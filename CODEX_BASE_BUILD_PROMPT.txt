@@ -1,0 +1,68 @@
+AGENTS_GAME_RULES.md と SPECIAL_MAHJONG_SPEC.md を読んでください。
+
+設計方針の詳細は Docs/ReferencePatterns/README.md にありますが、今回の主目的はゲーム仕様と固定ルールに沿って、特殊麻雀プロトタイプの最小ベース構造を作ることです。
+
+まずは完成版ではなく、今後の実装が従うための最小ベースを作ってください。
+
+今回作る範囲：
+
+- SeatId
+- Tile
+- Wall
+- Hand
+- DiscardRecord
+- PlayerSeat
+- MahjongGameFlow
+- TurnOrderService
+- DrawService
+- SkillSystem
+- ActiveSkillEffect
+- DevLog
+- MahjongLogFormatter
+- 手牌表示
+- 捨て牌表示
+- ツモボタン
+- 打牌操作
+- 必殺技ボタン
+- リトライ
+
+絶対に守ること：
+
+- Unity 6.3 LTS / Universal 2D 前提
+- 最初は1人用で、Eastのみ
+- activeSeats は最初 [East]
+- 鳴き、リーチ、ドラ、正式点数計算は作らない
+- ツモは必ず DrawService 経由
+- ターン順は TurnOrderService 経由
+- 捨て牌には actorSeat を記録する
+- 必殺技は自分のターン中だけ発動する
+- 発動済み効果は ActiveSkillEffect として保持する
+- Notifierは通知だけで、ゲーム進行を決めない
+- ログは観測専用で、ゲーム進行を決めない
+- 仮実装には `// PROTOTYPE` コメントを付ける
+
+最初に必要な流れ：
+
+1. Eastに配牌する
+2. Eastがツモする
+3. Eastが牌を捨てる
+4. 次のターンもEastに戻る
+5. 必殺技を発動するとActiveSkillEffectが登録される
+6. 次のツモでDrawServiceがActiveSkillEffectを参照する
+7. 指定牌が山にあれば、その牌を引く
+8. 効果を消費する
+9. ツモ、打牌、必殺技発動、効果解決をDevLogに残す
+
+まだ美しいUI、正式な麻雀ルール、鳴き、リーチ、ドラ、正式点数計算、CPU思考は不要です。
+
+実装前に、まず以下を報告してください。
+
+- 作成予定ファイル
+- 各スクリプトの役割
+- Unity上の必要なGameObject構成
+- Inspector設定
+- ログ出力方針
+- `// PROTOTYPE` になる箇所
+- 既知のリスク
+
+その後、問題なければ実装に進みます。
