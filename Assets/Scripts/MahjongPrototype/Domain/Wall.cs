@@ -18,9 +18,9 @@ namespace MahjongPrototype.Domain
         {
             List<Tile> generated = new List<Tile>(136);
 
-            AddSuit(generated, 'm');
-            AddSuit(generated, 'p');
-            AddSuit(generated, 's');
+            AddSuit(generated, TileSuit.Man);
+            AddSuit(generated, TileSuit.Pin);
+            AddSuit(generated, TileSuit.Sou);
             AddHonors(generated);
 
             Shuffle(generated, seed.HasValue ? new Random(seed.Value) : new Random());
@@ -65,24 +65,24 @@ namespace MahjongPrototype.Domain
             return tiles.ToArray();
         }
 
-        private static void AddSuit(List<Tile> target, char suit)
+        private static void AddSuit(List<Tile> target, TileSuit suit)
         {
             for (int number = 1; number <= 9; number++)
             {
-                Tile tile = new Tile($"{number}{suit}");
+                Tile tile = Tile.CreateNumber(suit, number);
                 AddFourCopies(target, tile);
             }
         }
 
         private static void AddHonors(List<Tile> target)
         {
-            AddFourCopies(target, new Tile("E"));
-            AddFourCopies(target, new Tile("S"));
-            AddFourCopies(target, new Tile("W"));
-            AddFourCopies(target, new Tile("N"));
-            AddFourCopies(target, new Tile("P"));
-            AddFourCopies(target, new Tile("F"));
-            AddFourCopies(target, new Tile("C"));
+            AddFourCopies(target, Tile.CreateHonor(HonorKind.East));
+            AddFourCopies(target, Tile.CreateHonor(HonorKind.South));
+            AddFourCopies(target, Tile.CreateHonor(HonorKind.West));
+            AddFourCopies(target, Tile.CreateHonor(HonorKind.North));
+            AddFourCopies(target, Tile.CreateHonor(HonorKind.White));
+            AddFourCopies(target, Tile.CreateHonor(HonorKind.Green));
+            AddFourCopies(target, Tile.CreateHonor(HonorKind.Red));
         }
 
         private static void AddFourCopies(List<Tile> target, Tile tile)
