@@ -1,10 +1,7 @@
-using System.Collections.Generic;
-using System.Text;
 using MahjongPrototype;
 using MahjongPrototype.Domain;
 using MahjongPrototype.Notifications;
 using UnityEngine;
-using TMPro;
 
 namespace MahjongPrototype.UI
 {
@@ -18,15 +15,9 @@ namespace MahjongPrototype.UI
         [Tooltip("決定済みイベントの通知役です。MahjongPrototypeRoot の MahjongEventNotifier を割り当てます。")]
         [SerializeField] private MahjongEventNotifier eventNotifier;
 
-        [Header("Status Text")]
-        [Tooltip("現在のSeat表示用TMP Textです。")]
-        [SerializeField] private TMP_Text currentSeatText;
-        [Tooltip("現在のターン番号表示用TMP Textです。")]
-        [SerializeField] private TMP_Text turnIndexText;
-        [Tooltip("山の残り枚数表示用TMP Textです。")]
-        [SerializeField] private TMP_Text wallCountText;
-        [Tooltip("現在のActiveSkillEffect表示用TMP Textです。")]
-        [SerializeField] private TMP_Text activeSkillText;
+        [Header("Display")]
+        [Tooltip("Status/ActiveSkill/Discard の表示更新Controllerです。")]
+        [SerializeField] private MahjongUiDisplayController displayController;
 
         [Header("Tile Areas")]
         [Tooltip("手牌ボタン表示のViewです。未設定ならPlay時に同じGameObjectへ追加します。")]
@@ -35,8 +26,6 @@ namespace MahjongPrototype.UI
         [SerializeField] private RectTransform handContainer;
         [Tooltip("手牌1枚分のTileButtonViewテンプレートまたはPrefabです。")]
         [SerializeField] private TileButtonView tileButtonPrefab;
-        [Tooltip("捨て牌一覧表示用TMP Textです。")]
-        [SerializeField] private TMP_Text discardText;
 
         [Header("Input")]
         [Tooltip("Draw/SkillDraw/Retry の入力受付Controllerです。")]
@@ -47,10 +36,9 @@ namespace MahjongPrototype.UI
         [SerializeField] private MahjongLogPreviewController logPreviewController;
 
         private bool warnedMissingFlow;
+        private bool warnedMissingDisplayController;
         private bool warnedMissingInputController;
         private bool warnedMissingLogPreviewController;
-        private bool warnedMissingStatusText;
-        private bool warnedMissingDiscardText;
         private bool isHandViewSubscribed;
         private bool isInputControllerSubscribed;
 
@@ -66,6 +54,7 @@ namespace MahjongPrototype.UI
 
         private void OnEnable()
         {
+            EnsureDisplayController();
             EnsureHandView();
             SubscribeHandViewEvents();
             EnsureInputController();
@@ -77,12 +66,12 @@ namespace MahjongPrototype.UI
         private void Start()
         {
             CacheReferences();
+            EnsureDisplayController();
             EnsureHandView();
             SubscribeHandViewEvents();
             EnsureInputController();
             SubscribeInputControllerEvents();
             EnsureLogPreviewController();
-            WarnMissingStaticReferences();
             RefreshFromFlow();
             RefreshLogPreview();
         }
@@ -99,13 +88,8 @@ namespace MahjongPrototype.UI
             if (state == null)
                 return;
 
-            SetText(currentSeatText, $"Seat: {state.CurrentSeat}");
-            SetText(turnIndexText, $"Turn: {state.TurnIndex}");
-            SetText(wallCountText, $"Wall: {state.Wall.Count}");
-            SetText(activeSkillText, BuildActiveSkillText(state));
-
+            RefreshDisplay(state);
             RefreshHand(state);
-            RefreshDiscards(state.Discards);
             RefreshLogPreview();
         }
 
@@ -127,6 +111,9 @@ namespace MahjongPrototype.UI
 
             if (eventNotifier == null && gameFlow != null)
                 eventNotifier = gameFlow.EventNotifier;
+
+            if (displayController == null)
+                displayController = GetComponentInChildren<MahjongUiDisplayController>(true);
 
             if (handView == null)
                 handView = GetComponentInChildren<MahjongHandView>(true);
@@ -152,6 +139,25 @@ namespace MahjongPrototype.UI
                 return;
 
             eventNotifier.AnyEventNotified -= RefreshFromFlow;
+        }
+
+        private void EnsureDisplayController()
+        {
+            if (displayController == null)
+            {
+                displayController = GetComponentInChildren<MahjongUiDisplayController>(true);
+            }
+
+            if (displayController != null)
+                return;
+
+            displayController = gameObject.AddComponent<MahjongUiDisplayController>();
+            if (displayController == null)
+            {
+                WarnMissingOnce(
+                    ref warnedMissingDisplayController,
+                    "MahjongUiDisplayController is not assigned. Add it to the UI GameObject and assign the status/discard texts.");
+            }
         }
 
         private void EnsureInputController()
@@ -228,6 +234,15 @@ namespace MahjongPrototype.UI
             gameFlow.RetryPrototype();
         }
 
+        private void RefreshDisplay(MahjongGameState state)
+        {
+            if (displayController == null)
+                EnsureDisplayController();
+
+            if (displayController != null)
+                displayController.Refresh(state);
+        }
+
         private void EnsureHandView()
         {
             if (handView == null)
@@ -283,32 +298,6 @@ namespace MahjongPrototype.UI
             gameFlow.RequestDiscard(handIndex);
         }
 
-        private void RefreshDiscards(IReadOnlyList<DiscardRecord> discards)
-        {
-            if (discardText == null)
-            {
-                WarnMissingOnce(ref warnedMissingDiscardText, "DiscardText is not assigned.");
-                return;
-            }
-
-            StringBuilder builder = new StringBuilder();
-            for (int i = 0; i < discards.Count; i++)
-            {
-                DiscardRecord record = discards[i];
-                builder.Append(record.ActorSeat)
-                    .Append(" ")
-                    .Append(record.Tile)
-                    .Append(" (T")
-                    .Append(record.TurnIndex)
-                    .Append(')');
-
-                if (i + 1 < discards.Count)
-                    builder.AppendLine();
-            }
-
-            discardText.text = builder.ToString();
-        }
-
         private void EnsureLogPreviewController()
         {
             if (logPreviewController == null)
@@ -331,34 +320,6 @@ namespace MahjongPrototype.UI
 
             if (logPreviewController != null)
                 logPreviewController.Refresh();
-        }
-
-        private static void SetText(TMP_Text text, string value)
-        {
-            if (text != null)
-                text.text = value;
-        }
-
-        private void WarnMissingStaticReferences()
-        {
-            if (currentSeatText == null || turnIndexText == null || wallCountText == null || activeSkillText == null)
-                WarnMissingOnce(ref warnedMissingStatusText, "One or more status TMP_Text references are not assigned.");
-        }
-
-        private static string BuildActiveSkillText(MahjongGameState state)
-        {
-            if (state.ActiveSkillEffects.Count <= 0)
-                return "Skill: none";
-
-            StringBuilder builder = new StringBuilder("Skill: ");
-            for (int i = 0; i < state.ActiveSkillEffects.Count; i++)
-            {
-                builder.Append(state.ActiveSkillEffects[i].ToLogText());
-                if (i + 1 < state.ActiveSkillEffects.Count)
-                    builder.Append(", ");
-            }
-
-            return builder.ToString();
         }
 
         private void WarnMissingOnce(ref bool warned, string message)
