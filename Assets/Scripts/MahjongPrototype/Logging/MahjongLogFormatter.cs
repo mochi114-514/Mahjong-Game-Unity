@@ -27,6 +27,76 @@ namespace MahjongPrototype.Logging
             return builder.ToString();
         }
 
+        public static string FormatDisplayLine(MahjongLogEntry entry)
+        {
+            if (entry == null)
+                return string.Empty;
+
+            string eventName = entry.EventName ?? string.Empty;
+            switch (eventName)
+            {
+                case "TurnStarted":
+                    return TrimLine($"TurnStarted {entry.Seat} turn={entry.TurnIndex} wall={entry.WallCount}");
+
+                case "TileDrawn":
+                    if (!string.IsNullOrEmpty(entry.ActiveSkill))
+                        return string.Empty;
+
+                    return TrimLine($"Draw {entry.Tile}");
+
+                case "TileDiscarded":
+                    return TrimLine($"Discard {entry.Tile} turn={entry.TurnIndex}");
+
+                case "SkillActivated":
+                    return TrimLine($"Skill target={entry.Tile}");
+
+                case "SkillEffectRegistered":
+                    return string.Empty;
+
+                case "SkillEffectResolved":
+                    return string.Empty;
+
+                case "DrawModifiedBySkill":
+                    if (!string.IsNullOrEmpty(entry.Message) &&
+                        entry.Message.IndexOf("Fell back", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        return TrimLine($"SkillFallback {entry.Tile}");
+                    }
+
+                    return TrimLine($"SkillDraw {entry.Tile}");
+
+                case "SkillEffectExpired":
+                    return string.Empty;
+
+                case "RoundStarted":
+                    return TrimLine($"RoundStarted wall={entry.WallCount}");
+
+                case "RoundEnded":
+                    return TrimLine($"RoundEnded {entry.Message}");
+
+                case "WinChecked":
+                    return TrimLine("WinChecked");
+
+                case "SlowFrame":
+                    return TrimLine("SlowFrame");
+
+                case "Unity Console Warning":
+                    return TrimLine($"Warning {entry.Message}");
+
+                case "Unity Console Error":
+                    return TrimLine($"Error {entry.Message}");
+
+                case "Unity Console Exception":
+                    return TrimLine($"Exception {entry.Message}");
+
+                case "RunStarted":
+                    return "RunStarted";
+
+                default:
+                    return TrimLine($"{entry.EventName} {entry.Message}");
+            }
+        }
+
         private static void AppendString(StringBuilder builder, string name, string value, bool first = false)
         {
             if (string.IsNullOrEmpty(value))
@@ -94,6 +164,19 @@ namespace MahjongPrototype.Logging
             }
 
             return builder.ToString();
+        }
+
+        private static string TrimLine(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return string.Empty;
+
+            string line = value.Trim();
+            const int maxLength = 64;
+            if (line.Length <= maxLength)
+                return line;
+
+            return line.Substring(0, maxLength - 1) + "...";
         }
     }
 }

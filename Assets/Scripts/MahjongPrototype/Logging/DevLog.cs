@@ -13,14 +13,17 @@ namespace MahjongPrototype.Logging
         private const int MaxRecentLines = 120;
 
         private static readonly List<string> RecentLinesInternal = new List<string>(MaxRecentLines);
+        private static readonly List<string> RecentDisplayLinesInternal = new List<string>(MaxRecentLines);
         private static bool isInitialized;
         private static bool isEnabled;
         private static bool enableInReleaseBuild;
 
         public static event Action<string> LineWritten;
+        public static event Action<string> DisplayLineWritten;
 
         public static string CurrentLogFilePath { get; private set; }
         public static IReadOnlyList<string> RecentLines => RecentLinesInternal;
+        public static IReadOnlyList<string> RecentDisplayLines => RecentDisplayLinesInternal;
 
         public static void Initialize(bool enableLog, bool allowReleaseBuildLogging)
         {
@@ -28,6 +31,7 @@ namespace MahjongPrototype.Logging
             isEnabled = enableLog && IsLoggingAllowed();
             isInitialized = true;
             RecentLinesInternal.Clear();
+            RecentDisplayLinesInternal.Clear();
             CurrentLogFilePath = string.Empty;
 
             if (!isEnabled)
@@ -84,10 +88,11 @@ namespace MahjongPrototype.Logging
             };
 
             string line = MahjongLogFormatter.FormatJsonLine(entry);
-            WriteLine(line);
+            string displayLine = MahjongLogFormatter.FormatDisplayLine(entry);
+            WriteLine(line, displayLine);
         }
 
-        private static void WriteLine(string line)
+        private static void WriteLine(string line, string displayLine)
         {
             if (string.IsNullOrEmpty(CurrentLogFilePath))
                 return;
@@ -100,6 +105,15 @@ namespace MahjongPrototype.Logging
             RecentLinesInternal.Add(line);
             if (RecentLinesInternal.Count > MaxRecentLines)
                 RecentLinesInternal.RemoveAt(0);
+
+            if (!string.IsNullOrEmpty(displayLine))
+            {
+                RecentDisplayLinesInternal.Add(displayLine);
+                if (RecentDisplayLinesInternal.Count > MaxRecentLines)
+                    RecentDisplayLinesInternal.RemoveAt(0);
+
+                DisplayLineWritten?.Invoke(displayLine);
+            }
 
             LineWritten?.Invoke(line);
         }

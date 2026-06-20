@@ -15,29 +15,44 @@ namespace MahjongPrototype.UI
     public sealed class MahjongPrototypeUi : MonoBehaviour
     {
         [Header("Flow")]
+        [Tooltip("ゲーム進行の指示役です。MahjongPrototypeRoot の MahjongGameFlow を割り当てます。")]
         [SerializeField] private MahjongGameFlow gameFlow;
+        [Tooltip("決定済みイベントの通知役です。MahjongPrototypeRoot の MahjongEventNotifier を割り当てます。")]
         [SerializeField] private MahjongEventNotifier eventNotifier;
 
         [Header("Status Text")]
+        [Tooltip("現在のSeat表示用TMP Textです。")]
         [SerializeField] private TMP_Text currentSeatText;
+        [Tooltip("現在のターン番号表示用TMP Textです。")]
         [SerializeField] private TMP_Text turnIndexText;
+        [Tooltip("山の残り枚数表示用TMP Textです。")]
         [SerializeField] private TMP_Text wallCountText;
+        [Tooltip("現在のActiveSkillEffect表示用TMP Textです。")]
         [SerializeField] private TMP_Text activeSkillText;
 
         [Header("Tile Areas")]
-        [SerializeField] private Transform handContainer;
+        [Tooltip("手牌ボタンを生成する親RectTransformです。Canvas/HandArea を割り当てます。")]
+        [SerializeField] private RectTransform handContainer;
+        [Tooltip("手牌1枚分のTileButtonViewテンプレートまたはPrefabです。")]
         [SerializeField] private TileButtonView tileButtonPrefab;
+        [Tooltip("捨て牌一覧表示用TMP Textです。")]
         [SerializeField] private TMP_Text discardText;
 
         [Header("Controls")]
+        [Tooltip("現在のSeatでツモを要求するButtonです。")]
         [SerializeField] private Button drawButton;
+        [Tooltip("TargetTileInputの牌を次ツモで狙う必殺技Buttonです。")]
         [SerializeField] private Button forceDrawSkillButton;
+        [Tooltip("プロトタイプ状態を初期化するButtonです。")]
         [SerializeField] private Button retryButton;
+        [Tooltip("指定牌ツモの対象を入力するTMP_InputFieldです。1m-9m, 1p-9p, 1s-9s, E/S/W/N/P/F/C を受け付けます。")]
         [SerializeField] private TMP_InputField targetTileInput;
 
         [Header("Log Preview")]
+        [Tooltip("画面表示用の短い人間向けログを表示するTMP Textです。JSONL全文はファイルにのみ保存します。")]
         [SerializeField] private TMP_Text recentLogText;
-        [SerializeField, Min(1)] private int maxVisibleLogLines = 8;
+        [Tooltip("画面に表示する最新ログ行数です。")]
+        [SerializeField, Min(1)] private int maxVisibleLogLines = 5;
 
         private readonly List<TileButtonView> activeTileButtons = new List<TileButtonView>();
         private bool warnedMissingFlow;
@@ -65,7 +80,7 @@ namespace MahjongPrototype.UI
         {
             RegisterButtonListeners();
             SubscribeNotifications();
-            DevLog.LineWritten += HandleLogLineWritten;
+            DevLog.DisplayLineWritten += HandleLogLineWritten;
         }
 
         private void Start()
@@ -80,7 +95,7 @@ namespace MahjongPrototype.UI
         {
             UnregisterButtonListeners();
             UnsubscribeNotifications();
-            DevLog.LineWritten -= HandleLogLineWritten;
+            DevLog.DisplayLineWritten -= HandleLogLineWritten;
         }
 
         public void Refresh(MahjongGameState state)
@@ -296,7 +311,7 @@ namespace MahjongPrototype.UI
                 return;
             }
 
-            IReadOnlyList<string> lines = DevLog.RecentLines;
+            IReadOnlyList<string> lines = DevLog.RecentDisplayLines;
             int start = Mathf.Max(0, lines.Count - maxVisibleLogLines);
             StringBuilder builder = new StringBuilder();
             for (int i = start; i < lines.Count; i++)
