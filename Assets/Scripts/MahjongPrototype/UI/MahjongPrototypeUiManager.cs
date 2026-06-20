@@ -6,8 +6,8 @@ using UnityEngine;
 namespace MahjongPrototype.UI
 {
     [DisallowMultipleComponent]
-    [AddComponentMenu("Mahjong Prototype/UI/Mahjong Prototype UI")]
-    public sealed class MahjongPrototypeUi : MonoBehaviour
+    [AddComponentMenu("Mahjong Prototype/UI/Mahjong Prototype UI Manager")]
+    public sealed class MahjongPrototypeUiManager : MonoBehaviour
     {
         [Header("Flow")]
         [Tooltip("ゲーム進行の指示役です。MahjongPrototypeRoot の MahjongGameFlow を割り当てます。")]
@@ -336,7 +336,7 @@ namespace MahjongPrototype.UI
                 return;
 
             warned = true;
-            Debug.LogWarning($"{nameof(MahjongPrototypeUi)}: {message}", this);
+            Debug.LogWarning($"{nameof(MahjongPrototypeUiManager)}: {message}", this);
         }
     }
 }
