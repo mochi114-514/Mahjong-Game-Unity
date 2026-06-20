@@ -30,6 +30,8 @@ namespace MahjongPrototype.UI
         [SerializeField] private TMP_Text activeSkillText;
 
         [Header("Tile Areas")]
+        [Tooltip("手牌ボタン表示のViewです。未設定ならPlay時に同じGameObjectへ追加します。")]
+        [SerializeField] private MahjongHandView handView;
         [Tooltip("手牌ボタンを生成する親RectTransformです。Canvas/HandArea を割り当てます。")]
         [SerializeField] private RectTransform handContainer;
         [Tooltip("手牌1枚分のTileButtonViewテンプレートまたはPrefabです。")]
@@ -55,16 +57,14 @@ namespace MahjongPrototype.UI
         [Tooltip("画面に表示する最新ログ行数です。")]
         [SerializeField, Min(1)] private int maxVisibleLogLines = 5;
 
-        private readonly List<TileButtonView> activeTileButtons = new List<TileButtonView>();
         private bool warnedMissingFlow;
-        private bool warnedMissingHandContainer;
-        private bool warnedMissingTileButtonPrefab;
         private bool warnedMissingTargetInput;
         private bool warnedMissingDrawButton;
         private bool warnedMissingSkillButton;
         private bool warnedMissingRetryButton;
         private bool warnedMissingStatusText;
         private bool warnedMissingDiscardText;
+        private bool isHandViewSubscribed;
 
         private void Reset()
         {
@@ -78,6 +78,8 @@ namespace MahjongPrototype.UI
 
         private void OnEnable()
         {
+            EnsureHandView();
+            SubscribeHandViewEvents();
             EnsureLogPreviewController();
             RegisterButtonListeners();
             SubscribeNotifications();
@@ -86,6 +88,8 @@ namespace MahjongPrototype.UI
         private void Start()
         {
             CacheReferences();
+            EnsureHandView();
+            SubscribeHandViewEvents();
             EnsureLogPreviewController();
             WarnMissingStaticReferences();
             RefreshFromFlow();
@@ -94,6 +98,7 @@ namespace MahjongPrototype.UI
 
         private void OnDisable()
         {
+            UnsubscribeHandViewEvents();
             UnregisterButtonListeners();
             UnsubscribeNotifications();
         }
@@ -108,7 +113,7 @@ namespace MahjongPrototype.UI
             SetText(wallCountText, $"Wall: {state.Wall.Count}");
             SetText(activeSkillText, BuildActiveSkillText(state));
 
-            RebuildHand(state.GetPlayerSeat(state.CurrentSeat).Hand.GetTiles());
+            RefreshHand(state);
             RefreshDiscards(state.Discards);
             RefreshLogPreview();
         }
@@ -131,6 +136,9 @@ namespace MahjongPrototype.UI
 
             if (eventNotifier == null && gameFlow != null)
                 eventNotifier = gameFlow.EventNotifier;
+
+            if (handView == null)
+                handView = GetComponentInChildren<MahjongHandView>(true);
 
             if (logPreviewController == null)
                 logPreviewController = GetComponentInChildren<MahjongLogPreviewController>(true);
@@ -233,6 +241,50 @@ namespace MahjongPrototype.UI
             gameFlow.RetryPrototype();
         }
 
+        private void EnsureHandView()
+        {
+            if (handView == null)
+            {
+                handView = GetComponentInChildren<MahjongHandView>(true);
+            }
+
+            if (handView == null)
+            {
+                handView = gameObject.AddComponent<MahjongHandView>();
+                handView.Configure(handContainer, tileButtonPrefab);
+                return;
+            }
+
+            handView.ConfigureMissingReferences(handContainer, tileButtonPrefab);
+        }
+
+        private void SubscribeHandViewEvents()
+        {
+            if (handView == null || isHandViewSubscribed)
+                return;
+
+            handView.TileClicked += HandleTileClicked;
+            isHandViewSubscribed = true;
+        }
+
+        private void UnsubscribeHandViewEvents()
+        {
+            if (handView == null || !isHandViewSubscribed)
+                return;
+
+            handView.TileClicked -= HandleTileClicked;
+            isHandViewSubscribed = false;
+        }
+
+        private void RefreshHand(MahjongGameState state)
+        {
+            if (handView == null)
+                EnsureHandView();
+
+            if (handView != null)
+                handView.Rebuild(state.GetPlayerSeat(state.CurrentSeat).Hand.GetTiles());
+        }
+
         private void HandleTileClicked(int handIndex)
         {
             if (gameFlow == null)
@@ -242,42 +294,6 @@ namespace MahjongPrototype.UI
             }
 
             gameFlow.RequestDiscard(handIndex);
-        }
-
-        private void RebuildHand(IReadOnlyList<Tile> handTiles)
-        {
-            ClearHandButtons();
-
-            if (handContainer == null)
-            {
-                WarnMissingOnce(ref warnedMissingHandContainer, "Hand container is not assigned.");
-                return;
-            }
-
-            if (tileButtonPrefab == null)
-            {
-                WarnMissingOnce(ref warnedMissingTileButtonPrefab, "TileButtonView prefab is not assigned.");
-                return;
-            }
-
-            for (int i = 0; i < handTiles.Count; i++)
-            {
-                TileButtonView view = Instantiate(tileButtonPrefab, handContainer);
-                view.Initialize(i, handTiles[i], HandleTileClicked);
-                activeTileButtons.Add(view);
-            }
-        }
-
-        private void ClearHandButtons()
-        {
-            for (int i = 0; i < activeTileButtons.Count; i++)
-            {
-                TileButtonView view = activeTileButtons[i];
-                if (view != null)
-                    Destroy(view.gameObject);
-            }
-
-            activeTileButtons.Clear();
         }
 
         private void RefreshDiscards(IReadOnlyList<DiscardRecord> discards)

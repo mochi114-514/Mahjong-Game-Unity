@@ -172,6 +172,7 @@ GameObject:
   - component: {fileID: 45752824}
   - component: {fileID: 45752823}
   - component: {fileID: 45752828}
+  - component: {fileID: 45752829}
   m_Layer: 5
   m_Name: Canvas
   m_TagString: Untagged
@@ -197,6 +198,7 @@ MonoBehaviour:
   turnIndexText: {fileID: 1222914383}
   wallCountText: {fileID: 1917315620}
   activeSkillText: {fileID: 1807224747}
+  handView: {fileID: 45752829}
   handContainer: {fileID: 1972641026}
   tileButtonPrefab: {fileID: 8792027050792319394, guid: 5f307326666617c4e8318056c650e193, type: 3}
   discardText: {fileID: 492366573}
@@ -306,8 +308,22 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 80b9aea57a9f9c44fac62b7dd96d40f7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI.MahjongLogPreviewController
-  recentLogText: {fileID: 0}
+  recentLogText: {fileID: 312434043}
   maxVisibleLogLines: 5
+--- !u!114 &45752829
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 45752822}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 14004cb01e7a4114bacf9ee94146a441, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI.MahjongHandView
+  handContainer: {fileID: 1972641026}
+  tileButtonPrefab: {fileID: 8792027050792319394, guid: 5f307326666617c4e8318056c650e193, type: 3}
 --- !u!1 &59872338
 GameObject:
   m_ObjectHideFlags: 0
