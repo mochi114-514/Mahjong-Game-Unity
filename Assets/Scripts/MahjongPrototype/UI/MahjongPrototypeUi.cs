@@ -3,9 +3,8 @@ using System.Text;
 using MahjongPrototype;
 using MahjongPrototype.Domain;
 using MahjongPrototype.Notifications;
-using TMPro;
 using UnityEngine;
-using UnityEngine.UI;
+using TMPro;
 
 namespace MahjongPrototype.UI
 {
@@ -39,32 +38,21 @@ namespace MahjongPrototype.UI
         [Tooltip("捨て牌一覧表示用TMP Textです。")]
         [SerializeField] private TMP_Text discardText;
 
-        [Header("Controls")]
-        [Tooltip("現在のSeatでツモを要求するButtonです。")]
-        [SerializeField] private Button drawButton;
-        [Tooltip("TargetTileInputの牌を次ツモで狙う必殺技Buttonです。")]
-        [SerializeField] private Button forceDrawSkillButton;
-        [Tooltip("プロトタイプ状態を初期化するButtonです。")]
-        [SerializeField] private Button retryButton;
-        [Tooltip("指定牌ツモの対象を入力するTMP_InputFieldです。1m-9m, 1p-9p, 1s-9s, E/S/W/N/P/F/C を受け付けます。")]
-        [SerializeField] private TMP_InputField targetTileInput;
+        [Header("Input")]
+        [Tooltip("Draw/SkillDraw/Retry の入力受付Controllerです。")]
+        [SerializeField] private MahjongUiInputController inputController;
 
         [Header("Log Preview")]
-        [Tooltip("画面ログ表示のControllerです。未設定ならPlay時に同じGameObjectへ追加します。")]
+        [Tooltip("画面ログ表示のControllerです。RecentLogText と表示行数はこのController側で設定します。")]
         [SerializeField] private MahjongLogPreviewController logPreviewController;
-        [Tooltip("画面表示用の短い人間向けログを表示するTMP Textです。JSONL全文はファイルにのみ保存します。")]
-        [SerializeField] private TMP_Text recentLogText;
-        [Tooltip("画面に表示する最新ログ行数です。")]
-        [SerializeField, Min(1)] private int maxVisibleLogLines = 5;
 
         private bool warnedMissingFlow;
-        private bool warnedMissingTargetInput;
-        private bool warnedMissingDrawButton;
-        private bool warnedMissingSkillButton;
-        private bool warnedMissingRetryButton;
+        private bool warnedMissingInputController;
+        private bool warnedMissingLogPreviewController;
         private bool warnedMissingStatusText;
         private bool warnedMissingDiscardText;
         private bool isHandViewSubscribed;
+        private bool isInputControllerSubscribed;
 
         private void Reset()
         {
@@ -80,8 +68,9 @@ namespace MahjongPrototype.UI
         {
             EnsureHandView();
             SubscribeHandViewEvents();
+            EnsureInputController();
+            SubscribeInputControllerEvents();
             EnsureLogPreviewController();
-            RegisterButtonListeners();
             SubscribeNotifications();
         }
 
@@ -90,6 +79,8 @@ namespace MahjongPrototype.UI
             CacheReferences();
             EnsureHandView();
             SubscribeHandViewEvents();
+            EnsureInputController();
+            SubscribeInputControllerEvents();
             EnsureLogPreviewController();
             WarnMissingStaticReferences();
             RefreshFromFlow();
@@ -99,7 +90,7 @@ namespace MahjongPrototype.UI
         private void OnDisable()
         {
             UnsubscribeHandViewEvents();
-            UnregisterButtonListeners();
+            UnsubscribeInputControllerEvents();
             UnsubscribeNotifications();
         }
 
@@ -140,50 +131,11 @@ namespace MahjongPrototype.UI
             if (handView == null)
                 handView = GetComponentInChildren<MahjongHandView>(true);
 
+            if (inputController == null)
+                inputController = GetComponentInChildren<MahjongUiInputController>(true);
+
             if (logPreviewController == null)
                 logPreviewController = GetComponentInChildren<MahjongLogPreviewController>(true);
-        }
-
-        private void RegisterButtonListeners()
-        {
-            if (drawButton != null)
-            {
-                drawButton.onClick.AddListener(HandleDrawClicked);
-            }
-            else
-            {
-                WarnMissingOnce(ref warnedMissingDrawButton, "DrawButton is not assigned.");
-            }
-
-            if (forceDrawSkillButton != null)
-            {
-                forceDrawSkillButton.onClick.AddListener(HandleForceDrawSkillClicked);
-            }
-            else
-            {
-                WarnMissingOnce(ref warnedMissingSkillButton, "ForceDrawSkillButton is not assigned.");
-            }
-
-            if (retryButton != null)
-            {
-                retryButton.onClick.AddListener(HandleRetryClicked);
-            }
-            else
-            {
-                WarnMissingOnce(ref warnedMissingRetryButton, "RetryButton is not assigned.");
-            }
-        }
-
-        private void UnregisterButtonListeners()
-        {
-            if (drawButton != null)
-                drawButton.onClick.RemoveListener(HandleDrawClicked);
-
-            if (forceDrawSkillButton != null)
-                forceDrawSkillButton.onClick.RemoveListener(HandleForceDrawSkillClicked);
-
-            if (retryButton != null)
-                retryButton.onClick.RemoveListener(HandleRetryClicked);
         }
 
         private void SubscribeNotifications()
@@ -202,7 +154,48 @@ namespace MahjongPrototype.UI
             eventNotifier.AnyEventNotified -= RefreshFromFlow;
         }
 
-        private void HandleDrawClicked()
+        private void EnsureInputController()
+        {
+            if (inputController == null)
+            {
+                inputController = GetComponentInChildren<MahjongUiInputController>(true);
+            }
+
+            if (inputController != null)
+                return;
+
+            inputController = gameObject.AddComponent<MahjongUiInputController>();
+            if (inputController == null)
+            {
+                WarnMissingOnce(
+                    ref warnedMissingInputController,
+                    "MahjongUiInputController is not assigned. Add it to the UI GameObject and assign the Draw/Skill/Retry controls.");
+            }
+        }
+
+        private void SubscribeInputControllerEvents()
+        {
+            if (inputController == null || isInputControllerSubscribed)
+                return;
+
+            inputController.DrawRequested += HandleDrawRequested;
+            inputController.ForceDrawSkillRequested += HandleForceDrawSkillRequested;
+            inputController.RetryRequested += HandleRetryRequested;
+            isInputControllerSubscribed = true;
+        }
+
+        private void UnsubscribeInputControllerEvents()
+        {
+            if (inputController == null || !isInputControllerSubscribed)
+                return;
+
+            inputController.DrawRequested -= HandleDrawRequested;
+            inputController.ForceDrawSkillRequested -= HandleForceDrawSkillRequested;
+            inputController.RetryRequested -= HandleRetryRequested;
+            isInputControllerSubscribed = false;
+        }
+
+        private void HandleDrawRequested()
         {
             if (gameFlow == null)
             {
@@ -213,7 +206,7 @@ namespace MahjongPrototype.UI
             gameFlow.RequestDraw();
         }
 
-        private void HandleForceDrawSkillClicked()
+        private void HandleForceDrawSkillRequested(string targetTileText)
         {
             if (gameFlow == null)
             {
@@ -221,16 +214,10 @@ namespace MahjongPrototype.UI
                 return;
             }
 
-            if (targetTileInput == null)
-            {
-                WarnMissingOnce(ref warnedMissingTargetInput, "TargetTileInput is not assigned.");
-                return;
-            }
-
-            gameFlow.RequestForceDrawSkill(targetTileInput.text);
+            gameFlow.RequestForceDrawSkill(targetTileText);
         }
 
-        private void HandleRetryClicked()
+        private void HandleRetryRequested()
         {
             if (gameFlow == null)
             {
@@ -329,14 +316,12 @@ namespace MahjongPrototype.UI
                 logPreviewController = GetComponentInChildren<MahjongLogPreviewController>(true);
             }
 
-            if (logPreviewController == null)
-            {
-                logPreviewController = gameObject.AddComponent<MahjongLogPreviewController>();
-                logPreviewController.Configure(recentLogText, maxVisibleLogLines);
+            if (logPreviewController != null)
                 return;
-            }
 
-            logPreviewController.ConfigureMissingReferences(recentLogText, maxVisibleLogLines);
+            WarnMissingOnce(
+                ref warnedMissingLogPreviewController,
+                "MahjongLogPreviewController is not assigned. Add it to the UI GameObject and assign RecentLogText there.");
         }
 
         private void RefreshLogPreview()

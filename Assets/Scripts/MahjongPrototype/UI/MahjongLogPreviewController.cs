@@ -34,23 +34,6 @@ namespace MahjongPrototype.UI
             UnsubscribeLogEvents();
         }
 
-        public void Configure(TMP_Text logText, int visibleLineCount)
-        {
-            recentLogText = logText;
-            maxVisibleLogLines = Mathf.Max(1, visibleLineCount);
-            Refresh();
-        }
-
-        public void ConfigureMissingReferences(TMP_Text fallbackLogText, int fallbackVisibleLineCount)
-        {
-            if (recentLogText != null)
-                return;
-
-            recentLogText = fallbackLogText;
-            maxVisibleLogLines = Mathf.Max(1, fallbackVisibleLineCount);
-            Refresh();
-        }
-
         public void Refresh()
         {
             if (recentLogText == null)

@@ -173,6 +173,7 @@ GameObject:
   - component: {fileID: 45752823}
   - component: {fileID: 45752828}
   - component: {fileID: 45752829}
+  - component: {fileID: 45752830}
   m_Layer: 5
   m_Name: Canvas
   m_TagString: Untagged
@@ -202,13 +203,8 @@ MonoBehaviour:
   handContainer: {fileID: 1972641026}
   tileButtonPrefab: {fileID: 8792027050792319394, guid: 5f307326666617c4e8318056c650e193, type: 3}
   discardText: {fileID: 492366573}
-  drawButton: {fileID: 1789999089}
-  forceDrawSkillButton: {fileID: 382517923}
-  retryButton: {fileID: 205517238}
-  targetTileInput: {fileID: 1477977273}
+  inputController: {fileID: 45752830}
   logPreviewController: {fileID: 45752828}
-  recentLogText: {fileID: 312434043}
-  maxVisibleLogLines: 8
 --- !u!114 &45752824
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -309,7 +305,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI.MahjongLogPreviewController
   recentLogText: {fileID: 312434043}
-  maxVisibleLogLines: 5
+  maxVisibleLogLines: 6
 --- !u!114 &45752829
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -324,6 +320,22 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI.MahjongHandView
   handContainer: {fileID: 1972641026}
   tileButtonPrefab: {fileID: 8792027050792319394, guid: 5f307326666617c4e8318056c650e193, type: 3}
+--- !u!114 &45752830
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 45752822}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5bdf6125a2d130b41838d49f7456b6ad, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI.MahjongUiInputController
+  drawButton: {fileID: 1789999089}
+  forceDrawSkillButton: {fileID: 382517923}
+  retryButton: {fileID: 205517238}
+  targetTileInput: {fileID: 1477977273}
 --- !u!1 &59872338
 GameObject:
   m_ObjectHideFlags: 0
