@@ -171,6 +171,7 @@ GameObject:
   - component: {fileID: 45752825}
   - component: {fileID: 45752824}
   - component: {fileID: 45752823}
+  - component: {fileID: 45752828}
   m_Layer: 5
   m_Name: Canvas
   m_TagString: Untagged
@@ -203,6 +204,7 @@ MonoBehaviour:
   forceDrawSkillButton: {fileID: 382517923}
   retryButton: {fileID: 205517238}
   targetTileInput: {fileID: 1477977273}
+  logPreviewController: {fileID: 45752828}
   recentLogText: {fileID: 312434043}
   maxVisibleLogLines: 8
 --- !u!114 &45752824
@@ -292,6 +294,20 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0, y: 0}
+--- !u!114 &45752828
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 45752822}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 80b9aea57a9f9c44fac62b7dd96d40f7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI.MahjongLogPreviewController
+  recentLogText: {fileID: 0}
+  maxVisibleLogLines: 5
 --- !u!1 &59872338
 GameObject:
   m_ObjectHideFlags: 0
@@ -1029,8 +1045,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 36
-  m_fontSizeBase: 36
+  m_fontSize: 20
+  m_fontSizeBase: 20
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18

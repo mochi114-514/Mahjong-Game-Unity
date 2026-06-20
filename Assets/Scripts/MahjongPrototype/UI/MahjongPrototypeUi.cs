@@ -2,7 +2,6 @@ using System.Collections.Generic;
 using System.Text;
 using MahjongPrototype;
 using MahjongPrototype.Domain;
-using MahjongPrototype.Logging;
 using MahjongPrototype.Notifications;
 using TMPro;
 using UnityEngine;
@@ -49,6 +48,8 @@ namespace MahjongPrototype.UI
         [SerializeField] private TMP_InputField targetTileInput;
 
         [Header("Log Preview")]
+        [Tooltip("画面ログ表示のControllerです。未設定ならPlay時に同じGameObjectへ追加します。")]
+        [SerializeField] private MahjongLogPreviewController logPreviewController;
         [Tooltip("画面表示用の短い人間向けログを表示するTMP Textです。JSONL全文はファイルにのみ保存します。")]
         [SerializeField] private TMP_Text recentLogText;
         [Tooltip("画面に表示する最新ログ行数です。")]
@@ -64,7 +65,6 @@ namespace MahjongPrototype.UI
         private bool warnedMissingRetryButton;
         private bool warnedMissingStatusText;
         private bool warnedMissingDiscardText;
-        private bool warnedMissingRecentLogText;
 
         private void Reset()
         {
@@ -78,24 +78,24 @@ namespace MahjongPrototype.UI
 
         private void OnEnable()
         {
+            EnsureLogPreviewController();
             RegisterButtonListeners();
             SubscribeNotifications();
-            DevLog.DisplayLineWritten += HandleLogLineWritten;
         }
 
         private void Start()
         {
             CacheReferences();
+            EnsureLogPreviewController();
             WarnMissingStaticReferences();
             RefreshFromFlow();
-            RefreshRecentLogText();
+            RefreshLogPreview();
         }
 
         private void OnDisable()
         {
             UnregisterButtonListeners();
             UnsubscribeNotifications();
-            DevLog.DisplayLineWritten -= HandleLogLineWritten;
         }
 
         public void Refresh(MahjongGameState state)
@@ -110,7 +110,7 @@ namespace MahjongPrototype.UI
 
             RebuildHand(state.GetPlayerSeat(state.CurrentSeat).Hand.GetTiles());
             RefreshDiscards(state.Discards);
-            RefreshRecentLogText();
+            RefreshLogPreview();
         }
 
         public void RefreshFromFlow()
@@ -131,6 +131,9 @@ namespace MahjongPrototype.UI
 
             if (eventNotifier == null && gameFlow != null)
                 eventNotifier = gameFlow.EventNotifier;
+
+            if (logPreviewController == null)
+                logPreviewController = GetComponentInChildren<MahjongLogPreviewController>(true);
         }
 
         private void RegisterButtonListeners()
@@ -303,28 +306,30 @@ namespace MahjongPrototype.UI
             discardText.text = builder.ToString();
         }
 
-        private void RefreshRecentLogText()
+        private void EnsureLogPreviewController()
         {
-            if (recentLogText == null)
+            if (logPreviewController == null)
             {
-                WarnMissingOnce(ref warnedMissingRecentLogText, "RecentLogText is not assigned.");
+                logPreviewController = GetComponentInChildren<MahjongLogPreviewController>(true);
+            }
+
+            if (logPreviewController == null)
+            {
+                logPreviewController = gameObject.AddComponent<MahjongLogPreviewController>();
+                logPreviewController.Configure(recentLogText, maxVisibleLogLines);
                 return;
             }
 
-            IReadOnlyList<string> lines = DevLog.RecentDisplayLines;
-            int start = Mathf.Max(0, lines.Count - maxVisibleLogLines);
-            StringBuilder builder = new StringBuilder();
-            for (int i = start; i < lines.Count; i++)
-            {
-                builder.AppendLine(lines[i]);
-            }
-
-            recentLogText.text = builder.ToString();
+            logPreviewController.ConfigureMissingReferences(recentLogText, maxVisibleLogLines);
         }
 
-        private void HandleLogLineWritten(string line)
+        private void RefreshLogPreview()
         {
-            RefreshRecentLogText();
+            if (logPreviewController == null)
+                EnsureLogPreviewController();
+
+            if (logPreviewController != null)
+                logPreviewController.Refresh();
         }
 
         private static void SetText(TMP_Text text, string value)
