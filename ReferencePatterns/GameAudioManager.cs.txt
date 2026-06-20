@@ -1,0 +1,851 @@
+using System;
+using System.Collections;
+using UnityEngine;
+
+/// <summary>
+/// ゲーム全体の音声システムの指示役。
+/// タイトル画面に1個だけ置き、DontDestroyOnLoadで維持する。
+/// 通知側スクリプトは AudioClip を持たず、AudioKey をこの Manager に渡す。
+/// </summary>
+[AddComponentMenu("音楽/音楽：Game Audio Manager")]
+[DisallowMultipleComponent]
+public sealed class GameAudioManager : MonoBehaviour
+{
+    public static GameAudioManager Instance { get; private set; }
+    public static bool HasInstance => Instance != null;
+
+    private const string MasterVolumeKey = "GameAudio.MasterVolume";
+    private const string BgmVolumeKey = "GameAudio.BgmVolume";
+    private const string SeVolumeKey = "GameAudio.SeVolume";
+
+    private const string MasterMutedKey = "GameAudio.MasterMuted";
+    private const string BgmMutedKey = "GameAudio.BgmMuted";
+    private const string SeMutedKey = "GameAudio.SeMuted";
+
+    private const string MasterVolumeBeforeMuteKey = "GameAudio.MasterVolumeBeforeMute";
+    private const string BgmVolumeBeforeMuteKey = "GameAudio.BgmVolumeBeforeMute";
+    private const string SeVolumeBeforeMuteKey = "GameAudio.SeVolumeBeforeMute";
+
+    private const float MutedThreshold = 0.0001f;
+    private const float CompareEpsilon = 0.0001f;
+
+    [Header("音声データ")]
+    [SerializeField] private AudioDatabase audioDatabase;
+
+    [Header("再生機能")]
+    [Tooltip("BGM 実再生担当。未設定なら同じ GameObject から取得し、無ければ自動追加します。")]
+    [SerializeField] private BgmPlaybackController bgmPlayback;
+    [Tooltip("SE 実再生担当。未設定なら同じ GameObject から取得し、無ければ自動追加します。")]
+    [SerializeField] private SePlaybackController sePlayback;
+
+    [Header("初期音量")]
+    [Tooltip("保存値が無い場合に使うマスター音量です。")]
+    [Range(0f, 1f)] [SerializeField] private float defaultMasterVolume = 1f;
+    [Tooltip("保存値が無い場合に使う BGM 音量です。")]
+    [Range(0f, 1f)] [SerializeField] private float defaultBgmVolume = 1f;
+    [Tooltip("保存値が無い場合に使う SE 音量です。")]
+    [Range(0f, 1f)] [SerializeField] private float defaultSeVolume = 1f;
+
+    [Header("ミュート")]
+    [Tooltip("ミュート解除時に復帰する音量が0に近すぎる場合、この値を最低復帰音量として使います。")]
+    [Range(0.01f, 1f)] [SerializeField] private float minimumUnmuteVolume = 0.01f;
+
+    [Header("起動時BGM（任意）")]
+    [Tooltip("タイトル画面などで、GameAudioManager生成直後にBGMを流したい場合だけONにします。")]
+    [SerializeField] private bool playInitialBgmOnAwake = false;
+    [SerializeField] private AudioKey initialBgmKey = AudioKey.None;
+
+    [Header("ゲーム状態サウンド")]
+    [Tooltip("ONならGameManagerの状態変化を受け取り、状態に応じたSEをGameAudioManager側で再生します。BGMは基本的にGameFlowBgmNotifier側で扱います。")]
+    [SerializeField] private bool playSeOnGameFlowStateChanged = true;
+
+    [Tooltip("ONならGameClear状態に入った瞬間にSEを再生します。")]
+    [SerializeField] private bool playGameClearSeOnStateChanged = false;
+
+    [Tooltip("GameClear状態に入った瞬間に再生するSEです。AudioDatabaseにSEとして登録してください。")]
+    [SerializeField] private AudioKey gameClearStateSeKey = AudioKey.GameClearSe;
+
+    [Tooltip("ONならGameClear状態に入った瞬間にBGMを再生します。通常BGMはGameFlowBgmNotifier側で扱うため、二重再生を避けるならOFF推奨です。")]
+    [SerializeField] private bool playGameClearBgmOnStateChanged = false;
+
+    [Tooltip("GameClear状態に入った瞬間に再生するBGMです。AudioDatabaseにBGMとして登録してください。")]
+    [SerializeField] private AudioKey gameClearStateBgmKey = AudioKey.GameClearBgm;
+
+    [Tooltip("GameOver状態に入った瞬間に再生するSEです。既存のGameOverAudioNotifierと重複しないよう、初期値はNoneにしています。")]
+    [SerializeField] private AudioKey gameOverStateSeKey = AudioKey.None;
+
+    [Tooltip("GameOver状態に入った瞬間に再生するBGMです。不要ならNoneにしてください。")]
+    [SerializeField] private AudioKey gameOverStateBgmKey = AudioKey.None;
+
+    [Header("シーン間維持")]
+    [SerializeField] private bool dontDestroyOnLoad = true;
+
+    [Header("ログ")]
+    [SerializeField] private bool enableWarningLogs = true;
+
+    [Header("実行時表示（Inspector確認用）")]
+    [SerializeField, Range(0f, 1f)] private float currentMasterVolume = 1f;
+    [SerializeField, Range(0f, 1f)] private float currentBgmVolume = 1f;
+    [SerializeField, Range(0f, 1f)] private float currentSeVolume = 1f;
+    [SerializeField] private bool isMasterMuted;
+    [SerializeField] private bool isBgmMuted;
+    [SerializeField] private bool isSeMuted;
+    [SerializeField, Range(0f, 1f)] private float masterVolumeBeforeMute = 1f;
+    [SerializeField, Range(0f, 1f)] private float bgmVolumeBeforeMute = 1f;
+    [SerializeField, Range(0f, 1f)] private float seVolumeBeforeMute = 1f;
+    [SerializeField] private AudioKey currentBgmKey = AudioKey.None;
+    [SerializeField] private GameManager.GameFlowState lastHandledStateSe = GameManager.GameFlowState.Title;
+
+    private GameManager subscribedGameManager;
+    private Coroutine waitForGameManagerCoroutine;
+    private bool hasHandledStateSe;
+
+    public AudioDatabase Database => audioDatabase;
+    public float MasterVolume => currentMasterVolume;
+    public float BgmVolume => currentBgmVolume;
+    public float SeVolume => currentSeVolume;
+    public float MasterVolumeBeforeMute => masterVolumeBeforeMute;
+    public float BgmVolumeBeforeMute => bgmVolumeBeforeMute;
+    public float SeVolumeBeforeMute => seVolumeBeforeMute;
+    public bool IsMasterMuted => isMasterMuted || currentMasterVolume <= MutedThreshold;
+    public bool IsBgmMuted => isBgmMuted || currentBgmVolume <= MutedThreshold;
+    public bool IsSeMuted => isSeMuted || currentSeVolume <= MutedThreshold;
+    public float FinalBgmVolume => bgmPlayback != null ? bgmPlayback.FinalVolume : Mathf.Clamp01(GetEffectiveVolume(currentMasterVolume, isMasterMuted) * GetEffectiveVolume(currentBgmVolume, isBgmMuted));
+    public float FinalSeVolume => Mathf.Clamp01(GetEffectiveVolume(currentMasterVolume, isMasterMuted) * GetEffectiveVolume(currentSeVolume, isSeMuted));
+    public AudioKey CurrentBgmKey => currentBgmKey;
+    public AudioClip CurrentBgmClip => bgmPlayback != null ? bgmPlayback.CurrentClip : null;
+    public bool IsBgmPlaying => bgmPlayback != null && bgmPlayback.IsPlaying;
+
+    public event Action<float> OnMasterVolumeChanged;
+    public event Action<float> OnBgmVolumeChanged;
+    public event Action<float> OnSeVolumeChanged;
+    public event Action<bool> OnMasterMuteChanged;
+    public event Action<bool> OnBgmMuteChanged;
+    public event Action<bool> OnSeMuteChanged;
+
+    private void Reset()
+    {
+        CacheLocalReferences();
+        NormalizeRuntimeValues();
+        ApplyAllRuntimeVolumes();
+    }
+
+    private void Awake()
+    {
+        if (Instance != null && Instance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
+
+        Instance = this;
+
+        if (dontDestroyOnLoad)
+        {
+            DontDestroyOnLoad(gameObject);
+        }
+
+        CacheLocalReferences();
+        LoadVolumes();
+        ApplyAllRuntimeVolumes();
+
+        if (playInitialBgmOnAwake && initialBgmKey != AudioKey.None)
+        {
+            PlayBgm(initialBgmKey);
+        }
+    }
+
+    private void OnEnable()
+    {
+        if (Instance != this)
+            return;
+
+        TrySubscribeOrWaitForGameManager();
+    }
+
+    private void Start()
+    {
+        if (Instance != this)
+            return;
+
+        TrySubscribeOrWaitForGameManager();
+    }
+
+    private void OnDisable()
+    {
+        if (Instance != this)
+            return;
+
+        StopWaitingForGameManager();
+        UnsubscribeFromGameManager();
+    }
+
+    private void OnDestroy()
+    {
+        if (Instance == this)
+        {
+            Instance = null;
+        }
+    }
+
+    private void OnValidate()
+    {
+        NormalizeRuntimeValues();
+
+        if (Application.isPlaying)
+        {
+            ApplyAllRuntimeVolumes();
+        }
+    }
+
+    #region Volume API
+
+    public void SetMasterVolume(float volume)
+    {
+        bool changed = SetVolumeValue(
+            volume,
+            ref currentMasterVolume,
+            ref masterVolumeBeforeMute,
+            ref isMasterMuted,
+            defaultMasterVolume,
+            ApplyAllRuntimeVolumes,
+            OnMasterVolumeChanged,
+            OnMasterMuteChanged);
+
+        if (changed)
+        {
+            SaveVolumesToPlayerPrefs();
+        }
+    }
+
+    public void SetBgmVolume(float volume)
+    {
+        bool changed = SetVolumeValue(
+            volume,
+            ref currentBgmVolume,
+            ref bgmVolumeBeforeMute,
+            ref isBgmMuted,
+            defaultBgmVolume,
+            ApplyBgmRuntimeVolume,
+            OnBgmVolumeChanged,
+            OnBgmMuteChanged);
+
+        if (changed)
+        {
+            SaveVolumesToPlayerPrefs();
+        }
+    }
+
+    public void SetSeVolume(float volume)
+    {
+        bool changed = SetVolumeValue(
+            volume,
+            ref currentSeVolume,
+            ref seVolumeBeforeMute,
+            ref isSeMuted,
+            defaultSeVolume,
+            ApplySeRuntimeVolume,
+            OnSeVolumeChanged,
+            OnSeMuteChanged);
+
+        if (changed)
+        {
+            SaveVolumesToPlayerPrefs();
+        }
+    }
+
+    public void ToggleMasterMute()
+    {
+        SetMasterMuted(!IsMasterMuted);
+    }
+
+    public void ToggleBgmMute()
+    {
+        SetBgmMuted(!IsBgmMuted);
+    }
+
+    public void ToggleSeMute()
+    {
+        SetSeMuted(!IsSeMuted);
+    }
+
+    public void SetMasterMuted(bool muted)
+    {
+        bool changed = SetMutedValue(
+            muted,
+            ref currentMasterVolume,
+            ref masterVolumeBeforeMute,
+            ref isMasterMuted,
+            defaultMasterVolume,
+            ApplyAllRuntimeVolumes,
+            OnMasterVolumeChanged,
+            OnMasterMuteChanged);
+
+        if (changed)
+        {
+            SaveVolumesToPlayerPrefs();
+        }
+    }
+
+    public void SetBgmMuted(bool muted)
+    {
+        bool changed = SetMutedValue(
+            muted,
+            ref currentBgmVolume,
+            ref bgmVolumeBeforeMute,
+            ref isBgmMuted,
+            defaultBgmVolume,
+            ApplyBgmRuntimeVolume,
+            OnBgmVolumeChanged,
+            OnBgmMuteChanged);
+
+        if (changed)
+        {
+            SaveVolumesToPlayerPrefs();
+        }
+    }
+
+    public void SetSeMuted(bool muted)
+    {
+        bool changed = SetMutedValue(
+            muted,
+            ref currentSeVolume,
+            ref seVolumeBeforeMute,
+            ref isSeMuted,
+            defaultSeVolume,
+            ApplySeRuntimeVolume,
+            OnSeVolumeChanged,
+            OnSeMuteChanged);
+
+        if (changed)
+        {
+            SaveVolumesToPlayerPrefs();
+        }
+    }
+
+    public void ResetSavedVolumes()
+    {
+        PlayerPrefs.DeleteKey(MasterVolumeKey);
+        PlayerPrefs.DeleteKey(BgmVolumeKey);
+        PlayerPrefs.DeleteKey(SeVolumeKey);
+        PlayerPrefs.DeleteKey(MasterMutedKey);
+        PlayerPrefs.DeleteKey(BgmMutedKey);
+        PlayerPrefs.DeleteKey(SeMutedKey);
+        PlayerPrefs.DeleteKey(MasterVolumeBeforeMuteKey);
+        PlayerPrefs.DeleteKey(BgmVolumeBeforeMuteKey);
+        PlayerPrefs.DeleteKey(SeVolumeBeforeMuteKey);
+        PlayerPrefs.Save();
+
+        currentMasterVolume = Mathf.Clamp01(defaultMasterVolume);
+        currentBgmVolume = Mathf.Clamp01(defaultBgmVolume);
+        currentSeVolume = Mathf.Clamp01(defaultSeVolume);
+        isMasterMuted = currentMasterVolume <= MutedThreshold;
+        isBgmMuted = currentBgmVolume <= MutedThreshold;
+        isSeMuted = currentSeVolume <= MutedThreshold;
+        masterVolumeBeforeMute = SanitizeStoredBeforeMute(currentMasterVolume, defaultMasterVolume);
+        bgmVolumeBeforeMute = SanitizeStoredBeforeMute(currentBgmVolume, defaultBgmVolume);
+        seVolumeBeforeMute = SanitizeStoredBeforeMute(currentSeVolume, defaultSeVolume);
+
+        ApplyAllRuntimeVolumes();
+
+        OnMasterVolumeChanged?.Invoke(currentMasterVolume);
+        OnBgmVolumeChanged?.Invoke(currentBgmVolume);
+        OnSeVolumeChanged?.Invoke(currentSeVolume);
+        OnMasterMuteChanged?.Invoke(IsMasterMuted);
+        OnBgmMuteChanged?.Invoke(IsBgmMuted);
+        OnSeMuteChanged?.Invoke(IsSeMuted);
+    }
+
+    #endregion
+
+    #region BGM API
+
+    public bool PlayBgm(AudioKey key)
+    {
+        if (!TryResolveEntry(key, GameAudioKind.Bgm, out AudioDatabase.AudioEntry entry))
+            return false;
+
+        if (bgmPlayback == null)
+        {
+            Warn("BgmPlaybackController が未設定です。");
+            return false;
+        }
+
+        bgmPlayback.Play(entry.Clip, entry.RestartIfSame, entry.Loop, entry.VolumeScale);
+        currentBgmKey = key;
+        return true;
+    }
+
+    public void StopBgm()
+    {
+        if (bgmPlayback == null)
+            return;
+
+        bgmPlayback.Stop();
+    }
+
+    public void StopBgmAndClearClip()
+    {
+        if (bgmPlayback == null)
+            return;
+
+        bgmPlayback.StopAndClearClip();
+        currentBgmKey = AudioKey.None;
+    }
+
+    public void PauseBgm()
+    {
+        if (bgmPlayback == null)
+            return;
+
+        bgmPlayback.Pause();
+    }
+
+    public void ResumeBgm()
+    {
+        if (bgmPlayback == null)
+            return;
+
+        bgmPlayback.Resume();
+    }
+
+    public void SetBgmLoop(bool loop)
+    {
+        if (bgmPlayback == null)
+            return;
+
+        bgmPlayback.SetLoop(loop);
+    }
+
+    #endregion
+
+    #region SE API
+
+    public bool PlaySe(AudioKey key)
+    {
+        if (!TryResolveEntry(key, GameAudioKind.Se, out AudioDatabase.AudioEntry entry))
+            return false;
+
+        if (sePlayback == null)
+        {
+            Warn("SePlaybackController が未設定です。");
+            return false;
+        }
+
+        sePlayback.Play(entry.Clip, entry.VolumeScale);
+        return true;
+    }
+
+    #endregion
+
+    #region Game State Audio
+
+    private void TrySubscribeOrWaitForGameManager()
+    {
+        if (!playSeOnGameFlowStateChanged)
+            return;
+
+        if (TrySubscribeToGameManager())
+            return;
+
+        if (waitForGameManagerCoroutine == null && isActiveAndEnabled)
+            waitForGameManagerCoroutine = StartCoroutine(Co_WaitForGameManagerAndSubscribe());
+    }
+
+    private IEnumerator Co_WaitForGameManagerAndSubscribe()
+    {
+        while (isActiveAndEnabled && GameManager.Instance == null)
+            yield return null;
+
+        waitForGameManagerCoroutine = null;
+
+        if (!isActiveAndEnabled)
+            yield break;
+
+        TrySubscribeToGameManager();
+    }
+
+    private bool TrySubscribeToGameManager()
+    {
+        if (!playSeOnGameFlowStateChanged)
+            return false;
+
+        GameManager manager = GameManager.Instance;
+        if (manager == null)
+            return false;
+
+        if (subscribedGameManager == manager)
+            return true;
+
+        UnsubscribeFromGameManager();
+
+        subscribedGameManager = manager;
+        subscribedGameManager.OnGameFlowStateChanged += HandleGameFlowStateChanged;
+
+        HandleCurrentGameFlowStateIfNeeded(subscribedGameManager.CurrentState);
+        return true;
+    }
+
+    private void UnsubscribeFromGameManager()
+    {
+        if (subscribedGameManager == null)
+            return;
+
+        subscribedGameManager.OnGameFlowStateChanged -= HandleGameFlowStateChanged;
+        subscribedGameManager = null;
+    }
+
+    private void StopWaitingForGameManager()
+    {
+        if (waitForGameManagerCoroutine == null)
+            return;
+
+        StopCoroutine(waitForGameManagerCoroutine);
+        waitForGameManagerCoroutine = null;
+    }
+
+    private void HandleGameFlowStateChanged(GameManager.GameFlowState previousState, GameManager.GameFlowState nextState)
+    {
+        HandleCurrentGameFlowStateIfNeeded(nextState);
+    }
+
+    private void HandleCurrentGameFlowStateIfNeeded(GameManager.GameFlowState state)
+    {
+        if (!playSeOnGameFlowStateChanged)
+            return;
+
+        if (hasHandledStateSe && lastHandledStateSe == state)
+            return;
+
+        hasHandledStateSe = true;
+        lastHandledStateSe = state;
+
+        AudioKey seKey = ResolveStateSeKey(state);
+        if (seKey != AudioKey.None)
+            PlaySe(seKey);
+
+        AudioKey bgmKey = ResolveStateBgmKey(state);
+        if (bgmKey != AudioKey.None)
+            PlayBgm(bgmKey);
+    }
+
+    private AudioKey ResolveStateSeKey(GameManager.GameFlowState state)
+    {
+        switch (state)
+        {
+            case GameManager.GameFlowState.GameClear:
+                return playGameClearSeOnStateChanged ? gameClearStateSeKey : AudioKey.None;
+
+            case GameManager.GameFlowState.GameOver:
+                return gameOverStateSeKey;
+
+            default:
+                return AudioKey.None;
+        }
+    }
+
+    private AudioKey ResolveStateBgmKey(GameManager.GameFlowState state)
+    {
+        switch (state)
+        {
+            case GameManager.GameFlowState.GameClear:
+                return playGameClearBgmOnStateChanged ? gameClearStateBgmKey : AudioKey.None;
+
+            case GameManager.GameFlowState.GameOver:
+                return gameOverStateBgmKey;
+
+            default:
+                return AudioKey.None;
+        }
+    }
+
+    #endregion
+
+    public void SetDatabase(AudioDatabase database)
+    {
+        audioDatabase = database;
+    }
+
+    private bool TryResolveEntry(AudioKey key, GameAudioKind expectedKind, out AudioDatabase.AudioEntry entry)
+    {
+        entry = null;
+
+        if (key == AudioKey.None)
+        {
+            Warn("AudioKey.None は再生できません。");
+            return false;
+        }
+
+        if (audioDatabase == null)
+        {
+            Warn("AudioDatabase が未設定です。");
+            return false;
+        }
+
+        if (!audioDatabase.TryGetEntry(key, out entry) || entry == null)
+        {
+            Warn($"AudioDatabase に {key} の定義がありません。");
+            return false;
+        }
+
+        if (entry.Kind != expectedKind)
+        {
+            Warn($"{key} は {entry.Kind} として登録されています。{expectedKind} としては再生できません。");
+            entry = null;
+            return false;
+        }
+
+        if (entry.Clip == null)
+        {
+            Warn($"{key} の AudioClip が未設定です。");
+            return false;
+        }
+
+        return true;
+    }
+
+    private void LoadVolumes()
+    {
+        currentMasterVolume = Mathf.Clamp01(PlayerPrefs.GetFloat(MasterVolumeKey, defaultMasterVolume));
+        currentBgmVolume = Mathf.Clamp01(PlayerPrefs.GetFloat(BgmVolumeKey, defaultBgmVolume));
+        currentSeVolume = Mathf.Clamp01(PlayerPrefs.GetFloat(SeVolumeKey, defaultSeVolume));
+
+        isMasterMuted = PlayerPrefs.GetInt(MasterMutedKey, currentMasterVolume <= MutedThreshold ? 1 : 0) != 0;
+        isBgmMuted = PlayerPrefs.GetInt(BgmMutedKey, currentBgmVolume <= MutedThreshold ? 1 : 0) != 0;
+        isSeMuted = PlayerPrefs.GetInt(SeMutedKey, currentSeVolume <= MutedThreshold ? 1 : 0) != 0;
+
+        masterVolumeBeforeMute = Mathf.Clamp01(PlayerPrefs.GetFloat(MasterVolumeBeforeMuteKey, SanitizeStoredBeforeMute(currentMasterVolume, defaultMasterVolume)));
+        bgmVolumeBeforeMute = Mathf.Clamp01(PlayerPrefs.GetFloat(BgmVolumeBeforeMuteKey, SanitizeStoredBeforeMute(currentBgmVolume, defaultBgmVolume)));
+        seVolumeBeforeMute = Mathf.Clamp01(PlayerPrefs.GetFloat(SeVolumeBeforeMuteKey, SanitizeStoredBeforeMute(currentSeVolume, defaultSeVolume)));
+
+        if (isMasterMuted) currentMasterVolume = 0f;
+        if (isBgmMuted) currentBgmVolume = 0f;
+        if (isSeMuted) currentSeVolume = 0f;
+
+        NormalizeRuntimeValues();
+    }
+
+    private void SaveVolumesToPlayerPrefs()
+    {
+        NormalizeRuntimeValues();
+
+        PlayerPrefs.SetFloat(MasterVolumeKey, currentMasterVolume);
+        PlayerPrefs.SetFloat(BgmVolumeKey, currentBgmVolume);
+        PlayerPrefs.SetFloat(SeVolumeKey, currentSeVolume);
+
+        PlayerPrefs.SetInt(MasterMutedKey, IsMasterMuted ? 1 : 0);
+        PlayerPrefs.SetInt(BgmMutedKey, IsBgmMuted ? 1 : 0);
+        PlayerPrefs.SetInt(SeMutedKey, IsSeMuted ? 1 : 0);
+
+        PlayerPrefs.SetFloat(MasterVolumeBeforeMuteKey, SanitizeStoredBeforeMute(masterVolumeBeforeMute, defaultMasterVolume));
+        PlayerPrefs.SetFloat(BgmVolumeBeforeMuteKey, SanitizeStoredBeforeMute(bgmVolumeBeforeMute, defaultBgmVolume));
+        PlayerPrefs.SetFloat(SeVolumeBeforeMuteKey, SanitizeStoredBeforeMute(seVolumeBeforeMute, defaultSeVolume));
+
+        PlayerPrefs.Save();
+    }
+
+    private bool SetVolumeValue(
+        float volume,
+        ref float currentVolume,
+        ref float volumeBeforeMute,
+        ref bool isMuted,
+        float defaultVolume,
+        Action applyVolume,
+        Action<float> onVolumeChanged,
+        Action<bool> onMuteChanged)
+    {
+        float previousVolume = currentVolume;
+        bool previousMuted = isMuted || previousVolume <= MutedThreshold;
+
+        float safeVolume = Mathf.Clamp01(volume);
+        currentVolume = safeVolume;
+
+        if (safeVolume <= MutedThreshold)
+        {
+            isMuted = true;
+            volumeBeforeMute = SanitizeStoredBeforeMute(volumeBeforeMute, defaultVolume);
+        }
+        else
+        {
+            isMuted = false;
+            volumeBeforeMute = safeVolume;
+        }
+
+        applyVolume?.Invoke();
+
+        bool volumeChanged = !Approximately(previousVolume, currentVolume);
+        bool mutedChanged = previousMuted != (isMuted || currentVolume <= MutedThreshold);
+
+        if (volumeChanged)
+        {
+            onVolumeChanged?.Invoke(currentVolume);
+        }
+
+        if (mutedChanged)
+        {
+            onMuteChanged?.Invoke(isMuted || currentVolume <= MutedThreshold);
+        }
+
+        return volumeChanged || mutedChanged;
+    }
+
+    private bool SetMutedValue(
+        bool muted,
+        ref float currentVolume,
+        ref float volumeBeforeMute,
+        ref bool isMuted,
+        float defaultVolume,
+        Action applyVolume,
+        Action<float> onVolumeChanged,
+        Action<bool> onMuteChanged)
+    {
+        float previousVolume = currentVolume;
+        bool previousMuted = isMuted || currentVolume <= MutedThreshold;
+
+        if (muted)
+        {
+            if (currentVolume > MutedThreshold)
+            {
+                volumeBeforeMute = currentVolume;
+            }
+            else
+            {
+                volumeBeforeMute = SanitizeStoredBeforeMute(volumeBeforeMute, defaultVolume);
+            }
+
+            currentVolume = 0f;
+            isMuted = true;
+        }
+        else
+        {
+            float restoreVolume = SanitizeStoredBeforeMute(volumeBeforeMute, defaultVolume);
+            currentVolume = restoreVolume;
+            volumeBeforeMute = restoreVolume;
+            isMuted = false;
+        }
+
+        applyVolume?.Invoke();
+
+        bool volumeChanged = !Approximately(previousVolume, currentVolume);
+        bool mutedChanged = previousMuted != (isMuted || currentVolume <= MutedThreshold);
+
+        if (volumeChanged)
+        {
+            onVolumeChanged?.Invoke(currentVolume);
+        }
+
+        if (mutedChanged)
+        {
+            onMuteChanged?.Invoke(isMuted || currentVolume <= MutedThreshold);
+        }
+
+        return volumeChanged || mutedChanged;
+    }
+
+    private void ApplyAllRuntimeVolumes()
+    {
+        ApplyBgmRuntimeVolume();
+        ApplySeRuntimeVolume();
+    }
+
+    private void ApplyBgmRuntimeVolume()
+    {
+        if (bgmPlayback == null)
+            return;
+
+        bgmPlayback.SetBaseVolume(Mathf.Clamp01(
+            GetEffectiveVolume(currentMasterVolume, isMasterMuted)
+            * GetEffectiveVolume(currentBgmVolume, isBgmMuted)));
+    }
+
+    private void ApplySeRuntimeVolume()
+    {
+        if (sePlayback == null)
+            return;
+
+        sePlayback.SetBaseVolume(Mathf.Clamp01(
+            GetEffectiveVolume(currentMasterVolume, isMasterMuted)
+            * GetEffectiveVolume(currentSeVolume, isSeMuted)));
+    }
+
+    private void CacheLocalReferences()
+    {
+        if (bgmPlayback == null)
+        {
+            bgmPlayback = GetComponent<BgmPlaybackController>();
+            if (bgmPlayback == null)
+            {
+                bgmPlayback = gameObject.AddComponent<BgmPlaybackController>();
+            }
+        }
+
+        if (sePlayback == null)
+        {
+            sePlayback = GetComponent<SePlaybackController>();
+            if (sePlayback == null)
+            {
+                sePlayback = gameObject.AddComponent<SePlaybackController>();
+            }
+        }
+    }
+
+    private void NormalizeRuntimeValues()
+    {
+        defaultMasterVolume = Mathf.Clamp01(defaultMasterVolume);
+        defaultBgmVolume = Mathf.Clamp01(defaultBgmVolume);
+        defaultSeVolume = Mathf.Clamp01(defaultSeVolume);
+        minimumUnmuteVolume = Mathf.Clamp(minimumUnmuteVolume, 0.01f, 1f);
+
+        currentMasterVolume = Mathf.Clamp01(currentMasterVolume);
+        currentBgmVolume = Mathf.Clamp01(currentBgmVolume);
+        currentSeVolume = Mathf.Clamp01(currentSeVolume);
+
+        masterVolumeBeforeMute = SanitizeStoredBeforeMute(masterVolumeBeforeMute, defaultMasterVolume);
+        bgmVolumeBeforeMute = SanitizeStoredBeforeMute(bgmVolumeBeforeMute, defaultBgmVolume);
+        seVolumeBeforeMute = SanitizeStoredBeforeMute(seVolumeBeforeMute, defaultSeVolume);
+
+        if (isMasterMuted) currentMasterVolume = 0f;
+        if (isBgmMuted) currentBgmVolume = 0f;
+        if (isSeMuted) currentSeVolume = 0f;
+    }
+
+    private float SanitizeStoredBeforeMute(float value, float fallback)
+    {
+        float safeValue = Mathf.Clamp01(value);
+        if (safeValue > MutedThreshold)
+        {
+            return safeValue;
+        }
+
+        float safeFallback = Mathf.Clamp01(fallback);
+        if (safeFallback > MutedThreshold)
+        {
+            return safeFallback;
+        }
+
+        return Mathf.Clamp01(minimumUnmuteVolume);
+    }
+
+    private static float GetEffectiveVolume(float volume, bool muted)
+    {
+        if (muted)
+        {
+            return 0f;
+        }
+
+        return Mathf.Clamp01(volume);
+    }
+
+    private static bool Approximately(float a, float b)
+    {
+        return Mathf.Abs(a - b) <= CompareEpsilon;
+    }
+
+    private void Warn(string message)
+    {
+        if (!enableWarningLogs)
+            return;
+
+        Debug.LogWarning($"{nameof(GameAudioManager)}: {message}", this);
+    }
+}

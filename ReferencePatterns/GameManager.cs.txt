@@ -1,0 +1,572 @@
+using System;
+using UnityEngine;
+using UnityEngine.Events;
+using UnityEngine.SceneManagement;
+
+[AddComponentMenu("オプション/マネージャー/オプション：Game制御")]
+[DisallowMultipleComponent]
+public class GameManager : MonoBehaviour
+{
+    public enum GameFlowState
+    {
+        Title = 0,
+        // 旧名互換用。新規実装では Title を使用する。
+        Boot = Title,
+        Playing = 1,
+        GameOver = 2,
+        Transitioning = 3,
+        Tutorial = 4,
+        Music = 5,
+        GameClear = 6
+    }
+
+    public static GameManager Instance { get; private set; }
+
+    /// <summary>
+    /// ゲーム全体の状態が変わったことを知らせる通知。
+    /// Audio / UI / 入力制御など、状態を見て動きたい側はこの通知を受け取る。
+    /// </summary>
+    public event Action<GameFlowState, GameFlowState> OnGameFlowStateChanged;
+
+    /// <summary>
+    /// ゲームオーバー状態に入ったことだけを知らせる通知。
+    /// UI演出の開始など、GameOverの入り口で動きたい側が購読する。
+    /// </summary>
+    public event Action GameOverStarted;
+
+    /// <summary>
+    /// 旧呼び出しとの互換用。新規実装では GameOverStarted を使う。
+    /// </summary>
+    public event Action GameOverSequenceStarted;
+
+    /// <summary>
+    /// GameOver UI の表示演出が終わり、メニュー操作可能になったことを知らせる通知。
+    /// これはゲーム状態ではなく、UI側の表示完了通知として扱う。
+    /// </summary>
+    public event Action GameOverMenuOpened;
+
+    /// <summary>
+    /// ゲームクリア状態に入ったことだけを知らせる通知。
+    /// UI演出の開始など、GameClearの入り口で動きたい側が購読する。
+    /// </summary>
+    public event Action GameClearStarted;
+
+    [Header("状態（実行時確認用）")]
+    [SerializeField] private GameFlowState currentState = GameFlowState.Title;
+    [SerializeField] private bool isGameOver = false;
+    [SerializeField] private bool isGameClear = false;
+    [SerializeField] private bool hasNotifiedGameOverMenuOpened = false;
+
+    [Header("永続化")]
+    [SerializeField] private bool dontDestroyOnLoad = true;
+    [SerializeField] private bool logDuplicateInstanceWarning = false;
+
+    [Header("シーン遷移")]
+    [SerializeField] private SceneCatalog sceneCatalog;
+    [SerializeField] private SceneId titleSceneId = SceneId.Title;
+    [SerializeField] private SceneId mainGameSceneId = SceneId.MainGame;
+    [SerializeField] private SceneId tutorialSceneId = SceneId.Tutorial;
+    [SerializeField] private SceneId musicSceneId = SceneId.Music;
+    [SerializeField] private SceneId gameClearSceneId = SceneId.GameClear;
+    [SerializeField] private SceneId retrySceneId = SceneId.MainGame;
+    [SerializeField] private bool retryUsesActiveScene = true;
+    [SerializeField] private bool logSceneResolveWarnings = true;
+
+    [Header("ゲームオーバー（全体制御）")]
+    [Tooltip("ON の場合、GameOver UI の演出が終わってメニュー操作可能になったタイミングで Time.timeScale を 0 にします。")]
+    [SerializeField] private bool setTimeScaleZeroOnMenuOpen = false;
+
+    [Header("下位Manager参照（実行時確認用）")]
+    [SerializeField] private WaveManager waveManager;
+    [SerializeField] private TutorialManager tutorialManager;
+    [SerializeField] private GameClearManager gameClearManager;
+
+    [Header("イベント")]
+    [SerializeField] private UnityEvent onGameOverStarted;
+    [SerializeField] private UnityEvent onGameOverSequenceStarted;
+    [SerializeField] private UnityEvent onGameOverMenuOpened;
+    [SerializeField] private UnityEvent onGameClearStarted;
+    [SerializeField] private UnityEvent onRetryStarted;
+    [SerializeField] private UnityEvent onReturnToTitleStarted;
+
+    private bool tutorialStartNotified;
+    private bool gameClearStartNotified;
+
+    public bool IsGameOver => isGameOver;
+    public bool IsGameClear => isGameClear;
+    public bool IsTitle => currentState == GameFlowState.Title;
+    public bool IsPlaying => currentState == GameFlowState.Playing;
+    public bool IsTutorial => currentState == GameFlowState.Tutorial;
+    public bool IsMusic => currentState == GameFlowState.Music;
+    public bool IsTransitioning => currentState == GameFlowState.Transitioning;
+    public GameFlowState CurrentState => currentState;
+    public SceneCatalog SceneCatalog => sceneCatalog;
+    public SceneId GameClearSceneId => gameClearSceneId;
+
+    private void Awake()
+    {
+        if (!TryInitializeSingleton())
+            return;
+
+        if (dontDestroyOnLoad)
+            DontDestroyOnLoad(gameObject);
+
+        EnterSceneDefaultState(SceneManager.GetActiveScene(), false);
+    }
+
+    private void OnEnable()
+    {
+        if (Instance != this)
+            return;
+
+        SceneManager.sceneLoaded += HandleSceneLoaded;
+        GameOverNotifier.OnAnyGameOverNotified += HandleGameOverNotified;
+        GameClearNotifier.OnAnyGameClearNotified += HandleGameClearNotified;
+    }
+
+    private void Start()
+    {
+        if (Instance != this)
+            return;
+
+        EnterSceneDefaultState(SceneManager.GetActiveScene(), true);
+    }
+
+    private void OnDisable()
+    {
+        if (Instance != this)
+            return;
+
+        SceneManager.sceneLoaded -= HandleSceneLoaded;
+        GameOverNotifier.OnAnyGameOverNotified -= HandleGameOverNotified;
+        GameClearNotifier.OnAnyGameClearNotified -= HandleGameClearNotified;
+    }
+
+    private void OnDestroy()
+    {
+        if (Instance != this)
+            return;
+
+        SceneManager.sceneLoaded -= HandleSceneLoaded;
+        GameOverNotifier.OnAnyGameOverNotified -= HandleGameOverNotified;
+        GameClearNotifier.OnAnyGameClearNotified -= HandleGameClearNotified;
+        Instance = null;
+    }
+
+    private bool TryInitializeSingleton()
+    {
+        if (Instance != null && Instance != this)
+        {
+            if (logDuplicateInstanceWarning)
+                Debug.LogWarning("[GameManager] 既存のGameManagerが存在するため、このインスタンスは破棄します。", this);
+
+            Destroy(gameObject);
+            return false;
+        }
+
+        Instance = this;
+        return true;
+    }
+
+    private void HandleSceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+        RestoreRuntimeFlagsForNewScene();
+        EnterSceneDefaultState(scene, true);
+    }
+
+    private void RestoreRuntimeFlagsForNewScene()
+    {
+        Time.timeScale = 1f;
+        isGameOver = false;
+        isGameClear = false;
+        hasNotifiedGameOverMenuOpened = false;
+        tutorialStartNotified = false;
+        gameClearStartNotified = false;
+    }
+
+    private void EnterSceneDefaultState(Scene scene, bool notifyTutorialManager)
+    {
+        if (IsTitleScene(scene))
+        {
+            SetState(GameFlowState.Title);
+            return;
+        }
+
+        if (IsTutorialScene(scene))
+        {
+            SetState(GameFlowState.Tutorial);
+            if (notifyTutorialManager)
+                NotifyTutorialStartedIfPossible();
+            return;
+        }
+
+        tutorialStartNotified = false;
+
+        if (IsMusicScene(scene))
+        {
+            SetState(GameFlowState.Music);
+            return;
+        }
+
+        if (IsGameClearScene(scene))
+        {
+            isGameClear = true;
+            SetState(GameFlowState.GameClear);
+            if (notifyTutorialManager)
+                NotifyGameClearStartedIfPossible();
+            return;
+        }
+
+        SetState(GameFlowState.Playing);
+    }
+
+    private void SetState(GameFlowState nextState)
+    {
+        if (currentState == nextState)
+            return;
+
+        GameFlowState previousState = currentState;
+        currentState = nextState;
+        OnGameFlowStateChanged?.Invoke(previousState, currentState);
+    }
+
+    private bool IsTitleScene(Scene scene)
+    {
+        if (sceneCatalog == null)
+            return false;
+
+        return sceneCatalog.IsScene(scene, titleSceneId);
+    }
+
+    private bool IsTutorialScene(Scene scene)
+    {
+        if (sceneCatalog == null)
+            return false;
+
+        return sceneCatalog.IsScene(scene, tutorialSceneId);
+    }
+
+    private bool IsMusicScene(Scene scene)
+    {
+        if (sceneCatalog == null)
+            return false;
+
+        return sceneCatalog.IsScene(scene, musicSceneId);
+    }
+
+    private bool IsGameClearScene(Scene scene)
+    {
+        if (sceneCatalog == null)
+            return false;
+
+        return sceneCatalog.IsScene(scene, gameClearSceneId);
+    }
+
+    private void HandleGameOverNotified(GameOverNotifier notifier)
+    {
+        TriggerGameOver(notifier);
+    }
+
+    private void HandleGameClearNotified(GameClearNotifier notifier)
+    {
+        TriggerGameClear(notifier);
+    }
+
+    public void TriggerGameOver()
+    {
+        TriggerGameOver(null);
+    }
+
+    public void TriggerGameOver(GameOverNotifier notifier)
+    {
+        if (isGameOver || isGameClear || currentState == GameFlowState.Transitioning || currentState == GameFlowState.Tutorial)
+            return;
+
+        isGameOver = true;
+        hasNotifiedGameOverMenuOpened = false;
+        SetState(GameFlowState.GameOver);
+
+        InputModeSwitcher.Instance?.SetMode(InputMode.None);
+        waveManager?.AbortForGameOver();
+
+        GameOverStarted?.Invoke();
+        GameOverSequenceStarted?.Invoke();
+
+        onGameOverStarted?.Invoke();
+        onGameOverSequenceStarted?.Invoke();
+    }
+
+    public void TriggerGameClear()
+    {
+        TriggerGameClear(null);
+    }
+
+    public void TriggerGameClear(GameClearNotifier notifier)
+    {
+        if (isGameClear || isGameOver || currentState == GameFlowState.Transitioning || currentState == GameFlowState.Tutorial)
+            return;
+
+        isGameClear = true;
+        SetState(GameFlowState.GameClear);
+
+        InputModeSwitcher.Instance?.SetMode(InputMode.None);
+
+        GameClearStarted?.Invoke();
+        onGameClearStarted?.Invoke();
+        NotifyGameClearStartedIfPossible();
+    }
+
+    /// <summary>
+    /// GameOver UI の演出が完了し、Retry / Title などを押せる状態になったことを受け取る。
+    /// ここでは GameFlowState は変更しない。ゲーム状態は GameOver のまま維持する。
+    /// </summary>
+    public void NotifyGameOverMenuOpenedByUI()
+    {
+        NotifyGameOverPresentationReadyByUI();
+    }
+
+    public void NotifyGameOverPresentationReadyByUI()
+    {
+        if (!isGameOver)
+            return;
+
+        if (hasNotifiedGameOverMenuOpened)
+            return;
+
+        hasNotifiedGameOverMenuOpened = true;
+
+        if (setTimeScaleZeroOnMenuOpen)
+            Time.timeScale = 0f;
+
+        GameOverMenuOpened?.Invoke();
+        onGameOverMenuOpened?.Invoke();
+    }
+
+    [ContextMenu("Debug/現在シーンを再読み込み")]
+    public void ReloadCurrentScene()
+    {
+        RetryCurrentScene();
+    }
+
+    public string GetRetryScenePath()
+    {
+        if (retryUsesActiveScene)
+            return SceneManager.GetActiveScene().path;
+
+        return ResolveScenePath(retrySceneId, "リトライ先");
+    }
+
+    public void RetryCurrentScene()
+    {
+        if (currentState == GameFlowState.Transitioning)
+            return;
+
+        GameFlowState fallbackState = isGameOver
+            ? GameFlowState.GameOver
+            : isGameClear
+                ? GameFlowState.GameClear
+                : currentState;
+
+        SetState(GameFlowState.Transitioning);
+        onRetryStarted?.Invoke();
+
+        string scenePath = GetRetryScenePath();
+        if (!TryLoadScenePath(scenePath, "リトライ先"))
+            SetState(fallbackState);
+    }
+
+    public void ReturnToTitle()
+    {
+        if (currentState == GameFlowState.Transitioning)
+            return;
+
+        GameFlowState fallbackState = isGameOver
+            ? GameFlowState.GameOver
+            : isGameClear
+                ? GameFlowState.GameClear
+                : currentState;
+
+        SetState(GameFlowState.Transitioning);
+        onReturnToTitleStarted?.Invoke();
+
+        string scenePath = ResolveScenePath(titleSceneId, "タイトル遷移先");
+        if (!TryLoadScenePath(scenePath, "タイトル遷移先"))
+            SetState(fallbackState);
+    }
+
+
+    /// <summary>
+    /// GameClear演出後に、SceneCatalogで指定されたゲームクリアシーンへ遷移する。
+    /// 暗転などの表示演出は外側のControllerが担当し、GameManagerはシーン解決とロードだけを扱う。
+    /// </summary>
+    public void GoToGameClearScene()
+    {
+        if (currentState == GameFlowState.Transitioning)
+            return;
+
+        GameFlowState fallbackState = isGameClear
+            ? GameFlowState.GameClear
+            : currentState;
+
+        SetState(GameFlowState.Transitioning);
+
+        string scenePath = ResolveScenePath(gameClearSceneId, "ゲームクリア遷移先");
+        if (!TryLoadScenePath(scenePath, "ゲームクリア遷移先"))
+            SetState(fallbackState);
+    }
+
+    // Button / UnityEvent から呼びやすい別名。
+    public void LoadGameClearScene()
+    {
+        GoToGameClearScene();
+    }
+
+    public void StartMainGameFromTutorial()
+    {
+        if (currentState == GameFlowState.Transitioning)
+            return;
+
+        if (currentState != GameFlowState.Tutorial)
+        {
+            LogSceneWarning("[GameManager] Tutorial状態ではないため、本番開始遷移を中止します。", this);
+            return;
+        }
+
+        tutorialManager?.FinishTutorial();
+        SetState(GameFlowState.Transitioning);
+
+        string scenePath = ResolveScenePath(mainGameSceneId, "チュートリアル後の本番遷移先");
+        if (!TryLoadScenePath(scenePath, "チュートリアル後の本番遷移先"))
+            SetState(GameFlowState.Tutorial);
+    }
+
+    public void SetWaveManager(WaveManager manager)
+    {
+        waveManager = manager;
+    }
+
+    public void ClearWaveManager(WaveManager manager)
+    {
+        if (waveManager != manager)
+            return;
+
+        waveManager = null;
+    }
+
+    public void SetTutorialManager(TutorialManager manager)
+    {
+        tutorialManager = manager;
+        NotifyTutorialStartedIfPossible();
+    }
+
+    public void ClearTutorialManager(TutorialManager manager)
+    {
+        if (tutorialManager != manager)
+            return;
+
+        tutorialManager = null;
+    }
+
+
+    public void SetGameClearManager(GameClearManager manager)
+    {
+        gameClearManager = manager;
+        NotifyGameClearStartedIfPossible();
+    }
+
+    public void ClearGameClearManager(GameClearManager manager)
+    {
+        if (gameClearManager != manager)
+            return;
+
+        gameClearManager = null;
+    }
+
+    public void SetSceneCatalog(SceneCatalog catalog)
+    {
+        sceneCatalog = catalog;
+    }
+
+    private void NotifyTutorialStartedIfPossible()
+    {
+        if (currentState != GameFlowState.Tutorial)
+            return;
+
+        if (tutorialStartNotified)
+            return;
+
+        if (tutorialManager == null)
+            return;
+
+        tutorialStartNotified = true;
+        tutorialManager.BeginTutorial();
+    }
+
+    private void NotifyGameClearStartedIfPossible()
+    {
+        if (currentState != GameFlowState.GameClear)
+            return;
+
+        if (!isGameClear)
+            return;
+
+        if (gameClearStartNotified)
+            return;
+
+        if (gameClearManager == null)
+            return;
+
+        gameClearStartNotified = true;
+        gameClearManager.BeginGameClearSequence();
+    }
+
+    private string ResolveScenePath(SceneId sceneId, string label)
+    {
+        if (sceneId == SceneId.None)
+        {
+            LogSceneWarning($"[GameManager] {label} の SceneId が None です。", this);
+            return string.Empty;
+        }
+
+        if (sceneCatalog == null)
+        {
+            LogSceneWarning($"[GameManager] SceneCatalog が未設定のため、{label} を解決できません。", this);
+            return string.Empty;
+        }
+
+        if (!sceneCatalog.TryGetScenePath(sceneId, out string scenePath))
+        {
+            LogSceneWarning($"[GameManager] SceneCatalog に {label} の設定がありません。 SceneId={sceneId}", this);
+            return string.Empty;
+        }
+
+        return scenePath;
+    }
+
+    private bool TryLoadScenePath(string scenePath, string label)
+    {
+        if (string.IsNullOrWhiteSpace(scenePath))
+        {
+            LogSceneWarning($"[GameManager] {label} の scenePath が未設定です。", this);
+            return false;
+        }
+
+        Time.timeScale = 1f;
+        AsyncOperation op = SceneManager.LoadSceneAsync(scenePath);
+        if (op == null)
+        {
+            LogSceneWarning($"[GameManager] {label} の非同期ロード開始に失敗しました。 path={scenePath}", this);
+            return false;
+        }
+
+        return true;
+    }
+
+    private void LogSceneWarning(string message, UnityEngine.Object context)
+    {
+        if (!logSceneResolveWarnings)
+            return;
+
+        Debug.LogWarning(message, context);
+    }
+}

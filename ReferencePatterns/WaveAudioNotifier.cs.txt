@@ -1,0 +1,360 @@
+using System.Collections;
+using UnityEngine;
+
+/// <summary>
+/// WaveManager / WaveIntermissionUI の通知を受け取り、AudioKey に変換して GameAudioManager へ通知する。
+/// WaveManager 本体に AudioDatabase や AudioClip の知識を持たせないための中継役。
+/// </summary>
+[AddComponentMenu("音楽/音楽：Wave Audio Notifier")]
+[DisallowMultipleComponent]
+public sealed class WaveAudioNotifier : MonoBehaviour
+{
+    [Header("参照")]
+    [Tooltip("未設定なら同じGameObjectの WaveManager を自動取得します。")]
+    [SerializeField] private WaveManager waveManager;
+    [Tooltip("未設定なら同じGameObjectの WaveIntermissionUI を自動取得します。")]
+    [SerializeField] private WaveIntermissionUI intermissionUI;
+    [Tooltip("未設定なら同じGameObjectの WavePresentationController を自動取得します。Start画像表示とWaveStartSeを同期するために使います。")]
+    [SerializeField] private WavePresentationController presentationController;
+
+    [Header("Wave開始タイミング")]
+    [Tooltip("ONならWaveManagerのWave開始直後ではなく、startImageObject が表示された瞬間をWave開始音声の基準にします。")]
+    [SerializeField] private bool useStartImagePresentationAsWaveStartAudioCue = true;
+
+    [Header("Wave SE")]
+    [SerializeField] private bool playWaveStartSe = true;
+    [SerializeField] private AudioKey waveStartSeKey = AudioKey.WaveStartSe;
+    [SerializeField] private bool playWaveClearSe = true;
+    [SerializeField] private AudioKey waveClearSeKey = AudioKey.WaveClearSe;
+
+    [Header("Wave戦闘BGM")]
+    [Tooltip("Wave開始通知を受けた時に戦闘BGMへ切り替えます。")]
+    [SerializeField] private bool playCombatBgmOnWaveStarted = true;
+    [SerializeField] private AudioKey combatBgmKey = AudioKey.StageNormalBgm;
+    [Tooltip("bossWaveがONのWave開始時に使用するボス戦BGMです。通常Waveと同じ再生タイミング・遅延設定を使います。")]
+    [SerializeField] private AudioKey bossCombatBgmKey = AudioKey.BossBgm;
+    [Tooltip("WaveStartSeを先に聞かせるため、戦闘BGMの開始を遅らせます。")]
+    [SerializeField] private bool delayCombatBgmOnWaveStarted = true;
+    [Min(0f)] [SerializeField] private float combatBgmDelaySeconds = 1.0f;
+    [Tooltip("遅延中は現在のBGMを止め、WaveStartSeを聞こえやすくします。")]
+    [SerializeField] private bool stopCurrentBgmBeforeCombatDelay = true;
+    [SerializeField] private bool useUnscaledTimeForCombatBgmDelay = true;
+
+    [Header("Waveクリア後BGM")]
+    [Tooltip("報酬パネル表示開始時にBGMを止めます。StageNormalBgmとWaveIntermissionBgmの間を無音にするための設定です。")]
+    [SerializeField] private bool stopBgmOnRewardPanelPresentation = true;
+    [Tooltip("「防衛準備中」表示に入った時にWave休憩BGMを流します。")]
+    [SerializeField] private bool playIntermissionBgmOnDefensePreparation = true;
+    [SerializeField] private AudioKey intermissionBgmKey = AudioKey.WaveIntermissionBgm;
+
+    [Header("連続再生抑制")]
+    [Tooltip("同一通知が短時間で重複した場合にSEを間引くための最小間隔です。通常は保険用です。")]
+    [Min(0f)] [SerializeField] private float minimumPlayInterval = 0.05f;
+
+    [Header("デバッグ")]
+    [SerializeField] private bool logWarnings = true;
+
+    private bool isSubscribed;
+    private float lastWaveStartSeTime = -999f;
+    private float lastWaveClearSeTime = -999f;
+    private Coroutine delayedCombatBgmCoroutine;
+    private int activeWaveStartAudioWaveNumber = -1;
+    private bool hasPlayedWaveStartAudioForActiveWave;
+
+    private void Reset()
+    {
+        CacheReferences();
+    }
+
+    private void Awake()
+    {
+        CacheReferences();
+    }
+
+    private void OnEnable()
+    {
+        Subscribe();
+    }
+
+    private void OnDisable()
+    {
+        Unsubscribe();
+        CancelDelayedCombatBgm();
+    }
+
+    private void OnValidate()
+    {
+        minimumPlayInterval = Mathf.Max(0f, minimumPlayInterval);
+        combatBgmDelaySeconds = Mathf.Max(0f, combatBgmDelaySeconds);
+
+        if (!Application.isPlaying)
+        {
+            CacheReferences();
+        }
+    }
+
+    private void CacheReferences()
+    {
+        if (waveManager == null)
+        {
+            waveManager = GetComponent<WaveManager>();
+        }
+
+        if (intermissionUI == null)
+        {
+            intermissionUI = GetComponent<WaveIntermissionUI>();
+        }
+
+        if (presentationController == null)
+        {
+            presentationController = GetComponent<WavePresentationController>();
+        }
+    }
+
+    private void Subscribe()
+    {
+        if (isSubscribed)
+            return;
+
+        CacheReferences();
+
+        if (waveManager == null)
+        {
+            Warn($"{nameof(WaveAudioNotifier)}: {nameof(WaveManager)} が見つからないため、Wave音声通知を購読できません。");
+            return;
+        }
+
+        waveManager.OnWaveStarted += HandleWaveStarted;
+        waveManager.OnWaveCleared += HandleWaveCleared;
+
+        if (intermissionUI != null)
+        {
+            intermissionUI.OnRewardPanelPresentationStarted += HandleRewardPanelPresentationStarted;
+            intermissionUI.OnDefensePreparationShown += HandleDefensePreparationShown;
+        }
+        else
+        {
+            Warn($"{nameof(WaveAudioNotifier)}: {nameof(WaveIntermissionUI)} が見つからないため、報酬パネル/防衛準備中BGM通知を購読できません。");
+        }
+
+        if (presentationController != null)
+        {
+            presentationController.OnStartImagePresentationStarted += HandleStartImagePresentationStarted;
+        }
+        else if (useStartImagePresentationAsWaveStartAudioCue)
+        {
+            Warn($"{nameof(WaveAudioNotifier)}: {nameof(WavePresentationController)} が見つからないため、Wave開始音声はWaveManagerのWave開始通知で再生します。");
+        }
+
+        isSubscribed = true;
+    }
+
+    private void Unsubscribe()
+    {
+        if (!isSubscribed)
+            return;
+
+        if (waveManager != null)
+        {
+            waveManager.OnWaveStarted -= HandleWaveStarted;
+            waveManager.OnWaveCleared -= HandleWaveCleared;
+        }
+
+        if (intermissionUI != null)
+        {
+            intermissionUI.OnRewardPanelPresentationStarted -= HandleRewardPanelPresentationStarted;
+            intermissionUI.OnDefensePreparationShown -= HandleDefensePreparationShown;
+        }
+
+        if (presentationController != null)
+        {
+            presentationController.OnStartImagePresentationStarted -= HandleStartImagePresentationStarted;
+        }
+
+        isSubscribed = false;
+    }
+
+    private void HandleWaveStarted(int waveNumber)
+    {
+        CancelDelayedCombatBgm();
+
+        activeWaveStartAudioWaveNumber = waveNumber;
+        hasPlayedWaveStartAudioForActiveWave = false;
+
+        if (ShouldWaitForStartImageAudioCue())
+        {
+            if (playCombatBgmOnWaveStarted && stopCurrentBgmBeforeCombatDelay)
+            {
+                StopBgm();
+            }
+
+            return;
+        }
+
+        PlayWaveStartAudioCue(waveNumber);
+    }
+
+    private void HandleStartImagePresentationStarted(int waveNumber)
+    {
+        if (!useStartImagePresentationAsWaveStartAudioCue)
+            return;
+
+        PlayWaveStartAudioCue(waveNumber);
+    }
+
+    private bool ShouldWaitForStartImageAudioCue()
+    {
+        return useStartImagePresentationAsWaveStartAudioCue
+            && presentationController != null
+            && presentationController.CanShowStartImageOnCombatSpawning;
+    }
+
+    private void PlayWaveStartAudioCue(int waveNumber)
+    {
+        if (hasPlayedWaveStartAudioForActiveWave && waveNumber == activeWaveStartAudioWaveNumber)
+            return;
+
+        hasPlayedWaveStartAudioForActiveWave = true;
+        activeWaveStartAudioWaveNumber = waveNumber;
+
+        if (playWaveStartSe)
+        {
+            TryPlaySe(waveStartSeKey, ref lastWaveStartSeTime);
+        }
+
+        if (!playCombatBgmOnWaveStarted)
+            return;
+
+        AudioKey resolvedCombatBgmKey = ResolveCombatBgmKey(waveNumber);
+        if (resolvedCombatBgmKey == AudioKey.None)
+            return;
+
+        if (delayCombatBgmOnWaveStarted && combatBgmDelaySeconds > 0f)
+        {
+            if (stopCurrentBgmBeforeCombatDelay)
+            {
+                StopBgm();
+            }
+
+            delayedCombatBgmCoroutine = StartCoroutine(Co_PlayCombatBgmDelayed(resolvedCombatBgmKey));
+            return;
+        }
+
+        TryPlayBgm(resolvedCombatBgmKey);
+    }
+
+    private AudioKey ResolveCombatBgmKey(int waveNumber)
+    {
+        if (waveManager != null && waveManager.IsBossWaveNumber(waveNumber))
+            return bossCombatBgmKey;
+
+        return combatBgmKey;
+    }
+
+    private void HandleWaveCleared(int waveNumber)
+    {
+        if (!playWaveClearSe)
+            return;
+
+        TryPlaySe(waveClearSeKey, ref lastWaveClearSeTime);
+    }
+
+    private void HandleRewardPanelPresentationStarted(int clearedWaveNumber)
+    {
+        CancelDelayedCombatBgm();
+
+        if (!stopBgmOnRewardPanelPresentation)
+            return;
+
+        StopBgm();
+    }
+
+    private void HandleDefensePreparationShown(int clearedWaveNumber)
+    {
+        CancelDelayedCombatBgm();
+
+        if (!playIntermissionBgmOnDefensePreparation)
+            return;
+
+        TryPlayBgm(intermissionBgmKey);
+    }
+
+    private IEnumerator Co_PlayCombatBgmDelayed(AudioKey bgmKey)
+    {
+        float delay = Mathf.Max(0f, combatBgmDelaySeconds);
+
+        if (useUnscaledTimeForCombatBgmDelay)
+        {
+            float endTime = Time.unscaledTime + delay;
+            while (Time.unscaledTime < endTime)
+                yield return null;
+        }
+        else
+        {
+            yield return new WaitForSeconds(delay);
+        }
+
+        delayedCombatBgmCoroutine = null;
+        TryPlayBgm(bgmKey);
+    }
+
+    private void CancelDelayedCombatBgm()
+    {
+        if (delayedCombatBgmCoroutine == null)
+            return;
+
+        StopCoroutine(delayedCombatBgmCoroutine);
+        delayedCombatBgmCoroutine = null;
+    }
+
+    private void TryPlaySe(AudioKey key, ref float lastPlayTime)
+    {
+        if (key == AudioKey.None)
+            return;
+
+        if (minimumPlayInterval > 0f && Time.unscaledTime - lastPlayTime < minimumPlayInterval)
+            return;
+
+        if (GameAudioManager.Instance == null)
+        {
+            Warn($"{nameof(WaveAudioNotifier)}: {nameof(GameAudioManager)}.Instance が見つからないため、{key} を再生できません。");
+            return;
+        }
+
+        lastPlayTime = Time.unscaledTime;
+        GameAudioManager.Instance.PlaySe(key);
+    }
+
+    private void TryPlayBgm(AudioKey key)
+    {
+        if (key == AudioKey.None)
+            return;
+
+        if (GameAudioManager.Instance == null)
+        {
+            Warn($"{nameof(WaveAudioNotifier)}: {nameof(GameAudioManager)}.Instance が見つからないため、{key} を再生できません。");
+            return;
+        }
+
+        GameAudioManager.Instance.PlayBgm(key);
+    }
+
+    private void StopBgm()
+    {
+        if (GameAudioManager.Instance == null)
+        {
+            Warn($"{nameof(WaveAudioNotifier)}: {nameof(GameAudioManager)}.Instance が見つからないため、BGMを停止できません。");
+            return;
+        }
+
+        GameAudioManager.Instance.StopBgmAndClearClip();
+    }
+
+    private void Warn(string message)
+    {
+        if (!logWarnings)
+            return;
+
+        Debug.LogWarning(message, this);
+    }
+}

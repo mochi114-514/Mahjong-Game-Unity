@@ -1,0 +1,489 @@
+using System.Collections;
+using UnityEngine;
+using UnityEngine.Serialization;
+
+/// <summary>
+/// GameManager のゲーム状態を受け取り、BGM用 AudioKey に変換して GameAudioManager へ通知するスクリプト。
+///
+/// 配置想定:
+/// GameAudioManager と同じ GameObject にアタッチする。
+///
+/// 責務:
+/// - GameManager.Instance の OnGameFlowStateChanged を購読する
+/// - GameFlowState を AudioKey に変換する
+/// - 同じ GameObject の GameAudioManager へ PlayBgm を依頼する
+///
+/// 注意:
+/// - このスクリプト自体は Singleton にしない
+/// - GameAudioManager 本体には GameManager の状態を持ち込まない
+/// - GameManager は状態の送信元、GameFlowBgmNotifier はAudio側の受信・変換役として扱う
+/// </summary>
+[AddComponentMenu("音楽/音楽：Game状態BGM通知")]
+[DisallowMultipleComponent]
+[RequireComponent(typeof(GameAudioManager))]
+public sealed class GameFlowBgmNotifier : MonoBehaviour
+{
+    [Header("通知先")]
+    [Tooltip("同じ GameObject の GameAudioManager を指定します。未設定なら自動取得します。")]
+    [SerializeField] private GameAudioManager audioManager;
+
+    [Header("状態購読")]
+    [Tooltip("ON の場合、GameManager.Instance の状態変更通知を購読します。")]
+    [SerializeField] private bool subscribeGameManagerState = true;
+    [Tooltip("ON の場合、有効化時点の GameManager.CurrentState も即座にBGMへ反映します。")]
+    [SerializeField] private bool applyCurrentStateOnEnable = true;
+    [Tooltip("ON の場合、OnEnable時点で GameManager.Instance がまだ無い時に、見つかるまで軽く再試行します。")]
+    [SerializeField] private bool retryUntilGameManagerFound = true;
+    [Tooltip("GameManager.Instance が見つからない時の再試行間隔です。")]
+    [Min(0.05f)] [SerializeField] private float retryInterval = 0.2f;
+    [Tooltip("ON の場合、一定時間待っても GameManager.Instance が見つからない時だけ警告します。起動直後の生成順による一時的な未検出では警告しません。")]
+    [SerializeField] private bool warnIfGameManagerStillMissing = true;
+    [Tooltip("GameManager.Instance 未検出の警告を出すまでの猶予時間です。")]
+    [Min(0.1f)] [SerializeField] private float missingGameManagerWarningDelay = 3f;
+
+    [Header("状態別BGM")]
+    [Tooltip("Title 状態の時に再生するBGMです。")]
+    [FormerlySerializedAs("bootBgmKey")]
+    [SerializeField] private AudioKey titleBgmKey = AudioKey.TitleBgm;
+    [Tooltip("Playing 状態の時に再生するBGMです。")]
+    [SerializeField] private AudioKey playingBgmKey = AudioKey.StageNormalBgm;
+    [Tooltip("Tutorial 状態の時に再生するBGMです。")]
+    [SerializeField] private AudioKey tutorialBgmKey = AudioKey.TutorialBgm;
+    [Tooltip("GameOver 状態の時に再生するBGMです。不要なら None にしてください。")]
+    [SerializeField] private AudioKey gameOverBgmKey = AudioKey.GameOverBgm;
+    [Tooltip("GameClear 状態の時に再生するBGMです。不要なら None にしてください。")]
+    [SerializeField] private AudioKey gameClearBgmKey = AudioKey.GameClearBgm;
+
+    [Header("Playing BGM 開始遅延")]
+    [Tooltip("ON の場合、Playing 状態に入った直後は少し待ってから Stage BGM を再生します。Wave Start SE を先に聞かせたい時に使います。")]
+    [SerializeField] private bool delayPlayingBgmOnEnter = true;
+    [Tooltip("Playing 状態に入ってから Stage BGM を再生するまでの待ち時間です。Wave Start SE と重なりすぎる場合は少し長くします。")]
+    [Min(0f)] [SerializeField] private float playingBgmDelaySeconds = 1f;
+    [Tooltip("ON の場合、遅延待ち中に前のBGMを停止します。Title BGMを残さず、Wave Start SEを先に聞かせたい場合はON推奨です。")]
+    [SerializeField] private bool stopCurrentBgmBeforePlayingDelay = true;
+    [Tooltip("ON の場合、Time.timeScale の影響を受けずに遅延します。通常はこちらを推奨します。")]
+    [SerializeField] private bool useUnscaledTimeForPlayingBgmDelay = true;
+
+    [Header("Tutorial BGM 開始遅延")]
+    [Tooltip("ON の場合、Tutorial 状態に入った直後は少し待ってから Tutorial BGM を再生します。シーン読み込み直後の固まりとBGM開始が重なる場合に使います。")]
+    [SerializeField] private bool delayTutorialBgmOnEnter = true;
+    [Tooltip("Tutorial 状態に入ってから Tutorial BGM を再生するまでの待ち時間です。読み込み直後の違和感が残る場合は少し長くします。")]
+    [Min(0f)] [SerializeField] private float tutorialBgmDelaySeconds = 1f;
+    [Tooltip("ON の場合、遅延待ち中に前のBGMを停止します。Title BGMを残さず、Tutorial BGMを遅らせたい場合はON推奨です。")]
+    [SerializeField] private bool stopCurrentBgmBeforeTutorialDelay = true;
+    [Tooltip("ON の場合、Time.timeScale の影響を受けずに遅延します。通常はこちらを推奨します。")]
+    [SerializeField] private bool useUnscaledTimeForTutorialBgmDelay = true;
+
+    [Header("遅延BGM共通")]
+    [Tooltip("遅延BGMの待機開始前に、指定フレーム数だけ待ちます。シーン開始直後の初期化負荷を避けたい場合に使います。")]
+    [Min(0)] [SerializeField] private int delayedBgmWaitFramesBeforeCounting = 1;
+    [Tooltip("ON の場合、遅延秒数の計測を毎フレーム積算で行います。読み込み停止中に秒数だけ進んでしまう挙動を避けたい場合はON推奨です。")]
+    [SerializeField] private bool countDelayedBgmSecondsByFrame = true;
+
+    [Header("Transitioning の扱い")]
+    [Tooltip("ON の場合、シーン遷移中はBGM変更しません。通常はこちらを推奨します。")]
+    [SerializeField] private bool ignoreTransitioning = true;
+    [Tooltip("ignoreTransitioning が OFF の時、Transitioning に入ったらBGMを停止します。")]
+    [SerializeField] private bool stopBgmOnTransitioning = false;
+
+    [Header("None の扱い")]
+    [Tooltip("状態に対応する AudioKey が None の時、BGMを停止します。OFFなら何もしません。")]
+    [SerializeField] private bool stopBgmWhenKeyIsNone = false;
+
+    [Header("ログ")]
+    [SerializeField] private bool enableWarningLogs = true;
+    [SerializeField] private bool enableDebugLogs = false;
+
+    [Header("実行時表示（Inspector確認用）")]
+    [SerializeField] private bool isSubscribed;
+    [SerializeField] private GameManager.GameFlowState lastReceivedState = GameManager.GameFlowState.Title;
+    [SerializeField] private AudioKey lastRequestedBgmKey = AudioKey.None;
+
+    private GameManager subscribedGameManager;
+    private bool hasAppliedCurrentState;
+    private bool hasLoggedMissingGameManager;
+    private float nextRetryTime;
+    private float enabledTime;
+    private Coroutine delayedBgmCoroutine;
+
+    private void Reset()
+    {
+        CacheLocalReferences();
+    }
+
+    private void Awake()
+    {
+        CacheLocalReferences();
+    }
+
+    private void OnEnable()
+    {
+        CacheLocalReferences();
+
+        enabledTime = Time.unscaledTime;
+        hasLoggedMissingGameManager = false;
+
+        bool warnImmediately = !retryUntilGameManagerFound;
+        TrySubscribeToGameManager(applyCurrentStateOnEnable, warnImmediately);
+
+        nextRetryTime = Time.unscaledTime + Mathf.Max(0.05f, retryInterval);
+    }
+
+    private void Start()
+    {
+        if (subscribedGameManager != null)
+            return;
+
+        bool warnImmediately = !retryUntilGameManagerFound;
+        TrySubscribeToGameManager(applyCurrentStateOnEnable, warnImmediately);
+    }
+
+    private void Update()
+    {
+        if (!retryUntilGameManagerFound)
+            return;
+
+        if (subscribedGameManager != null)
+            return;
+
+        if (!subscribeGameManagerState)
+            return;
+
+        if (Time.unscaledTime < nextRetryTime)
+            return;
+
+        nextRetryTime = Time.unscaledTime + Mathf.Max(0.05f, retryInterval);
+
+        bool subscribed = TrySubscribeToGameManager(applyCurrentStateOnEnable, false);
+        if (subscribed)
+            return;
+
+        if (warnIfGameManagerStillMissing
+            && !hasLoggedMissingGameManager
+            && Time.unscaledTime - enabledTime >= Mathf.Max(0.1f, missingGameManagerWarningDelay))
+        {
+            WarnMissingGameManagerOnce();
+        }
+    }
+
+    private void OnDisable()
+    {
+        CancelDelayedPlayingBgm();
+        UnsubscribeFromGameManager();
+        hasAppliedCurrentState = false;
+        hasLoggedMissingGameManager = false;
+    }
+
+    private void OnDestroy()
+    {
+        CancelDelayedPlayingBgm();
+        UnsubscribeFromGameManager();
+    }
+
+    private void CacheLocalReferences()
+    {
+        if (audioManager == null)
+        {
+            audioManager = GetComponent<GameAudioManager>();
+        }
+    }
+
+    private bool TrySubscribeToGameManager(bool applyCurrentState, bool warnIfMissing)
+    {
+        if (!subscribeGameManagerState)
+            return false;
+
+        GameManager manager = GameManager.Instance;
+        if (manager == null)
+        {
+            if (warnIfMissing)
+            {
+                WarnMissingGameManagerOnce();
+            }
+
+            return false;
+        }
+
+        hasLoggedMissingGameManager = false;
+
+        if (subscribedGameManager == manager)
+            return true;
+
+        UnsubscribeFromGameManager();
+
+        subscribedGameManager = manager;
+        subscribedGameManager.OnGameFlowStateChanged += HandleGameFlowStateChanged;
+        isSubscribed = true;
+
+        if (enableDebugLogs)
+        {
+            Debug.Log($"{nameof(GameFlowBgmNotifier)}: GameManager の状態通知を購読しました。", this);
+        }
+
+        if (applyCurrentState && !hasAppliedCurrentState)
+        {
+            hasAppliedCurrentState = true;
+            ApplyState(subscribedGameManager.CurrentState);
+        }
+
+        return true;
+    }
+
+    private void UnsubscribeFromGameManager()
+    {
+        if (subscribedGameManager == null)
+        {
+            isSubscribed = false;
+            return;
+        }
+
+        subscribedGameManager.OnGameFlowStateChanged -= HandleGameFlowStateChanged;
+        subscribedGameManager = null;
+        isSubscribed = false;
+    }
+
+    private void HandleGameFlowStateChanged(GameManager.GameFlowState previousState, GameManager.GameFlowState currentState)
+    {
+        ApplyState(currentState);
+    }
+
+    private void ApplyState(GameManager.GameFlowState state)
+    {
+        CancelDelayedPlayingBgm();
+        lastReceivedState = state;
+
+        if (state == GameManager.GameFlowState.Transitioning)
+        {
+            HandleTransitioningState();
+            return;
+        }
+
+        AudioKey bgmKey = ResolveBgmKey(state);
+        lastRequestedBgmKey = bgmKey;
+
+        if (bgmKey == AudioKey.None)
+        {
+            if (stopBgmWhenKeyIsNone)
+            {
+                StopBgm();
+            }
+
+            return;
+        }
+
+        if (ShouldDelayBgmOnEnter(state, bgmKey))
+        {
+            ScheduleDelayedBgm(state, bgmKey);
+            return;
+        }
+
+        PlayBgm(bgmKey);
+    }
+
+    private void HandleTransitioningState()
+    {
+        if (ignoreTransitioning)
+            return;
+
+        lastRequestedBgmKey = AudioKey.None;
+
+        if (stopBgmOnTransitioning)
+        {
+            StopBgm();
+        }
+    }
+
+    private AudioKey ResolveBgmKey(GameManager.GameFlowState state)
+    {
+        switch (state)
+        {
+            case GameManager.GameFlowState.Title:
+                return titleBgmKey;
+
+            case GameManager.GameFlowState.Playing:
+                return playingBgmKey;
+
+            case GameManager.GameFlowState.Tutorial:
+                return tutorialBgmKey;
+
+            case GameManager.GameFlowState.GameOver:
+                return gameOverBgmKey;
+
+            case GameManager.GameFlowState.GameClear:
+                return gameClearBgmKey;
+
+            default:
+                return AudioKey.None;
+        }
+    }
+
+    private bool ShouldDelayBgmOnEnter(GameManager.GameFlowState state, AudioKey bgmKey)
+    {
+        if (bgmKey == AudioKey.None)
+            return false;
+
+        if (audioManager != null
+            && audioManager.CurrentBgmKey == bgmKey
+            && audioManager.IsBgmPlaying)
+        {
+            return false;
+        }
+
+        switch (state)
+        {
+            case GameManager.GameFlowState.Playing:
+                return delayPlayingBgmOnEnter && playingBgmDelaySeconds > 0f;
+
+            case GameManager.GameFlowState.Tutorial:
+                return delayTutorialBgmOnEnter && tutorialBgmDelaySeconds > 0f;
+
+            default:
+                return false;
+        }
+    }
+
+    private void ScheduleDelayedBgm(GameManager.GameFlowState expectedState, AudioKey bgmKey)
+    {
+        float delay = GetBgmDelaySeconds(expectedState);
+        bool stopCurrentBgm = ShouldStopCurrentBgmBeforeDelay(expectedState);
+        bool useUnscaledTime = ShouldUseUnscaledTimeForDelay(expectedState);
+
+        if (stopCurrentBgm)
+        {
+            StopBgm();
+        }
+
+        delayedBgmCoroutine = StartCoroutine(CoPlayBgmAfterDelay(expectedState, bgmKey, delay, useUnscaledTime));
+    }
+
+    private float GetBgmDelaySeconds(GameManager.GameFlowState state)
+    {
+        switch (state)
+        {
+            case GameManager.GameFlowState.Playing:
+                return Mathf.Max(0f, playingBgmDelaySeconds);
+
+            case GameManager.GameFlowState.Tutorial:
+                return Mathf.Max(0f, tutorialBgmDelaySeconds);
+
+            default:
+                return 0f;
+        }
+    }
+
+    private bool ShouldStopCurrentBgmBeforeDelay(GameManager.GameFlowState state)
+    {
+        switch (state)
+        {
+            case GameManager.GameFlowState.Playing:
+                return stopCurrentBgmBeforePlayingDelay;
+
+            case GameManager.GameFlowState.Tutorial:
+                return stopCurrentBgmBeforeTutorialDelay;
+
+            default:
+                return false;
+        }
+    }
+
+    private bool ShouldUseUnscaledTimeForDelay(GameManager.GameFlowState state)
+    {
+        switch (state)
+        {
+            case GameManager.GameFlowState.Playing:
+                return useUnscaledTimeForPlayingBgmDelay;
+
+            case GameManager.GameFlowState.Tutorial:
+                return useUnscaledTimeForTutorialBgmDelay;
+
+            default:
+                return true;
+        }
+    }
+
+    private IEnumerator CoPlayBgmAfterDelay(GameManager.GameFlowState expectedState, AudioKey bgmKey, float delay, bool useUnscaledTime)
+    {
+        int waitFrames = Mathf.Max(0, delayedBgmWaitFramesBeforeCounting);
+        for (int i = 0; i < waitFrames; i++)
+        {
+            yield return null;
+        }
+
+        if (delay > 0f)
+        {
+            if (countDelayedBgmSecondsByFrame)
+            {
+                float elapsed = 0f;
+                while (elapsed < delay)
+                {
+                    elapsed += useUnscaledTime ? Time.unscaledDeltaTime : Time.deltaTime;
+                    yield return null;
+                }
+            }
+            else if (useUnscaledTime)
+            {
+                yield return new WaitForSecondsRealtime(delay);
+            }
+            else
+            {
+                yield return new WaitForSeconds(delay);
+            }
+        }
+
+        delayedBgmCoroutine = null;
+
+        GameManager manager = subscribedGameManager != null ? subscribedGameManager : GameManager.Instance;
+        if (manager != null && manager.CurrentState != expectedState)
+            yield break;
+
+        PlayBgm(bgmKey);
+    }
+
+    private void CancelDelayedPlayingBgm()
+    {
+        if (delayedBgmCoroutine == null)
+            return;
+
+        StopCoroutine(delayedBgmCoroutine);
+        delayedBgmCoroutine = null;
+    }
+
+    private void PlayBgm(AudioKey key)
+    {
+        if (audioManager == null)
+        {
+            Warn("GameAudioManager が未設定です。");
+            return;
+        }
+
+        audioManager.PlayBgm(key);
+    }
+
+    private void StopBgm()
+    {
+        if (audioManager == null)
+        {
+            Warn("GameAudioManager が未設定です。");
+            return;
+        }
+
+        audioManager.StopBgmAndClearClip();
+    }
+
+    private void WarnMissingGameManagerOnce()
+    {
+        if (hasLoggedMissingGameManager)
+            return;
+
+        hasLoggedMissingGameManager = true;
+        Warn("GameManager.Instance が見つからないため、BGM状態通知を購読できません。GameManager が存在するシーンか確認してください。");
+    }
+
+    private void Warn(string message)
+    {
+        if (!enableWarningLogs)
+            return;
+
+        Debug.LogWarning($"{nameof(GameFlowBgmNotifier)}: {message}", this);
+    }
+}

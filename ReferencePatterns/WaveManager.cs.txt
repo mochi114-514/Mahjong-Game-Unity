@@ -1,0 +1,1971 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+[AddComponentMenu("オプション/マネージャー/オプション：Wave制御")]
+[DisallowMultipleComponent]
+public class WaveManager : MonoBehaviour
+{
+    [System.Serializable]
+    public class AreaSpawnWeight
+    {
+        [Tooltip("スポーン対象エリア")]
+        public AreaId areaId = AreaId.Area1;
+
+        [Tooltip("出現比率。例：主8・副2・enemyCount30なら主24体/副6体になります。0以下なら候補外です。")]
+        [Min(0f)]
+        public float weight = 1f;
+    }
+
+
+    private struct AreaSpawnPlanItem
+    {
+        public AreaId areaId;
+        public float weight;
+        public int count;
+        public float remainder;
+
+        public AreaSpawnPlanItem(AreaId areaId, float weight)
+        {
+            this.areaId = areaId;
+            this.weight = weight;
+            count = 0;
+            remainder = 0f;
+        }
+    }
+
+    private struct SpawnBatchPlanItem
+    {
+        public bool useSpecificArea;
+        public AreaId areaId;
+        public int count;
+
+        public SpawnBatchPlanItem(AreaId areaId, int count, bool useSpecificArea)
+        {
+            this.areaId = areaId;
+            this.count = Mathf.Max(0, count);
+            this.useSpecificArea = useSpecificArea;
+        }
+    }
+
+    private enum SpawnEnemyKind
+    {
+        Normal = 0,
+        Large = 1,
+        Ranged = 2,
+        Boss = 3,
+    }
+
+    public readonly struct BossWantedPresentationRequest
+    {
+        public readonly int WaveNumber;
+        public readonly WantedEnemyKind EnemyKind;
+        public readonly int BossCount;
+        public readonly bool UseTimeLimit;
+
+        public BossWantedPresentationRequest(int waveNumber, WantedEnemyKind enemyKind, int bossCount, bool useTimeLimit)
+        {
+            WaveNumber = Mathf.Max(1, waveNumber);
+            EnemyKind = enemyKind;
+            BossCount = Mathf.Max(1, bossCount);
+            UseTimeLimit = useTimeLimit;
+        }
+    }
+
+    [System.Serializable]
+    public class Wave
+    {
+        public int enemyCount;
+        public float spawnDelay = 0.4f;
+
+        [Header("スポーンまとめ湧き")]
+        public int batchSize = 5; // 複数単位で湧かせる
+
+        [Header("まとめ湧き配置")]
+        public float clusterRadius = 0.8f; // ★追加：基準点からの散らし半径
+
+        [Header("主エリア / 副エリア 出現比率")]
+        [Tooltip("このWaveで中心になる主エリア。比率が0以下なら候補外です。")]
+        public AreaId primaryArea = AreaId.Area1;
+
+        [Tooltip("主エリアの出現比率。例：主8・副2・enemyCount30なら主24体/副6体になります。0以下なら候補外です。")]
+        [Min(0f)]
+        public float primaryAreaWeight = 1f;
+
+        [Tooltip("副エリア。各weightはランダム重みではなく、Wave内の出現数を決める比率として扱います。")]
+        public AreaSpawnWeight[] secondaryAreas = System.Array.Empty<AreaSpawnWeight>();
+
+        [Header("リーダー（バッチ回数固定：1バッチ最大1体）")]
+        public bool enableLeader = false;
+
+        // このWaveで「リーダーが出るバッチの回数」を固定
+        [Min(0)]
+        public int leaderBatchCount = 0;
+
+        [Header("大型雑魚（通常スポーン枠へ混ぜる）")]
+        [Tooltip("このWave内で大型雑魚として湧かせる上限数。enemyCountの内数として扱います。")]
+        [Min(0)]
+        public int largeEnemyCount = 0;
+
+        [Header("遠距離雑魚（通常スポーン枠へ混ぜる）")]
+        [Tooltip("このWave内で遠距離雑魚として湧かせる上限数。enemyCountの内数として扱います。リーダーにはなりませんが、フォロワーにはなれます。")]
+        [Min(0)]
+        public int rangedEnemyCount = 0;
+
+        [Header("緊急クエスト / 指名手配")]
+        [Tooltip("ONなら、このWave中に出現する敵のうち1体を指名手配対象にします。")]
+        public bool enableWantedQuest = false;
+
+        [Tooltip("ONならWave開始時に、何体目のスポーンを指名手配にするかランダム決定します。OFFなら Wanted Spawn Order を使います。")]
+        public bool randomizeWantedSpawnOrder = true;
+
+        [Tooltip("何体目にスポーンした敵を指名手配にするか。1始まりです。Randomize Wanted Spawn Order がOFFの時に使用します。")]
+        [Min(1)]
+        public int wantedSpawnOrder = 1;
+
+        [Header("ボス専用Wave")]
+        [Tooltip("ONなら、このWaveは通常のまとめ湧きではなくボス専用スポーンとして扱います。Wave6でONにしてください。")]
+        public bool bossWave = false;
+
+        [Tooltip("このWaveでスポーンするボス数です。通常は1体です。enemyCountではなくこの値を総出現数として使います。")]
+        [Min(1)]
+        public int bossCount = 1;
+
+        [Tooltip("ONならボスWaveの最初のボスを必ず指名手配対象として扱います。")]
+        public bool forceBossWantedQuest = true;
+
+        [Tooltip("ボス用のWantedEnemyKindです。WantedEnemyKind側へBossを追加した後、この欄をBossに設定してください。")]
+        public WantedEnemyKind bossWantedEnemyKind = WantedEnemyKind.Boss;
+
+    }
+
+    [System.Serializable]
+    public class EnemyPowerStage
+    {
+        [Min(1)] public int unlockWave = 1;
+        [Min(0f)] public float multiplier = 1.0f;
+    }
+
+    public enum WaveRuntimeState
+    {
+        Idle = 0,
+        CombatSpawning = 1,
+        CombatResolving = 2,
+        Intermission = 3,
+        Aborted = 4,
+    }
+
+    // ラウンドロビン用のインデックス（反復子にrefを渡せないためフィールド化）
+    [SerializeField] private int spawnerRoundRobinIndex = 0;
+
+    [Header("Wave中の同時出現上限（0以下で無制限）")]
+    [SerializeField, Min(0)] private int maxAliveEnemiesInWave = 30;
+    [SerializeField, Min(0)] private int currentAliveEnemies = 0;
+
+    [Header("敵生成タイミング")]
+    [Tooltip("ONならWave開始後、初回バッチ生成前にも各Waveの spawnDelay 分だけ待機します。")]
+    [SerializeField] private bool waitSpawnDelayBeforeFirstBatch = true;
+
+    [Header("スポナーを登録")]
+    [SerializeField] private EnemySpawner[] spawners;
+    [SerializeField] private Wave[] waves;
+
+    [Header("Hierarchy整理")]
+    [Tooltip("敵生成時の親として使う空GameObject。未設定かつ自動生成ONなら実行時に作成します。")]
+    [SerializeField] private Transform spawnedEnemyHierarchyRoot;
+    [SerializeField] private bool autoCreateSpawnedEnemyHierarchyRoot = true;
+    [SerializeField] private string spawnedEnemyHierarchyRootName = "Enemies_Runtime";
+
+    [Header("敵強化段階（到達Waveで倍率を切り替える）")]
+    [Tooltip("unlockWave 以下ではなく、現在Waveが unlockWave 以上になった段階のうち、最後に一致した倍率を使用します")]
+    [SerializeField] private EnemyPowerStage[] enemyPowerStages =
+    {
+        new EnemyPowerStage { unlockWave = 1, multiplier = 1.0f },
+        new EnemyPowerStage { unlockWave = 2, multiplier = 1.2f },
+        new EnemyPowerStage { unlockWave = 3, multiplier = 1.4f },
+        new EnemyPowerStage { unlockWave = 4, multiplier = 1.6f },
+    };
+
+    [Header("現在の敵強化倍率（実行時確認用）")]
+    [SerializeField] private float currentEnemyPowerMultiplier = 1.0f;
+
+    [Header("Wave実行状態（実行時確認用）")]
+    [SerializeField] private WaveRuntimeState runtimeState = WaveRuntimeState.Idle;
+
+    [Header("起動条件")]
+    [Tooltip("ONの場合、GameManager が Playing 状態のときだけ Wave を自動開始します。Tutorial などでは敵を湧かせません。")]
+    [SerializeField] private bool startOnlyWhenGameManagerPlaying = true;
+    [SerializeField] private bool logSkippedAutoStart = true;
+
+    [HideInInspector] public Transform[] waypoints;
+
+    [Header("敵情報")]
+    [SerializeField] private WaveEnemyState enemyState;
+
+    private int currentWaveIndex = 0;
+
+    [Header("Wave中の残数アナウンス（別コンポーネント）")]
+    [SerializeField] private WaveAnnouncer announcer;
+
+    [Header("Wave間演出（別コンポーネント）")]
+    [SerializeField] private WaveIntermissionUI intermissionUI;
+
+    [Header("Wave間ターゲットガイド")]
+    [Tooltip("Wave休憩に入った時、TargetDirectionGuideUIを標準Targetへ戻します。標準Targetにはスライムくんを設定します。")]
+    [SerializeField] private TargetDirectionGuideUI targetDirectionGuideUI;
+    [SerializeField] private bool restoreDefaultGuideTargetOnIntermission = true;
+
+    [Header("Wave開始/終了演出（別コンポーネント）")]
+    [SerializeField] private WavePresentationController presentationController;
+
+    [Header("緊急クエスト / 指名手配")]
+    [Tooltip("指名手配システムの窓口です。UI表示・テキスト更新・報酬付与はここ経由で指示します。")]
+    [SerializeField] private WantedController wantedController;
+    [SerializeField] private bool logWantedQuest = true;
+
+    [Header("ボスWave / 指名手配演出")]
+    [Tooltip("ONならWaveIntermissionUIからのボス指名手配演出要求を、WantedControllerへ中継します。")]
+    [SerializeField] private bool requestBossWantedPresentationThroughWantedController = true;
+    [Tooltip("WantedController側のボス指名手配演出完了通知を直接待てない場合の保険待機時間です。")]
+    [SerializeField, Min(0f)] private float bossWantedPresentationFallbackSeconds = 1.5f;
+    [SerializeField] private bool logBossWave = true;
+
+    public event Action<WantedTargetNotifier, int> WantedQuestRewardGranted;
+
+    /// <summary>Waveが戦闘開始状態に入ったことを知らせる通知。Audio等の外部反応用。</summary>
+    public event Action<int> OnWaveStarted;
+
+    /// <summary>このWaveの敵が全滅し、Waveクリア扱いになったことを知らせる通知。Audio等の外部反応用。</summary>
+    public event Action<int> OnWaveCleared;
+
+    [Header("緊急クエスト / 指名手配（実行時確認用）")]
+    [SerializeField] private bool currentWaveHasWantedQuest;
+    [SerializeField] private int currentWantedSpawnOrder = -1;
+    [SerializeField] private int currentWaveSuccessfulSpawnCount;
+    [SerializeField] private WantedTargetNotifier currentWantedTarget;
+
+    private bool intermissionEventsSubscribed;
+
+    private readonly HashSet<int> leaderBatchIndices = new HashSet<int>();
+    private Coroutine waveFlowCoroutine;
+
+    public int CurrentWaveNumber => currentWaveIndex + 1;
+    public float CurrentEnemyPowerMultiplier => currentEnemyPowerMultiplier;
+    public WaveRuntimeState RuntimeState => runtimeState;
+
+    public void SetWantedController(WantedController controller)
+    {
+        wantedController = controller;
+    }
+
+    // runtimeState だけを真実にし、他の状態値は必要時に派生で読む
+    public bool IsCombatState =>
+        runtimeState == WaveRuntimeState.CombatSpawning ||
+        runtimeState == WaveRuntimeState.CombatResolving;
+
+    public bool IsIntermissionState =>
+        runtimeState == WaveRuntimeState.Intermission;
+
+    public bool IsAbortedForGameOver =>
+        runtimeState == WaveRuntimeState.Aborted;
+
+    public bool IsWaveFlowRunning =>
+        runtimeState != WaveRuntimeState.Idle &&
+        runtimeState != WaveRuntimeState.Aborted;
+
+    private void OnEnable()
+    {
+        RegisterToGameManager();
+        BuildingLogMessageSource.OnDestroyedNotified += HandleBuildingDestroyedNotified;
+        SubscribeIntermissionEvents();
+    }
+
+    private void Start()
+    {
+        RegisterToGameManager();
+        TransitionTo(WaveRuntimeState.Idle);
+
+        // すべてのスポナーに共有情報を注入
+        ResolveSpawnedEnemyHierarchyRootIfNeeded();
+
+        foreach (EnemySpawner spawner in spawners)
+        {
+            if (!spawner)
+                continue;
+
+            spawner.Configure(this, waypoints, spawnedEnemyHierarchyRoot);
+        }
+
+        if (announcer == null)
+            announcer = GetComponent<WaveAnnouncer>();
+
+        if (intermissionUI == null)
+            intermissionUI = GetComponent<WaveIntermissionUI>();
+
+        if (targetDirectionGuideUI == null)
+            targetDirectionGuideUI = GetComponent<TargetDirectionGuideUI>();
+
+        if (presentationController == null)
+            presentationController = GetComponent<WavePresentationController>();
+
+        if (wantedController == null)
+            wantedController = GetComponent<WantedController>();
+
+        SubscribeIntermissionEvents();
+
+        if (!CanStartWaveFlow())
+            return;
+
+        waveFlowCoroutine = StartCoroutine(RunWaves());
+    }
+
+    private void OnDisable()
+    {
+        BuildingLogMessageSource.OnDestroyedNotified -= HandleBuildingDestroyedNotified;
+        UnsubscribeIntermissionEvents();
+        UnregisterFromGameManager();
+    }
+
+    private void OnDestroy()
+    {
+        BuildingLogMessageSource.OnDestroyedNotified -= HandleBuildingDestroyedNotified;
+        UnsubscribeIntermissionEvents();
+        UnregisterFromGameManager();
+    }
+
+    private void RegisterToGameManager()
+    {
+        GameManager.Instance?.SetWaveManager(this);
+    }
+
+    private void UnregisterFromGameManager()
+    {
+        GameManager.Instance?.ClearWaveManager(this);
+    }
+
+    private void SubscribeIntermissionEvents()
+    {
+        if (intermissionEventsSubscribed)
+            return;
+
+        if (intermissionUI == null)
+            return;
+
+        intermissionUI.OnBossWantedPresentationRequested += Co_HandleBossWantedPresentationRequested;
+        intermissionEventsSubscribed = true;
+    }
+
+    private void UnsubscribeIntermissionEvents()
+    {
+        if (!intermissionEventsSubscribed)
+            return;
+
+        if (intermissionUI != null)
+            intermissionUI.OnBossWantedPresentationRequested -= Co_HandleBossWantedPresentationRequested;
+
+        intermissionEventsSubscribed = false;
+    }
+
+    private bool CanStartWaveFlow()
+    {
+        if (!startOnlyWhenGameManagerPlaying)
+            return true;
+
+        GameManager manager = GameManager.Instance;
+        if (manager == null)
+        {
+            if (logSkippedAutoStart)
+                Debug.LogWarning("[WaveManager] GameManager.Instance が見つからないため、Wave自動開始を行いません。", this);
+
+            return false;
+        }
+
+        if (manager.CurrentState == GameManager.GameFlowState.Playing)
+            return true;
+
+        if (logSkippedAutoStart)
+            Debug.Log($"[WaveManager] GameManager.CurrentState={manager.CurrentState} のため、Wave自動開始を行いません。", this);
+
+        return false;
+    }
+
+    private bool IsGameFlowPlaying()
+    {
+        if (!startOnlyWhenGameManagerPlaying)
+            return true;
+
+        GameManager manager = GameManager.Instance;
+        return manager != null && manager.CurrentState == GameManager.GameFlowState.Playing;
+    }
+
+#if UNITY_EDITOR
+    private void OnValidate()
+    {
+        NormalizeBossWaveSettingsForInspector();
+        currentEnemyPowerMultiplier = EvaluateEnemyPowerMultiplier(currentWaveIndex + 1);
+    }
+#endif
+
+    private void NormalizeBossWaveSettingsForInspector()
+    {
+        if (waves == null)
+            return;
+
+        for (int i = 0; i < waves.Length; i++)
+        {
+            Wave wave = waves[i];
+            if (wave == null || !wave.bossWave)
+                continue;
+
+            wave.bossCount = Mathf.Max(1, wave.bossCount);
+            wave.forceBossWantedQuest = true;
+            wave.bossWantedEnemyKind = WantedEnemyKind.Boss;
+        }
+    }
+
+    #region RuntimeState
+    private void TransitionTo(WaveRuntimeState nextState)
+    {
+        runtimeState = nextState;
+
+        switch (nextState)
+        {
+            case WaveRuntimeState.CombatSpawning:
+                EnterCombatSpawning();
+                break;
+
+            case WaveRuntimeState.CombatResolving:
+                EnterCombatResolving();
+                break;
+
+            case WaveRuntimeState.Intermission:
+                EnterIntermission();
+                break;
+
+            case WaveRuntimeState.Aborted:
+                EnterAborted();
+                break;
+
+            case WaveRuntimeState.Idle:
+            default:
+                EnterIdle();
+                break;
+        }
+
+        presentationController?.HandleWaveStateEntered(runtimeState, CurrentWaveNumber);
+    }
+
+    private void EnterIdle()
+    {
+        SetWaveAnnounceAvailability(false, cancelPending: true);
+        SetAllSpawnersActive(false);
+    }
+
+    private void EnterCombatSpawning()
+    {
+        SetWaveAnnounceAvailability(false, cancelPending: true);
+        // スポナーON/OFF自体は Wave ごとのルールで直後に切り替える
+    }
+
+    private void EnterCombatResolving()
+    {
+        SetWaveAnnounceAvailability(true, cancelPending: false);
+    }
+
+    private void EnterIntermission()
+    {
+        SetWaveAnnounceAvailability(false, cancelPending: true);
+        SetAllSpawnersActive(false);
+        RestoreDefaultTargetGuideForIntermission();
+    }
+
+    private void EnterAborted()
+    {
+        SetWaveAnnounceAvailability(false, cancelPending: true);
+        SetAllSpawnersActive(false);
+    }
+
+    private void RestoreDefaultTargetGuideForIntermission()
+    {
+        if (!restoreDefaultGuideTargetOnIntermission)
+            return;
+
+        if (targetDirectionGuideUI == null)
+            return;
+
+        targetDirectionGuideUI.RestoreDefaultTarget();
+    }
+
+    private void SetWaveAnnounceAvailability(bool canAnnounceAfterSpawn, bool cancelPending)
+    {
+        if (announcer == null)
+            return;
+
+        if (cancelPending)
+            announcer.CancelPendingAnnouncements();
+
+        announcer.CanAnnounceAfterSpawn = canAnnounceAfterSpawn;
+    }
+
+    private bool IsRuntimeAborted()
+    {
+        return runtimeState == WaveRuntimeState.Aborted;
+    }
+    #endregion
+
+    #region GameOver停止
+    public void AbortForGameOver()
+    {
+        if (IsRuntimeAborted())
+            return;
+
+        if (waveFlowCoroutine != null)
+        {
+            StopCoroutine(waveFlowCoroutine);
+            waveFlowCoroutine = null;
+        }
+
+        CancelCurrentWantedQuest(true);
+        TransitionTo(WaveRuntimeState.Aborted);
+
+        Debug.Log("[WaveManager] GameOverによりWave機能を停止しました。", this);
+    }
+    #endregion
+
+    #region Waveの挙動
+    /// <summary>
+    /// Wave全般の挙動を記述
+    /// </summary>
+    private IEnumerator RunWaves()
+    {
+        try
+        {
+            while (currentWaveIndex < waves.Length)
+            {
+                if (!IsGameFlowPlaying())
+                    yield break;
+
+                // ① Wave開始リセット（意味が明確な塊）
+                Wave currentWave = BeginWaveAndResetState();
+
+                // ② スポナー有効化（単発なのでそのまま）
+                ApplySpawnerRulesForWave(currentWaveIndex, currentWave);
+
+                // ③ 敵スポーン（戦闘中のみゲームオーバーが起こり得る）
+                yield return Co_SpawnWaveEnemies(currentWave);
+                if (IsRuntimeAborted())
+                    yield break;
+
+                // ここに追加:この瞬間から「発言してよし」
+                enemyState.MarkSpawnCompleted();
+                TransitionTo(WaveRuntimeState.CombatResolving);
+
+                Debug.Log($"Wave {currentWaveIndex + 1} 終了");
+
+                // 演出的に少しだけ間を空けたい場合（任意）
+                yield return new WaitForSeconds(1f);
+
+                // 敵が全滅するまで待機
+                while (!enemyState.IsCleared)
+                    yield return null;
+
+                OnWaveCleared?.Invoke(CurrentWaveNumber);
+
+                TransitionTo(WaveRuntimeState.Intermission);
+
+                // ④ Wave間（ここではクリスタルは壊れない前提）
+                bool hasNext = (currentWaveIndex + 1 < waves.Length);
+                bool nextWaveIsBoss = hasNext && IsBossWaveByIndex(currentWaveIndex + 1);
+                if (intermissionUI != null)
+                    yield return intermissionUI.Co_HandleNextWaveFlow(currentWaveIndex, hasNext, nextWaveIsBoss);
+
+                // Wave間の間
+                yield return new WaitForSeconds(2f);
+                currentWaveIndex++;
+            }
+
+            Debug.Log("全Wave終了！");
+        }
+        finally
+        {
+            if (!IsRuntimeAborted())
+                TransitionTo(WaveRuntimeState.Idle);
+
+            waveFlowCoroutine = null;
+        }
+    }
+    #endregion
+
+    // ─────────────────────────────────────
+    // とりあえず見やすくまとめたメソッドたち
+
+    #region リセット系統
+    /// <summary>
+    /// リセット系統のメソッド
+    /// </summary>
+    private Wave BeginWaveAndResetState()
+    {
+        Wave currentWave = waves[currentWaveIndex];
+
+        TransitionTo(WaveRuntimeState.CombatSpawning);
+
+        Debug.Assert(enemyState != null, "WaveEnemyState が未設定です");
+        enemyState.BeginWave(GetWaveSpawnTotalCount(currentWave));
+        currentAliveEnemies = 0;
+        currentEnemyPowerMultiplier = EvaluateEnemyPowerMultiplier(CurrentWaveNumber);
+
+        announcer?.ResetForNewWave();
+
+        Debug.Log($"Wave {currentWaveIndex + 1} 開始 / EnemyPower x{currentEnemyPowerMultiplier:0.00}");
+
+        OnWaveStarted?.Invoke(CurrentWaveNumber);
+
+        // Waveが始まったので教官スライムは隠す
+        intermissionUI?.OnWaveStarted();
+
+        // 実際のリーダーバッチ抽選は、エリア別バッチ計画が確定した後に行う。
+        leaderBatchIndices.Clear();
+
+        PrepareWantedQuestForWave(currentWave);
+
+        return currentWave;
+    }
+
+    #endregion
+
+    // ─────────────────────────────────────
+    // 敵強化段階のメソッド
+
+    #region 敵強化段階
+
+    public float GetCurrentEnemyPowerMultiplier()
+    {
+        return currentEnemyPowerMultiplier;
+    }
+
+    public float GetEnemyPowerMultiplierForWave(int waveNumber)
+    {
+        return EvaluateEnemyPowerMultiplier(waveNumber);
+    }
+
+    private float EvaluateEnemyPowerMultiplier(int waveNumber)
+    {
+        float result = 1.0f;
+        int safeWaveNumber = Mathf.Max(1, waveNumber);
+
+        if (enemyPowerStages == null || enemyPowerStages.Length == 0)
+            return result;
+
+        int bestUnlockWave = int.MinValue;
+        for (int i = 0; i < enemyPowerStages.Length; i++)
+        {
+            EnemyPowerStage stage = enemyPowerStages[i];
+            if (stage == null)
+                continue;
+
+            int unlockWave = Mathf.Max(1, stage.unlockWave);
+            if (unlockWave > safeWaveNumber)
+                continue;
+
+            if (unlockWave < bestUnlockWave)
+                continue;
+
+            bestUnlockWave = unlockWave;
+            result = Mathf.Max(0f, stage.multiplier);
+        }
+
+        return result;
+    }
+
+    #endregion
+
+    // ─────────────────────────────────────
+    // スポーンの基準点を作るメソッド
+
+    #region スポーン時の基準点を1点決める
+    private EnemySpawner ChooseSpawnerRoundRobin(List<EnemySpawner> activeSpawners)
+    {
+        if (activeSpawners.Count <= 0)
+            return null;
+
+        EnemySpawner chosen = activeSpawners[spawnerRoundRobinIndex % activeSpawners.Count];
+        spawnerRoundRobinIndex++;
+        return chosen;
+    }
+
+    private EnemySpawner ChooseSpawnerForArea(AreaId areaId, List<EnemySpawner> activeSpawners, List<EnemySpawner> areaSpawners)
+    {
+        if (activeSpawners == null || activeSpawners.Count <= 0)
+            return null;
+
+        CollectSpawnersByArea(activeSpawners, areaId, areaSpawners);
+        if (areaSpawners != null && areaSpawners.Count > 0)
+            return ChooseSpawnerRoundRobin(areaSpawners);
+
+        return null;
+    }
+
+    private void CollectSpawnersByArea(List<EnemySpawner> source, AreaId areaId, List<EnemySpawner> destination)
+    {
+        destination.Clear();
+
+        if (source == null)
+            return;
+
+        for (int i = 0; i < source.Count; i++)
+        {
+            EnemySpawner spawner = source[i];
+            if (spawner == null)
+                continue;
+
+            if (spawner.AreaId != areaId)
+                continue;
+
+            destination.Add(spawner);
+        }
+    }
+
+    /// <summary>
+    /// Wave内のエリア別出現数を先に確定し、Areaごとに batchSize 単位のグループへ分割する。
+    /// 例：enemyCount=30、Area2=8、Area1=2 なら Area2を24枠、Area1を6枠にし、
+    ///     batchSize=5 の場合は Area2:5/5/5/5/4、Area1:5/1 のような単位で扱う。
+    /// </summary>
+    private bool BuildAreaSpawnBatchPlan(Wave wave, int totalCount, int batchSize, List<EnemySpawner> activeSpawners, List<SpawnBatchPlanItem> plan)
+    {
+        plan.Clear();
+
+        if (wave == null || totalCount <= 0 || activeSpawners == null || activeSpawners.Count <= 0)
+            return false;
+
+        List<AreaSpawnPlanItem> items = new List<AreaSpawnPlanItem>(8);
+
+        AddOrMergeAreaSpawnPlanItem(items, wave.primaryArea, wave.primaryAreaWeight, activeSpawners);
+
+        AreaSpawnWeight[] secondaryAreas = wave.secondaryAreas;
+        if (secondaryAreas != null)
+        {
+            for (int i = 0; i < secondaryAreas.Length; i++)
+            {
+                AreaSpawnWeight area = secondaryAreas[i];
+                if (area == null)
+                    continue;
+
+                AddOrMergeAreaSpawnPlanItem(items, area.areaId, area.weight, activeSpawners);
+            }
+        }
+
+        if (items.Count <= 0)
+            return false;
+
+        float totalWeight = 0f;
+        for (int i = 0; i < items.Count; i++)
+            totalWeight += Mathf.Max(0f, items[i].weight);
+
+        if (totalWeight <= 0f)
+            return false;
+
+        int assignedCount = 0;
+        for (int i = 0; i < items.Count; i++)
+        {
+            AreaSpawnPlanItem item = items[i];
+            float exact = totalCount * item.weight / totalWeight;
+            item.count = Mathf.FloorToInt(exact);
+            item.remainder = exact - item.count;
+            assignedCount += item.count;
+            items[i] = item;
+        }
+
+        int remaining = totalCount - assignedCount;
+        while (remaining > 0)
+        {
+            int bestIndex = GetLargestRemainderIndex(items);
+            if (bestIndex < 0)
+                break;
+
+            AreaSpawnPlanItem item = items[bestIndex];
+            item.count++;
+            item.remainder = -1f;
+            items[bestIndex] = item;
+            remaining--;
+        }
+
+        int safeBatchSize = Mathf.Max(1, batchSize);
+        for (int i = 0; i < items.Count; i++)
+        {
+            AreaSpawnPlanItem item = items[i];
+            int remainingInArea = Mathf.Max(0, item.count);
+
+            while (remainingInArea > 0)
+            {
+                int countInBatch = Mathf.Min(safeBatchSize, remainingInArea);
+                plan.Add(new SpawnBatchPlanItem(item.areaId, countInBatch, useSpecificArea: true));
+                remainingInArea -= countInBatch;
+            }
+        }
+
+        Shuffle(plan);
+        DebugLogAreaSpawnBatchPlan(plan, useAreaPlan: true);
+        return plan.Count > 0;
+    }
+
+    private void BuildFallbackSpawnBatchPlan(int totalCount, int batchSize, List<SpawnBatchPlanItem> plan)
+    {
+        plan.Clear();
+
+        int safeBatchSize = Mathf.Max(1, batchSize);
+        for (int spawned = 0; spawned < totalCount;)
+        {
+            int countInBatch = Mathf.Min(safeBatchSize, totalCount - spawned);
+            plan.Add(new SpawnBatchPlanItem(default, countInBatch, useSpecificArea: false));
+            spawned += countInBatch;
+        }
+    }
+
+    private void AddOrMergeAreaSpawnPlanItem(List<AreaSpawnPlanItem> items, AreaId areaId, float weight, List<EnemySpawner> activeSpawners)
+    {
+        if (weight <= 0f)
+            return;
+
+        if (!HasActiveSpawnerForArea(activeSpawners, areaId))
+            return;
+
+        for (int i = 0; i < items.Count; i++)
+        {
+            AreaSpawnPlanItem existing = items[i];
+            if (existing.areaId != areaId)
+                continue;
+
+            existing.weight += weight;
+            items[i] = existing;
+            return;
+        }
+
+        items.Add(new AreaSpawnPlanItem(areaId, weight));
+    }
+
+    private bool HasActiveSpawnerForArea(List<EnemySpawner> activeSpawners, AreaId areaId)
+    {
+        if (activeSpawners == null)
+            return false;
+
+        for (int i = 0; i < activeSpawners.Count; i++)
+        {
+            EnemySpawner spawner = activeSpawners[i];
+            if (spawner == null)
+                continue;
+
+            if (spawner.AreaId == areaId)
+                return true;
+        }
+
+        return false;
+    }
+
+    private int GetLargestRemainderIndex(List<AreaSpawnPlanItem> items)
+    {
+        int bestIndex = -1;
+        float bestRemainder = float.NegativeInfinity;
+
+        for (int i = 0; i < items.Count; i++)
+        {
+            if (items[i].remainder <= bestRemainder)
+                continue;
+
+            bestRemainder = items[i].remainder;
+            bestIndex = i;
+        }
+
+        return bestIndex;
+    }
+
+    private void DebugLogAreaSpawnBatchPlan(List<SpawnBatchPlanItem> plan, bool useAreaPlan)
+    {
+        if (plan == null || plan.Count <= 0)
+            return;
+
+        if (!useAreaPlan)
+        {
+            Debug.Log($"[WaveManager] Wave {CurrentWaveNumber} fallback spawn batch plan: batchCount={plan.Count}", this);
+            return;
+        }
+
+        Dictionary<AreaId, int> counts = new Dictionary<AreaId, int>();
+        for (int i = 0; i < plan.Count; i++)
+        {
+            SpawnBatchPlanItem batch = plan[i];
+            if (!batch.useSpecificArea)
+                continue;
+
+            counts.TryGetValue(batch.areaId, out int count);
+            counts[batch.areaId] = count + batch.count;
+        }
+
+        string msg = $"[WaveManager] Wave {CurrentWaveNumber} area spawn batch plan:";
+        foreach (KeyValuePair<AreaId, int> pair in counts)
+        {
+            msg += $" {pair.Key}={pair.Value}";
+        }
+
+        msg += " / batches:";
+        for (int i = 0; i < plan.Count; i++)
+        {
+            SpawnBatchPlanItem batch = plan[i];
+            if (!batch.useSpecificArea)
+                continue;
+
+            msg += $" {batch.areaId}x{batch.count}";
+        }
+
+        Debug.Log(msg, this);
+    }
+
+    private static void Shuffle<T>(List<T> list)
+    {
+        if (list == null)
+            return;
+
+        for (int i = list.Count - 1; i > 0; i--)
+        {
+            int j = UnityEngine.Random.Range(0, i + 1);
+            (list[i], list[j]) = (list[j], list[i]);
+        }
+    }
+
+    private Vector2 GetClusterOffset(float radius)
+    {
+        return UnityEngine.Random.insideUnitCircle * radius;
+    }
+    #endregion
+
+    // ─────────────────────────────────────
+    // スポーン系のメソッド
+
+    #region Wave: スポーン関連（メソッド化）
+
+    /// <summary>
+    /// このWaveで使用するスポナーを有効化する。
+    /// 主エリア / 副エリア設定が有効ならそのエリア群をONにし、設定不備時だけ旧Wave番号ルールへフォールバックする。
+    /// </summary>
+    private void ApplySpawnerRulesForWave(int waveIndex, Wave wave)
+    {
+        // 1) すべて無効化
+        SetAllSpawnersActive(false);
+
+        // 2) Waveごとの主エリア / 副エリア設定で有効化
+        if (SetWeightedAreaSpawnersActive(wave))
+            return;
+
+        // 3) 設定不備時の保険：旧Waveごとの有効化ルール
+        if (spawners == null)
+            return;
+
+        if (waveIndex == 0 && spawners.Length > 0 && spawners[0] != null)
+            spawners[0].SetActive(true);
+        else if (waveIndex == 1 && spawners.Length > 1 && spawners[1] != null)
+            spawners[1].SetActive(true);
+        else if (waveIndex == 2 && spawners.Length > 2 && spawners[2] != null)
+            spawners[2].SetActive(true);
+        else if (waveIndex == 3 && spawners.Length > 3 && spawners[3] != null)
+            spawners[3].SetActive(true);
+        else if (waveIndex == 4)
+        {
+            foreach (EnemySpawner spawner in spawners)
+            {
+                if (spawner != null)
+                    spawner.SetActive(true);
+            }
+        }
+    }
+
+    private bool SetWeightedAreaSpawnersActive(Wave wave)
+    {
+        if (wave == null || spawners == null)
+            return false;
+
+        bool activatedAny = false;
+
+        for (int i = 0; i < spawners.Length; i++)
+        {
+            EnemySpawner spawner = spawners[i];
+            if (spawner == null)
+                continue;
+
+            if (!IsWaveSpawnAreaEnabled(wave, spawner.AreaId))
+                continue;
+
+            spawner.SetActive(true);
+            activatedAny = true;
+        }
+
+        return activatedAny;
+    }
+
+    private bool IsWaveSpawnAreaEnabled(Wave wave, AreaId areaId)
+    {
+        return GetWaveAreaWeight(wave, areaId) > 0f;
+    }
+
+    private float GetWaveAreaWeight(Wave wave, AreaId areaId)
+    {
+        if (wave == null)
+            return 0f;
+
+        float weight = 0f;
+
+        if (wave.primaryArea == areaId)
+        {
+            weight += Mathf.Max(0f, wave.primaryAreaWeight);
+        }
+
+        AreaSpawnWeight[] secondaryAreas = wave.secondaryAreas;
+        if (secondaryAreas == null)
+            return weight;
+
+        for (int i = 0; i < secondaryAreas.Length; i++)
+        {
+            AreaSpawnWeight setting = secondaryAreas[i];
+            if (setting == null)
+                continue;
+
+            if (setting.areaId != areaId)
+                continue;
+
+            weight += Mathf.Max(0f, setting.weight);
+        }
+
+        return weight;
+    }
+
+    private void SetAllSpawnersActive(bool active)
+    {
+        if (spawners == null)
+            return;
+
+        foreach (EnemySpawner spawner in spawners)
+        {
+            if (spawner != null)
+                spawner.SetActive(active);
+        }
+    }
+
+    /// <summary>
+    /// アクティブなスポナーのみ収集（毎回newしない）
+    /// </summary>
+    private void CollectActiveSpawners(List<EnemySpawner> buffer)
+    {
+        buffer.Clear();
+
+        foreach (EnemySpawner spawner in spawners)
+        {
+            if (spawner != null && spawner.IsActive)
+                buffer.Add(spawner);
+        }
+    }
+
+    private int GetAvailableAliveEnemyCapacity()
+    {
+        if (maxAliveEnemiesInWave <= 0)
+            return int.MaxValue;
+
+        return Mathf.Max(0, maxAliveEnemiesInWave - currentAliveEnemies);
+    }
+
+    private bool ShouldIgnoreWaveRuntimeRequest()
+    {
+        return IsRuntimeAborted() || !IsGameFlowPlaying();
+    }
+
+    private void HandleBuildingDestroyedNotified(BuildingLogMessageSource source)
+    {
+        if (ShouldIgnoreWaveRuntimeRequest())
+            return;
+
+        if (source == null)
+            return;
+
+        if (announcer == null)
+            return;
+
+        announcer.NotifyBuildingDestroyed();
+    }
+
+    /// <summary>
+    /// まとめ湧き（batchSize単位）で敵をスポーンする。
+    /// Area比率を使う場合は、Areaごとに分割済みのバッチ単位でスポナーと基準点を1回だけ決める。
+    /// これにより「同じ5体バッチなのに1体ごとに別地点へ湧く」状態を防ぐ。
+    /// 戦闘中のみゲームオーバーが起こり得るため、このループだけガードする。
+    /// </summary>
+    private IEnumerator Co_SpawnWaveEnemies(Wave currentWave)
+    {
+        if (currentWave == null)
+            yield break;
+
+        if (IsBossWave(currentWave))
+        {
+            yield return Co_SpawnBossWaveEnemies(currentWave);
+            yield break;
+        }
+
+        if (currentWave.enemyCount <= 0)
+            yield break;
+
+        int batchSize = Mathf.Max(1, currentWave.batchSize);
+        float radius = Mathf.Max(0f, currentWave.clusterRadius);
+
+        float safeSpawnDelay = Mathf.Max(0f, currentWave.spawnDelay);
+        WaitForSeconds wait = new WaitForSeconds(safeSpawnDelay);
+        List<EnemySpawner> activeSpawners = new List<EnemySpawner>(spawners != null ? spawners.Length : 4);
+        List<EnemySpawner> areaSpawners = new List<EnemySpawner>(spawners != null ? spawners.Length : 4);
+        List<SpawnBatchPlanItem> spawnBatchPlan = new List<SpawnBatchPlanItem>(Mathf.CeilToInt((float)currentWave.enemyCount / batchSize));
+
+        CollectActiveSpawners(activeSpawners);
+        bool hasAreaPlan = BuildAreaSpawnBatchPlan(currentWave, currentWave.enemyCount, batchSize, activeSpawners, spawnBatchPlan);
+        if (!hasAreaPlan)
+        {
+            Debug.LogWarning($"[WaveManager] Wave {CurrentWaveNumber} のエリア別スポーン計画を作成できません。アクティブスポナーのラウンドロビンへフォールバックします。", this);
+            BuildFallbackSpawnBatchPlan(currentWave.enemyCount, batchSize, spawnBatchPlan);
+            DebugLogAreaSpawnBatchPlan(spawnBatchPlan, useAreaPlan: false);
+        }
+
+        BuildLeaderBatchIndices(currentWave, spawnBatchPlan.Count);
+
+        int remainingSpecialEnemyEligibleSlots = GetSpecialEnemyEligibleSlotCount(currentWave);
+        int remainingLargeEnemyQuota = Mathf.Min(
+            Mathf.Max(0, currentWave.largeEnemyCount),
+            remainingSpecialEnemyEligibleSlots);
+        int requestedRangedEnemyQuota = Mathf.Max(0, currentWave.rangedEnemyCount);
+        int remainingRangedEnemyQuota = Mathf.Min(
+            requestedRangedEnemyQuota,
+            Mathf.Max(0, remainingSpecialEnemyEligibleSlots - remainingLargeEnemyQuota));
+
+        if (requestedRangedEnemyQuota > remainingRangedEnemyQuota)
+        {
+            Debug.LogWarning(
+                $"[WaveManager] Wave {CurrentWaveNumber} の rangedEnemyCount が通常スポーン枠を超えたため {remainingRangedEnemyQuota} 体に制限しました。" +
+                $" enemyCount={currentWave.enemyCount}, leaderSlots={(currentWave.enableLeader ? leaderBatchIndices.Count : 0)}, largeEnemyCount={remainingLargeEnemyQuota}, requestedRangedEnemyCount={requestedRangedEnemyQuota}",
+                this);
+        }
+
+        // 従来はこの後すぐ最初のバッチを生成していたため、
+        // 初回だけ spawnDelay が効かない状態になっていた。
+        // Wave開始後も他バッチ間と同じ間隔を置いてから、最初のバッチ生成へ進める。
+        if (waitSpawnDelayBeforeFirstBatch && safeSpawnDelay > 0f)
+        {
+            yield return wait;
+
+            if (IsRuntimeAborted())
+                yield break;
+        }
+
+        for (int batchIndex = 0; batchIndex < spawnBatchPlan.Count; batchIndex++)
+        {
+            if (IsRuntimeAborted())
+                yield break;
+
+            SpawnBatchPlanItem batch = spawnBatchPlan[batchIndex];
+            int plannedCount = Mathf.Max(0, batch.count);
+            if (plannedCount <= 0)
+                continue;
+
+            bool spawnLeaderThisBatch = currentWave.enableLeader && leaderBatchIndices.Contains(batchIndex);
+            int groupId = -1;
+            EnemyGroupMember leaderMember = null;
+
+            EnemySpawner batchSpawner = null;
+            Vector2 batchBasePoint = Vector2.zero;
+            bool resolvedBatchAnchor = false;
+            int spawnedInBatch = 0;
+
+            // リーダーバッチ内でフォロワーとして扱うのは通常雑魚・遠距離雑魚のみ。
+            // 大型雑魚はフォロワー化しないだけでなく、フォロワー用スロット番号にも含めない。
+            int nextFollowerSlotIndex = 0;
+
+            while (spawnedInBatch < plannedCount)
+            {
+                if (IsRuntimeAborted())
+                    yield break;
+
+                int availableCapacity = GetAvailableAliveEnemyCapacity();
+                if (availableCapacity <= 0)
+                {
+                    yield return wait;
+                    continue;
+                }
+
+                if (!resolvedBatchAnchor)
+                {
+                    CollectActiveSpawners(activeSpawners);
+                    if (activeSpawners.Count <= 0)
+                    {
+                        yield return wait;
+                        continue;
+                    }
+
+                    batchSpawner = batch.useSpecificArea
+                        ? ChooseSpawnerForArea(batch.areaId, activeSpawners, areaSpawners)
+                        : ChooseSpawnerRoundRobin(activeSpawners);
+
+                    if (batchSpawner == null)
+                    {
+                        batchSpawner = ChooseSpawnerRoundRobin(activeSpawners);
+                    }
+
+                    if (batchSpawner == null)
+                    {
+                        yield return wait;
+                        continue;
+                    }
+
+                    batchBasePoint = batchSpawner.GetRandomSpawnPoint();
+                    resolvedBatchAnchor = true;
+                }
+
+                if (spawnLeaderThisBatch && groupId < 0)
+                    groupId = enemyState.IssueNextGroupId();
+
+                int spawnNow = Mathf.Min(plannedCount - spawnedInBatch, availableCapacity);
+                for (int i = 0; i < spawnNow; i++)
+                {
+                    if (IsRuntimeAborted())
+                        yield break;
+
+                    int slotInBatch = spawnedInBatch;
+                    Vector2 pos = batchBasePoint + GetClusterOffset(radius);
+
+                    // 1) このバッチの1体目だけリーダー
+                    if (slotInBatch == 0 && spawnLeaderThisBatch)
+                    {
+                        GameObject leaderObj = batchSpawner.SpawnLeaderAt(pos);
+                        if (leaderObj != null)
+                        {
+                            leaderMember = leaderObj.GetComponent<EnemyGroupMember>();
+                            if (leaderMember != null)
+                                leaderMember.SetupAsLeader(groupId);
+                            else
+                                Debug.LogWarning($"LeaderにEnemyGroupMemberが付いていません: {leaderObj.name}");
+
+                            currentAliveEnemies++;
+                            RegisterSpawnedEnemyForWantedQuest(leaderObj, WantedEnemyKind.EnemyLeader);
+                        }
+                    }
+                    else
+                    {
+                        SpawnEnemyKind spawnKind = ConsumeSpawnEnemyKind(
+                            ref remainingLargeEnemyQuota,
+                            ref remainingRangedEnemyQuota,
+                            ref remainingSpecialEnemyEligibleSlots);
+
+                        GameObject enemyObj;
+                        switch (spawnKind)
+                        {
+                            case SpawnEnemyKind.Large:
+                                enemyObj = batchSpawner.SpawnLargeEnemyAt(pos);
+                                break;
+                            case SpawnEnemyKind.Ranged:
+                                enemyObj = batchSpawner.SpawnRangedEnemyAt(pos);
+                                break;
+                            default:
+                                enemyObj = batchSpawner.SpawnEnemyAt(pos);
+                                break;
+                        }
+
+                        // 2) リーダーがいるバッチならフォロワー化（slotIndex を固定割り当て）
+                        // 大型雑魚は「通常スポーン枠のPrefab差し替え」扱いだが、
+                        // リーダー/フォロワーの特殊性は持たせない。
+                        // 遠距離雑魚は通常雑魚と同じ扱いなので、リーダーにはしないがフォロワーにはできる。
+                        bool canBecomeFollower = spawnKind == SpawnEnemyKind.Normal || spawnKind == SpawnEnemyKind.Ranged;
+                        if (canBecomeFollower && enemyObj != null && leaderMember != null)
+                        {
+                            int slotIndex = nextFollowerSlotIndex;
+                            nextFollowerSlotIndex++;
+
+                            EnemyGroupMember follower = enemyObj.GetComponent<EnemyGroupMember>();
+                            if (follower != null)
+                            {
+                                follower.SetupAsFollower(groupId, leaderMember, slotIndex);
+                            }
+                            else
+                            {
+                                Debug.LogWarning($"FollowerにEnemyGroupMemberが付いていません: {enemyObj.name}");
+                            }
+                        }
+
+                        if (enemyObj != null)
+                        {
+                            currentAliveEnemies++;
+                            RegisterSpawnedEnemyForWantedQuest(enemyObj, ToWantedEnemyKind(spawnKind));
+                        }
+                    }
+
+                    spawnedInBatch++;
+                }
+
+                if (spawnedInBatch < plannedCount)
+                    yield return wait;
+            }
+
+            yield return wait;
+        }
+    }
+
+    private IEnumerator Co_SpawnBossWaveEnemies(Wave currentWave)
+    {
+        int bossCount = GetBossSpawnCount(currentWave);
+        if (bossCount <= 0)
+            yield break;
+
+        float safeSpawnDelay = Mathf.Max(0f, currentWave.spawnDelay);
+        WaitForSeconds wait = new WaitForSeconds(safeSpawnDelay);
+        List<EnemySpawner> activeSpawners = new List<EnemySpawner>(spawners != null ? spawners.Length : 4);
+        List<EnemySpawner> areaSpawners = new List<EnemySpawner>(spawners != null ? spawners.Length : 4);
+        float radius = Mathf.Max(0f, currentWave.clusterRadius);
+
+        if (waitSpawnDelayBeforeFirstBatch && safeSpawnDelay > 0f)
+        {
+            yield return wait;
+
+            if (IsRuntimeAborted())
+                yield break;
+        }
+
+        for (int bossIndex = 0; bossIndex < bossCount; bossIndex++)
+        {
+            if (IsRuntimeAborted())
+                yield break;
+
+            while (GetAvailableAliveEnemyCapacity() <= 0)
+            {
+                yield return wait;
+
+                if (IsRuntimeAborted())
+                    yield break;
+            }
+
+            CollectActiveSpawners(activeSpawners);
+            if (activeSpawners.Count <= 0)
+            {
+                yield return wait;
+                bossIndex--;
+                continue;
+            }
+
+            EnemySpawner spawner = ChooseSpawnerForArea(currentWave.primaryArea, activeSpawners, areaSpawners);
+            if (spawner == null)
+                spawner = ChooseSpawnerRoundRobin(activeSpawners);
+
+            if (spawner == null)
+            {
+                yield return wait;
+                bossIndex--;
+                continue;
+            }
+
+            Vector2 basePoint = spawner.GetRandomSpawnPoint();
+            Vector2 pos = basePoint + GetClusterOffset(radius);
+            GameObject bossObj = spawner.SpawnBossEnemyAt(pos);
+            if (bossObj != null)
+            {
+                currentAliveEnemies++;
+                RegisterSpawnedEnemyForWantedQuest(bossObj, GetBossWantedEnemyKind(currentWave));
+
+                if (logBossWave)
+                {
+                    Debug.Log($"[WaveManager] Boss Wave {CurrentWaveNumber} ボスをスポーンしました。enemy={bossObj.name}", bossObj);
+                }
+            }
+
+            if (bossIndex + 1 < bossCount && safeSpawnDelay > 0f)
+                yield return wait;
+        }
+    }
+
+    private int GetSpecialEnemyEligibleSlotCount(Wave wave)
+    {
+        if (wave == null)
+            return 0;
+
+        int enemyCount = Mathf.Max(0, wave.enemyCount);
+        if (enemyCount <= 0)
+            return 0;
+
+        // リーダー枠は特殊雑魚に置き換えない。
+        // 大型雑魚・遠距離雑魚は通常スポーン枠だけに混ぜる。
+        int leaderSlotCount = wave.enableLeader ? leaderBatchIndices.Count : 0;
+        return Mathf.Max(0, enemyCount - leaderSlotCount);
+    }
+
+    private SpawnEnemyKind ConsumeSpawnEnemyKind(ref int remainingLargeQuota, ref int remainingRangedQuota, ref int remainingEligibleSlots)
+    {
+        if (remainingEligibleSlots <= 0)
+            return SpawnEnemyKind.Normal;
+
+        int totalSpecialQuota = Mathf.Clamp(remainingLargeQuota + remainingRangedQuota, 0, remainingEligibleSlots);
+        bool shouldSpawnSpecial = false;
+
+        if (totalSpecialQuota >= remainingEligibleSlots)
+        {
+            shouldSpawnSpecial = true;
+        }
+        else if (totalSpecialQuota > 0)
+        {
+            shouldSpawnSpecial = UnityEngine.Random.Range(0, remainingEligibleSlots) < totalSpecialQuota;
+        }
+
+        remainingEligibleSlots--;
+
+        if (!shouldSpawnSpecial)
+            return SpawnEnemyKind.Normal;
+
+        if (remainingLargeQuota <= 0 && remainingRangedQuota <= 0)
+            return SpawnEnemyKind.Normal;
+
+        if (remainingLargeQuota <= 0)
+        {
+            remainingRangedQuota--;
+            return SpawnEnemyKind.Ranged;
+        }
+
+        if (remainingRangedQuota <= 0)
+        {
+            remainingLargeQuota--;
+            return SpawnEnemyKind.Large;
+        }
+
+        int totalTypeQuota = remainingLargeQuota + remainingRangedQuota;
+        bool chooseLarge = UnityEngine.Random.Range(0, totalTypeQuota) < remainingLargeQuota;
+        if (chooseLarge)
+        {
+            remainingLargeQuota--;
+            return SpawnEnemyKind.Large;
+        }
+
+        remainingRangedQuota--;
+        return SpawnEnemyKind.Ranged;
+    }
+
+    /// <summary>
+    /// リーダー格の敵を1枠だけ湧かせるバッチを決める。
+    /// エリア比率によってバッチ数が増減するため、実際に作成した spawnBatchPlan.Count を基準にする。
+    /// </summary>
+    private void BuildLeaderBatchIndices(Wave wave, int batchCount)
+    {
+        leaderBatchIndices.Clear();
+
+        if (wave == null || !wave.enableLeader)
+            return;
+
+        batchCount = Mathf.Max(0, batchCount);
+        if (batchCount <= 0)
+            return;
+
+        int count = Mathf.Clamp(wave.leaderBatchCount, 0, batchCount);
+        if (count <= 0)
+            return;
+
+        List<int> indices = new List<int>(batchCount);
+        for (int i = 0; i < batchCount; i++)
+            indices.Add(i);
+
+        // シャッフル（回数は固定、出るタイミングだけランダム）
+        for (int i = indices.Count - 1; i > 0; i--)
+        {
+            int j = UnityEngine.Random.Range(0, i + 1);
+            (indices[i], indices[j]) = (indices[j], indices[i]);
+        }
+
+        // 先頭count個をリーダーバッチにする
+        for (int i = 0; i < count; i++)
+            leaderBatchIndices.Add(indices[i]);
+    }
+    #endregion
+
+    // ─────────────────────────────────────
+    // 通知のメソッド
+
+    #region 動的スポナー差し替え
+    public bool ReplaceSpawnerByArea(AreaId areaId, EnemySpawner replacement)
+    {
+        if (ShouldIgnoreWaveRuntimeRequest())
+            return false;
+
+        if (replacement == null)
+            return false;
+
+        replacement.SetAreaId(areaId);
+
+        int index = FindSpawnerIndexByArea(areaId);
+        if (index >= 0)
+        {
+            EnemySpawner existing = spawners[index];
+            if (existing != null && existing != replacement)
+            {
+                replacement.CopyRuntimeDependenciesFrom(existing);
+                existing.SetActive(false);
+            }
+
+            EnsureSpawnerConfigured(replacement);
+            spawners[index] = replacement;
+            ClampRoundRobinIndex();
+            return true;
+        }
+
+        RegisterSpawner(replacement);
+        return false;
+    }
+
+    /// <summary>
+    /// 初期侵攻用スポーンエリアを無効化し、完成したポータル由来のスポーンエリアへ切り替える。
+    /// 2個目以降のポータル完成時は、同エリアに追加で登録する。
+    /// </summary>
+    public bool RegisterPortalSpawnerForArea(AreaId areaId, EnemySpawner portalSpawner)
+    {
+        if (ShouldIgnoreWaveRuntimeRequest())
+            return false;
+
+        if (portalSpawner == null)
+            return false;
+
+        portalSpawner.SetAreaId(areaId);
+        EnsureSpawnerConfigured(portalSpawner);
+
+        EnemySpawner existing = FindSpawnerByArea(areaId);
+        if (existing != null && existing != portalSpawner)
+        {
+            return existing.RegisterPortalSpawnAreas(
+                portalSpawner.GetAllSpawnAreasSnapshot(),
+                removeInitialSpawnAreas: true);
+        }
+
+        // 既存スポナーが無い場合は、このポータル自身をそのままエリア担当として登録する。
+        // ただし意味上は「ポータル湧き」なので、内部では初期湧き欄ではなく portal 欄へ寄せておく。
+        portalSpawner.SetPortalSpawnAreasAsOnlyActiveSource(portalSpawner.GetAllSpawnAreasSnapshot());
+        RegisterSpawner(portalSpawner);
+        return true;
+    }
+
+    public bool RegisterSpawner(EnemySpawner spawner)
+    {
+        if (ShouldIgnoreWaveRuntimeRequest())
+            return false;
+
+        if (spawner == null)
+            return false;
+
+        if (ContainsSpawner(spawner))
+        {
+            EnsureSpawnerConfigured(spawner);
+            return false;
+        }
+
+        List<EnemySpawner> list = new List<EnemySpawner>(spawners ?? System.Array.Empty<EnemySpawner>())
+        {
+            spawner
+        };
+
+        spawners = list.ToArray();
+        EnsureSpawnerConfigured(spawner);
+        ClampRoundRobinIndex();
+        return true;
+    }
+
+    public bool UnregisterSpawner(EnemySpawner spawner)
+    {
+        if (ShouldIgnoreWaveRuntimeRequest())
+            return false;
+
+        if (spawner == null || spawners == null || spawners.Length == 0)
+            return false;
+
+        List<EnemySpawner> list = new List<EnemySpawner>(spawners);
+        bool removed = list.Remove(spawner);
+        if (!removed)
+            return false;
+
+        spawners = list.ToArray();
+        ClampRoundRobinIndex();
+        return true;
+    }
+
+    public EnemySpawner FindSpawnerByArea(AreaId areaId)
+    {
+        int index = FindSpawnerIndexByArea(areaId);
+        if (index < 0)
+            return null;
+
+        return spawners[index];
+    }
+
+    private int FindSpawnerIndexByArea(AreaId areaId)
+    {
+        if (spawners == null)
+            return -1;
+
+        for (int i = 0; i < spawners.Length; i++)
+        {
+            EnemySpawner spawner = spawners[i];
+            if (spawner == null)
+                continue;
+
+            if (spawner.AreaId != areaId)
+                continue;
+
+            return i;
+        }
+
+        return -1;
+    }
+
+    private bool ContainsSpawner(EnemySpawner spawner)
+    {
+        if (spawner == null || spawners == null)
+            return false;
+
+        for (int i = 0; i < spawners.Length; i++)
+        {
+            if (spawners[i] == spawner)
+                return true;
+        }
+
+        return false;
+    }
+
+    private void EnsureSpawnerConfigured(EnemySpawner spawner)
+    {
+        if (spawner == null)
+            return;
+
+        spawner.Configure(this, waypoints, spawnedEnemyHierarchyRoot);
+    }
+
+    private void ClampRoundRobinIndex()
+    {
+        if (spawners == null || spawners.Length <= 0)
+        {
+            spawnerRoundRobinIndex = 0;
+            return;
+        }
+
+        spawnerRoundRobinIndex %= spawners.Length;
+        if (spawnerRoundRobinIndex < 0)
+            spawnerRoundRobinIndex = 0;
+    }
+
+    private void ResolveSpawnedEnemyHierarchyRootIfNeeded()
+    {
+        if (spawnedEnemyHierarchyRoot != null)
+            return;
+
+        if (!autoCreateSpawnedEnemyHierarchyRoot)
+            return;
+
+        GameObject root = new GameObject(string.IsNullOrWhiteSpace(spawnedEnemyHierarchyRootName)
+            ? "Enemies_Runtime"
+            : spawnedEnemyHierarchyRootName);
+
+        spawnedEnemyHierarchyRoot = root.transform;
+    }
+    #endregion
+
+    #region 通知の責務はWaveEnemyStateに移した
+    public void NotifyEnemySpawned()
+    {
+        if (ShouldIgnoreWaveRuntimeRequest())
+            return;
+
+        enemyState.NotifyEnemySpawned();
+    }
+
+    public void NotifyEnemyRemoved()
+    {
+        if (ShouldIgnoreWaveRuntimeRequest())
+            return;
+
+        currentAliveEnemies = Mathf.Max(0, currentAliveEnemies - 1);
+        enemyState.NotifyEnemyRemoved();
+        announcer?.NotifyRemaining(enemyState.RemainingEnemies);
+    }
+
+    public bool IsBossWaveNumber(int waveNumber)
+    {
+        int index = Mathf.Max(1, waveNumber) - 1;
+        return IsBossWaveByIndex(index);
+    }
+
+    private bool IsBossWaveByIndex(int waveIndex)
+    {
+        if (waves == null)
+            return false;
+
+        if (waveIndex < 0 || waveIndex >= waves.Length)
+            return false;
+
+        return IsBossWave(waves[waveIndex]);
+    }
+
+    private bool IsBossWave(Wave wave)
+    {
+        return wave != null && wave.bossWave;
+    }
+
+    private int GetWaveSpawnTotalCount(Wave wave)
+    {
+        if (IsBossWave(wave))
+            return GetBossSpawnCount(wave);
+
+        return wave != null ? Mathf.Max(0, wave.enemyCount) : 0;
+    }
+
+    private int GetBossSpawnCount(Wave wave)
+    {
+        if (wave == null)
+            return 0;
+
+        return Mathf.Max(1, wave.bossCount);
+    }
+
+    private WantedEnemyKind GetBossWantedEnemyKind(Wave wave)
+    {
+        if (wave == null)
+            return WantedEnemyKind.Boss;
+
+        // 既存Inspector値が Enemy のまま残っていても、ボスWaveだけは Boss として扱う。
+        if (IsBossWave(wave) && wave.bossWantedEnemyKind == WantedEnemyKind.Enemy)
+            return WantedEnemyKind.Boss;
+
+        return wave.bossWantedEnemyKind;
+    }
+
+    private IEnumerator Co_HandleBossWantedPresentationRequested(int bossWaveNumber)
+    {
+        if (!requestBossWantedPresentationThroughWantedController)
+            yield break;
+
+        int bossWaveIndex = Mathf.Max(1, bossWaveNumber) - 1;
+        if (waves == null || bossWaveIndex < 0 || bossWaveIndex >= waves.Length)
+            yield break;
+
+        Wave bossWave = waves[bossWaveIndex];
+        if (!IsBossWave(bossWave))
+            yield break;
+
+        if (wantedController == null)
+        {
+            if (logBossWave)
+            {
+                Debug.LogWarning($"[WaveManager] WantedController が未設定のため、Boss Wave {bossWaveNumber} の指名手配事前演出を表示できません。", this);
+            }
+            yield break;
+        }
+
+        BossWantedPresentationRequest request = new BossWantedPresentationRequest(
+            bossWaveNumber,
+            GetBossWantedEnemyKind(bossWave),
+            GetBossSpawnCount(bossWave),
+            useTimeLimit: false);
+
+        if (logBossWave)
+        {
+            Debug.Log(
+                $"[WaveManager] Boss Wave {bossWaveNumber} の指名手配事前演出をWantedControllerへ要求しました。kind={request.EnemyKind}, useTimeLimit={request.UseTimeLimit}",
+                wantedController);
+        }
+
+        IEnumerator presentationRoutine = wantedController.Co_ShowBossWantedPresentation(request);
+        if (presentationRoutine != null)
+        {
+            yield return presentationRoutine;
+            yield break;
+        }
+
+        if (bossWantedPresentationFallbackSeconds > 0f)
+            yield return new WaitForSecondsRealtime(bossWantedPresentationFallbackSeconds);
+    }
+
+    private void PrepareWantedQuestForWave(Wave wave)
+{
+    CancelCurrentWantedQuest(false);
+
+    currentWaveSuccessfulSpawnCount = 0;
+    currentWantedSpawnOrder = -1;
+
+    if (IsBossWave(wave) && wave.forceBossWantedQuest && GetBossSpawnCount(wave) > 0)
+    {
+        currentWaveHasWantedQuest = true;
+        currentWantedSpawnOrder = 1;
+
+        if (logWantedQuest)
+        {
+            Debug.Log(
+                $"[WaveManager] Boss Wave {CurrentWaveNumber} の指名手配対象を予約しました。spawnOrder=1/{GetBossSpawnCount(wave)}, kind={GetBossWantedEnemyKind(wave)}",
+                this);
+        }
+
+        return;
+    }
+
+    if (wave == null || !wave.enableWantedQuest || wave.enemyCount <= 0)
+    {
+        currentWaveHasWantedQuest = false;
+        return;
+    }
+
+    currentWaveHasWantedQuest = true;
+
+    int maxOrder = Mathf.Max(1, wave.enemyCount);
+    currentWantedSpawnOrder = wave.randomizeWantedSpawnOrder
+        ? UnityEngine.Random.Range(1, maxOrder + 1)
+        : Mathf.Clamp(wave.wantedSpawnOrder, 1, maxOrder);
+
+    if (logWantedQuest)
+    {
+        Debug.Log(
+            $"[WaveManager] Wave {CurrentWaveNumber} 指名手配対象を予約しました。spawnOrder={currentWantedSpawnOrder}/{maxOrder}",
+            this);
+    }
+}
+
+    private void RegisterSpawnedEnemyForWantedQuest(GameObject enemyObj, WantedEnemyKind enemyKind)
+{
+    if (enemyObj == null)
+        return;
+
+    currentWaveSuccessfulSpawnCount++;
+
+    if (!currentWaveHasWantedQuest)
+        return;
+
+    if (currentWantedTarget != null)
+        return;
+
+    if (currentWaveSuccessfulSpawnCount != currentWantedSpawnOrder)
+        return;
+
+    WantedTargetNotifier notifier = enemyObj.GetComponent<WantedTargetNotifier>();
+    bool hadNotifierOnPrefab = notifier != null;
+
+    if (notifier == null)
+        notifier = enemyObj.AddComponent<WantedTargetNotifier>();
+
+    currentWantedTarget = notifier;
+
+    notifier.Configure(
+        this,
+        CurrentWaveNumber,
+        enemyKind,
+        true);
+
+    if (logWantedQuest)
+    {
+        string notifierSource = hadNotifierOnPrefab ? "Prefab" : "RuntimeAdd";
+        Debug.Log(
+            $"[WaveManager] 指名手配対象を設定しました。wave={CurrentWaveNumber}, enemy={enemyObj.name}, kind={enemyKind}, notifier={notifierSource}",
+            enemyObj);
+    }
+}
+
+    private WantedEnemyKind ToWantedEnemyKind(SpawnEnemyKind spawnKind)
+{
+    switch (spawnKind)
+    {
+        case SpawnEnemyKind.Large:
+            return WantedEnemyKind.BigEnemy;
+        case SpawnEnemyKind.Ranged:
+            return WantedEnemyKind.RangedEnemy;
+        default:
+            return WantedEnemyKind.Enemy;
+    }
+}
+
+    public void NotifyWantedTargetSpawned(WantedTargetNotifier notifier)
+{
+    if (notifier == null)
+        return;
+
+    if (currentWantedTarget != null && notifier != currentWantedTarget)
+        return;
+
+    wantedController?.NotifyWantedTargetSpawned(notifier);
+}
+
+    public void NotifyWantedTargetRewardGranted(WantedTargetNotifier notifier)
+{
+    if (notifier == null)
+        return;
+
+    if (currentWantedTarget != null && notifier != currentWantedTarget)
+        return;
+
+    bool rewardApplied = wantedController != null &&
+        wantedController.NotifyWantedTargetRewardGranted(notifier);
+
+    int rewardStatusPoints = wantedController != null
+        ? wantedController.GetRewardStatusPoints(notifier)
+        : 0;
+
+    if (logWantedQuest)
+    {
+        string controllerName = wantedController != null ? wantedController.gameObject.name : "なし";
+        Debug.Log(
+            $"[WaveManager] 指名手配報酬通知を処理しました。wave={notifier.WaveNumber}, enemy={notifier.gameObject.name}, reward={rewardStatusPoints}, applied={rewardApplied}, controller={controllerName}",
+            notifier);
+    }
+
+    WantedQuestRewardGranted?.Invoke(notifier, rewardStatusPoints);
+    currentWantedTarget = null;
+    currentWaveHasWantedQuest = false;
+}
+
+    public void NotifyWantedTargetExpired(WantedTargetNotifier notifier)
+{
+    if (notifier == null)
+        return;
+
+    if (currentWantedTarget != null && notifier != currentWantedTarget)
+        return;
+
+    if (logWantedQuest)
+    {
+        Debug.Log(
+            $"[WaveManager] 指名手配対象が時間切れになったため、報酬なしで解除しました。wave={notifier.WaveNumber}, enemy={notifier.gameObject.name}",
+            notifier);
+    }
+
+    currentWantedTarget = null;
+    currentWaveHasWantedQuest = false;
+    currentWantedSpawnOrder = -1;
+}
+
+// 旧呼び出し互換。報酬値はWantedPortraitCatalog側を正とするため、渡された値は使用しない。
+[Obsolete("報酬値は WantedPortraitCatalog 側で管理します。NotifyWantedTargetRewardGranted(notifier) を使用してください。")]
+    public void NotifyWantedTargetRewardGranted(WantedTargetNotifier notifier, int ignoredRewardAmount)
+{
+    NotifyWantedTargetRewardGranted(notifier);
+}
+
+    private void CancelCurrentWantedQuest(bool disarmTarget)
+{
+    if (disarmTarget && currentWantedTarget != null)
+        currentWantedTarget.DisarmWithoutReward();
+
+    currentWaveHasWantedQuest = false;
+    currentWantedSpawnOrder = -1;
+    currentWaveSuccessfulSpawnCount = 0;
+    currentWantedTarget = null;
+}
+    #endregion
+
+    // ─────────────────────────────────────
+    // Wave遷移・選択肢制御
+
+    #region Wave遷移・選択肢制御
+    public void RequestNextWave()
+    {
+        if (ShouldIgnoreWaveRuntimeRequest())
+            return;
+
+        intermissionUI?.RequestNextWave();
+    }
+
+    #endregion
+}
