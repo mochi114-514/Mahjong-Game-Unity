@@ -4,7 +4,6 @@ using MahjongPrototype.Logging;
 using MahjongPrototype.Notifications;
 using MahjongPrototype.Services;
 using MahjongPrototype.Skills;
-using MahjongPrototype.UI;
 using UnityEngine;
 
 namespace MahjongPrototype
@@ -25,7 +24,6 @@ namespace MahjongPrototype
 
         [Header("Scene References")]
         [SerializeField] private MahjongEventNotifier eventNotifier;
-        [SerializeField] private MahjongPrototypeUi ui;
 
         [Header("Dev Log")]
         [SerializeField] private bool enableDevLog = true;
@@ -41,7 +39,6 @@ namespace MahjongPrototype
 
         private MahjongGameState gameState;
         private bool warnedMissingNotifier;
-        private bool warnedMissingUi;
 
         public MahjongGameState CurrentState => gameState;
         public MahjongEventNotifier EventNotifier => eventNotifier;
@@ -91,7 +88,6 @@ namespace MahjongPrototype
 
             DealInitialHands();
             StartTurn(gameState.CurrentSeat, gameState.TurnIndex);
-            RefreshUi();
         }
 
         public void RetryPrototype()
@@ -123,7 +119,6 @@ namespace MahjongPrototype
             if (!result.Success)
             {
                 EndRound("WallEmpty");
-                RefreshUi();
                 return;
             }
 
@@ -131,7 +126,6 @@ namespace MahjongPrototype
             NotifyTileDrawn(result);
             LogTileDrawn(result);
             CheckWinPrototype();
-            RefreshUi();
         }
 
         public void RequestDiscard(int handIndex)
@@ -162,7 +156,6 @@ namespace MahjongPrototype
             NotifyTileDiscarded(result.Record);
             LogTileDiscarded(result.Record);
             AdvanceTurn();
-            RefreshUi();
         }
 
         public void RequestForceDrawSkill(string targetTileCode)
@@ -191,7 +184,6 @@ namespace MahjongPrototype
             LogSkillActivated(gameState.CurrentSeat, result.Effect);
             NotifySkillEffectRegistered(result.Effect);
             LogSkillEffectRegistered(result.Effect);
-            RefreshUi();
         }
 
         private void DealInitialHands()
@@ -291,9 +283,6 @@ namespace MahjongPrototype
         {
             if (eventNotifier == null)
                 eventNotifier = GetComponent<MahjongEventNotifier>();
-
-            if (ui == null)
-                ui = GetComponentInChildren<MahjongPrototypeUi>(true);
         }
 
         private void NormalizeInitialActiveSeats()
@@ -312,17 +301,6 @@ namespace MahjongPrototype
 
             Warn("GameState is not initialized. StartNewRound first.");
             return false;
-        }
-
-        private void RefreshUi()
-        {
-            if (ui == null)
-            {
-                WarnMissingOnce(ref warnedMissingUi, "MahjongPrototypeUi is not assigned.");
-                return;
-            }
-
-            ui.Refresh(gameState);
         }
 
         private void NotifyRunStarted()

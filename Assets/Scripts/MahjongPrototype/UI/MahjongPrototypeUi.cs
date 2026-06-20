@@ -36,6 +36,7 @@ namespace MahjongPrototype.UI
         [SerializeField] private MahjongLogPreviewController logPreviewController;
 
         private bool warnedMissingFlow;
+        private bool warnedMissingEventNotifier;
         private bool warnedMissingDisplayController;
         private bool warnedMissingInputController;
         private bool warnedMissingLogPreviewController;
@@ -54,6 +55,7 @@ namespace MahjongPrototype.UI
 
         private void OnEnable()
         {
+            CacheReferences();
             EnsureDisplayController();
             EnsureHandView();
             SubscribeHandViewEvents();
@@ -61,6 +63,7 @@ namespace MahjongPrototype.UI
             SubscribeInputControllerEvents();
             EnsureLogPreviewController();
             SubscribeNotifications();
+            RefreshFromFlow();
         }
 
         private void Start()
@@ -128,7 +131,12 @@ namespace MahjongPrototype.UI
         private void SubscribeNotifications()
         {
             if (eventNotifier == null)
+            {
+                WarnMissingOnce(
+                    ref warnedMissingEventNotifier,
+                    "MahjongEventNotifier is not assigned. UI refresh depends on AnyEventNotified.");
                 return;
+            }
 
             eventNotifier.AnyEventNotified += RefreshFromFlow;
         }
