@@ -204,6 +204,17 @@ namespace MahjongPrototype
             LogSkillEffectRegistered(result.Effect);
         }
 
+        public void RequestSortHand()
+        {
+            if (!CanUseGameState())
+                return;
+
+            SeatId seat = gameState.CurrentSeat;
+            gameState.GetPlayerSeat(seat).Hand.SortByTypeIndex();
+            NotifyHandSorted(seat, gameState.TurnIndex);
+            LogHandSorted(seat, gameState.TurnIndex);
+        }
+
         public void RequestDeclareWin()
         {
             if (!CanUseGameState())
@@ -436,6 +447,11 @@ namespace MahjongPrototype
             eventNotifier?.NotifyWinDeclined(seat, turnIndex);
         }
 
+        private void NotifyHandSorted(SeatId seat, int turnIndex)
+        {
+            eventNotifier?.NotifyHandSorted(seat, turnIndex);
+        }
+
         private void LogRunStarted()
         {
             DevLog.Record(
@@ -568,6 +584,18 @@ namespace MahjongPrototype
                 "Mahjong",
                 "WinDeclined",
                 "Winning hand declined.",
+                seat: seat,
+                hand: GetHandText(seat),
+                wallCount: gameState.Wall.Count,
+                turnIndex: turnIndex);
+        }
+
+        private void LogHandSorted(SeatId seat, int turnIndex)
+        {
+            DevLog.Record(
+                "Mahjong",
+                "HandSorted",
+                "Hand sorted by TypeIndex.",
                 seat: seat,
                 hand: GetHandText(seat),
                 wallCount: gameState.Wall.Count,

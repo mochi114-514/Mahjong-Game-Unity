@@ -83,6 +83,9 @@ namespace MahjongPrototype.Logging
                 case "WinDeclined":
                     return TrimLine("WinDeclined");
 
+                case "HandSorted":
+                    return TrimLine("HandSorted");
+
                 case "SlowFrame":
                     return TrimLine("SlowFrame");
 

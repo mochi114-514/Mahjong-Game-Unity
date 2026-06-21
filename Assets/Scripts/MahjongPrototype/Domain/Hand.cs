@@ -27,6 +27,11 @@ namespace MahjongPrototype.Domain
             return true;
         }
 
+        public void SortByTypeIndex()
+        {
+            tiles.Sort(CompareByTypeIndex);
+        }
+
         public IReadOnlyList<Tile> GetTiles()
         {
             return tiles.ToArray();
@@ -35,6 +40,17 @@ namespace MahjongPrototype.Domain
         public string ToDisplayString()
         {
             return string.Join(" ", Array.ConvertAll(tiles.ToArray(), tile => tile.ToString()));
+        }
+
+        private static int CompareByTypeIndex(Tile left, Tile right)
+        {
+            return GetSortKey(left).CompareTo(GetSortKey(right));
+        }
+
+        private static int GetSortKey(Tile tile)
+        {
+            int typeIndex = tile.TypeIndex;
+            return typeIndex < 0 ? int.MaxValue : typeIndex;
         }
     }
 }

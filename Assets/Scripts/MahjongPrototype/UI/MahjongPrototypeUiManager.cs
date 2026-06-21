@@ -201,6 +201,7 @@ namespace MahjongPrototype.UI
 
             inputController.DrawRequested += HandleDrawRequested;
             inputController.ForceDrawSkillRequested += HandleForceDrawSkillRequested;
+            inputController.SortHandRequested += HandleSortHandRequested;
             inputController.RetryRequested += HandleRetryRequested;
             inputController.WinRequested += HandleWinRequested;
             inputController.DeclineWinRequested += HandleDeclineWinRequested;
@@ -214,6 +215,7 @@ namespace MahjongPrototype.UI
 
             inputController.DrawRequested -= HandleDrawRequested;
             inputController.ForceDrawSkillRequested -= HandleForceDrawSkillRequested;
+            inputController.SortHandRequested -= HandleSortHandRequested;
             inputController.RetryRequested -= HandleRetryRequested;
             inputController.WinRequested -= HandleWinRequested;
             inputController.DeclineWinRequested -= HandleDeclineWinRequested;
@@ -250,6 +252,17 @@ namespace MahjongPrototype.UI
             }
 
             gameFlow.RequestForceDrawSkill(targetTileText);
+        }
+
+        private void HandleSortHandRequested()
+        {
+            if (gameFlow == null)
+            {
+                WarnMissingOnce(ref warnedMissingFlow, "Cannot sort hand because MahjongGameFlow is not assigned.");
+                return;
+            }
+
+            gameFlow.RequestSortHand();
         }
 
         private void HandleRetryRequested()
