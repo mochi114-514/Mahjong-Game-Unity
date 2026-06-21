@@ -16,6 +16,9 @@ namespace MahjongPrototype.UI
         [SerializeField] private Button forceDrawSkillButton;
         [Tooltip("プロトタイプ状態を初期化するButtonです。")]
         [SerializeField] private Button retryButton;
+        [Header("Win Decision")]
+        [SerializeField] private Button winButton;
+        [SerializeField] private Button declineWinButton;
         [Tooltip("指定牌ツモの対象を入力するTMP_InputFieldです。1m-9m, 1p-9p, 1s-9s, E/S/W/N/P/F/C を受け付けます。")]
         [SerializeField] private TMP_InputField targetTileInput;
 
@@ -24,10 +27,14 @@ namespace MahjongPrototype.UI
         private bool warnedMissingDrawButton;
         private bool warnedMissingSkillButton;
         private bool warnedMissingRetryButton;
+        private bool warnedMissingWinButton;
+        private bool warnedMissingDeclineWinButton;
 
         public event Action DrawRequested;
         public event Action<string> ForceDrawSkillRequested;
         public event Action RetryRequested;
+        public event Action WinRequested;
+        public event Action DeclineWinRequested;
 
         private void Reset()
         {
@@ -97,6 +104,24 @@ namespace MahjongPrototype.UI
                 WarnMissingOnce(ref warnedMissingRetryButton, "RetryButton is not assigned.");
             }
 
+            if (winButton != null)
+            {
+                winButton.onClick.AddListener(HandleWinClicked);
+            }
+            else
+            {
+                WarnMissingOnce(ref warnedMissingWinButton, "WinButton is not assigned.");
+            }
+
+            if (declineWinButton != null)
+            {
+                declineWinButton.onClick.AddListener(HandleDeclineWinClicked);
+            }
+            else
+            {
+                WarnMissingOnce(ref warnedMissingDeclineWinButton, "DeclineWinButton is not assigned.");
+            }
+
             isSubscribed = true;
         }
 
@@ -113,6 +138,12 @@ namespace MahjongPrototype.UI
 
             if (retryButton != null)
                 retryButton.onClick.RemoveListener(HandleRetryClicked);
+
+            if (winButton != null)
+                winButton.onClick.RemoveListener(HandleWinClicked);
+
+            if (declineWinButton != null)
+                declineWinButton.onClick.RemoveListener(HandleDeclineWinClicked);
 
             isSubscribed = false;
         }
@@ -136,6 +167,16 @@ namespace MahjongPrototype.UI
         private void HandleRetryClicked()
         {
             RetryRequested?.Invoke();
+        }
+
+        private void HandleWinClicked()
+        {
+            WinRequested?.Invoke();
+        }
+
+        private void HandleDeclineWinClicked()
+        {
+            DeclineWinRequested?.Invoke();
         }
 
         private Button FindButtonByName(string objectName)

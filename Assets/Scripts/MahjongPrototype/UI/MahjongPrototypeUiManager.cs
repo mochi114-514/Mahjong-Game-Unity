@@ -46,7 +46,6 @@ namespace MahjongPrototype.UI
         private bool warnedMissingLogPreviewController;
         private bool isHandViewSubscribed;
         private bool isInputControllerSubscribed;
-        private bool isWinDecisionControllerSubscribed;
 
         private void Reset()
         {
@@ -67,7 +66,6 @@ namespace MahjongPrototype.UI
             EnsureInputController();
             SubscribeInputControllerEvents();
             EnsureWinDecisionController();
-            SubscribeWinDecisionControllerEvents();
             EnsureLogPreviewController();
             SubscribeNotifications();
             RefreshFromFlow();
@@ -82,7 +80,6 @@ namespace MahjongPrototype.UI
             EnsureInputController();
             SubscribeInputControllerEvents();
             EnsureWinDecisionController();
-            SubscribeWinDecisionControllerEvents();
             EnsureLogPreviewController();
             RefreshFromFlow();
             RefreshLogPreview();
@@ -92,7 +89,6 @@ namespace MahjongPrototype.UI
         {
             UnsubscribeHandViewEvents();
             UnsubscribeInputControllerEvents();
-            UnsubscribeWinDecisionControllerEvents();
             UnsubscribeNotifications();
         }
 
@@ -134,9 +130,6 @@ namespace MahjongPrototype.UI
 
             if (inputController == null)
                 inputController = GetComponentInChildren<MahjongUiInputController>(true);
-
-            if (winDecisionController == null)
-                winDecisionController = GetComponentInChildren<MahjongWinDecisionController>(true);
 
             if (logPreviewController == null)
                 logPreviewController = GetComponentInChildren<MahjongLogPreviewController>(true);
@@ -209,6 +202,8 @@ namespace MahjongPrototype.UI
             inputController.DrawRequested += HandleDrawRequested;
             inputController.ForceDrawSkillRequested += HandleForceDrawSkillRequested;
             inputController.RetryRequested += HandleRetryRequested;
+            inputController.WinRequested += HandleWinRequested;
+            inputController.DeclineWinRequested += HandleDeclineWinRequested;
             isInputControllerSubscribed = true;
         }
 
@@ -220,46 +215,19 @@ namespace MahjongPrototype.UI
             inputController.DrawRequested -= HandleDrawRequested;
             inputController.ForceDrawSkillRequested -= HandleForceDrawSkillRequested;
             inputController.RetryRequested -= HandleRetryRequested;
+            inputController.WinRequested -= HandleWinRequested;
+            inputController.DeclineWinRequested -= HandleDeclineWinRequested;
             isInputControllerSubscribed = false;
         }
 
         private void EnsureWinDecisionController()
         {
-            if (winDecisionController == null)
-            {
-                winDecisionController = GetComponentInChildren<MahjongWinDecisionController>(true);
-            }
-
             if (winDecisionController != null)
                 return;
 
-            winDecisionController = gameObject.AddComponent<MahjongWinDecisionController>();
-            if (winDecisionController == null)
-            {
-                WarnMissingOnce(
-                    ref warnedMissingWinDecisionController,
-                    "MahjongWinDecisionController is not assigned. Add WinDecisionArea and assign its buttons.");
-            }
-        }
-
-        private void SubscribeWinDecisionControllerEvents()
-        {
-            if (winDecisionController == null || isWinDecisionControllerSubscribed)
-                return;
-
-            winDecisionController.WinRequested += HandleWinRequested;
-            winDecisionController.DeclineWinRequested += HandleDeclineWinRequested;
-            isWinDecisionControllerSubscribed = true;
-        }
-
-        private void UnsubscribeWinDecisionControllerEvents()
-        {
-            if (winDecisionController == null || !isWinDecisionControllerSubscribed)
-                return;
-
-            winDecisionController.WinRequested -= HandleWinRequested;
-            winDecisionController.DeclineWinRequested -= HandleDeclineWinRequested;
-            isWinDecisionControllerSubscribed = false;
+            WarnMissingOnce(
+                ref warnedMissingWinDecisionController,
+                "MahjongWinDecisionController is not assigned. Add it to the UI GameObject and assign WinDecisionArea and its buttons.");
         }
 
         private void HandleDrawRequested()
