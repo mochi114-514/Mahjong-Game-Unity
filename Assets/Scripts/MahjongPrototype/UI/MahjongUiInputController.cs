@@ -14,8 +14,6 @@ namespace MahjongPrototype.UI
         [SerializeField] private Button drawButton;
         [Tooltip("TargetTileInputの牌を次ツモで狙う必殺技Buttonです。")]
         [SerializeField] private Button forceDrawSkillButton;
-        [Tooltip("Sorts the current hand by Tile.TypeIndex.")]
-        [SerializeField] private Button sortHandButton;
         [Tooltip("Enables automatic TypeIndex sorting when the hand changes.")]
         [SerializeField] private Toggle autoSortToggle;
         [Tooltip("プロトタイプ状態を初期化するButtonです。")]
@@ -30,7 +28,6 @@ namespace MahjongPrototype.UI
         private bool warnedMissingTargetInput;
         private bool warnedMissingDrawButton;
         private bool warnedMissingSkillButton;
-        private bool warnedMissingSortHandButton;
         private bool warnedMissingAutoSortToggle;
         private bool warnedMissingRetryButton;
         private bool warnedMissingWinButton;
@@ -38,7 +35,6 @@ namespace MahjongPrototype.UI
 
         public event Action DrawRequested;
         public event Action<string> ForceDrawSkillRequested;
-        public event Action SortHandRequested;
         public event Action<bool> AutoSortChanged;
         public event Action RetryRequested;
         public event Action WinRequested;
@@ -73,9 +69,6 @@ namespace MahjongPrototype.UI
             if (forceDrawSkillButton == null)
                 forceDrawSkillButton = FindButtonByName("ForceDrawSkillButton");
 
-            if (sortHandButton == null)
-                sortHandButton = FindButtonByName("SortHandButton");
-
             if (autoSortToggle == null)
                 autoSortToggle = FindComponentByName<Toggle>("AutoSortToggle");
 
@@ -107,15 +100,6 @@ namespace MahjongPrototype.UI
             else
             {
                 WarnMissingOnce(ref warnedMissingSkillButton, "ForceDrawSkillButton is not assigned.");
-            }
-
-            if (sortHandButton != null)
-            {
-                sortHandButton.onClick.AddListener(HandleSortHandClicked);
-            }
-            else
-            {
-                WarnMissingOnce(ref warnedMissingSortHandButton, "SortHandButton is not assigned.");
             }
 
             if (autoSortToggle != null)
@@ -168,9 +152,6 @@ namespace MahjongPrototype.UI
             if (forceDrawSkillButton != null)
                 forceDrawSkillButton.onClick.RemoveListener(HandleForceDrawSkillClicked);
 
-            if (sortHandButton != null)
-                sortHandButton.onClick.RemoveListener(HandleSortHandClicked);
-
             if (autoSortToggle != null)
                 autoSortToggle.onValueChanged.RemoveListener(HandleAutoSortChanged);
 
@@ -200,11 +181,6 @@ namespace MahjongPrototype.UI
             }
 
             ForceDrawSkillRequested?.Invoke(targetTileInput.text);
-        }
-
-        private void HandleSortHandClicked()
-        {
-            SortHandRequested?.Invoke();
         }
 
         private void HandleAutoSortChanged(bool enabled)
@@ -238,6 +214,20 @@ namespace MahjongPrototype.UI
             }
 
             autoSortToggle.SetIsOnWithoutNotify(enabled);
+        }
+
+        public void SetGameplayInputInteractable(bool interactable)
+        {
+            CacheReferences();
+
+            if (drawButton != null)
+                drawButton.interactable = interactable;
+
+            if (forceDrawSkillButton != null)
+                forceDrawSkillButton.interactable = interactable;
+
+            if (targetTileInput != null)
+                targetTileInput.interactable = interactable;
         }
 
         private Button FindButtonByName(string objectName)

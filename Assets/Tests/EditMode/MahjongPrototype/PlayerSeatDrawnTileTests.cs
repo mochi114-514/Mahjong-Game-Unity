@@ -45,7 +45,7 @@ namespace MahjongPrototype.Tests
             AddHandTile(playerSeat, "1m");
             SetDrawnTile(playerSeat, CreateTile("C"));
 
-            SortHand(playerSeat);
+            SortNormalHand(playerSeat);
 
             Assert.That(GetHandDisplayString(playerSeat), Is.EqualTo("1m 9m"));
             Assert.That(GetDrawnTile(playerSeat).ToString(), Is.EqualTo("C"));
@@ -114,7 +114,7 @@ namespace MahjongPrototype.Tests
             method.Invoke(hand, new[] { CreateTile(tileCode) });
         }
 
-        private static void SortHand(object playerSeat)
+        private static void SortNormalHand(object playerSeat)
         {
             object hand = GetHand(playerSeat);
             MethodInfo method = hand.GetType().GetMethod("SortByTypeIndex");

@@ -52,6 +52,7 @@ namespace MahjongPrototype
         public SeatId ViewerSeat => viewerSeat;
         public bool IsWinDecisionPending => isWinDecisionPending;
         public bool IsAutoSortEnabled => autoSortEnabled;
+        public bool IsInteractionLocked => isWinDecisionPending || (gameState != null && gameState.IsRoundEnded);
 
         private void Reset()
         {
@@ -116,6 +117,12 @@ namespace MahjongPrototype
             if (gameState.IsRoundEnded)
             {
                 Warn("Round already ended. Press Retry.");
+                return;
+            }
+
+            if (isWinDecisionPending)
+            {
+                Warn("Declare or decline win before drawing.");
                 return;
             }
 
@@ -221,6 +228,12 @@ namespace MahjongPrototype
             if (!CanUseGameState())
                 return;
 
+            if (gameState.IsRoundEnded)
+            {
+                Warn("Round already ended. Press Retry.");
+                return;
+            }
+
             if (isWinDecisionPending)
             {
                 Warn("Declare or decline win before activating another skill.");
@@ -250,17 +263,6 @@ namespace MahjongPrototype
             LogSkillEffectRegistered(result.Effect);
         }
 
-        public void RequestSortHand()
-        {
-            if (!CanUseGameState())
-                return;
-
-            SeatId seat = gameState.CurrentSeat;
-            gameState.GetPlayerSeat(seat).Hand.SortByTypeIndex();
-            NotifyHandSorted(seat, gameState.TurnIndex);
-            LogHandSorted(seat, gameState.TurnIndex);
-        }
-
         public void RequestSetAutoSortEnabled(bool enabled)
         {
             if (autoSortEnabled == enabled)
@@ -287,6 +289,7 @@ namespace MahjongPrototype
             SeatId seat = pendingWinSeat;
             int turnIndex = pendingWinTurnIndex;
             ClearWinDecision();
+            gameState.IsRoundEnded = true;
 
             NotifyWinDeclared(seat, turnIndex);
             LogWinDeclared(seat, turnIndex);
@@ -526,11 +529,6 @@ namespace MahjongPrototype
             eventNotifier?.NotifyWinDeclined(seat, turnIndex);
         }
 
-        private void NotifyHandSorted(SeatId seat, int turnIndex)
-        {
-            eventNotifier?.NotifyHandSorted(seat, turnIndex);
-        }
-
         private void NotifyHandAutoSorted(SeatId seat, int turnIndex)
         {
             eventNotifier?.NotifyHandAutoSorted(seat, turnIndex);
@@ -694,18 +692,6 @@ namespace MahjongPrototype
                 "Mahjong",
                 "WinDeclined",
                 "Winning hand declined.",
-                seat: seat,
-                hand: GetHandText(seat),
-                wallCount: gameState.Wall.Count,
-                turnIndex: turnIndex);
-        }
-
-        private void LogHandSorted(SeatId seat, int turnIndex)
-        {
-            DevLog.Record(
-                "Mahjong",
-                "HandSorted",
-                "Hand sorted by TypeIndex.",
                 seat: seat,
                 hand: GetHandText(seat),
                 wallCount: gameState.Wall.Count,

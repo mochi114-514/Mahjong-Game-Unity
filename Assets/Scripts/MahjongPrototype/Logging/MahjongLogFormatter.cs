@@ -83,9 +83,6 @@ namespace MahjongPrototype.Logging
                 case "WinDeclined":
                     return TrimLine("WinDeclined");
 
-                case "HandSorted":
-                    return TrimLine("HandSorted");
-
                 case "HandAutoSorted":
                     return string.Empty;
 

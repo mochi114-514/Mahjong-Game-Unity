@@ -64,6 +64,14 @@ namespace MahjongPrototype.UI
             }
         }
 
+        public void SetInteractable(bool interactable)
+        {
+            CacheReferences();
+
+            if (button != null)
+                button.interactable = interactable;
+        }
+
         private void CacheReferences()
         {
             if (button == null)

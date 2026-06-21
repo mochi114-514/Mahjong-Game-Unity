@@ -16,6 +16,7 @@ namespace MahjongPrototype.UI
         [SerializeField] private TileButtonView tileButtonPrefab;
 
         private readonly List<TileButtonView> activeTileButtons = new List<TileButtonView>();
+        private bool tilesInteractable = true;
         private bool warnedMissingHandContainer;
         private bool warnedMissingTileButtonPrefab;
 
@@ -59,7 +60,20 @@ namespace MahjongPrototype.UI
             {
                 TileButtonView view = Instantiate(tileButtonPrefab, handContainer);
                 view.Initialize(i, handTiles[i], HandleTileClicked);
+                view.SetInteractable(tilesInteractable);
                 activeTileButtons.Add(view);
+            }
+        }
+
+        public void SetTilesInteractable(bool interactable)
+        {
+            tilesInteractable = interactable;
+
+            for (int i = 0; i < activeTileButtons.Count; i++)
+            {
+                TileButtonView view = activeTileButtons[i];
+                if (view != null)
+                    view.SetInteractable(interactable);
             }
         }
 

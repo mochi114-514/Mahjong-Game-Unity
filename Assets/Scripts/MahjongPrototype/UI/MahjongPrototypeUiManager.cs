@@ -111,6 +111,7 @@ namespace MahjongPrototype.UI
             RefreshHand(state);
             RefreshDrawnTile(state);
             RefreshWinDecision();
+            RefreshInteractionState();
             RefreshLogPreview();
         }
 
@@ -215,7 +216,6 @@ namespace MahjongPrototype.UI
 
             inputController.DrawRequested += HandleDrawRequested;
             inputController.ForceDrawSkillRequested += HandleForceDrawSkillRequested;
-            inputController.SortHandRequested += HandleSortHandRequested;
             inputController.AutoSortChanged += HandleAutoSortChanged;
             inputController.RetryRequested += HandleRetryRequested;
             inputController.WinRequested += HandleWinRequested;
@@ -238,7 +238,6 @@ namespace MahjongPrototype.UI
 
             inputController.DrawRequested -= HandleDrawRequested;
             inputController.ForceDrawSkillRequested -= HandleForceDrawSkillRequested;
-            inputController.SortHandRequested -= HandleSortHandRequested;
             inputController.AutoSortChanged -= HandleAutoSortChanged;
             inputController.RetryRequested -= HandleRetryRequested;
             inputController.WinRequested -= HandleWinRequested;
@@ -278,17 +277,6 @@ namespace MahjongPrototype.UI
             gameFlow.RequestForceDrawSkill(targetTileText);
         }
 
-        private void HandleSortHandRequested()
-        {
-            if (gameFlow == null)
-            {
-                WarnMissingOnce(ref warnedMissingFlow, "Cannot sort hand because MahjongGameFlow is not assigned.");
-                return;
-            }
-
-            gameFlow.RequestSortHand();
-        }
-
         private void HandleAutoSortChanged(bool enabled)
         {
             if (gameFlow == null)
@@ -309,7 +297,7 @@ namespace MahjongPrototype.UI
             }
 
             gameFlow.RetryPrototype();
-            RefreshWinDecision();
+            RefreshFromFlow();
         }
 
         private void HandleWinRequested()
@@ -321,7 +309,7 @@ namespace MahjongPrototype.UI
             }
 
             gameFlow.RequestDeclareWin();
-            RefreshWinDecision();
+            RefreshFromFlow();
         }
 
         private void HandleDeclineWinRequested()
@@ -333,7 +321,7 @@ namespace MahjongPrototype.UI
             }
 
             gameFlow.RequestDeclineWin();
-            RefreshWinDecision();
+            RefreshFromFlow();
         }
 
         private void RefreshDisplay(MahjongGameState state)
@@ -440,6 +428,20 @@ namespace MahjongPrototype.UI
 
             if (winDecisionController != null)
                 winDecisionController.SetVisible(gameFlow != null && gameFlow.IsWinDecisionPending);
+        }
+
+        private void RefreshInteractionState()
+        {
+            bool canUseGameplayInput = gameFlow != null && !gameFlow.IsInteractionLocked;
+
+            if (inputController != null)
+                inputController.SetGameplayInputInteractable(canUseGameplayInput);
+
+            if (handView != null)
+                handView.SetTilesInteractable(canUseGameplayInput);
+
+            if (drawnTileView != null)
+                drawnTileView.SetTileInteractable(canUseGameplayInput);
         }
 
         private void HandleTileClicked(int handIndex)

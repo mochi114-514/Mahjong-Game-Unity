@@ -13,6 +13,7 @@ namespace MahjongPrototype.UI
         [SerializeField] private TileButtonView tileButtonPrefab;
 
         private TileButtonView activeTileButton;
+        private bool tileInteractable = true;
         private bool warnedMissingDrawnTileContainer;
         private bool warnedMissingTileButtonPrefab;
 
@@ -54,6 +55,15 @@ namespace MahjongPrototype.UI
 
             activeTileButton = Instantiate(tileButtonPrefab, drawnTileContainer);
             activeTileButton.Initialize(0, drawnTile.Value, HandleDrawnTileClicked);
+            activeTileButton.SetInteractable(tileInteractable);
+        }
+
+        public void SetTileInteractable(bool interactable)
+        {
+            tileInteractable = interactable;
+
+            if (activeTileButton != null)
+                activeTileButton.SetInteractable(interactable);
         }
 
         public void Clear()
