@@ -48,6 +48,8 @@ namespace MahjongPrototype.Domain
         public bool IsNumberTile => IsNumberSuit(Suit) && Rank >= 1 && Rank <= 9 && Honor == HonorKind.None;
         public bool IsHonorTile => Suit == TileSuit.None && Rank == 0 && Honor != HonorKind.None;
         public string Code => IsValid ? FormatCode() : string.Empty;
+        public int TypeIndex => CalculateTypeIndex();
+        public int TypeId => TypeIndex < 0 ? 0 : TypeIndex + 1;
 
         public static Tile CreateNumber(TileSuit suit, int rank)
         {
@@ -152,6 +154,53 @@ namespace MahjongPrototype.Domain
                 return FormatHonorCode(Honor).ToString();
 
             return string.Empty;
+        }
+
+        private int CalculateTypeIndex()
+        {
+            if (IsNumberTile)
+            {
+                int suitOffset;
+                switch (Suit)
+                {
+                    case TileSuit.Man:
+                        suitOffset = 0;
+                        break;
+                    case TileSuit.Pin:
+                        suitOffset = 9;
+                        break;
+                    case TileSuit.Sou:
+                        suitOffset = 18;
+                        break;
+                    default:
+                        return -1;
+                }
+
+                return suitOffset + Rank - 1;
+            }
+
+            if (!IsHonorTile)
+                return -1;
+
+            switch (Honor)
+            {
+                case HonorKind.East:
+                    return 27;
+                case HonorKind.South:
+                    return 28;
+                case HonorKind.West:
+                    return 29;
+                case HonorKind.North:
+                    return 30;
+                case HonorKind.White:
+                    return 31;
+                case HonorKind.Green:
+                    return 32;
+                case HonorKind.Red:
+                    return 33;
+                default:
+                    return -1;
+            }
         }
 
         private static bool IsNumberSuit(TileSuit suit)

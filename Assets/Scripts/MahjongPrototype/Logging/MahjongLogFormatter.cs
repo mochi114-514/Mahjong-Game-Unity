@@ -75,7 +75,7 @@ namespace MahjongPrototype.Logging
                     return TrimLine($"RoundEnded {entry.Message}");
 
                 case "WinChecked":
-                    return TrimLine("WinChecked");
+                    return TrimLine($"WinChecked {entry.Message}");
 
                 case "SlowFrame":
                     return TrimLine("SlowFrame");

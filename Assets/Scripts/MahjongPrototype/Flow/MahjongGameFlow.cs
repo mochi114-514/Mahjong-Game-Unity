@@ -35,6 +35,7 @@ namespace MahjongPrototype
         private readonly TurnOrderService turnOrderService = new TurnOrderService();
         private readonly DrawService drawService = new DrawService();
         private readonly DiscardService discardService = new DiscardService();
+        private readonly HandWinChecker handWinChecker = new HandWinChecker();
         private readonly SkillSystem skillSystem = new SkillSystem();
 
         private MahjongGameState gameState;
@@ -225,14 +226,17 @@ namespace MahjongPrototype
 
         private void CheckWinPrototype()
         {
-            // PROTOTYPE: 正式な和了判定、役判定、点数計算はまだ行わない。
-            bool isWin = false;
+            // PROTOTYPE: 役判定、点数計算、ロン、鳴き面子はまだ扱わない。
+            IReadOnlyList<Tile> handTiles = gameState.GetPlayerSeat(gameState.CurrentSeat).Hand.GetTiles();
+            bool isWin = handWinChecker.CanWinStandardHand(handTiles);
             eventNotifier?.NotifyWinChecked(gameState.CurrentSeat, gameState.TurnIndex, isWin);
 
             DevLog.Record(
                 "Mahjong",
                 "WinChecked",
-                "Prototype win check always returns false.",
+                isWin
+                    ? "isWin=true; standard hand shape complete."
+                    : "isWin=false; standard hand shape incomplete.",
                 seat: gameState.CurrentSeat,
                 hand: GetCurrentHandText(),
                 wallCount: gameState.Wall.Count,

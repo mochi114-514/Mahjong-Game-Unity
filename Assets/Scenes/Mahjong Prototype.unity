@@ -620,7 +620,7 @@ GameObject:
   - component: {fileID: 312434044}
   - component: {fileID: 312434043}
   m_Layer: 5
-  m_Name: 'RecentLogText '
+  m_Name: RecentLogText
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1245,7 +1245,6 @@ MonoBehaviour:
   useFixedRandomSeed: 0
   fixedRandomSeed: 12345
   eventNotifier: {fileID: 1264733449}
-  ui: {fileID: 45752823}
   enableDevLog: 1
   enableReleaseBuildLogging: 0
   logWarnings: 1
