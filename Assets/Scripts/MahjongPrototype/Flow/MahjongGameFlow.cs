@@ -119,7 +119,8 @@ namespace MahjongPrototype
                 return;
             }
 
-            if (gameState.HasDrawnThisTurn)
+            PlayerSeat currentPlayerSeat = gameState.GetPlayerSeat(gameState.CurrentSeat);
+            if (gameState.HasDrawnThisTurn || currentPlayerSeat.HasDrawnTile)
             {
                 Warn("Already drew this turn. Discard a tile first.");
                 return;
@@ -134,7 +135,7 @@ namespace MahjongPrototype
                 return;
             }
 
-            ApplyAutoSortIfEnabled(result.Seat, "Draw", false);
+            currentPlayerSeat.SetDrawnTile(result.Tile);
             HandleSkillResolutionLogs(result);
             gameState.HasDrawnThisTurn = true;
             NotifyTileDrawn(result);
@@ -166,6 +167,43 @@ namespace MahjongPrototype
             }
 
             DiscardResult result = discardService.DiscardTile(gameState, gameState.CurrentSeat, handIndex);
+            if (!result.Success)
+            {
+                Warn(result.Reason);
+                return;
+            }
+
+            CommitDrawnTileToHandIfPresent(gameState.CurrentSeat);
+            gameState.HasDrawnThisTurn = false;
+            NotifyTileDiscarded(result.Record);
+            LogTileDiscarded(result.Record);
+            AdvanceTurn();
+        }
+
+        public void RequestDiscardDrawnTile()
+        {
+            if (!CanUseGameState())
+                return;
+
+            if (gameState.IsRoundEnded)
+            {
+                Warn("Round already ended. Press Retry.");
+                return;
+            }
+
+            if (!gameState.HasDrawnThisTurn)
+            {
+                Warn("Draw before discarding.");
+                return;
+            }
+
+            if (isWinDecisionPending)
+            {
+                Warn("Declare or decline win before discarding.");
+                return;
+            }
+
+            DiscardResult result = discardService.DiscardDrawnTile(gameState, gameState.CurrentSeat);
             if (!result.Success)
             {
                 Warn(result.Reason);
@@ -288,6 +326,7 @@ namespace MahjongPrototype
                         return;
                     }
 
+                    gameState.GetPlayerSeat(seat).Hand.Add(result.Tile);
                     NotifyTileDrawn(result);
                     LogTileDrawn(result);
                 }
@@ -314,7 +353,7 @@ namespace MahjongPrototype
         private void CheckWinPrototype()
         {
             // PROTOTYPE: 役判定、点数計算、ロン、鳴き面子はまだ扱わない。
-            IReadOnlyList<Tile> handTiles = gameState.GetPlayerSeat(gameState.CurrentSeat).Hand.GetTiles();
+            IReadOnlyList<Tile> handTiles = BuildWinCheckTiles(gameState.CurrentSeat);
             bool isWin = handWinChecker.CanWinStandardHand(handTiles);
             SetWinDecisionPending(isWin, gameState.CurrentSeat, gameState.TurnIndex);
             eventNotifier?.NotifyWinChecked(gameState.CurrentSeat, gameState.TurnIndex, isWin);
@@ -329,6 +368,25 @@ namespace MahjongPrototype
                 hand: GetCurrentHandText(),
                 wallCount: gameState.Wall.Count,
                 turnIndex: gameState.TurnIndex);
+        }
+
+        private IReadOnlyList<Tile> BuildWinCheckTiles(SeatId seat)
+        {
+            PlayerSeat playerSeat = gameState.GetPlayerSeat(seat);
+            List<Tile> tiles = new List<Tile>(playerSeat.Hand.GetTiles());
+            if (playerSeat.DrawnTile.HasValue)
+                tiles.Add(playerSeat.DrawnTile.Value);
+
+            return tiles;
+        }
+
+        private void CommitDrawnTileToHandIfPresent(SeatId seat)
+        {
+            PlayerSeat playerSeat = gameState.GetPlayerSeat(seat);
+            if (!playerSeat.CommitDrawnTileToHand())
+                return;
+
+            ApplyAutoSortIfEnabled(seat, "DrawnTileCommitted", false);
         }
 
         private void SetWinDecisionPending(bool isPending, SeatId seat, int turnIndex)

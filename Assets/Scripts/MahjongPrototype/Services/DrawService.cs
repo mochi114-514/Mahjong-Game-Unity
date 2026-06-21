@@ -40,7 +40,6 @@ namespace MahjongPrototype.Services
         {
             if (gameState.Wall.TryTakeSpecific(effect.TargetTile, out Tile skillTile))
             {
-                gameState.GetPlayerSeat(seat).Hand.Add(skillTile);
                 gameState.RemoveActiveSkillEffect(effect);
 
                 return new DrawResult(
@@ -83,8 +82,6 @@ namespace MahjongPrototype.Services
                     skillApplied,
                     "Wall is empty.");
             }
-
-            gameState.GetPlayerSeat(seat).Hand.Add(tile);
 
             DrawSource source = purpose == DrawPurpose.InitialDeal
                 ? DrawSource.InitialDeal

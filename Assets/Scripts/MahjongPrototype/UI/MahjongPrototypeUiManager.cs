@@ -22,8 +22,10 @@ namespace MahjongPrototype.UI
         [Header("Tile Areas")]
         [Tooltip("手牌ボタン表示のViewです。未設定ならPlay時に同じGameObjectへ追加します。")]
         [SerializeField] private MahjongHandView handView;
+        [SerializeField] private MahjongDrawnTileView drawnTileView;
         [Tooltip("手牌ボタンを生成する親RectTransformです。Canvas/HandArea を割り当てます。")]
         [SerializeField] private RectTransform handContainer;
+        [SerializeField] private RectTransform drawnTileContainer;
         [Tooltip("手牌1枚分のTileButtonViewテンプレートまたはPrefabです。")]
         [SerializeField] private TileButtonView tileButtonPrefab;
 
@@ -45,6 +47,7 @@ namespace MahjongPrototype.UI
         private bool warnedMissingWinDecisionController;
         private bool warnedMissingLogPreviewController;
         private bool isHandViewSubscribed;
+        private bool isDrawnTileViewSubscribed;
         private bool isInputControllerSubscribed;
 
         private void Reset()
@@ -63,6 +66,8 @@ namespace MahjongPrototype.UI
             EnsureDisplayController();
             EnsureHandView();
             SubscribeHandViewEvents();
+            EnsureDrawnTileView();
+            SubscribeDrawnTileViewEvents();
             EnsureInputController();
             SubscribeInputControllerEvents();
             SyncAutoSortToggleFromFlow();
@@ -78,6 +83,8 @@ namespace MahjongPrototype.UI
             EnsureDisplayController();
             EnsureHandView();
             SubscribeHandViewEvents();
+            EnsureDrawnTileView();
+            SubscribeDrawnTileViewEvents();
             EnsureInputController();
             SubscribeInputControllerEvents();
             SyncAutoSortToggleFromFlow();
@@ -90,6 +97,7 @@ namespace MahjongPrototype.UI
         private void OnDisable()
         {
             UnsubscribeHandViewEvents();
+            UnsubscribeDrawnTileViewEvents();
             UnsubscribeInputControllerEvents();
             UnsubscribeNotifications();
         }
@@ -101,6 +109,7 @@ namespace MahjongPrototype.UI
 
             RefreshDisplay(state);
             RefreshHand(state);
+            RefreshDrawnTile(state);
             RefreshWinDecision();
             RefreshLogPreview();
         }
@@ -129,6 +138,9 @@ namespace MahjongPrototype.UI
 
             if (handView == null)
                 handView = GetComponentInChildren<MahjongHandView>(true);
+
+            if (drawnTileView == null)
+                drawnTileView = GetComponentInChildren<MahjongDrawnTileView>(true);
 
             if (inputController == null)
                 inputController = GetComponentInChildren<MahjongUiInputController>(true);
@@ -350,6 +362,23 @@ namespace MahjongPrototype.UI
             handView.ConfigureMissingReferences(handContainer, tileButtonPrefab);
         }
 
+        private void EnsureDrawnTileView()
+        {
+            if (drawnTileView == null)
+            {
+                drawnTileView = GetComponentInChildren<MahjongDrawnTileView>(true);
+            }
+
+            if (drawnTileView == null)
+            {
+                drawnTileView = gameObject.AddComponent<MahjongDrawnTileView>();
+                drawnTileView.Configure(drawnTileContainer, tileButtonPrefab);
+                return;
+            }
+
+            drawnTileView.ConfigureMissingReferences(drawnTileContainer, tileButtonPrefab);
+        }
+
         private void SubscribeHandViewEvents()
         {
             if (handView == null || isHandViewSubscribed)
@@ -368,6 +397,24 @@ namespace MahjongPrototype.UI
             isHandViewSubscribed = false;
         }
 
+        private void SubscribeDrawnTileViewEvents()
+        {
+            if (drawnTileView == null || isDrawnTileViewSubscribed)
+                return;
+
+            drawnTileView.DrawnTileClicked += HandleDrawnTileClicked;
+            isDrawnTileViewSubscribed = true;
+        }
+
+        private void UnsubscribeDrawnTileViewEvents()
+        {
+            if (drawnTileView == null || !isDrawnTileViewSubscribed)
+                return;
+
+            drawnTileView.DrawnTileClicked -= HandleDrawnTileClicked;
+            isDrawnTileViewSubscribed = false;
+        }
+
         private void RefreshHand(MahjongGameState state)
         {
             if (handView == null)
@@ -375,6 +422,15 @@ namespace MahjongPrototype.UI
 
             if (handView != null)
                 handView.Rebuild(state.GetPlayerSeat(state.CurrentSeat).Hand.GetTiles());
+        }
+
+        private void RefreshDrawnTile(MahjongGameState state)
+        {
+            if (drawnTileView == null)
+                EnsureDrawnTileView();
+
+            if (drawnTileView != null)
+                drawnTileView.Rebuild(state.GetPlayerSeat(state.CurrentSeat).DrawnTile);
         }
 
         private void RefreshWinDecision()
@@ -395,6 +451,17 @@ namespace MahjongPrototype.UI
             }
 
             gameFlow.RequestDiscard(handIndex);
+        }
+
+        private void HandleDrawnTileClicked()
+        {
+            if (gameFlow == null)
+            {
+                WarnMissingOnce(ref warnedMissingFlow, "Cannot discard drawn tile because MahjongGameFlow is not assigned.");
+                return;
+            }
+
+            gameFlow.RequestDiscardDrawnTile();
         }
 
         private void EnsureLogPreviewController()
