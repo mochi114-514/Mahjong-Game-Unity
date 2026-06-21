@@ -77,6 +77,12 @@ namespace MahjongPrototype.Logging
                 case "WinChecked":
                     return TrimLine($"WinChecked {entry.Message}");
 
+                case "WinDeclared":
+                    return TrimLine("WinDeclared self-draw");
+
+                case "WinDeclined":
+                    return TrimLine("WinDeclined");
+
                 case "SlowFrame":
                     return TrimLine("SlowFrame");
 

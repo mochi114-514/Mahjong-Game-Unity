@@ -20,6 +20,8 @@ namespace MahjongPrototype.Notifications
         public event Action<DrawResult> SkillEffectResolved;
         public event Action<ActiveSkillEffect, string> SkillEffectExpired;
         public event Action<SeatId, int, bool> WinChecked;
+        public event Action<SeatId, int> WinDeclared;
+        public event Action<SeatId, int> WinDeclined;
         public event Action<string> RoundEnded;
         public event Action AnyEventNotified;
 
@@ -80,6 +82,18 @@ namespace MahjongPrototype.Notifications
         public void NotifyWinChecked(SeatId seat, int turnIndex, bool isWin)
         {
             WinChecked?.Invoke(seat, turnIndex, isWin);
+            NotifyAny();
+        }
+
+        public void NotifyWinDeclared(SeatId seat, int turnIndex)
+        {
+            WinDeclared?.Invoke(seat, turnIndex);
+            NotifyAny();
+        }
+
+        public void NotifyWinDeclined(SeatId seat, int turnIndex)
+        {
+            WinDeclined?.Invoke(seat, turnIndex);
             NotifyAny();
         }
 

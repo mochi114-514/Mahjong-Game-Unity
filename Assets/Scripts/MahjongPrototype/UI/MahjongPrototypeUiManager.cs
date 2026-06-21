@@ -31,6 +31,9 @@ namespace MahjongPrototype.UI
         [Tooltip("Draw/SkillDraw/Retry の入力受付Controllerです。")]
         [SerializeField] private MahjongUiInputController inputController;
 
+        [Header("Win Decision")]
+        [SerializeField] private MahjongWinDecisionController winDecisionController;
+
         [Header("Log Preview")]
         [Tooltip("画面ログ表示のControllerです。RecentLogText と表示行数はこのController側で設定します。")]
         [SerializeField] private MahjongLogPreviewController logPreviewController;
@@ -39,9 +42,11 @@ namespace MahjongPrototype.UI
         private bool warnedMissingEventNotifier;
         private bool warnedMissingDisplayController;
         private bool warnedMissingInputController;
+        private bool warnedMissingWinDecisionController;
         private bool warnedMissingLogPreviewController;
         private bool isHandViewSubscribed;
         private bool isInputControllerSubscribed;
+        private bool isWinDecisionControllerSubscribed;
 
         private void Reset()
         {
@@ -61,6 +66,8 @@ namespace MahjongPrototype.UI
             SubscribeHandViewEvents();
             EnsureInputController();
             SubscribeInputControllerEvents();
+            EnsureWinDecisionController();
+            SubscribeWinDecisionControllerEvents();
             EnsureLogPreviewController();
             SubscribeNotifications();
             RefreshFromFlow();
@@ -74,6 +81,8 @@ namespace MahjongPrototype.UI
             SubscribeHandViewEvents();
             EnsureInputController();
             SubscribeInputControllerEvents();
+            EnsureWinDecisionController();
+            SubscribeWinDecisionControllerEvents();
             EnsureLogPreviewController();
             RefreshFromFlow();
             RefreshLogPreview();
@@ -83,6 +92,7 @@ namespace MahjongPrototype.UI
         {
             UnsubscribeHandViewEvents();
             UnsubscribeInputControllerEvents();
+            UnsubscribeWinDecisionControllerEvents();
             UnsubscribeNotifications();
         }
 
@@ -93,6 +103,7 @@ namespace MahjongPrototype.UI
 
             RefreshDisplay(state);
             RefreshHand(state);
+            RefreshWinDecision();
             RefreshLogPreview();
         }
 
@@ -123,6 +134,9 @@ namespace MahjongPrototype.UI
 
             if (inputController == null)
                 inputController = GetComponentInChildren<MahjongUiInputController>(true);
+
+            if (winDecisionController == null)
+                winDecisionController = GetComponentInChildren<MahjongWinDecisionController>(true);
 
             if (logPreviewController == null)
                 logPreviewController = GetComponentInChildren<MahjongLogPreviewController>(true);
@@ -209,6 +223,45 @@ namespace MahjongPrototype.UI
             isInputControllerSubscribed = false;
         }
 
+        private void EnsureWinDecisionController()
+        {
+            if (winDecisionController == null)
+            {
+                winDecisionController = GetComponentInChildren<MahjongWinDecisionController>(true);
+            }
+
+            if (winDecisionController != null)
+                return;
+
+            winDecisionController = gameObject.AddComponent<MahjongWinDecisionController>();
+            if (winDecisionController == null)
+            {
+                WarnMissingOnce(
+                    ref warnedMissingWinDecisionController,
+                    "MahjongWinDecisionController is not assigned. Add WinDecisionArea and assign its buttons.");
+            }
+        }
+
+        private void SubscribeWinDecisionControllerEvents()
+        {
+            if (winDecisionController == null || isWinDecisionControllerSubscribed)
+                return;
+
+            winDecisionController.WinRequested += HandleWinRequested;
+            winDecisionController.DeclineWinRequested += HandleDeclineWinRequested;
+            isWinDecisionControllerSubscribed = true;
+        }
+
+        private void UnsubscribeWinDecisionControllerEvents()
+        {
+            if (winDecisionController == null || !isWinDecisionControllerSubscribed)
+                return;
+
+            winDecisionController.WinRequested -= HandleWinRequested;
+            winDecisionController.DeclineWinRequested -= HandleDeclineWinRequested;
+            isWinDecisionControllerSubscribed = false;
+        }
+
         private void HandleDrawRequested()
         {
             if (gameFlow == null)
@@ -240,6 +293,31 @@ namespace MahjongPrototype.UI
             }
 
             gameFlow.RetryPrototype();
+            RefreshWinDecision();
+        }
+
+        private void HandleWinRequested()
+        {
+            if (gameFlow == null)
+            {
+                WarnMissingOnce(ref warnedMissingFlow, "Cannot declare win because MahjongGameFlow is not assigned.");
+                return;
+            }
+
+            gameFlow.RequestDeclareWin();
+            RefreshWinDecision();
+        }
+
+        private void HandleDeclineWinRequested()
+        {
+            if (gameFlow == null)
+            {
+                WarnMissingOnce(ref warnedMissingFlow, "Cannot decline win because MahjongGameFlow is not assigned.");
+                return;
+            }
+
+            gameFlow.RequestDeclineWin();
+            RefreshWinDecision();
         }
 
         private void RefreshDisplay(MahjongGameState state)
@@ -293,6 +371,15 @@ namespace MahjongPrototype.UI
 
             if (handView != null)
                 handView.Rebuild(state.GetPlayerSeat(state.CurrentSeat).Hand.GetTiles());
+        }
+
+        private void RefreshWinDecision()
+        {
+            if (winDecisionController == null)
+                EnsureWinDecisionController();
+
+            if (winDecisionController != null)
+                winDecisionController.SetVisible(gameFlow != null && gameFlow.IsWinDecisionPending);
         }
 
         private void HandleTileClicked(int handIndex)

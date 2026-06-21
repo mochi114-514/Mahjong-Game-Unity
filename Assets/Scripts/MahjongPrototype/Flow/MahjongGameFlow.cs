@@ -39,11 +39,15 @@ namespace MahjongPrototype
         private readonly SkillSystem skillSystem = new SkillSystem();
 
         private MahjongGameState gameState;
+        private bool isWinDecisionPending;
+        private SeatId pendingWinSeat;
+        private int pendingWinTurnIndex;
         private bool warnedMissingNotifier;
 
         public MahjongGameState CurrentState => gameState;
         public MahjongEventNotifier EventNotifier => eventNotifier;
         public SeatId ViewerSeat => viewerSeat;
+        public bool IsWinDecisionPending => isWinDecisionPending;
 
         private void Reset()
         {
@@ -78,6 +82,7 @@ namespace MahjongPrototype
             NormalizeInitialActiveSeats();
 
             DevLog.Initialize(enableDevLog, enableReleaseBuildLogging);
+            ClearWinDecision();
             NotifyRunStarted();
             LogRunStarted();
 
@@ -146,6 +151,12 @@ namespace MahjongPrototype
                 return;
             }
 
+            if (isWinDecisionPending)
+            {
+                Warn("Declare or decline win before discarding.");
+                return;
+            }
+
             DiscardResult result = discardService.DiscardTile(gameState, gameState.CurrentSeat, handIndex);
             if (!result.Success)
             {
@@ -163,6 +174,12 @@ namespace MahjongPrototype
         {
             if (!CanUseGameState())
                 return;
+
+            if (isWinDecisionPending)
+            {
+                Warn("Declare or decline win before activating another skill.");
+                return;
+            }
 
             if (!Tile.TryParse(targetTileCode, out Tile targetTile))
             {
@@ -185,6 +202,44 @@ namespace MahjongPrototype
             LogSkillActivated(gameState.CurrentSeat, result.Effect);
             NotifySkillEffectRegistered(result.Effect);
             LogSkillEffectRegistered(result.Effect);
+        }
+
+        public void RequestDeclareWin()
+        {
+            if (!CanUseGameState())
+                return;
+
+            if (!isWinDecisionPending)
+            {
+                Warn("No winning hand decision is pending.");
+                return;
+            }
+
+            SeatId seat = pendingWinSeat;
+            int turnIndex = pendingWinTurnIndex;
+            ClearWinDecision();
+
+            NotifyWinDeclared(seat, turnIndex);
+            LogWinDeclared(seat, turnIndex);
+        }
+
+        public void RequestDeclineWin()
+        {
+            if (!CanUseGameState())
+                return;
+
+            if (!isWinDecisionPending)
+            {
+                Warn("No winning hand decision is pending.");
+                return;
+            }
+
+            SeatId seat = pendingWinSeat;
+            int turnIndex = pendingWinTurnIndex;
+            ClearWinDecision();
+
+            NotifyWinDeclined(seat, turnIndex);
+            LogWinDeclined(seat, turnIndex);
         }
 
         private void DealInitialHands()
@@ -229,6 +284,7 @@ namespace MahjongPrototype
             // PROTOTYPE: 役判定、点数計算、ロン、鳴き面子はまだ扱わない。
             IReadOnlyList<Tile> handTiles = gameState.GetPlayerSeat(gameState.CurrentSeat).Hand.GetTiles();
             bool isWin = handWinChecker.CanWinStandardHand(handTiles);
+            SetWinDecisionPending(isWin, gameState.CurrentSeat, gameState.TurnIndex);
             eventNotifier?.NotifyWinChecked(gameState.CurrentSeat, gameState.TurnIndex, isWin);
 
             DevLog.Record(
@@ -241,6 +297,18 @@ namespace MahjongPrototype
                 hand: GetCurrentHandText(),
                 wallCount: gameState.Wall.Count,
                 turnIndex: gameState.TurnIndex);
+        }
+
+        private void SetWinDecisionPending(bool isPending, SeatId seat, int turnIndex)
+        {
+            isWinDecisionPending = isPending;
+            pendingWinSeat = isPending ? seat : default;
+            pendingWinTurnIndex = isPending ? turnIndex : 0;
+        }
+
+        private void ClearWinDecision()
+        {
+            SetWinDecisionPending(false, default, 0);
         }
 
         private void EndRound(string reason)
@@ -358,6 +426,16 @@ namespace MahjongPrototype
             eventNotifier?.NotifySkillEffectExpired(effect, reason);
         }
 
+        private void NotifyWinDeclared(SeatId seat, int turnIndex)
+        {
+            eventNotifier?.NotifyWinDeclared(seat, turnIndex);
+        }
+
+        private void NotifyWinDeclined(SeatId seat, int turnIndex)
+        {
+            eventNotifier?.NotifyWinDeclined(seat, turnIndex);
+        }
+
         private void LogRunStarted()
         {
             DevLog.Record(
@@ -470,6 +548,30 @@ namespace MahjongPrototype
                 wallCount: gameState.Wall.Count,
                 turnIndex: gameState.TurnIndex,
                 activeSkill: effect.ToLogText());
+        }
+
+        private void LogWinDeclared(SeatId seat, int turnIndex)
+        {
+            DevLog.Record(
+                "Mahjong",
+                "WinDeclared",
+                "Self draw win declared.",
+                seat: seat,
+                hand: GetHandText(seat),
+                wallCount: gameState.Wall.Count,
+                turnIndex: turnIndex);
+        }
+
+        private void LogWinDeclined(SeatId seat, int turnIndex)
+        {
+            DevLog.Record(
+                "Mahjong",
+                "WinDeclined",
+                "Winning hand declined.",
+                seat: seat,
+                hand: GetHandText(seat),
+                wallCount: gameState.Wall.Count,
+                turnIndex: turnIndex);
         }
 
         private string GetCurrentHandText()
