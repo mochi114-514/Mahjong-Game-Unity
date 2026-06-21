@@ -16,6 +16,8 @@ namespace MahjongPrototype.UI
         [SerializeField] private Button forceDrawSkillButton;
         [Tooltip("Sorts the current hand by Tile.TypeIndex.")]
         [SerializeField] private Button sortHandButton;
+        [Tooltip("Enables automatic TypeIndex sorting when the hand changes.")]
+        [SerializeField] private Toggle autoSortToggle;
         [Tooltip("プロトタイプ状態を初期化するButtonです。")]
         [SerializeField] private Button retryButton;
         [Header("Win Decision")]
@@ -29,6 +31,7 @@ namespace MahjongPrototype.UI
         private bool warnedMissingDrawButton;
         private bool warnedMissingSkillButton;
         private bool warnedMissingSortHandButton;
+        private bool warnedMissingAutoSortToggle;
         private bool warnedMissingRetryButton;
         private bool warnedMissingWinButton;
         private bool warnedMissingDeclineWinButton;
@@ -36,6 +39,7 @@ namespace MahjongPrototype.UI
         public event Action DrawRequested;
         public event Action<string> ForceDrawSkillRequested;
         public event Action SortHandRequested;
+        public event Action<bool> AutoSortChanged;
         public event Action RetryRequested;
         public event Action WinRequested;
         public event Action DeclineWinRequested;
@@ -71,6 +75,9 @@ namespace MahjongPrototype.UI
 
             if (sortHandButton == null)
                 sortHandButton = FindButtonByName("SortHandButton");
+
+            if (autoSortToggle == null)
+                autoSortToggle = FindComponentByName<Toggle>("AutoSortToggle");
 
             if (retryButton == null)
                 retryButton = FindButtonByName("RetryButton");
@@ -109,6 +116,15 @@ namespace MahjongPrototype.UI
             else
             {
                 WarnMissingOnce(ref warnedMissingSortHandButton, "SortHandButton is not assigned.");
+            }
+
+            if (autoSortToggle != null)
+            {
+                autoSortToggle.onValueChanged.AddListener(HandleAutoSortChanged);
+            }
+            else
+            {
+                WarnMissingOnce(ref warnedMissingAutoSortToggle, "AutoSortToggle is not assigned.");
             }
 
             if (retryButton != null)
@@ -155,6 +171,9 @@ namespace MahjongPrototype.UI
             if (sortHandButton != null)
                 sortHandButton.onClick.RemoveListener(HandleSortHandClicked);
 
+            if (autoSortToggle != null)
+                autoSortToggle.onValueChanged.RemoveListener(HandleAutoSortChanged);
+
             if (retryButton != null)
                 retryButton.onClick.RemoveListener(HandleRetryClicked);
 
@@ -188,6 +207,11 @@ namespace MahjongPrototype.UI
             SortHandRequested?.Invoke();
         }
 
+        private void HandleAutoSortChanged(bool enabled)
+        {
+            AutoSortChanged?.Invoke(enabled);
+        }
+
         private void HandleRetryClicked()
         {
             RetryRequested?.Invoke();
@@ -201,6 +225,19 @@ namespace MahjongPrototype.UI
         private void HandleDeclineWinClicked()
         {
             DeclineWinRequested?.Invoke();
+        }
+
+        public void SetAutoSortWithoutNotify(bool enabled)
+        {
+            CacheReferences();
+
+            if (autoSortToggle == null)
+            {
+                WarnMissingOnce(ref warnedMissingAutoSortToggle, "AutoSortToggle is not assigned.");
+                return;
+            }
+
+            autoSortToggle.SetIsOnWithoutNotify(enabled);
         }
 
         private Button FindButtonByName(string objectName)

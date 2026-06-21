@@ -65,6 +65,7 @@ namespace MahjongPrototype.UI
             SubscribeHandViewEvents();
             EnsureInputController();
             SubscribeInputControllerEvents();
+            SyncAutoSortToggleFromFlow();
             EnsureWinDecisionController();
             EnsureLogPreviewController();
             SubscribeNotifications();
@@ -79,6 +80,7 @@ namespace MahjongPrototype.UI
             SubscribeHandViewEvents();
             EnsureInputController();
             SubscribeInputControllerEvents();
+            SyncAutoSortToggleFromFlow();
             EnsureWinDecisionController();
             EnsureLogPreviewController();
             RefreshFromFlow();
@@ -202,10 +204,19 @@ namespace MahjongPrototype.UI
             inputController.DrawRequested += HandleDrawRequested;
             inputController.ForceDrawSkillRequested += HandleForceDrawSkillRequested;
             inputController.SortHandRequested += HandleSortHandRequested;
+            inputController.AutoSortChanged += HandleAutoSortChanged;
             inputController.RetryRequested += HandleRetryRequested;
             inputController.WinRequested += HandleWinRequested;
             inputController.DeclineWinRequested += HandleDeclineWinRequested;
             isInputControllerSubscribed = true;
+        }
+
+        private void SyncAutoSortToggleFromFlow()
+        {
+            if (inputController == null || gameFlow == null)
+                return;
+
+            inputController.SetAutoSortWithoutNotify(gameFlow.IsAutoSortEnabled);
         }
 
         private void UnsubscribeInputControllerEvents()
@@ -216,6 +227,7 @@ namespace MahjongPrototype.UI
             inputController.DrawRequested -= HandleDrawRequested;
             inputController.ForceDrawSkillRequested -= HandleForceDrawSkillRequested;
             inputController.SortHandRequested -= HandleSortHandRequested;
+            inputController.AutoSortChanged -= HandleAutoSortChanged;
             inputController.RetryRequested -= HandleRetryRequested;
             inputController.WinRequested -= HandleWinRequested;
             inputController.DeclineWinRequested -= HandleDeclineWinRequested;
@@ -263,6 +275,17 @@ namespace MahjongPrototype.UI
             }
 
             gameFlow.RequestSortHand();
+        }
+
+        private void HandleAutoSortChanged(bool enabled)
+        {
+            if (gameFlow == null)
+            {
+                WarnMissingOnce(ref warnedMissingFlow, "Cannot change auto sort because MahjongGameFlow is not assigned.");
+                return;
+            }
+
+            gameFlow.RequestSetAutoSortEnabled(enabled);
         }
 
         private void HandleRetryRequested()

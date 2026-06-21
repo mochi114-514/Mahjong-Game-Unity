@@ -32,6 +32,9 @@ namespace MahjongPrototype
         [Header("Warnings")]
         [SerializeField] private bool logWarnings = true;
 
+        [Header("Hand Sort")]
+        [SerializeField] private bool autoSortEnabled;
+
         private readonly TurnOrderService turnOrderService = new TurnOrderService();
         private readonly DrawService drawService = new DrawService();
         private readonly DiscardService discardService = new DiscardService();
@@ -48,6 +51,7 @@ namespace MahjongPrototype
         public MahjongEventNotifier EventNotifier => eventNotifier;
         public SeatId ViewerSeat => viewerSeat;
         public bool IsWinDecisionPending => isWinDecisionPending;
+        public bool IsAutoSortEnabled => autoSortEnabled;
 
         private void Reset()
         {
@@ -98,6 +102,8 @@ namespace MahjongPrototype
 
         public void RetryPrototype()
         {
+            // PROTOTYPE: Reset the current flow state without reloading the scene.
+            StartNewRound();
             // PROTOTYPE: シーン再読み込みではなく、現在のFlow内状態だけを初期化する。
             StartNewRound();
         }
@@ -120,14 +126,16 @@ namespace MahjongPrototype
             }
 
             DrawResult result = drawService.DrawTile(gameState.CurrentSeat, gameState, DrawPurpose.TurnDraw);
-            HandleSkillResolutionLogs(result);
 
             if (!result.Success)
             {
+                HandleSkillResolutionLogs(result);
                 EndRound("WallEmpty");
                 return;
             }
 
+            ApplyAutoSortIfEnabled(result.Seat, "Draw", false);
+            HandleSkillResolutionLogs(result);
             gameState.HasDrawnThisTurn = true;
             NotifyTileDrawn(result);
             LogTileDrawn(result);
@@ -215,6 +223,18 @@ namespace MahjongPrototype
             LogHandSorted(seat, gameState.TurnIndex);
         }
 
+        public void RequestSetAutoSortEnabled(bool enabled)
+        {
+            if (autoSortEnabled == enabled)
+                return;
+
+            autoSortEnabled = enabled;
+            LogAutoSortChanged(enabled);
+
+            if (enabled && gameState != null)
+                ApplyAutoSort(gameState.CurrentSeat, "ToggleEnabled", true);
+        }
+
         public void RequestDeclareWin()
         {
             if (!CanUseGameState())
@@ -274,6 +294,7 @@ namespace MahjongPrototype
             }
 
             gameState.HasDrawnThisTurn = false;
+            ApplyAutoSortToActiveHandsIfEnabled("InitialDeal");
         }
 
         private void AdvanceTurn()
@@ -452,6 +473,37 @@ namespace MahjongPrototype
             eventNotifier?.NotifyHandSorted(seat, turnIndex);
         }
 
+        private void NotifyHandAutoSorted(SeatId seat, int turnIndex)
+        {
+            eventNotifier?.NotifyHandAutoSorted(seat, turnIndex);
+        }
+
+        private void ApplyAutoSortToActiveHandsIfEnabled(string reason)
+        {
+            if (!autoSortEnabled || gameState == null)
+                return;
+
+            for (int i = 0; i < gameState.ActiveSeats.Count; i++)
+                ApplyAutoSort(gameState.ActiveSeats[i], reason, true);
+        }
+
+        private void ApplyAutoSortIfEnabled(SeatId seat, string reason, bool notify)
+        {
+            if (!autoSortEnabled || gameState == null)
+                return;
+
+            ApplyAutoSort(seat, reason, notify);
+        }
+
+        private void ApplyAutoSort(SeatId seat, string reason, bool notify)
+        {
+            gameState.GetPlayerSeat(seat).Hand.SortByTypeIndex();
+            LogHandAutoSorted(seat, gameState.TurnIndex, reason);
+
+            if (notify)
+                NotifyHandAutoSorted(seat, gameState.TurnIndex);
+        }
+
         private void LogRunStarted()
         {
             DevLog.Record(
@@ -600,6 +652,39 @@ namespace MahjongPrototype
                 hand: GetHandText(seat),
                 wallCount: gameState.Wall.Count,
                 turnIndex: turnIndex);
+        }
+
+        private void LogHandAutoSorted(SeatId seat, int turnIndex, string reason)
+        {
+            DevLog.Record(
+                "Mahjong",
+                "HandAutoSorted",
+                $"reason={reason}; hand sorted by TypeIndex.",
+                seat: seat,
+                hand: GetHandText(seat),
+                wallCount: gameState.Wall.Count,
+                turnIndex: turnIndex);
+        }
+
+        private void LogAutoSortChanged(bool enabled)
+        {
+            if (gameState == null)
+            {
+                DevLog.Record(
+                    "Mahjong",
+                    enabled ? "AutoSortEnabled" : "AutoSortDisabled",
+                    enabled ? "Auto sort enabled." : "Auto sort disabled.");
+                return;
+            }
+
+            DevLog.Record(
+                "Mahjong",
+                enabled ? "AutoSortEnabled" : "AutoSortDisabled",
+                enabled ? "Auto sort enabled." : "Auto sort disabled.",
+                seat: gameState.CurrentSeat,
+                hand: GetCurrentHandText(),
+                wallCount: gameState.Wall.Count,
+                turnIndex: gameState.TurnIndex);
         }
 
         private string GetCurrentHandText()

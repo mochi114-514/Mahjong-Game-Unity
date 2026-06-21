@@ -23,6 +23,7 @@ namespace MahjongPrototype.Notifications
         public event Action<SeatId, int> WinDeclared;
         public event Action<SeatId, int> WinDeclined;
         public event Action<SeatId, int> HandSorted;
+        public event Action<SeatId, int> HandAutoSorted;
         public event Action<string> RoundEnded;
         public event Action AnyEventNotified;
 
@@ -101,6 +102,12 @@ namespace MahjongPrototype.Notifications
         public void NotifyHandSorted(SeatId seat, int turnIndex)
         {
             HandSorted?.Invoke(seat, turnIndex);
+            NotifyAny();
+        }
+
+        public void NotifyHandAutoSorted(SeatId seat, int turnIndex)
+        {
+            HandAutoSorted?.Invoke(seat, turnIndex);
             NotifyAny();
         }
 

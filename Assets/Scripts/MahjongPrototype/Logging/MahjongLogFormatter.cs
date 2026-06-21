@@ -86,6 +86,15 @@ namespace MahjongPrototype.Logging
                 case "HandSorted":
                     return TrimLine("HandSorted");
 
+                case "HandAutoSorted":
+                    return string.Empty;
+
+                case "AutoSortEnabled":
+                    return TrimLine("AutoSort ON");
+
+                case "AutoSortDisabled":
+                    return TrimLine("AutoSort OFF");
+
                 case "SlowFrame":
                     return TrimLine("SlowFrame");
 
