@@ -23,9 +23,11 @@ namespace MahjongPrototype.UI
         [Tooltip("手牌ボタン表示のViewです。未設定ならPlay時に同じGameObjectへ追加します。")]
         [SerializeField] private MahjongHandView handView;
         [SerializeField] private MahjongDrawnTileView drawnTileView;
+        [SerializeField] private MahjongDiscardRiverView discardRiverView;
         [Tooltip("手牌ボタンを生成する親RectTransformです。Canvas/HandArea を割り当てます。")]
         [SerializeField] private RectTransform handContainer;
         [SerializeField] private RectTransform drawnTileContainer;
+        [SerializeField] private RectTransform eastDiscardRiverContainer;
         [Tooltip("手牌1枚分のTileButtonViewテンプレートまたはPrefabです。")]
         [SerializeField] private TileButtonView tileButtonPrefab;
 
@@ -46,6 +48,7 @@ namespace MahjongPrototype.UI
         private bool warnedMissingInputController;
         private bool warnedMissingWinDecisionController;
         private bool warnedMissingLogPreviewController;
+        private bool warnedMissingDiscardArea;
         private bool isHandViewSubscribed;
         private bool isDrawnTileViewSubscribed;
         private bool isInputControllerSubscribed;
@@ -68,6 +71,7 @@ namespace MahjongPrototype.UI
             SubscribeHandViewEvents();
             EnsureDrawnTileView();
             SubscribeDrawnTileViewEvents();
+            EnsureDiscardRiverView();
             EnsureInputController();
             SubscribeInputControllerEvents();
             SyncAutoSortToggleFromFlow();
@@ -85,6 +89,7 @@ namespace MahjongPrototype.UI
             SubscribeHandViewEvents();
             EnsureDrawnTileView();
             SubscribeDrawnTileViewEvents();
+            EnsureDiscardRiverView();
             EnsureInputController();
             SubscribeInputControllerEvents();
             SyncAutoSortToggleFromFlow();
@@ -110,6 +115,7 @@ namespace MahjongPrototype.UI
             RefreshDisplay(state);
             RefreshHand(state);
             RefreshDrawnTile(state);
+            RefreshDiscardRiver(state);
             RefreshWinDecision();
             RefreshInteractionState();
             RefreshLogPreview();
@@ -142,6 +148,9 @@ namespace MahjongPrototype.UI
 
             if (drawnTileView == null)
                 drawnTileView = GetComponentInChildren<MahjongDrawnTileView>(true);
+
+            if (discardRiverView == null)
+                discardRiverView = GetComponentInChildren<MahjongDiscardRiverView>(true);
 
             if (inputController == null)
                 inputController = GetComponentInChildren<MahjongUiInputController>(true);
@@ -367,6 +376,24 @@ namespace MahjongPrototype.UI
             drawnTileView.ConfigureMissingReferences(drawnTileContainer, tileButtonPrefab);
         }
 
+        private void EnsureDiscardRiverView()
+        {
+            if (discardRiverView == null)
+            {
+                discardRiverView = GetComponentInChildren<MahjongDiscardRiverView>(true);
+            }
+
+            RectTransform container = GetOrCreateEastDiscardRiverContainer();
+            if (discardRiverView == null)
+            {
+                discardRiverView = gameObject.AddComponent<MahjongDiscardRiverView>();
+                discardRiverView.Configure(container, tileButtonPrefab);
+                return;
+            }
+
+            discardRiverView.ConfigureMissingReferences(container, tileButtonPrefab);
+        }
+
         private void SubscribeHandViewEvents()
         {
             if (handView == null || isHandViewSubscribed)
@@ -419,6 +446,15 @@ namespace MahjongPrototype.UI
 
             if (drawnTileView != null)
                 drawnTileView.Rebuild(state.GetPlayerSeat(state.CurrentSeat).DrawnTile);
+        }
+
+        private void RefreshDiscardRiver(MahjongGameState state)
+        {
+            if (discardRiverView == null)
+                EnsureDiscardRiverView();
+
+            if (discardRiverView != null)
+                discardRiverView.Rebuild(state.Discards);
         }
 
         private void RefreshWinDecision()
@@ -488,6 +524,48 @@ namespace MahjongPrototype.UI
 
             if (logPreviewController != null)
                 logPreviewController.Refresh();
+        }
+
+        private RectTransform GetOrCreateEastDiscardRiverContainer()
+        {
+            if (eastDiscardRiverContainer != null)
+                return eastDiscardRiverContainer;
+
+            eastDiscardRiverContainer = FindRectTransformByName("EastDiscardRiverContainer");
+            if (eastDiscardRiverContainer != null)
+                return eastDiscardRiverContainer;
+
+            RectTransform discardArea = FindRectTransformByName("DiscardArea");
+            if (discardArea == null)
+            {
+                WarnMissingOnce(
+                    ref warnedMissingDiscardArea,
+                    "DiscardArea is not found. Add EastDiscardRiverContainer under DiscardArea for discard tiles.");
+                return null;
+            }
+
+            GameObject containerObject = new GameObject("EastDiscardRiverContainer", typeof(RectTransform));
+            eastDiscardRiverContainer = containerObject.GetComponent<RectTransform>();
+            eastDiscardRiverContainer.SetParent(discardArea, false);
+            eastDiscardRiverContainer.anchorMin = new Vector2(0.5f, 0.5f);
+            eastDiscardRiverContainer.anchorMax = new Vector2(0.5f, 0.5f);
+            eastDiscardRiverContainer.pivot = new Vector2(0.5f, 0.5f);
+            eastDiscardRiverContainer.anchoredPosition = new Vector2(0f, -85f);
+            eastDiscardRiverContainer.sizeDelta = new Vector2(380f, 140f);
+            return eastDiscardRiverContainer;
+        }
+
+        private RectTransform FindRectTransformByName(string objectName)
+        {
+            RectTransform[] rectTransforms = GetComponentsInChildren<RectTransform>(true);
+            for (int i = 0; i < rectTransforms.Length; i++)
+            {
+                RectTransform rectTransform = rectTransforms[i];
+                if (rectTransform != null && rectTransform.gameObject.name == objectName)
+                    return rectTransform;
+            }
+
+            return null;
         }
 
         private void WarnMissingOnce(ref bool warned, string message)
