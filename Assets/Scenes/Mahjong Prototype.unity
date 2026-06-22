@@ -1718,7 +1718,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 967759132}
-  - component: {fileID: 967759133}
   m_Layer: 0
   m_Name: EastDiscardRiverContainer
   m_TagString: Untagged
@@ -1745,30 +1744,6 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: -85}
   m_SizeDelta: {x: 380, y: 140}
   m_Pivot: {x: 0.5, y: 0.5}
---- !u!114 &967759133
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 967759131}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 8a8695521f0d02e499659fee002a26c2, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.GridLayoutGroup
-  m_Padding:
-    m_Left: 0
-    m_Right: 0
-    m_Top: 0
-    m_Bottom: 0
-  m_ChildAlignment: 0
-  m_StartCorner: 0
-  m_StartAxis: 0
-  m_CellSize: {x: 60, y: 65}
-  m_Spacing: {x: 3, y: 3}
-  m_Constraint: 1
-  m_ConstraintCount: 6
 --- !u!1 &1217582411
 GameObject:
   m_ObjectHideFlags: 0

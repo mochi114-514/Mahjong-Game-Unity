@@ -44,9 +44,45 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void Rebuild_ConfiguresSixColumnGridLayout()
+        public void Rebuild_PreservesPrefabSizeAndWrapsSeventhTile()
         {
-            GameObject root = new GameObject("DiscardRiverGridTest");
+            GameObject root = new GameObject("DiscardRiverPositionTest");
+            GameObject prefab = CreateTileButtonPrefab();
+            try
+            {
+                object view = CreateView(root, prefab, out RectTransform container);
+
+                Invoke(
+                    view,
+                    "Rebuild",
+                    CreateDiscardList(
+                        CreateDiscardRecord("East", "1m", 1),
+                        CreateDiscardRecord("East", "2m", 2),
+                        CreateDiscardRecord("East", "3m", 3),
+                        CreateDiscardRecord("East", "4m", 4),
+                        CreateDiscardRecord("East", "5m", 5),
+                        CreateDiscardRecord("East", "6m", 6),
+                        CreateDiscardRecord("East", "7m", 7)));
+
+                Assert.That(container.childCount, Is.EqualTo(7));
+                RectTransform firstTile = (RectTransform)container.GetChild(0);
+                RectTransform seventhTile = (RectTransform)container.GetChild(6);
+                Assert.That(firstTile.sizeDelta, Is.EqualTo(new Vector2(40f, 45f)));
+                Assert.That(firstTile.anchoredPosition, Is.EqualTo(Vector2.zero));
+                Assert.That(seventhTile.sizeDelta, Is.EqualTo(new Vector2(40f, 45f)));
+                Assert.That(seventhTile.anchoredPosition, Is.EqualTo(new Vector2(0f, -48f)));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(prefab);
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void Rebuild_DoesNotAddGridLayoutGroup()
+        {
+            GameObject root = new GameObject("DiscardRiverNoGridTest");
             GameObject prefab = CreateTileButtonPrefab();
             try
             {
@@ -54,12 +90,30 @@ namespace MahjongPrototype.Tests
 
                 Invoke(view, "Rebuild", CreateDiscardList(CreateDiscardRecord("East", "1m", 1)));
 
-                GridLayoutGroup gridLayout = container.GetComponent<GridLayoutGroup>();
-                Assert.That(gridLayout, Is.Not.Null);
-                Assert.That(gridLayout.constraint, Is.EqualTo(GridLayoutGroup.Constraint.FixedColumnCount));
-                Assert.That(gridLayout.constraintCount, Is.EqualTo(6));
-                Assert.That(gridLayout.cellSize, Is.EqualTo(new Vector2(60f, 65f)));
-                Assert.That(gridLayout.spacing, Is.EqualTo(new Vector2(3f, 3f)));
+                Assert.That(container.GetComponent<GridLayoutGroup>(), Is.Null);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(prefab);
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void Rebuild_DisablesExistingGridLayoutGroup()
+        {
+            GameObject root = new GameObject("DiscardRiverExistingGridTest");
+            GameObject prefab = CreateTileButtonPrefab();
+            try
+            {
+                object view = CreateView(root, prefab, out RectTransform container);
+                GridLayoutGroup gridLayout = container.gameObject.AddComponent<GridLayoutGroup>();
+                Assert.That(gridLayout.enabled, Is.True);
+
+                Invoke(view, "Rebuild", CreateDiscardList(CreateDiscardRecord("East", "1m", 1)));
+
+                Assert.That(gridLayout.enabled, Is.False);
+                Assert.That(container.childCount, Is.EqualTo(1));
             }
             finally
             {
@@ -113,6 +167,7 @@ namespace MahjongPrototype.Tests
         private static GameObject CreateTileButtonPrefab()
         {
             GameObject prefab = new GameObject("TileButtonPrefab", typeof(RectTransform));
+            prefab.GetComponent<RectTransform>().sizeDelta = new Vector2(40f, 45f);
             prefab.AddComponent<Image>();
             prefab.AddComponent<Button>();
 
