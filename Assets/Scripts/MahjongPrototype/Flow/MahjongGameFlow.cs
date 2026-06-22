@@ -16,6 +16,10 @@ namespace MahjongPrototype
         [SerializeField] private SeatId viewerSeat = SeatId.East;
         [SerializeField] private List<SeatId> initialActiveSeats = new List<SeatId> { SeatId.East };
 
+        [Header("Self Wind")]
+        [SerializeField] private bool randomizeSelfWind = true;
+        [SerializeField] private SeatId fixedSelfWind = SeatId.East;
+
         [Header("Round Setup")]
         [SerializeField, Min(1)] private int initialHandTileCount = 13;
         [SerializeField] private bool autoStart = true;
@@ -97,8 +101,11 @@ namespace MahjongPrototype
 
             int? seed = useFixedRandomSeed ? fixedRandomSeed : (int?)null;
             gameState = new MahjongGameState(Wall.CreateStandardShuffled(seed), initialActiveSeats);
+            gameState.SetSelfWind(ResolveSelfWind());
             playerTurnManager.InitializeRound(gameState, gameState.CurrentSeat);
 
+            LogSelfWindSelected(gameState.SelfWind);
+            LogSeatSlotsAssigned();
             NotifyRoundStarted();
             LogRoundStarted();
 
@@ -648,6 +655,14 @@ namespace MahjongPrototype
                 initialActiveSeats.Add(SeatId.East);
         }
 
+        private SeatId ResolveSelfWind()
+        {
+            if (!randomizeSelfWind)
+                return fixedSelfWind;
+
+            return (SeatId)Random.Range(0, 4);
+        }
+
         private bool IsActiveSeat(SeatId seat)
         {
             if (gameState == null)
@@ -813,6 +828,28 @@ namespace MahjongPrototype
                 seat: gameState.CurrentSeat,
                 wallCount: gameState.Wall.Count,
                 turnIndex: gameState.TurnIndex);
+        }
+
+        private void LogSelfWindSelected(SeatId selfWind)
+        {
+            DevLog.Record(
+                "GameFlow",
+                "SelfWindSelected",
+                $"SelfWind = {selfWind}");
+        }
+
+        private void LogSeatSlotsAssigned()
+        {
+            for (int i = 0; i < gameState.SeatSlots.Count; i++)
+            {
+                SeatSlot slot = gameState.SeatSlots[i];
+                DevLog.Record(
+                    "GameFlow",
+                    "SeatSlotAssigned",
+                    $"Seat {slot.Wind} = {slot.StateLabel}",
+                    seat: slot.Wind,
+                    turnIndex: gameState.TurnIndex);
+            }
         }
 
         private void LogTurnStarted(SeatId seat, int turnIndex)

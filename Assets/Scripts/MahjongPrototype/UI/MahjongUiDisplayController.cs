@@ -13,6 +13,7 @@ namespace MahjongPrototype.UI
         [Header("Status Text")]
         [Tooltip("現在のSeat表示用TMP Textです。")]
         [SerializeField] private TMP_Text currentSeatText;
+        [SerializeField] private TMP_Text selfWindText;
         [Tooltip("現在のターン番号表示用TMP Textです。")]
         [SerializeField] private TMP_Text turnIndexText;
         [Tooltip("山の残り枚数表示用TMP Textです。")]
@@ -44,6 +45,7 @@ namespace MahjongPrototype.UI
             WarnMissingStaticReferences();
 
             SetText(currentSeatText, $"Seat: {state.CurrentSeat}");
+            SetText(selfWindText, $"SelfWind: {state.SelfWind}");
             SetText(turnIndexText, $"Turn: {state.TurnIndex}");
             SetText(wallCountText, $"Wall: {state.Wall.Count}");
             SetText(activeSkillText, BuildActiveSkillText(state));
@@ -54,6 +56,9 @@ namespace MahjongPrototype.UI
         {
             if (currentSeatText == null)
                 currentSeatText = FindTextByName("CurrentSeatText");
+
+            if (selfWindText == null)
+                selfWindText = FindTextByName("SelfWindText");
 
             if (turnIndexText == null)
                 turnIndexText = FindTextByName("TurnIndexText");
