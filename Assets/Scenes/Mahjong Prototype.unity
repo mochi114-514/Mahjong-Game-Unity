@@ -1183,7 +1183,7 @@ MonoBehaviour:
   captureErrors: 1
   captureExceptions: 1
   enableSlowFrameLog: 1
-  slowFrameThresholdMs: 50
+  slowFrameThresholdMs: 30
   enableDevLogIfFlowHasNotStarted: 1
   enableReleaseBuildLogging: 0
 --- !u!4 &494045215
@@ -1256,7 +1256,7 @@ MonoBehaviour:
   eventNotifier: {fileID: 1264733449}
   enableDevLog: 1
   enableReleaseBuildLogging: 0
-  enableTurnDebugLog: 0
+  enableTurnDebugLog: 1
   logWarnings: 1
   autoSortEnabled: 0
 --- !u!1 &519420028
