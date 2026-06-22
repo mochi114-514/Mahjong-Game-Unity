@@ -104,7 +104,9 @@ namespace MahjongPrototype
 
             int? seed = useFixedRandomSeed ? fixedRandomSeed : (int?)null;
             gameState = new MahjongGameState(Wall.CreateStandardShuffled(seed), initialActiveSeats);
-            gameState.SetSelfSeat(ResolveSelfSeat());
+            SeatId selfSeat = ResolveSelfSeat();
+            gameState.SetSelfSeat(selfSeat);
+            gameState.SetActiveSeats(new List<SeatId> { selfSeat });
             playerTurnManager.InitializeRound(gameState, gameState.CurrentTurn);
 
             LogSeatSlotsAssigned();
@@ -117,7 +119,8 @@ namespace MahjongPrototype
 
         public void RetryPrototype()
         {
-            // PROTOTYPE: 繧ｷ繝ｼ繝ｳ蜀崎ｪｭ縺ｿ霎ｼ縺ｿ縺ｧ縺ｯ縺ｪ縺上∫樟蝨ｨ縺ｮFlow蜀・憾諷九□縺代ｒ蛻晄悄蛹悶☆繧九・            StartNewRound();
+            // PROTOTYPE: Reset only the current flow state without reloading the scene.
+            StartNewRound();
         }
 
         public void RequestDraw()
@@ -839,10 +842,18 @@ namespace MahjongPrototype
                 DevLog.Record(
                     "GameFlow",
                     "SeatSlotAssigned",
-                    $"Seat {slot.Wind} = {slot.StateLabel}",
+                    $"Seat {slot.Wind} = {GetSeatSlotLogLabel(slot)}",
                     seat: slot.Wind,
                     turnIndex: gameState.TurnIndex);
             }
+        }
+
+        private string GetSeatSlotLogLabel(SeatSlot slot)
+        {
+            if (slot == null || slot.IsEmpty)
+                return "Empty";
+
+            return gameState.IsSelfSeat(slot.Wind) ? "Self" : slot.StateLabel;
         }
 
         private void LogTurnStarted(SeatId seat, int turnIndex)

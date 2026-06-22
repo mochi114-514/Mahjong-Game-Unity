@@ -205,7 +205,7 @@ MonoBehaviour:
   discardRiverView: {fileID: 6100000124}
   handContainer: {fileID: 1972641026}
   drawnTileContainer: {fileID: 6100000121}
-  eastDiscardRiverContainer: {fileID: 967759132}
+  selfBottomDiscardRiverContainer: {fileID: 967759132}
   tileButtonPrefab: {fileID: 8792027050792319394, guid: 5f307326666617c4e8318056c650e193, type: 3}
   inputController: {fileID: 45752830}
   winDecisionController: {fileID: 6100000001}
@@ -1723,7 +1723,7 @@ GameObject:
   m_Component:
   - component: {fileID: 967759132}
   m_Layer: 0
-  m_Name: EastDiscardRiverContainer
+  m_Name: SelfBottomDiscardRiverContainer
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2296,8 +2296,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 30
-  m_fontSizeBase: 30
+  m_fontSize: 20
+  m_fontSizeBase: 20
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -4412,9 +4412,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2dc7ee4fdb9f4107ae487c61260d05f4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI.MahjongDiscardRiverView
-  eastDiscardRiverContainer: {fileID: 967759132}
+  selfBottomDiscardRiverContainer: {fileID: 967759132}
   tileButtonPrefab: {fileID: 2554712596921478464, guid: c957f79a6d8c9c64ead1413be5199862, type: 3}
-  displayedSeat: 0
+  viewSlot: 0
   columns: 6
   spacingX: 3
   spacingY: 3

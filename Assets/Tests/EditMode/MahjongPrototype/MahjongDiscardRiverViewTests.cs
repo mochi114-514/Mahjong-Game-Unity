@@ -44,6 +44,38 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
+        public void Rebuild_WithNorthDataSeat_UsesSelfBottomRotation()
+        {
+            GameObject root = new GameObject("DiscardRiverNorthSelfBottomTest");
+            GameObject prefab = CreateTileButtonPrefab();
+            try
+            {
+                object view = CreateView(root, prefab, out RectTransform container);
+
+                Invoke(
+                    view,
+                    "Rebuild",
+                    CreateDiscardList(
+                        CreateDiscardRecord("East", "1m", 1),
+                        CreateDiscardRecord("North", "9m", 2),
+                        CreateDiscardRecord("North", "7p", 3)),
+                    ParseSeat("North"));
+
+                Assert.That(container.childCount, Is.EqualTo(2));
+                Assert.That(GetTileLabelText(container.GetChild(0)), Is.EqualTo("9m"));
+                Assert.That(GetTileLabelText(container.GetChild(1)), Is.EqualTo("7p"));
+
+                RectTransform firstTile = (RectTransform)container.GetChild(0);
+                Assert.That(firstTile.localEulerAngles.z, Is.EqualTo(0f).Within(0.001f));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(prefab);
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
         public void Rebuild_PreservesPrefabSizeAndWrapsSeventhTile()
         {
             GameObject root = new GameObject("DiscardRiverPositionTest");
@@ -155,7 +187,7 @@ namespace MahjongPrototype.Tests
             Type viewType = Type.GetType(MahjongDiscardRiverViewTypeName, true);
             object view = root.AddComponent(viewType);
 
-            GameObject containerObject = new GameObject("EastDiscardRiverContainer", typeof(RectTransform));
+            GameObject containerObject = new GameObject("SelfBottomDiscardRiverContainer", typeof(RectTransform));
             container = containerObject.GetComponent<RectTransform>();
             container.SetParent(root.transform, false);
 
@@ -230,9 +262,22 @@ namespace MahjongPrototype.Tests
 
         private static object Invoke(object target, string methodName, params object[] args)
         {
-            MethodInfo method = target.GetType().GetMethod(
-                methodName,
+            MethodInfo method = null;
+            MethodInfo[] methods = target.GetType().GetMethods(
                 BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            for (int i = 0; i < methods.Length; i++)
+            {
+                MethodInfo candidate = methods[i];
+                if (candidate.Name != methodName)
+                    continue;
+
+                if (candidate.GetParameters().Length != args.Length)
+                    continue;
+
+                method = candidate;
+                break;
+            }
+
             Assert.That(method, Is.Not.Null);
             return method.Invoke(target, args);
         }

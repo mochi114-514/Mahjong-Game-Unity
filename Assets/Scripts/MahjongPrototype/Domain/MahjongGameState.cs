@@ -4,6 +4,14 @@ using MahjongPrototype.Skills;
 
 namespace MahjongPrototype.Domain
 {
+    public enum PlayerId
+    {
+        Player1 = 1,
+        Player2 = 2,
+        Player3 = 3,
+        Player4 = 4
+    }
+
     public sealed class MahjongGameState
     {
         private readonly Dictionary<SeatId, PlayerSeat> playerSeats = new Dictionary<SeatId, PlayerSeat>();
@@ -19,34 +27,24 @@ namespace MahjongPrototype.Domain
             if (initialActiveSeats == null)
                 throw new ArgumentNullException(nameof(initialActiveSeats));
 
-            foreach (SeatId seat in initialActiveSeats)
-            {
-                if (activeSeats.Contains(seat))
-                    continue;
-
-                activeSeats.Add(seat);
-                playerSeats[seat] = new PlayerSeat(seat);
-            }
-
-            if (activeSeats.Count <= 0)
-            {
-                activeSeats.Add(SeatId.East);
-                playerSeats[SeatId.East] = new PlayerSeat(SeatId.East);
-            }
-
             InitializeSeatSlots();
             SetSelfSeat(SeatId.East);
-            CurrentTurn = activeSeats[0];
+            SetActiveSeats(initialActiveSeats);
             TurnIndex = 1;
         }
 
         public Wall Wall { get; }
+        public PlayerId SelfPlayerId { get; } = PlayerId.Player1;
         public SeatId SelfSeat => GetSelfSeatSlot().Wind;
         public SeatId SelfWind => SelfSeat;
         public SeatId CurrentTurn { get; set; }
+        public SeatSlot CurrentTurnSlot => GetSeatSlot(CurrentTurn);
+        public PlayerId? CurrentTurnPlayerId => CurrentTurnSlot.PlayerId;
+        public bool IsSelfTurn => CurrentTurnPlayerId == SelfPlayerId;
         public int TurnIndex { get; set; }
         public bool IsRoundEnded { get; set; }
         public IReadOnlyList<SeatId> ActiveSeats => activeSeats;
+        public IReadOnlyList<SeatId> ActiveTurnSeats => activeSeats;
         public IReadOnlyList<SeatSlot> SeatSlots => seatSlots;
         public IReadOnlyList<DiscardRecord> Discards => discards;
         public IReadOnlyList<ActiveSkillEffect> ActiveSkillEffects => activeSkillEffects;
@@ -58,33 +56,68 @@ namespace MahjongPrototype.Domain
 
         public void SetSelfSeat(SeatId selfSeat)
         {
-            AssignSelfSeat(selfSeat);
+            AssignPlayerToSeat(SelfPlayerId, selfSeat);
+        }
+
+        public void SetActiveSeats(IEnumerable<SeatId> seats)
+        {
+            if (seats == null)
+                throw new ArgumentNullException(nameof(seats));
+
+            activeSeats.Clear();
+            foreach (SeatId seat in seats)
+            {
+                if (activeSeats.Contains(seat))
+                    continue;
+
+                activeSeats.Add(seat);
+                GetPlayerSeat(seat);
+            }
+
+            if (activeSeats.Count <= 0)
+            {
+                activeSeats.Add(SelfSeat);
+                GetPlayerSeat(SelfSeat);
+            }
+
+            CurrentTurn = activeSeats[0];
+        }
+
+        public void AssignPlayerToSeat(PlayerId playerId, SeatId seat)
+        {
+            ClearPlayerFromSeatSlots(playerId);
+            GetSeatSlot(seat).AssignPlayer(playerId);
         }
 
         public SeatSlot GetSelfSeatSlot()
         {
-            SeatSlot selfSlot = null;
-            for (int i = 0; i < seatSlots.Count; i++)
-            {
-                SeatSlot slot = seatSlots[i];
-                if (!slot.HasSelfPlayer)
-                    continue;
-
-                if (selfSlot != null)
-                    throw new InvalidOperationException("Multiple self seat slots are assigned.");
-
-                selfSlot = slot;
-            }
-
-            if (selfSlot == null)
-                throw new InvalidOperationException("Self seat slot is not assigned.");
-
-            return selfSlot;
+            return GetSeatSlot(GetSeatByPlayerId(SelfPlayerId));
         }
 
         public bool IsSelfSeat(SeatId seat)
         {
-            return GetSeatSlot(seat).HasSelfPlayer;
+            return GetSeatSlot(seat).PlayerId == SelfPlayerId;
+        }
+
+        public SeatId GetSeatByPlayerId(PlayerId playerId)
+        {
+            SeatSlot playerSlot = null;
+            for (int i = 0; i < seatSlots.Count; i++)
+            {
+                SeatSlot slot = seatSlots[i];
+                if (slot.PlayerId != playerId)
+                    continue;
+
+                if (playerSlot != null)
+                    throw new InvalidOperationException($"Player {playerId} is assigned to multiple seat slots.");
+
+                playerSlot = slot;
+            }
+
+            if (playerSlot == null)
+                throw new InvalidOperationException($"Player {playerId} is not assigned to a seat slot.");
+
+            return playerSlot.Wind;
         }
 
         public SeatSlot GetSeatSlot(SeatId wind)
@@ -165,14 +198,12 @@ namespace MahjongPrototype.Domain
             seatSlots.Add(new SeatSlot(SeatId.North));
         }
 
-        private void AssignSelfSeat(SeatId selfSeat)
+        private void ClearPlayerFromSeatSlots(PlayerId playerId)
         {
             for (int i = 0; i < seatSlots.Count; i++)
             {
                 SeatSlot slot = seatSlots[i];
-                if (slot.Wind == selfSeat)
-                    slot.AssignSelf();
-                else
+                if (slot.PlayerId == playerId)
                     slot.Clear();
             }
         }
@@ -187,18 +218,19 @@ namespace MahjongPrototype.Domain
         }
 
         public SeatId Wind { get; }
-        public bool HasSelfPlayer { get; private set; }
-        public bool IsEmpty => !HasSelfPlayer;
-        public string StateLabel => HasSelfPlayer ? "Self" : "Empty";
+        public PlayerId? PlayerId { get; private set; }
+        public bool HasPlayer => PlayerId.HasValue;
+        public bool IsEmpty => !PlayerId.HasValue;
+        public string StateLabel => PlayerId.HasValue ? PlayerId.Value.ToString() : "Empty";
 
-        internal void AssignSelf()
+        internal void AssignPlayer(PlayerId playerId)
         {
-            HasSelfPlayer = true;
+            PlayerId = playerId;
         }
 
         internal void Clear()
         {
-            HasSelfPlayer = false;
+            PlayerId = null;
         }
     }
 }

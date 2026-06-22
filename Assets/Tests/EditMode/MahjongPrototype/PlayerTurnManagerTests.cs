@@ -14,6 +14,7 @@ namespace MahjongPrototype.Tests
         private const string TurnOrderServiceTypeName = "MahjongPrototype.Services.TurnOrderService, Assembly-CSharp";
         private const string PlayerTurnManagerTypeName = "MahjongPrototype.Services.PlayerTurnManager, Assembly-CSharp";
         private const string MahjongGameFlowTypeName = "MahjongPrototype.MahjongGameFlow, Assembly-CSharp";
+        private const string PlayerIdTypeName = "MahjongPrototype.Domain.PlayerId, Assembly-CSharp";
 
         [Test]
         public void InitializeRound_SetsCurrentTurnAndTurnIndex()
@@ -278,7 +279,7 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void GameFlow_FixedSelfSeatSetsSlotsWithoutChangingSinglePlayerTurn()
+        public void GameFlow_FixedSelfSeatSetsSingleActiveTurnPlayer()
         {
             GameObject gameObject = new GameObject("MahjongGameFlowFixedSelfSeatTest");
             try
@@ -296,19 +297,25 @@ namespace MahjongPrototype.Tests
 
                 Assert.That(GetProperty(gameState, "SelfSeat").ToString(), Is.EqualTo("South"));
                 Assert.That(GetProperty(gameState, "SelfWind").ToString(), Is.EqualTo("South"));
-                Assert.That(GetProperty(gameState, "CurrentTurn").ToString(), Is.EqualTo("East"));
+                Assert.That(GetProperty(gameState, "SelfPlayerId").ToString(), Is.EqualTo("Player1"));
+                Assert.That(GetProperty(gameState, "CurrentTurn").ToString(), Is.EqualTo("South"));
+                Assert.That(GetProperty(gameState, "CurrentTurnPlayerId").ToString(), Is.EqualTo("Player1"));
+                Assert.That(GetProperty(gameState, "IsSelfTurn"), Is.True);
                 Assert.That(GetProperty(activeSeats, "Count"), Is.EqualTo(1));
-                Assert.That(itemProperty.GetValue(activeSeats, new object[] { 0 }).ToString(), Is.EqualTo("East"));
+                Assert.That(itemProperty.GetValue(activeSeats, new object[] { 0 }).ToString(), Is.EqualTo("South"));
 
                 object seatSlots = GetProperty(gameState, "SeatSlots");
                 Assert.That(GetProperty(seatSlots, "Count"), Is.EqualTo(4));
-                AssertSeatSlot(seatSlots, 0, "East", false);
-                AssertSeatSlot(seatSlots, 1, "South", true);
-                AssertSeatSlot(seatSlots, 2, "West", false);
-                AssertSeatSlot(seatSlots, 3, "North", false);
+                AssertSeatSlot(seatSlots, 0, "East", null);
+                AssertSeatSlot(seatSlots, 1, "South", "Player1");
+                AssertSeatSlot(seatSlots, 2, "West", null);
+                AssertSeatSlot(seatSlots, 3, "North", null);
 
                 object selfSeatSlot = Invoke(gameState, "GetSelfSeatSlot");
                 Assert.That(GetProperty(selfSeatSlot, "Wind").ToString(), Is.EqualTo("South"));
+                object currentTurnSlot = GetProperty(gameState, "CurrentTurnSlot");
+                Assert.That(GetProperty(currentTurnSlot, "Wind").ToString(), Is.EqualTo("South"));
+                Assert.That(Invoke(gameState, "GetSeatByPlayerId", ParsePlayerId("Player1")).ToString(), Is.EqualTo("South"));
                 Assert.That((bool)Invoke(gameState, "IsSelfSeat", ParseSeat("South")), Is.True);
                 Assert.That((bool)Invoke(gameState, "IsSelfSeat", ParseSeat("East")), Is.False);
             }
@@ -327,6 +334,8 @@ namespace MahjongPrototype.Tests
             SetPrivateField(gameFlow, "useFixedRandomSeed", true);
             SetPrivateField(gameFlow, "fixedRandomSeed", 12345);
             SetPrivateField(gameFlow, "enableAutoDraw", enableAutoDraw);
+            SetPrivateField(gameFlow, "randomizeSelfSeat", false);
+            SetPrivateField(gameFlow, "fixedSelfSeat", ParseSeat("East"));
             return gameFlow;
         }
 
@@ -409,16 +418,18 @@ namespace MahjongPrototype.Tests
             field.SetValue(target, value);
         }
 
-        private static void AssertSeatSlot(object seatSlots, int index, string wind, bool hasSelfPlayer)
+        private static void AssertSeatSlot(object seatSlots, int index, string wind, string playerId)
         {
             PropertyInfo itemProperty = seatSlots.GetType().GetProperty("Item");
             Assert.That(itemProperty, Is.Not.Null);
 
             object slot = itemProperty.GetValue(seatSlots, new object[] { index });
             Assert.That(GetProperty(slot, "Wind").ToString(), Is.EqualTo(wind));
-            Assert.That(GetProperty(slot, "HasSelfPlayer"), Is.EqualTo(hasSelfPlayer));
-            Assert.That(GetProperty(slot, "IsEmpty"), Is.EqualTo(!hasSelfPlayer));
-            Assert.That(GetProperty(slot, "StateLabel"), Is.EqualTo(hasSelfPlayer ? "Self" : "Empty"));
+            object actualPlayerId = GetProperty(slot, "PlayerId");
+            Assert.That(actualPlayerId == null ? null : actualPlayerId.ToString(), Is.EqualTo(playerId));
+            Assert.That(GetProperty(slot, "HasPlayer"), Is.EqualTo(playerId != null));
+            Assert.That(GetProperty(slot, "IsEmpty"), Is.EqualTo(playerId == null));
+            Assert.That(GetProperty(slot, "StateLabel"), Is.EqualTo(playerId ?? "Empty"));
         }
 
         private static IList CreateSeatList(params string[] seatNames)
@@ -436,6 +447,11 @@ namespace MahjongPrototype.Tests
         private static object ParseSeat(string seatName)
         {
             return Enum.Parse(GetSeatIdType(), seatName);
+        }
+
+        private static object ParsePlayerId(string playerId)
+        {
+            return Enum.Parse(Type.GetType(PlayerIdTypeName, true), playerId);
         }
 
         private static Type GetSeatIdType()

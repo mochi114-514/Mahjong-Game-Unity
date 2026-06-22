@@ -1,36 +1,45 @@
 using System.Collections.Generic;
 using MahjongPrototype.Domain;
 using UnityEngine;
+using UnityEngine.Serialization;
 using UnityEngine.UI;
 
 namespace MahjongPrototype.UI
 {
+    // PROTOTYPE: only the self/bottom river slot is rendered until full 4-seat river UI exists.
+    public enum DiscardRiverViewSlot
+    {
+        SelfBottom = 0
+    }
+
     [DisallowMultipleComponent]
     [AddComponentMenu("Mahjong Prototype/UI/Mahjong Discard River View")]
     public sealed class MahjongDiscardRiverView : MonoBehaviour
     {
         [Header("Discard River")]
-        [SerializeField] private RectTransform eastDiscardRiverContainer;
+        [FormerlySerializedAs("eastDiscardRiverContainer")]
+        [SerializeField] private RectTransform selfBottomDiscardRiverContainer;
         [SerializeField] private TileButtonView tileButtonPrefab;
-        [SerializeField] private SeatId displayedSeat = SeatId.East;
+        [SerializeField] private DiscardRiverViewSlot viewSlot = DiscardRiverViewSlot.SelfBottom;
         [SerializeField] private int columns = 6;
         [SerializeField] private float spacingX = 3f;
         [SerializeField] private float spacingY = 3f;
 
         private readonly List<TileButtonView> activeTileButtons = new List<TileButtonView>();
+        private SeatId dataSeat = SeatId.East;
         private bool warnedMissingContainer;
         private bool warnedMissingTileButtonPrefab;
 
         public void Configure(RectTransform container, TileButtonView prefab)
         {
-            eastDiscardRiverContainer = container;
+            selfBottomDiscardRiverContainer = container;
             tileButtonPrefab = prefab;
         }
 
         public void ConfigureMissingReferences(RectTransform fallbackContainer, TileButtonView fallbackPrefab)
         {
-            if (eastDiscardRiverContainer == null)
-                eastDiscardRiverContainer = fallbackContainer;
+            if (selfBottomDiscardRiverContainer == null)
+                selfBottomDiscardRiverContainer = fallbackContainer;
 
             if (tileButtonPrefab == null)
                 tileButtonPrefab = fallbackPrefab;
@@ -38,15 +47,33 @@ namespace MahjongPrototype.UI
 
         public void Rebuild(IReadOnlyList<DiscardRecord> discards)
         {
+            Rebuild(discards, dataSeat, viewSlot);
+        }
+
+        public void Rebuild(IReadOnlyList<DiscardRecord> discards, SeatId dataSeat)
+        {
+            Rebuild(discards, dataSeat, DiscardRiverViewSlot.SelfBottom);
+        }
+
+        public void Rebuild(IReadOnlyList<DiscardRecord> discards, SeatId dataSeat, DiscardRiverViewSlot viewSlot)
+        {
+            this.dataSeat = dataSeat;
+            this.viewSlot = viewSlot;
+            RebuildInternal(discards);
+        }
+
+        private void RebuildInternal(IReadOnlyList<DiscardRecord> discards)
+        {
             Clear();
 
-            if (eastDiscardRiverContainer == null)
+            RectTransform container = GetContainerForViewSlot(viewSlot);
+            if (container == null)
             {
-                WarnMissingOnce(ref warnedMissingContainer, "East discard river container is not assigned.");
+                WarnMissingOnce(ref warnedMissingContainer, "Self bottom discard river container is not assigned.");
                 return;
             }
 
-            DisableGridLayout(eastDiscardRiverContainer);
+            DisableGridLayout(container);
 
             if (discards == null)
                 return;
@@ -61,13 +88,13 @@ namespace MahjongPrototype.UI
             for (int i = 0; i < discards.Count; i++)
             {
                 DiscardRecord record = discards[i];
-                if (record.ActorSeat != displayedSeat)
+                if (record.ActorSeat != dataSeat)
                     continue;
 
-                TileButtonView view = Instantiate(tileButtonPrefab, eastDiscardRiverContainer);
+                TileButtonView view = Instantiate(tileButtonPrefab, container);
                 view.Initialize(riverIndex, record.Tile, null);
                 view.SetInteractable(false);
-                ApplyTileTransform(view, riverIndex, displayedSeat);
+                ApplyTileTransform(view, riverIndex, viewSlot);
                 activeTileButtons.Add(view);
                 riverIndex++;
             }
@@ -85,7 +112,17 @@ namespace MahjongPrototype.UI
             activeTileButtons.Clear();
         }
 
-        private void ApplyTileTransform(TileButtonView view, int discardIndex, SeatId seat)
+        private RectTransform GetContainerForViewSlot(DiscardRiverViewSlot slot)
+        {
+            switch (slot)
+            {
+                case DiscardRiverViewSlot.SelfBottom:
+                default:
+                    return selfBottomDiscardRiverContainer;
+            }
+        }
+
+        private void ApplyTileTransform(TileButtonView view, int discardIndex, DiscardRiverViewSlot slot)
         {
             if (view == null)
                 return;
@@ -99,7 +136,7 @@ namespace MahjongPrototype.UI
             tileRect.anchorMax = new Vector2(0f, 1f);
             tileRect.pivot = new Vector2(0f, 1f);
             tileRect.anchoredPosition = CalculateTilePosition(discardIndex, tileSize);
-            tileRect.localRotation = CalculateTileRotation(seat);
+            tileRect.localRotation = CalculateTileRotation(slot);
         }
 
         private static Vector2 GetTileSize(RectTransform tileRect)
@@ -130,17 +167,11 @@ namespace MahjongPrototype.UI
             return new Vector2(x, y);
         }
 
-        private static Quaternion CalculateTileRotation(SeatId seat)
+        private static Quaternion CalculateTileRotation(DiscardRiverViewSlot slot)
         {
-            switch (seat)
+            switch (slot)
             {
-                case SeatId.South:
-                    return Quaternion.Euler(0f, 0f, 90f);
-                case SeatId.West:
-                    return Quaternion.Euler(0f, 0f, 180f);
-                case SeatId.North:
-                    return Quaternion.Euler(0f, 0f, 270f);
-                case SeatId.East:
+                case DiscardRiverViewSlot.SelfBottom:
                 default:
                     return Quaternion.identity;
             }

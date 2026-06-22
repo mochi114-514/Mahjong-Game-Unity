@@ -166,6 +166,8 @@ namespace MahjongPrototype.Tests
             SetPrivateField(gameFlow, "useFixedRandomSeed", true);
             SetPrivateField(gameFlow, "fixedRandomSeed", 12345);
             SetPrivateField(gameFlow, "enableAutoDraw", enableAutoDraw);
+            SetPrivateField(gameFlow, "randomizeSelfSeat", false);
+            SetPrivateField(gameFlow, "fixedSelfSeat", ParseSeat("East"));
             SetPrivateField(gameFlow, "initialActiveSeats", CreateSeatList(activeSeats));
             return gameFlow;
         }

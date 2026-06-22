@@ -2,6 +2,7 @@ using MahjongPrototype;
 using MahjongPrototype.Domain;
 using MahjongPrototype.Notifications;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace MahjongPrototype.UI
 {
@@ -27,7 +28,8 @@ namespace MahjongPrototype.UI
         [Tooltip("Container for hand tile buttons.")]
         [SerializeField] private RectTransform handContainer;
         [SerializeField] private RectTransform drawnTileContainer;
-        [SerializeField] private RectTransform eastDiscardRiverContainer;
+        [FormerlySerializedAs("eastDiscardRiverContainer")]
+        [SerializeField] private RectTransform selfBottomDiscardRiverContainer;
         [Tooltip("Prefab used to render a single tile button.")]
         [SerializeField] private TileButtonView tileButtonPrefab;
 
@@ -383,7 +385,7 @@ namespace MahjongPrototype.UI
                 discardRiverView = GetComponentInChildren<MahjongDiscardRiverView>(true);
             }
 
-            RectTransform container = GetOrCreateEastDiscardRiverContainer();
+            RectTransform container = GetOrCreateSelfBottomDiscardRiverContainer();
             if (discardRiverView == null)
             {
                 discardRiverView = gameObject.AddComponent<MahjongDiscardRiverView>();
@@ -454,7 +456,7 @@ namespace MahjongPrototype.UI
                 EnsureDiscardRiverView();
 
             if (discardRiverView != null)
-                discardRiverView.Rebuild(state.Discards);
+                discardRiverView.Rebuild(state.Discards, state.SelfSeat);
         }
 
         private void RefreshWinDecision()
@@ -526,33 +528,37 @@ namespace MahjongPrototype.UI
                 logPreviewController.Refresh();
         }
 
-        private RectTransform GetOrCreateEastDiscardRiverContainer()
+        private RectTransform GetOrCreateSelfBottomDiscardRiverContainer()
         {
-            if (eastDiscardRiverContainer != null)
-                return eastDiscardRiverContainer;
+            if (selfBottomDiscardRiverContainer != null)
+                return selfBottomDiscardRiverContainer;
 
-            eastDiscardRiverContainer = FindRectTransformByName("EastDiscardRiverContainer");
-            if (eastDiscardRiverContainer != null)
-                return eastDiscardRiverContainer;
+            selfBottomDiscardRiverContainer = FindRectTransformByName("SelfBottomDiscardRiverContainer");
+            if (selfBottomDiscardRiverContainer != null)
+                return selfBottomDiscardRiverContainer;
+
+            selfBottomDiscardRiverContainer = FindRectTransformByName("EastDiscardRiverContainer");
+            if (selfBottomDiscardRiverContainer != null)
+                return selfBottomDiscardRiverContainer;
 
             RectTransform discardArea = FindRectTransformByName("DiscardArea");
             if (discardArea == null)
             {
                 WarnMissingOnce(
                     ref warnedMissingDiscardArea,
-                    "DiscardArea is not found. Add EastDiscardRiverContainer under DiscardArea for discard tiles.");
+                    "DiscardArea is not found. Add SelfBottomDiscardRiverContainer under DiscardArea for discard tiles.");
                 return null;
             }
 
-            GameObject containerObject = new GameObject("EastDiscardRiverContainer", typeof(RectTransform));
-            eastDiscardRiverContainer = containerObject.GetComponent<RectTransform>();
-            eastDiscardRiverContainer.SetParent(discardArea, false);
-            eastDiscardRiverContainer.anchorMin = new Vector2(0.5f, 0.5f);
-            eastDiscardRiverContainer.anchorMax = new Vector2(0.5f, 0.5f);
-            eastDiscardRiverContainer.pivot = new Vector2(0.5f, 0.5f);
-            eastDiscardRiverContainer.anchoredPosition = new Vector2(0f, -85f);
-            eastDiscardRiverContainer.sizeDelta = new Vector2(380f, 140f);
-            return eastDiscardRiverContainer;
+            GameObject containerObject = new GameObject("SelfBottomDiscardRiverContainer", typeof(RectTransform));
+            selfBottomDiscardRiverContainer = containerObject.GetComponent<RectTransform>();
+            selfBottomDiscardRiverContainer.SetParent(discardArea, false);
+            selfBottomDiscardRiverContainer.anchorMin = new Vector2(0.5f, 0.5f);
+            selfBottomDiscardRiverContainer.anchorMax = new Vector2(0.5f, 0.5f);
+            selfBottomDiscardRiverContainer.pivot = new Vector2(0.5f, 0.5f);
+            selfBottomDiscardRiverContainer.anchoredPosition = new Vector2(0f, -85f);
+            selfBottomDiscardRiverContainer.sizeDelta = new Vector2(380f, 140f);
+            return selfBottomDiscardRiverContainer;
         }
 
         private RectTransform FindRectTransformByName(string objectName)
