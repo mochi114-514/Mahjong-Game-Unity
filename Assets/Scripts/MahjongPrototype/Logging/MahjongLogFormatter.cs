@@ -38,6 +38,24 @@ namespace MahjongPrototype.Logging
                 case "TurnStarted":
                     return TrimLine($"TurnStarted {entry.Seat} turn={entry.TurnIndex} wall={entry.WallCount}");
 
+                case "BeginTurn":
+                    return TrimLine($"BeginTurn {entry.Seat} T{entry.TurnIndex} {entry.Message}");
+
+                case "DrawCompleted":
+                    return TrimLine($"DrawDone {entry.Seat} T{entry.TurnIndex} {entry.Tile} {entry.Message}");
+
+                case "DiscardCompleted":
+                    return TrimLine($"DiscardDone {entry.Seat} T{entry.TurnIndex} {entry.Tile} {entry.Message}");
+
+                case "EndTurn":
+                    return TrimLine($"EndTurn T{entry.TurnIndex} {entry.Message}");
+
+                case "DrawBlocked":
+                    return TrimLine($"DrawBlocked {entry.Message}");
+
+                case "DiscardBlocked":
+                    return TrimLine($"DiscardBlocked {entry.Message}");
+
                 case "TileDrawn":
                     if (!string.IsNullOrEmpty(entry.ActiveSkill))
                         return string.Empty;
@@ -82,6 +100,9 @@ namespace MahjongPrototype.Logging
 
                 case "WinDeclined":
                     return TrimLine("WinDeclined");
+
+                case "WinDecision":
+                    return TrimLine($"WinDecision {entry.Seat} {entry.Message}");
 
                 case "HandAutoSorted":
                     return string.Empty;

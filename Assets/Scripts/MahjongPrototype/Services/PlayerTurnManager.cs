@@ -32,9 +32,17 @@ namespace MahjongPrototype.Services
                 throw new ArgumentNullException(nameof(gameState));
 
             gameState.CurrentSeat = seat;
+            RefreshPhaseFromState(gameState);
+        }
+
+        public void RefreshPhaseFromState(MahjongGameState gameState)
+        {
+            if (gameState == null)
+                throw new ArgumentNullException(nameof(gameState));
+
             Phase = gameState.IsRoundEnded
                 ? TurnPhase.RoundEnded
-                : gameState.GetPlayerSeat(seat).HasDrawnTile
+                : gameState.GetPlayerSeat(gameState.CurrentSeat).HasDrawnTile
                     ? TurnPhase.WaitingForDiscard
                     : TurnPhase.WaitingForDraw;
         }

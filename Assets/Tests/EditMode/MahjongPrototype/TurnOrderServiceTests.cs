@@ -156,6 +156,22 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
+        public void RefreshPhaseFromState_UsesDrawnTileAsPhaseSource()
+        {
+            object gameState = CreateGameState("East");
+            object manager = CreatePlayerTurnManager();
+            object playerSeat = GetCurrentPlayerSeat(gameState);
+            Invoke(manager, "InitializeRound", gameState, ParseSeat("East"));
+
+            Assert.That(GetProperty(manager, "Phase").ToString(), Is.EqualTo("WaitingForDraw"));
+
+            Invoke(playerSeat, "SetDrawnTile", CreateTile("E"));
+            Invoke(manager, "RefreshPhaseFromState", gameState);
+
+            Assert.That(GetProperty(manager, "Phase").ToString(), Is.EqualTo("WaitingForDiscard"));
+        }
+
+        [Test]
         public void GameFlow_UsesDrawnTileAsDiscardGuard()
         {
             GameObject gameObject = new GameObject("MahjongGameFlowTest");
@@ -168,21 +184,26 @@ namespace MahjongPrototype.Tests
                 Invoke(gameFlow, "StartNewRound");
                 object gameState = GetProperty(gameFlow, "CurrentState");
                 object playerSeat = GetCurrentPlayerSeat(gameState);
+                object manager = GetPrivateField(gameFlow, "playerTurnManager");
 
                 Assert.That(GetProperty(playerSeat, "HasDrawnTile"), Is.False);
+                Assert.That(GetProperty(manager, "Phase").ToString(), Is.EqualTo("WaitingForDraw"));
 
                 Invoke(gameFlow, "RequestDiscard", 0);
                 Assert.That(GetProperty(gameState, "TurnIndex"), Is.EqualTo(1));
                 Assert.That(GetProperty(playerSeat, "HasDrawnTile"), Is.False);
+                Assert.That(GetProperty(manager, "Phase").ToString(), Is.EqualTo("WaitingForDraw"));
 
                 Invoke(gameFlow, "RequestDraw");
                 Assert.That(GetProperty(playerSeat, "HasDrawnTile"), Is.True);
+                Assert.That(GetProperty(manager, "Phase").ToString(), Is.EqualTo("WaitingForDiscard"));
 
                 Invoke(gameFlow, "RequestDiscard", 0);
                 playerSeat = GetCurrentPlayerSeat(gameState);
 
                 Assert.That(GetProperty(playerSeat, "HasDrawnTile"), Is.False);
                 Assert.That(GetProperty(gameState, "TurnIndex"), Is.EqualTo(2));
+                Assert.That(GetProperty(manager, "Phase").ToString(), Is.EqualTo("WaitingForDraw"));
             }
             finally
             {
@@ -209,6 +230,14 @@ namespace MahjongPrototype.Tests
             return Activator.CreateInstance(gameStateType, wall, CreateSeatList(seatNames));
         }
 
+        private static object CreateTile(string code)
+        {
+            Type tileType = Type.GetType("MahjongPrototype.Domain.Tile, Assembly-CSharp", true);
+            ConstructorInfo constructor = tileType.GetConstructor(new[] { typeof(string) });
+            Assert.That(constructor, Is.Not.Null);
+            return constructor.Invoke(new object[] { code });
+        }
+
         private static object GetCurrentPlayerSeat(object gameState)
         {
             MethodInfo method = gameState.GetType().GetMethod("GetPlayerSeat");
@@ -232,6 +261,15 @@ namespace MahjongPrototype.Tests
                 BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
             Assert.That(property, Is.Not.Null);
             return property.GetValue(target);
+        }
+
+        private static object GetPrivateField(object target, string fieldName)
+        {
+            FieldInfo field = target.GetType().GetField(
+                fieldName,
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.That(field, Is.Not.Null);
+            return field.GetValue(target);
         }
 
         private static void SetPrivateField(object target, string fieldName, object value)

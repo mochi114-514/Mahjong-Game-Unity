@@ -28,6 +28,7 @@ namespace MahjongPrototype
         [Header("Dev Log")]
         [SerializeField] private bool enableDevLog = true;
         [SerializeField] private bool enableReleaseBuildLogging = false;
+        [SerializeField] private bool enableTurnDebugLog;
 
         [Header("Warnings")]
         [SerializeField] private bool logWarnings = true;
@@ -116,12 +117,14 @@ namespace MahjongPrototype
             if (gameState.IsRoundEnded)
             {
                 Warn("Round already ended. Press Retry.");
+                LogTurnBlocked("DrawBlocked", "RoundEnded");
                 return;
             }
 
             if (isWinDecisionPending)
             {
                 Warn("Declare or decline win before drawing.");
+                LogTurnBlocked("DrawBlocked", "WinDecisionPending");
                 return;
             }
 
@@ -129,6 +132,7 @@ namespace MahjongPrototype
             if (currentPlayerSeat.HasDrawnTile)
             {
                 Warn("Already drew this turn. Discard a tile first.");
+                LogTurnBlocked("DrawBlocked", "DrawnTileExists");
                 return;
             }
 
@@ -142,6 +146,13 @@ namespace MahjongPrototype
             }
 
             currentPlayerSeat.SetDrawnTile(result.Tile);
+            playerTurnManager.RefreshPhaseFromState(gameState);
+            LogTurnDebug(
+                "DrawCompleted",
+                $"phase={playerTurnManager.Phase}; drawnTile={result.Tile}",
+                seat: gameState.CurrentSeat,
+                tile: result.Tile,
+                turnIndex: gameState.TurnIndex);
             HandleSkillResolutionLogs(result);
             NotifyTileDrawn(result);
             LogTileDrawn(result);
@@ -156,6 +167,7 @@ namespace MahjongPrototype
             if (gameState.IsRoundEnded)
             {
                 Warn("Round already ended. Press Retry.");
+                LogTurnBlocked("DiscardBlocked", "RoundEnded");
                 return;
             }
 
@@ -163,12 +175,14 @@ namespace MahjongPrototype
             if (!currentPlayerSeat.HasDrawnTile)
             {
                 Warn("Draw before discarding.");
+                LogTurnBlocked("DiscardBlocked", "DrawnTileMissing");
                 return;
             }
 
             if (isWinDecisionPending)
             {
                 Warn("Declare or decline win before discarding.");
+                LogTurnBlocked("DiscardBlocked", "WinDecisionPending");
                 return;
             }
 
@@ -180,6 +194,13 @@ namespace MahjongPrototype
             }
 
             CommitDrawnTileToHandIfPresent(gameState.CurrentSeat);
+            playerTurnManager.RefreshPhaseFromState(gameState);
+            LogTurnDebug(
+                "DiscardCompleted",
+                $"phase={playerTurnManager.Phase}; discardTile={result.Record.Tile}",
+                seat: result.Record.ActorSeat,
+                tile: result.Record.Tile,
+                turnIndex: result.Record.TurnIndex);
             NotifyTileDiscarded(result.Record);
             LogTileDiscarded(result.Record);
             AdvanceTurn();
@@ -193,6 +214,7 @@ namespace MahjongPrototype
             if (gameState.IsRoundEnded)
             {
                 Warn("Round already ended. Press Retry.");
+                LogTurnBlocked("DiscardBlocked", "RoundEnded");
                 return;
             }
 
@@ -200,12 +222,14 @@ namespace MahjongPrototype
             if (!currentPlayerSeat.HasDrawnTile)
             {
                 Warn("Draw before discarding.");
+                LogTurnBlocked("DiscardBlocked", "DrawnTileMissing");
                 return;
             }
 
             if (isWinDecisionPending)
             {
                 Warn("Declare or decline win before discarding.");
+                LogTurnBlocked("DiscardBlocked", "WinDecisionPending");
                 return;
             }
 
@@ -216,6 +240,13 @@ namespace MahjongPrototype
                 return;
             }
 
+            playerTurnManager.RefreshPhaseFromState(gameState);
+            LogTurnDebug(
+                "DiscardCompleted",
+                $"phase={playerTurnManager.Phase}; discardTile={result.Record.Tile}",
+                seat: result.Record.ActorSeat,
+                tile: result.Record.Tile,
+                turnIndex: result.Record.TurnIndex);
             NotifyTileDiscarded(result.Record);
             LogTileDiscarded(result.Record);
             AdvanceTurn();
@@ -289,6 +320,11 @@ namespace MahjongPrototype
             ClearWinDecision();
             gameState.IsRoundEnded = true;
             playerTurnManager.MarkRoundEnded();
+            LogTurnDebug(
+                "RoundEnded",
+                $"phase={playerTurnManager.Phase}; reason=WinDeclared",
+                seat: seat,
+                turnIndex: turnIndex);
 
             NotifyWinDeclared(seat, turnIndex);
             LogWinDeclared(seat, turnIndex);
@@ -339,7 +375,13 @@ namespace MahjongPrototype
 
         private void AdvanceTurn()
         {
+            SeatId fromSeat = gameState.CurrentSeat;
             SeatId nextSeat = playerTurnManager.EndTurnAndSelectNext(gameState, gameState.ActiveSeats);
+            LogTurnDebug(
+                "EndTurn",
+                $"from={fromSeat}; to={nextSeat}; phase={playerTurnManager.Phase}",
+                seat: nextSeat,
+                turnIndex: gameState.TurnIndex);
             StartTurn(nextSeat, gameState.TurnIndex);
         }
 
@@ -347,6 +389,11 @@ namespace MahjongPrototype
         {
             NotifyTurnStarted(seat, turnIndex);
             LogTurnStarted(seat, turnIndex);
+            LogTurnDebug(
+                "BeginTurn",
+                $"phase={playerTurnManager.Phase}; hasDrawnTile={gameState.GetPlayerSeat(seat).HasDrawnTile}",
+                seat: seat,
+                turnIndex: turnIndex);
         }
 
         private void CheckWinPrototype()
@@ -400,6 +447,11 @@ namespace MahjongPrototype
             if (isPending)
             {
                 playerTurnManager.MarkWinDecision();
+                LogTurnDebug(
+                    "WinDecision",
+                    $"phase={playerTurnManager.Phase}",
+                    seat: seat,
+                    turnIndex: turnIndex);
                 return;
             }
 
@@ -421,6 +473,11 @@ namespace MahjongPrototype
         {
             gameState.IsRoundEnded = true;
             playerTurnManager.MarkRoundEnded();
+            LogTurnDebug(
+                "RoundEnded",
+                $"phase={playerTurnManager.Phase}; reason={reason}",
+                seat: gameState.CurrentSeat,
+                turnIndex: gameState.TurnIndex);
             eventNotifier?.NotifyRoundEnded(reason);
 
             DevLog.Record(
@@ -480,6 +537,39 @@ namespace MahjongPrototype
 
             Warn("GameState is not initialized. StartNewRound first.");
             return false;
+        }
+
+        private void LogTurnBlocked(string eventName, string reason)
+        {
+            if (gameState == null)
+                return;
+
+            PlayerSeat currentPlayerSeat = gameState.GetPlayerSeat(gameState.CurrentSeat);
+            LogTurnDebug(
+                eventName,
+                $"reason={reason}; phase={playerTurnManager.Phase}; hasDrawnTile={currentPlayerSeat.HasDrawnTile}",
+                seat: gameState.CurrentSeat,
+                turnIndex: gameState.TurnIndex);
+        }
+
+        private void LogTurnDebug(
+            string eventName,
+            string message,
+            SeatId? seat = null,
+            Tile? tile = null,
+            int? turnIndex = null)
+        {
+            if (!enableTurnDebugLog)
+                return;
+
+            DevLog.Record(
+                "Turn",
+                eventName,
+                message,
+                seat: seat,
+                tile: tile,
+                wallCount: gameState == null ? (int?)null : gameState.Wall.Count,
+                turnIndex: turnIndex);
         }
 
         private void NotifyRunStarted()

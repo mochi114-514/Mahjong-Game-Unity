@@ -308,7 +308,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI.MahjongLogPreviewController
   recentLogText: {fileID: 312434043}
-  maxVisibleLogLines: 6
+  maxVisibleLogLines: 7
 --- !u!114 &45752829
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1256,6 +1256,7 @@ MonoBehaviour:
   eventNotifier: {fileID: 1264733449}
   enableDevLog: 1
   enableReleaseBuildLogging: 0
+  enableTurnDebugLog: 0
   logWarnings: 1
   autoSortEnabled: 0
 --- !u!1 &519420028
