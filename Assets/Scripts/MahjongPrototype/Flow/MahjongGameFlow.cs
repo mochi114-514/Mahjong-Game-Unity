@@ -125,7 +125,7 @@ namespace MahjongPrototype
             }
 
             PlayerSeat currentPlayerSeat = gameState.GetPlayerSeat(gameState.CurrentSeat);
-            if (gameState.HasDrawnThisTurn || currentPlayerSeat.HasDrawnTile)
+            if (currentPlayerSeat.HasDrawnTile)
             {
                 Warn("Already drew this turn. Discard a tile first.");
                 return;
@@ -142,7 +142,6 @@ namespace MahjongPrototype
 
             currentPlayerSeat.SetDrawnTile(result.Tile);
             HandleSkillResolutionLogs(result);
-            gameState.HasDrawnThisTurn = true;
             NotifyTileDrawn(result);
             LogTileDrawn(result);
             CheckWinPrototype();
@@ -159,7 +158,8 @@ namespace MahjongPrototype
                 return;
             }
 
-            if (!gameState.HasDrawnThisTurn)
+            PlayerSeat currentPlayerSeat = gameState.GetPlayerSeat(gameState.CurrentSeat);
+            if (!currentPlayerSeat.HasDrawnTile)
             {
                 Warn("Draw before discarding.");
                 return;
@@ -171,13 +171,6 @@ namespace MahjongPrototype
                 return;
             }
 
-            PlayerSeat currentPlayerSeat = gameState.GetPlayerSeat(gameState.CurrentSeat);
-            if (!currentPlayerSeat.HasDrawnTile)
-            {
-                Warn("Drawn tile is missing. Draw before discarding.");
-                return;
-            }
-
             DiscardResult result = discardService.DiscardTile(gameState, gameState.CurrentSeat, handIndex);
             if (!result.Success)
             {
@@ -186,7 +179,6 @@ namespace MahjongPrototype
             }
 
             CommitDrawnTileToHandIfPresent(gameState.CurrentSeat);
-            gameState.HasDrawnThisTurn = false;
             NotifyTileDiscarded(result.Record);
             LogTileDiscarded(result.Record);
             AdvanceTurn();
@@ -203,7 +195,8 @@ namespace MahjongPrototype
                 return;
             }
 
-            if (!gameState.HasDrawnThisTurn)
+            PlayerSeat currentPlayerSeat = gameState.GetPlayerSeat(gameState.CurrentSeat);
+            if (!currentPlayerSeat.HasDrawnTile)
             {
                 Warn("Draw before discarding.");
                 return;
@@ -215,13 +208,6 @@ namespace MahjongPrototype
                 return;
             }
 
-            PlayerSeat currentPlayerSeat = gameState.GetPlayerSeat(gameState.CurrentSeat);
-            if (!currentPlayerSeat.HasDrawnTile)
-            {
-                Warn("Drawn tile is missing. Draw before discarding.");
-                return;
-            }
-
             DiscardResult result = discardService.DiscardDrawnTile(gameState, gameState.CurrentSeat);
             if (!result.Success)
             {
@@ -229,7 +215,6 @@ namespace MahjongPrototype
                 return;
             }
 
-            gameState.HasDrawnThisTurn = false;
             NotifyTileDiscarded(result.Record);
             LogTileDiscarded(result.Record);
             AdvanceTurn();
@@ -347,7 +332,6 @@ namespace MahjongPrototype
                 }
             }
 
-            gameState.HasDrawnThisTurn = false;
             ApplyAutoSortToActiveHandsIfEnabled("InitialDeal");
         }
 

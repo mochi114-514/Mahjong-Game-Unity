@@ -40,7 +40,6 @@ namespace MahjongPrototype.Domain
         public Wall Wall { get; }
         public SeatId CurrentSeat { get; set; }
         public int TurnIndex { get; set; }
-        public bool HasDrawnThisTurn { get; set; }
         public bool IsRoundEnded { get; set; }
         public IReadOnlyList<SeatId> ActiveSeats => activeSeats;
         public IReadOnlyList<DiscardRecord> Discards => discards;

@@ -38,6 +38,19 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
+        public void DrawnTile_CanBeClearedWithoutChangingHand()
+        {
+            object playerSeat = CreatePlayerSeat();
+            AddHandTile(playerSeat, "1m");
+            SetDrawnTile(playerSeat, CreateTile("E"));
+
+            ClearDrawnTile(playerSeat);
+
+            Assert.That(HasDrawnTile(playerSeat), Is.False);
+            Assert.That(GetHandDisplayString(playerSeat), Is.EqualTo("1m"));
+        }
+
+        [Test]
         public void SortingHand_DoesNotChangeDrawnTile()
         {
             object playerSeat = CreatePlayerSeat();
@@ -88,6 +101,13 @@ namespace MahjongPrototype.Tests
             MethodInfo method = GetPlayerSeatType().GetMethod("CommitDrawnTileToHand");
             Assert.That(method, Is.Not.Null);
             return (bool)method.Invoke(playerSeat, null);
+        }
+
+        private static void ClearDrawnTile(object playerSeat)
+        {
+            MethodInfo method = GetPlayerSeatType().GetMethod("ClearDrawnTile");
+            Assert.That(method, Is.Not.Null);
+            method.Invoke(playerSeat, null);
         }
 
         private static bool HasDrawnTile(object playerSeat)
