@@ -19,7 +19,11 @@ namespace MahjongPrototype.Services
             if (!playerSeat.Hand.TryRemoveAt(handIndex, out Tile discardedTile))
                 return DiscardResult.Failed("Hand index is out of range.");
 
-            DiscardRecord record = new DiscardRecord(actorSeat, discardedTile, gameState.TurnIndex);
+            DiscardRecord record = new DiscardRecord(
+                actorSeat,
+                discardedTile,
+                gameState.TurnIndex,
+                DiscardSource.Hand);
             gameState.AddDiscard(record);
             return DiscardResult.Discarded(record);
         }
@@ -38,7 +42,11 @@ namespace MahjongPrototype.Services
             if (!playerSeat.TryTakeDrawnTile(out Tile discardedTile))
                 return DiscardResult.Failed("Drawn tile is not available.");
 
-            DiscardRecord record = new DiscardRecord(actorSeat, discardedTile, gameState.TurnIndex);
+            DiscardRecord record = new DiscardRecord(
+                actorSeat,
+                discardedTile,
+                gameState.TurnIndex,
+                DiscardSource.DrawnTile);
             gameState.AddDiscard(record);
             return DiscardResult.Discarded(record);
         }
