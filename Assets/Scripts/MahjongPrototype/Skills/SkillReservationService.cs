@@ -26,12 +26,12 @@ namespace MahjongPrototype.Skills
             return reservations.ContainsKey(ownerSeat);
         }
 
-        public bool TryConsumeForTurn(SeatId currentSeat, out PendingSkillReservation reservation)
+        public bool TryConsumeForTurn(SeatId currentTurn, out PendingSkillReservation reservation)
         {
-            if (!reservations.TryGetValue(currentSeat, out reservation))
+            if (!reservations.TryGetValue(currentTurn, out reservation))
                 return false;
 
-            reservations.Remove(currentSeat);
+            reservations.Remove(currentTurn);
             return true;
         }
 

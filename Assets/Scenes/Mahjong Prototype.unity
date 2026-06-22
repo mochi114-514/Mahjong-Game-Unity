@@ -358,7 +358,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f8aa44daca92c014cbe3d2be623c3cdf, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI.MahjongUiDisplayController
-  currentSeatText: {fileID: 1553984471}
+  currentTurnText: {fileID: 1553984471}
   selfWindText: {fileID: 1955799014}
   turnIndexText: {fileID: 1222914383}
   wallCountText: {fileID: 1917315620}
@@ -1254,8 +1254,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.MahjongGameFlow
   viewerSeat: 0
   initialActiveSeats: 00000000
-  randomizeSelfWind: 1
-  fixedSelfWind: 0
+  randomizeSelfSeat: 1
+  fixedSelfSeat: 0
   initialHandTileCount: 13
   autoStart: 1
   enableAutoDraw: 1
@@ -2224,7 +2224,7 @@ GameObject:
   - component: {fileID: 1553984472}
   - component: {fileID: 1553984471}
   m_Layer: 5
-  m_Name: CurrentSeatText
+  m_Name: CurrentTurnText
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2246,8 +2246,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 200, y: 50}
+  m_AnchoredPosition: {x: 19, y: 0}
+  m_SizeDelta: {x: 240, y: 50}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1553984471
 MonoBehaviour:
@@ -2296,8 +2296,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 36
-  m_fontSizeBase: 36
+  m_fontSize: 30
+  m_fontSizeBase: 30
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -3073,7 +3073,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -372, y: -108}
+  m_AnchoredPosition: {x: -357, y: -148}
   m_SizeDelta: {x: 200, y: 50}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1955799014

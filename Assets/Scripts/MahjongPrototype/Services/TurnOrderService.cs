@@ -5,7 +5,7 @@ namespace MahjongPrototype.Services
 {
     public sealed class TurnOrderService
     {
-        public SeatId GetNextSeat(IReadOnlyList<SeatId> activeSeats, SeatId currentSeat)
+        public SeatId GetNextSeat(IReadOnlyList<SeatId> activeSeats, SeatId currentTurn)
         {
             if (activeSeats == null || activeSeats.Count <= 0)
                 return SeatId.East;
@@ -13,7 +13,7 @@ namespace MahjongPrototype.Services
             int currentIndex = -1;
             for (int i = 0; i < activeSeats.Count; i++)
             {
-                if (activeSeats[i] == currentSeat)
+                if (activeSeats[i] == currentTurn)
                 {
                     currentIndex = i;
                     break;

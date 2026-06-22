@@ -35,14 +35,15 @@ namespace MahjongPrototype.Domain
             }
 
             InitializeSeatSlots();
-            SetSelfWind(SeatId.East);
-            CurrentSeat = activeSeats[0];
+            SetSelfSeat(SeatId.East);
+            CurrentTurn = activeSeats[0];
             TurnIndex = 1;
         }
 
         public Wall Wall { get; }
-        public SeatId SelfWind { get; private set; } = SeatId.East;
-        public SeatId CurrentSeat { get; set; }
+        public SeatId SelfSeat => GetSelfSeatSlot().Wind;
+        public SeatId SelfWind => SelfSeat;
+        public SeatId CurrentTurn { get; set; }
         public int TurnIndex { get; set; }
         public bool IsRoundEnded { get; set; }
         public IReadOnlyList<SeatId> ActiveSeats => activeSeats;
@@ -52,8 +53,38 @@ namespace MahjongPrototype.Domain
 
         public void SetSelfWind(SeatId selfWind)
         {
-            SelfWind = selfWind;
-            AssignSelfSeat(selfWind);
+            SetSelfSeat(selfWind);
+        }
+
+        public void SetSelfSeat(SeatId selfSeat)
+        {
+            AssignSelfSeat(selfSeat);
+        }
+
+        public SeatSlot GetSelfSeatSlot()
+        {
+            SeatSlot selfSlot = null;
+            for (int i = 0; i < seatSlots.Count; i++)
+            {
+                SeatSlot slot = seatSlots[i];
+                if (!slot.HasSelfPlayer)
+                    continue;
+
+                if (selfSlot != null)
+                    throw new InvalidOperationException("Multiple self seat slots are assigned.");
+
+                selfSlot = slot;
+            }
+
+            if (selfSlot == null)
+                throw new InvalidOperationException("Self seat slot is not assigned.");
+
+            return selfSlot;
+        }
+
+        public bool IsSelfSeat(SeatId seat)
+        {
+            return GetSeatSlot(seat).HasSelfPlayer;
         }
 
         public SeatSlot GetSeatSlot(SeatId wind)
@@ -134,12 +165,12 @@ namespace MahjongPrototype.Domain
             seatSlots.Add(new SeatSlot(SeatId.North));
         }
 
-        private void AssignSelfSeat(SeatId selfWind)
+        private void AssignSelfSeat(SeatId selfSeat)
         {
             for (int i = 0; i < seatSlots.Count; i++)
             {
                 SeatSlot slot = seatSlots[i];
-                if (slot.Wind == selfWind)
+                if (slot.Wind == selfSeat)
                     slot.AssignSelf();
                 else
                     slot.Clear();
@@ -160,12 +191,12 @@ namespace MahjongPrototype.Domain
         public bool IsEmpty => !HasSelfPlayer;
         public string StateLabel => HasSelfPlayer ? "Self" : "Empty";
 
-        public void AssignSelf()
+        internal void AssignSelf()
         {
             HasSelfPlayer = true;
         }
 
-        public void Clear()
+        internal void Clear()
         {
             HasSelfPlayer = false;
         }

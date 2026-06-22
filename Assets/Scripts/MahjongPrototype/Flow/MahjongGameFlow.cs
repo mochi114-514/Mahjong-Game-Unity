@@ -5,6 +5,7 @@ using MahjongPrototype.Notifications;
 using MahjongPrototype.Services;
 using MahjongPrototype.Skills;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace MahjongPrototype
 {
@@ -16,9 +17,11 @@ namespace MahjongPrototype
         [SerializeField] private SeatId viewerSeat = SeatId.East;
         [SerializeField] private List<SeatId> initialActiveSeats = new List<SeatId> { SeatId.East };
 
-        [Header("Self Wind")]
-        [SerializeField] private bool randomizeSelfWind = true;
-        [SerializeField] private SeatId fixedSelfWind = SeatId.East;
+        [Header("Self Seat")]
+        [FormerlySerializedAs("randomizeSelfWind")]
+        [SerializeField] private bool randomizeSelfSeat = true;
+        [FormerlySerializedAs("fixedSelfWind")]
+        [SerializeField] private SeatId fixedSelfSeat = SeatId.East;
 
         [Header("Round Setup")]
         [SerializeField, Min(1)] private int initialHandTileCount = 13;
@@ -101,22 +104,20 @@ namespace MahjongPrototype
 
             int? seed = useFixedRandomSeed ? fixedRandomSeed : (int?)null;
             gameState = new MahjongGameState(Wall.CreateStandardShuffled(seed), initialActiveSeats);
-            gameState.SetSelfWind(ResolveSelfWind());
-            playerTurnManager.InitializeRound(gameState, gameState.CurrentSeat);
+            gameState.SetSelfSeat(ResolveSelfSeat());
+            playerTurnManager.InitializeRound(gameState, gameState.CurrentTurn);
 
-            LogSelfWindSelected(gameState.SelfWind);
             LogSeatSlotsAssigned();
             NotifyRoundStarted();
             LogRoundStarted();
 
             DealInitialHands();
-            StartTurn(gameState.CurrentSeat, gameState.TurnIndex);
+            StartTurn(gameState.CurrentTurn, gameState.TurnIndex);
         }
 
         public void RetryPrototype()
         {
-            // PROTOTYPE: シーン再読み込みではなく、現在のFlow内状態だけを初期化する。
-            StartNewRound();
+            // PROTOTYPE: 繧ｷ繝ｼ繝ｳ蜀崎ｪｭ縺ｿ霎ｼ縺ｿ縺ｧ縺ｯ縺ｪ縺上∫樟蝨ｨ縺ｮFlow蜀・憾諷九□縺代ｒ蛻晄悄蛹悶☆繧九・            StartNewRound();
         }
 
         public void RequestDraw()
@@ -150,7 +151,7 @@ namespace MahjongPrototype
                 return false;
             }
 
-            PlayerSeat currentPlayerSeat = gameState.GetPlayerSeat(gameState.CurrentSeat);
+            PlayerSeat currentPlayerSeat = gameState.GetPlayerSeat(gameState.CurrentTurn);
             if (currentPlayerSeat.HasDrawnTile)
             {
                 if (warnOnBlocked)
@@ -160,7 +161,7 @@ namespace MahjongPrototype
                 return false;
             }
 
-            DrawResult result = drawService.DrawTile(gameState.CurrentSeat, gameState, DrawPurpose.TurnDraw);
+            DrawResult result = drawService.DrawTile(gameState.CurrentTurn, gameState, DrawPurpose.TurnDraw);
 
             if (!result.Success)
             {
@@ -174,7 +175,7 @@ namespace MahjongPrototype
             LogTurnDebug(
                 completedEventName,
                 $"phase={playerTurnManager.Phase}; drawnTile={result.Tile}",
-                seat: gameState.CurrentSeat,
+                seat: gameState.CurrentTurn,
                 tile: result.Tile,
                 turnIndex: gameState.TurnIndex);
             HandleSkillResolutionLogs(result);
@@ -196,7 +197,7 @@ namespace MahjongPrototype
                 return;
             }
 
-            PlayerSeat currentPlayerSeat = gameState.GetPlayerSeat(gameState.CurrentSeat);
+            PlayerSeat currentPlayerSeat = gameState.GetPlayerSeat(gameState.CurrentTurn);
             if (!currentPlayerSeat.HasDrawnTile)
             {
                 Warn("Draw before discarding.");
@@ -211,14 +212,14 @@ namespace MahjongPrototype
                 return;
             }
 
-            DiscardResult result = discardService.DiscardTile(gameState, gameState.CurrentSeat, handIndex);
+            DiscardResult result = discardService.DiscardTile(gameState, gameState.CurrentTurn, handIndex);
             if (!result.Success)
             {
                 Warn(result.Reason);
                 return;
             }
 
-            CommitDrawnTileToHandIfPresent(gameState.CurrentSeat);
+            CommitDrawnTileToHandIfPresent(gameState.CurrentTurn);
             playerTurnManager.RefreshPhaseFromState(gameState);
             LogTurnDebug(
                 "DiscardCompleted",
@@ -243,7 +244,7 @@ namespace MahjongPrototype
                 return;
             }
 
-            PlayerSeat currentPlayerSeat = gameState.GetPlayerSeat(gameState.CurrentSeat);
+            PlayerSeat currentPlayerSeat = gameState.GetPlayerSeat(gameState.CurrentTurn);
             if (!currentPlayerSeat.HasDrawnTile)
             {
                 Warn("Draw before discarding.");
@@ -258,7 +259,7 @@ namespace MahjongPrototype
                 return;
             }
 
-            DiscardResult result = discardService.DiscardDrawnTile(gameState, gameState.CurrentSeat);
+            DiscardResult result = discardService.DiscardDrawnTile(gameState, gameState.CurrentTurn);
             if (!result.Success)
             {
                 Warn(result.Reason);
@@ -279,7 +280,7 @@ namespace MahjongPrototype
 
         public void RequestForceDrawSkill(string targetTileCode)
         {
-            RequestForceDrawSkillForSeat(gameState != null ? gameState.CurrentSeat : viewerSeat, targetTileCode);
+            RequestForceDrawSkillForSeat(gameState != null ? gameState.CurrentTurn : viewerSeat, targetTileCode);
         }
 
         public void RequestForceDrawSkillForSeat(SeatId ownerSeat, string targetTileCode)
@@ -305,7 +306,7 @@ namespace MahjongPrototype
                 return;
             }
 
-            if (ownerSeat != gameState.CurrentSeat)
+            if (ownerSeat != gameState.CurrentTurn)
             {
                 ReserveForceDrawSkill(ownerSeat, targetTile);
                 return;
@@ -336,7 +337,7 @@ namespace MahjongPrototype
                 ownerSeat,
                 SkillEffectKind.ForceDrawTile,
                 targetTile,
-                gameState.CurrentSeat,
+                gameState.CurrentTurn,
                 gameState.TurnIndex);
 
             if (!skillReservationService.Reserve(reservation, out string reserveReason))
@@ -385,7 +386,7 @@ namespace MahjongPrototype
             LogAutoSortChanged(enabled);
 
             if (enabled && gameState != null)
-                ApplyAutoSort(gameState.CurrentSeat, "ToggleEnabled", true);
+                ApplyAutoSort(gameState.CurrentTurn, "ToggleEnabled", true);
         }
 
         public void RequestDeclareWin()
@@ -435,7 +436,7 @@ namespace MahjongPrototype
 
         private void DealInitialHands()
         {
-            // PROTOTYPE: 最初はactiveSeatsだけに固定枚数を配る。正式な配牌順や親処理は後回し。
+            // PROTOTYPE: Deal a fixed starting hand only to active seats.
             for (int seatIndex = 0; seatIndex < gameState.ActiveSeats.Count; seatIndex++)
             {
                 SeatId seat = gameState.ActiveSeats[seatIndex];
@@ -459,7 +460,7 @@ namespace MahjongPrototype
 
         private void AdvanceTurn()
         {
-            SeatId fromSeat = gameState.CurrentSeat;
+            SeatId fromSeat = gameState.CurrentTurn;
             SeatId nextSeat = playerTurnManager.EndTurnAndSelectNext(gameState, gameState.ActiveSeats);
             LogTurnDebug(
                 "EndTurn",
@@ -523,11 +524,11 @@ namespace MahjongPrototype
 
         private void CheckWinPrototype()
         {
-            // PROTOTYPE: 役判定、点数計算、ロン、鳴き面子はまだ扱わない。
-            IReadOnlyList<Tile> handTiles = BuildWinCheckTiles(gameState.CurrentSeat);
+            // PROTOTYPE: Check only a simple self-draw win shape.
+            IReadOnlyList<Tile> handTiles = BuildWinCheckTiles(gameState.CurrentTurn);
             bool isWin = handWinChecker.CanWinStandardHand(handTiles);
-            SetWinDecisionPending(isWin, gameState.CurrentSeat, gameState.TurnIndex);
-            eventNotifier?.NotifyWinChecked(gameState.CurrentSeat, gameState.TurnIndex, isWin);
+            SetWinDecisionPending(isWin, gameState.CurrentTurn, gameState.TurnIndex);
+            eventNotifier?.NotifyWinChecked(gameState.CurrentTurn, gameState.TurnIndex, isWin);
 
             DevLog.Record(
                 "Mahjong",
@@ -535,7 +536,7 @@ namespace MahjongPrototype
                 isWin
                     ? "isWin=true; standard hand shape complete."
                     : "isWin=false; standard hand shape incomplete.",
-                seat: gameState.CurrentSeat,
+                seat: gameState.CurrentTurn,
                 hand: GetCurrentHandText(),
                 wallCount: gameState.Wall.Count,
                 turnIndex: gameState.TurnIndex);
@@ -586,7 +587,7 @@ namespace MahjongPrototype
                 return;
             }
 
-            playerTurnManager.BeginTurn(gameState, gameState.CurrentSeat);
+            playerTurnManager.BeginTurn(gameState, gameState.CurrentTurn);
         }
 
         private void ClearWinDecision()
@@ -601,7 +602,7 @@ namespace MahjongPrototype
             LogTurnDebug(
                 "RoundEnded",
                 $"phase={playerTurnManager.Phase}; reason={reason}",
-                seat: gameState.CurrentSeat,
+                seat: gameState.CurrentTurn,
                 turnIndex: gameState.TurnIndex);
             eventNotifier?.NotifyRoundEnded(reason);
 
@@ -609,7 +610,7 @@ namespace MahjongPrototype
                 "GameFlow",
                 "RoundEnded",
                 reason,
-                seat: gameState.CurrentSeat,
+                seat: gameState.CurrentTurn,
                 wallCount: gameState.Wall.Count,
                 turnIndex: gameState.TurnIndex);
         }
@@ -655,10 +656,10 @@ namespace MahjongPrototype
                 initialActiveSeats.Add(SeatId.East);
         }
 
-        private SeatId ResolveSelfWind()
+        private SeatId ResolveSelfSeat()
         {
-            if (!randomizeSelfWind)
-                return fixedSelfWind;
+            if (!randomizeSelfSeat)
+                return fixedSelfSeat;
 
             return (SeatId)Random.Range(0, 4);
         }
@@ -691,11 +692,11 @@ namespace MahjongPrototype
             if (gameState == null)
                 return;
 
-            PlayerSeat currentPlayerSeat = gameState.GetPlayerSeat(gameState.CurrentSeat);
+            PlayerSeat currentPlayerSeat = gameState.GetPlayerSeat(gameState.CurrentTurn);
             LogTurnDebug(
                 eventName,
                 $"reason={reason}; phase={playerTurnManager.Phase}; hasDrawnTile={currentPlayerSeat.HasDrawnTile}",
-                seat: gameState.CurrentSeat,
+                seat: gameState.CurrentTurn,
                 turnIndex: gameState.TurnIndex);
         }
 
@@ -825,17 +826,9 @@ namespace MahjongPrototype
                 "GameFlow",
                 "RoundStarted",
                 "Round started.",
-                seat: gameState.CurrentSeat,
+                seat: gameState.CurrentTurn,
                 wallCount: gameState.Wall.Count,
                 turnIndex: gameState.TurnIndex);
-        }
-
-        private void LogSelfWindSelected(SeatId selfWind)
-        {
-            DevLog.Record(
-                "GameFlow",
-                "SelfWindSelected",
-                $"SelfWind = {selfWind}");
         }
 
         private void LogSeatSlotsAssigned()
@@ -937,7 +930,7 @@ namespace MahjongPrototype
             DevLog.Record(
                 "Skill",
                 "SkillActivatedBeforeDraw",
-                $"skillType={effect.Kind}; currentTurnSeat={gameState.CurrentSeat}",
+                $"skillType={effect.Kind}; currentTurnSeat={gameState.CurrentTurn}",
                 seat: ownerSeat,
                 tile: effect.TargetTile,
                 hand: GetHandText(ownerSeat),
@@ -969,7 +962,7 @@ namespace MahjongPrototype
             DevLog.Record(
                 "Skill",
                 "SkillReservationRejected",
-                $"skillType={skillEffectKind}; reason={reason}; currentTurnSeat={gameState.CurrentSeat}",
+                $"skillType={skillEffectKind}; reason={reason}; currentTurnSeat={gameState.CurrentTurn}",
                 seat: ownerSeat,
                 tile: targetTile,
                 hand: GetHandText(ownerSeat),
@@ -1058,7 +1051,7 @@ namespace MahjongPrototype
                 "Mahjong",
                 enabled ? "AutoSortEnabled" : "AutoSortDisabled",
                 enabled ? "Auto sort enabled." : "Auto sort disabled.",
-                seat: gameState.CurrentSeat,
+                seat: gameState.CurrentTurn,
                 hand: GetCurrentHandText(),
                 wallCount: gameState.Wall.Count,
                 turnIndex: gameState.TurnIndex);
@@ -1066,7 +1059,7 @@ namespace MahjongPrototype
 
         private string GetCurrentHandText()
         {
-            return gameState == null ? string.Empty : GetHandText(gameState.CurrentSeat);
+            return gameState == null ? string.Empty : GetHandText(gameState.CurrentTurn);
         }
 
         private string GetHandText(SeatId seat)

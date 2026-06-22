@@ -11,16 +11,17 @@ namespace MahjongPrototype.UI
     public sealed class MahjongUiDisplayController : MonoBehaviour
     {
         [Header("Status Text")]
-        [Tooltip("現在のSeat表示用TMP Textです。")]
-        [SerializeField] private TMP_Text currentSeatText;
+        [Tooltip("Displays the seat whose turn is active.")]
+        [SerializeField] private TMP_Text currentTurnText;
+        [Tooltip("Displays the self seat wind.")]
         [SerializeField] private TMP_Text selfWindText;
-        [Tooltip("現在のターン番号表示用TMP Textです。")]
+        [Tooltip("Displays the current turn index.")]
         [SerializeField] private TMP_Text turnIndexText;
-        [Tooltip("山の残り枚数表示用TMP Textです。")]
+        [Tooltip("Displays the remaining wall tile count.")]
         [SerializeField] private TMP_Text wallCountText;
-        [Tooltip("現在のActiveSkillEffect表示用TMP Textです。")]
+        [Tooltip("Displays active skill effects.")]
         [SerializeField] private TMP_Text activeSkillText;
-        [Tooltip("捨て牌一覧表示用TMP Textです。")]
+        [Tooltip("Displays discard log text.")]
         [SerializeField] private TMP_Text discardText;
 
         private bool warnedMissingStatusText;
@@ -44,8 +45,8 @@ namespace MahjongPrototype.UI
             CacheReferences();
             WarnMissingStaticReferences();
 
-            SetText(currentSeatText, $"Seat: {state.CurrentSeat}");
-            SetText(selfWindText, $"SelfWind: {state.SelfWind}");
+            SetText(currentTurnText, $"CurrentTurn: {state.CurrentTurn}");
+            SetText(selfWindText, state.SelfSeat.ToString());
             SetText(turnIndexText, $"Turn: {state.TurnIndex}");
             SetText(wallCountText, $"Wall: {state.Wall.Count}");
             SetText(activeSkillText, BuildActiveSkillText(state));
@@ -54,8 +55,8 @@ namespace MahjongPrototype.UI
 
         private void CacheReferences()
         {
-            if (currentSeatText == null)
-                currentSeatText = FindTextByName("CurrentSeatText");
+            if (currentTurnText == null)
+                currentTurnText = FindTextByName("CurrentTurnText");
 
             if (selfWindText == null)
                 selfWindText = FindTextByName("SelfWindText");
@@ -120,7 +121,7 @@ namespace MahjongPrototype.UI
 
         private void WarnMissingStaticReferences()
         {
-            if (currentSeatText == null || turnIndexText == null || wallCountText == null || activeSkillText == null)
+            if (currentTurnText == null || turnIndexText == null || wallCountText == null || activeSkillText == null)
                 WarnMissingOnce(ref warnedMissingStatusText, "One or more status TMP_Text references are not assigned.");
         }
 

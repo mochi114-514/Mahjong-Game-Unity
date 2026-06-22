@@ -15,7 +15,7 @@ namespace MahjongPrototype.Skills
             if (gameState.IsRoundEnded)
                 return SkillActivationResult.Failed("Round already ended.");
 
-            if (gameState.CurrentSeat != actorSeat)
+            if (gameState.CurrentTurn != actorSeat)
                 return SkillActivationResult.Failed("Skill can only be activated during the actor's turn.");
 
             if (gameState.HasActiveSkillEffect(actorSeat, SkillEffectKind.ForceDrawTile))

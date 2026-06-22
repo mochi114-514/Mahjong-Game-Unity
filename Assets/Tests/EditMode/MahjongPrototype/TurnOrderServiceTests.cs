@@ -23,16 +23,16 @@ namespace MahjongPrototype.Tests
         [TestCase("West", "North")]
         [TestCase("North", "East")]
         public void GetNextSeat_ReturnsNextSeat_WhenMultipleSeatsAreActive(
-            string currentSeat,
+            string currentTurn,
             string expectedSeat)
         {
-            object result = GetNextSeat(CreateSeatList("East", "South", "West", "North"), currentSeat);
+            object result = GetNextSeat(CreateSeatList("East", "South", "West", "North"), currentTurn);
 
             Assert.That(result.ToString(), Is.EqualTo(expectedSeat));
         }
 
         [Test]
-        public void GetNextSeat_ReturnsFirstActiveSeat_WhenCurrentSeatIsNotActive()
+        public void GetNextSeat_ReturnsFirstActiveSeat_WhenCurrentTurnIsNotActive()
         {
             object result = GetNextSeat(CreateSeatList("East", "South"), "West");
 
@@ -55,14 +55,14 @@ namespace MahjongPrototype.Tests
             Assert.That(result.ToString(), Is.EqualTo("East"));
         }
 
-        private static object GetNextSeat(object activeSeats, string currentSeatName)
+        private static object GetNextSeat(object activeSeats, string currentTurnName)
         {
             Type serviceType = Type.GetType(TurnOrderServiceTypeName, true);
             object service = Activator.CreateInstance(serviceType);
             MethodInfo method = serviceType.GetMethod("GetNextSeat");
             Assert.That(method, Is.Not.Null);
 
-            return method.Invoke(service, new[] { activeSeats, ParseSeat(currentSeatName) });
+            return method.Invoke(service, new[] { activeSeats, ParseSeat(currentTurnName) });
         }
 
         private static IList CreateSeatList(params string[] seatNames)

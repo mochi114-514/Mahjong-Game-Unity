@@ -10,36 +10,36 @@ namespace MahjongPrototype.UI
     public sealed class MahjongPrototypeUiManager : MonoBehaviour
     {
         [Header("Flow")]
-        [Tooltip("ゲーム進行の指示役です。MahjongPrototypeRoot の MahjongGameFlow を割り当てます。")]
+        [Tooltip("Game flow controller for the prototype.")]
         [SerializeField] private MahjongGameFlow gameFlow;
-        [Tooltip("決定済みイベントの通知役です。MahjongPrototypeRoot の MahjongEventNotifier を割り当てます。")]
+        [Tooltip("Event notifier used to refresh UI after game events.")]
         [SerializeField] private MahjongEventNotifier eventNotifier;
 
         [Header("Display")]
-        [Tooltip("Status/ActiveSkill/Discard の表示更新Controllerです。")]
+        [Tooltip("Controller for status, skill, and discard text.")]
         [SerializeField] private MahjongUiDisplayController displayController;
 
         [Header("Tile Areas")]
-        [Tooltip("手牌ボタン表示のViewです。未設定ならPlay時に同じGameObjectへ追加します。")]
+        [Tooltip("View for hand tiles.")]
         [SerializeField] private MahjongHandView handView;
         [SerializeField] private MahjongDrawnTileView drawnTileView;
         [SerializeField] private MahjongDiscardRiverView discardRiverView;
-        [Tooltip("手牌ボタンを生成する親RectTransformです。Canvas/HandArea を割り当てます。")]
+        [Tooltip("Container for hand tile buttons.")]
         [SerializeField] private RectTransform handContainer;
         [SerializeField] private RectTransform drawnTileContainer;
         [SerializeField] private RectTransform eastDiscardRiverContainer;
-        [Tooltip("手牌1枚分のTileButtonViewテンプレートまたはPrefabです。")]
+        [Tooltip("Prefab used to render a single tile button.")]
         [SerializeField] private TileButtonView tileButtonPrefab;
 
         [Header("Input")]
-        [Tooltip("Draw/SkillDraw/Retry の入力受付Controllerです。")]
+        [Tooltip("Controller for draw, skill, retry, and win decision input.")]
         [SerializeField] private MahjongUiInputController inputController;
 
         [Header("Win Decision")]
         [SerializeField] private MahjongWinDecisionController winDecisionController;
 
         [Header("Log Preview")]
-        [Tooltip("画面ログ表示のControllerです。RecentLogText と表示行数はこのController側で設定します。")]
+        [Tooltip("Controller for the on-screen recent log preview.")]
         [SerializeField] private MahjongLogPreviewController logPreviewController;
 
         private bool warnedMissingFlow;
@@ -436,7 +436,7 @@ namespace MahjongPrototype.UI
                 EnsureHandView();
 
             if (handView != null)
-                handView.Rebuild(state.GetPlayerSeat(state.CurrentSeat).Hand.GetTiles());
+                handView.Rebuild(state.GetPlayerSeat(state.CurrentTurn).Hand.GetTiles());
         }
 
         private void RefreshDrawnTile(MahjongGameState state)
@@ -445,7 +445,7 @@ namespace MahjongPrototype.UI
                 EnsureDrawnTileView();
 
             if (drawnTileView != null)
-                drawnTileView.Rebuild(state.GetPlayerSeat(state.CurrentSeat).DrawnTile);
+                drawnTileView.Rebuild(state.GetPlayerSeat(state.CurrentTurn).DrawnTile);
         }
 
         private void RefreshDiscardRiver(MahjongGameState state)

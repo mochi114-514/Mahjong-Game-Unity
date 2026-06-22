@@ -67,12 +67,12 @@ namespace MahjongPrototype.Tests
                 Invoke(gameFlow, "StartNewRound");
                 object gameState = GetProperty(gameFlow, "CurrentState");
 
-                SetProperty(gameState, "CurrentSeat", ParseSeat("South"));
+                SetProperty(gameState, "CurrentTurn", ParseSeat("South"));
                 Invoke(gameFlow, "RequestForceDrawSkillForSeat", ParseSeat("East"), "3m");
 
                 Assert.That(GetActiveSkillEffectCount(gameState), Is.EqualTo(0));
 
-                SetProperty(gameState, "CurrentSeat", ParseSeat("East"));
+                SetProperty(gameState, "CurrentTurn", ParseSeat("East"));
                 Invoke(gameFlow, "StartTurn", ParseSeat("East"), GetProperty(gameState, "TurnIndex"));
 
                 Assert.That(GetActiveSkillEffectCount(gameState), Is.EqualTo(1));
@@ -96,12 +96,12 @@ namespace MahjongPrototype.Tests
                 Invoke(gameFlow, "StartNewRound");
                 object gameState = GetProperty(gameFlow, "CurrentState");
 
-                SetProperty(gameState, "CurrentSeat", ParseSeat("South"));
+                SetProperty(gameState, "CurrentTurn", ParseSeat("South"));
                 Invoke(gameFlow, "RequestForceDrawSkillForSeat", ParseSeat("East"), "4m");
 
                 object eastSeat = Invoke(gameState, "GetPlayerSeat", ParseSeat("East"));
                 Invoke(eastSeat, "ClearDrawnTile");
-                SetProperty(gameState, "CurrentSeat", ParseSeat("East"));
+                SetProperty(gameState, "CurrentTurn", ParseSeat("East"));
                 Invoke(gameFlow, "StartTurn", ParseSeat("East"), GetProperty(gameState, "TurnIndex"));
 
                 Assert.That(GetProperty(eastSeat, "DrawnTile").ToString(), Is.EqualTo("4m"));
@@ -148,7 +148,7 @@ namespace MahjongPrototype.Tests
             Invoke(skillSystem, "ActivateForceDrawTile", gameState, ParseSeat("East"), CreateTile("6m"));
             Assert.That(GetActiveSkillEffectCount(gameState), Is.EqualTo(1));
 
-            SetProperty(gameState, "CurrentSeat", ParseSeat("South"));
+            SetProperty(gameState, "CurrentTurn", ParseSeat("South"));
             object drawResult = Invoke(drawService, "DrawTile", ParseSeat("South"), gameState, ParseDrawPurpose("TurnDraw"));
 
             Assert.That(GetProperty(drawResult, "SkillWasPresent"), Is.False);

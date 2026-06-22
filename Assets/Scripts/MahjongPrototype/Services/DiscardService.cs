@@ -12,7 +12,7 @@ namespace MahjongPrototype.Services
             if (gameState == null)
                 return DiscardResult.Failed("GameState is not available.");
 
-            if (gameState.CurrentSeat != actorSeat)
+            if (gameState.CurrentTurn != actorSeat)
                 return DiscardResult.Failed("Only current seat can discard.");
 
             PlayerSeat playerSeat = gameState.GetPlayerSeat(actorSeat);
@@ -35,7 +35,7 @@ namespace MahjongPrototype.Services
             if (gameState == null)
                 return DiscardResult.Failed("GameState is not available.");
 
-            if (gameState.CurrentSeat != actorSeat)
+            if (gameState.CurrentTurn != actorSeat)
                 return DiscardResult.Failed("Only current seat can discard.");
 
             PlayerSeat playerSeat = gameState.GetPlayerSeat(actorSeat);
