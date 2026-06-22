@@ -77,6 +77,18 @@ namespace MahjongPrototype.Logging
                 case "SkillActivated":
                     return TrimLine($"Skill target={entry.Tile}");
 
+                case "SkillReserved":
+                    return TrimLine($"SkillReserved {entry.Seat} target={entry.Tile} {entry.Message}");
+
+                case "SkillActivatedBeforeDraw":
+                    return TrimLine($"SkillBeforeDraw {entry.Seat} target={entry.Tile}");
+
+                case "ReservationConsumed":
+                    return TrimLine($"ReservationConsumed {entry.Seat} target={entry.Tile}");
+
+                case "SkillReservationRejected":
+                    return TrimLine($"SkillReserveRejected {entry.Seat} {entry.Message}");
+
                 case "SkillEffectRegistered":
                     return string.Empty;
 

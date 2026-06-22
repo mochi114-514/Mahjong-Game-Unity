@@ -42,6 +42,7 @@ namespace MahjongPrototype
         private readonly DiscardService discardService = new DiscardService();
         private readonly HandWinChecker handWinChecker = new HandWinChecker();
         private readonly SkillSystem skillSystem = new SkillSystem();
+        private readonly SkillReservationService skillReservationService = new SkillReservationService();
 
         private MahjongGameState gameState;
         private bool isWinDecisionPending;
@@ -90,6 +91,7 @@ namespace MahjongPrototype
 
             DevLog.Initialize(enableDevLog, enableReleaseBuildLogging);
             ClearWinDecision();
+            skillReservationService.Clear();
             NotifyRunStarted();
             LogRunStarted();
 
@@ -270,6 +272,11 @@ namespace MahjongPrototype
 
         public void RequestForceDrawSkill(string targetTileCode)
         {
+            RequestForceDrawSkillForSeat(gameState != null ? gameState.CurrentSeat : viewerSeat, targetTileCode);
+        }
+
+        public void RequestForceDrawSkillForSeat(SeatId ownerSeat, string targetTileCode)
+        {
             if (!CanUseGameState())
                 return;
 
@@ -291,21 +298,75 @@ namespace MahjongPrototype
                 return;
             }
 
+            if (ownerSeat != gameState.CurrentSeat)
+            {
+                ReserveForceDrawSkill(ownerSeat, targetTile);
+                return;
+            }
+
+            ActivateForceDrawSkill(ownerSeat, targetTile, false);
+        }
+
+        private void ReserveForceDrawSkill(SeatId ownerSeat, Tile targetTile)
+        {
+            if (!IsActiveSeat(ownerSeat))
+            {
+                string reason = "Owner seat is not active.";
+                Warn(reason);
+                LogSkillReservationRejected(ownerSeat, SkillEffectKind.ForceDrawTile, targetTile, reason);
+                return;
+            }
+
+            if (gameState.HasActiveSkillEffect(ownerSeat, SkillEffectKind.ForceDrawTile))
+            {
+                string reason = "Force draw skill is already active.";
+                Warn(reason);
+                LogSkillReservationRejected(ownerSeat, SkillEffectKind.ForceDrawTile, targetTile, reason);
+                return;
+            }
+
+            PendingSkillReservation reservation = new PendingSkillReservation(
+                ownerSeat,
+                SkillEffectKind.ForceDrawTile,
+                targetTile,
+                gameState.CurrentSeat,
+                gameState.TurnIndex);
+
+            if (!skillReservationService.Reserve(reservation, out string reserveReason))
+            {
+                Warn(reserveReason);
+                LogSkillReservationRejected(ownerSeat, SkillEffectKind.ForceDrawTile, targetTile, reserveReason);
+                return;
+            }
+
+            LogSkillReserved(reservation);
+        }
+
+        private bool ActivateForceDrawSkill(SeatId actorSeat, Tile targetTile, bool beforeDraw)
+        {
             SkillActivationResult result = skillSystem.ActivateForceDrawTile(
                 gameState,
-                gameState.CurrentSeat,
+                actorSeat,
                 targetTile);
 
             if (!result.Success)
             {
                 Warn(result.Reason);
-                return;
+                if (beforeDraw)
+                    LogSkillReservationRejected(actorSeat, SkillEffectKind.ForceDrawTile, targetTile, result.Reason);
+
+                return false;
             }
 
-            NotifySkillActivated(gameState.CurrentSeat, result.Effect);
-            LogSkillActivated(gameState.CurrentSeat, result.Effect);
+            NotifySkillActivated(actorSeat, result.Effect);
+            if (beforeDraw)
+                LogSkillActivatedBeforeDraw(actorSeat, result.Effect);
+            else
+                LogSkillActivated(actorSeat, result.Effect);
+
             NotifySkillEffectRegistered(result.Effect);
             LogSkillEffectRegistered(result.Effect);
+            return true;
         }
 
         public void RequestSetAutoSortEnabled(bool enabled)
@@ -410,7 +471,33 @@ namespace MahjongPrototype
                 $"phase={playerTurnManager.Phase}; hasDrawnTile={gameState.GetPlayerSeat(seat).HasDrawnTile}",
                 seat: seat,
                 turnIndex: turnIndex);
+            ResolveReservedSkillBeforeDraw(seat);
             TryAutoDrawAtTurnStart(seat, turnIndex);
+        }
+
+        private void ResolveReservedSkillBeforeDraw(SeatId seat)
+        {
+            if (gameState.IsRoundEnded || isWinDecisionPending)
+                return;
+
+            if (!skillReservationService.TryConsumeForTurn(seat, out PendingSkillReservation reservation))
+                return;
+
+            LogSkillReservationConsumed(reservation);
+
+            switch (reservation.SkillEffectKind)
+            {
+                case SkillEffectKind.ForceDrawTile:
+                    ActivateForceDrawSkill(reservation.OwnerSeat, reservation.TargetTile, true);
+                    break;
+                default:
+                    LogSkillReservationRejected(
+                        reservation.OwnerSeat,
+                        reservation.SkillEffectKind,
+                        reservation.TargetTile,
+                        "Unsupported skill reservation.");
+                    break;
+            }
         }
 
         private void TryAutoDrawAtTurnStart(SeatId seat, int turnIndex)
@@ -559,6 +646,20 @@ namespace MahjongPrototype
 
             if (initialActiveSeats.Count <= 0)
                 initialActiveSeats.Add(SeatId.East);
+        }
+
+        private bool IsActiveSeat(SeatId seat)
+        {
+            if (gameState == null)
+                return false;
+
+            for (int i = 0; i < gameState.ActiveSeats.Count; i++)
+            {
+                if (gameState.ActiveSeats[i] == seat)
+                    return true;
+            }
+
+            return false;
         }
 
         private bool CanUseGameState()
@@ -778,6 +879,66 @@ namespace MahjongPrototype
                 wallCount: gameState.Wall.Count,
                 turnIndex: gameState.TurnIndex,
                 activeSkill: effect.ToLogText());
+        }
+
+        private void LogSkillReserved(PendingSkillReservation reservation)
+        {
+            DevLog.Record(
+                "Skill",
+                "SkillReserved",
+                $"skillType={reservation.SkillEffectKind}; reservedOnTurnSeat={reservation.ReservedOnTurnSeat}; reservedTurnIndex={reservation.ReservedTurnIndex}",
+                seat: reservation.OwnerSeat,
+                tile: reservation.TargetTile,
+                hand: GetHandText(reservation.OwnerSeat),
+                wallCount: gameState.Wall.Count,
+                turnIndex: gameState.TurnIndex,
+                activeSkill: reservation.ToLogText());
+        }
+
+        private void LogSkillActivatedBeforeDraw(SeatId ownerSeat, ActiveSkillEffect effect)
+        {
+            DevLog.Record(
+                "Skill",
+                "SkillActivatedBeforeDraw",
+                $"skillType={effect.Kind}; currentTurnSeat={gameState.CurrentSeat}",
+                seat: ownerSeat,
+                tile: effect.TargetTile,
+                hand: GetHandText(ownerSeat),
+                wallCount: gameState.Wall.Count,
+                turnIndex: gameState.TurnIndex,
+                activeSkill: effect.ToLogText());
+        }
+
+        private void LogSkillReservationConsumed(PendingSkillReservation reservation)
+        {
+            DevLog.Record(
+                "Skill",
+                "ReservationConsumed",
+                $"skillType={reservation.SkillEffectKind}",
+                seat: reservation.OwnerSeat,
+                tile: reservation.TargetTile,
+                hand: GetHandText(reservation.OwnerSeat),
+                wallCount: gameState.Wall.Count,
+                turnIndex: gameState.TurnIndex,
+                activeSkill: reservation.ToLogText());
+        }
+
+        private void LogSkillReservationRejected(
+            SeatId ownerSeat,
+            SkillEffectKind skillEffectKind,
+            Tile targetTile,
+            string reason)
+        {
+            DevLog.Record(
+                "Skill",
+                "SkillReservationRejected",
+                $"skillType={skillEffectKind}; reason={reason}; currentTurnSeat={gameState.CurrentSeat}",
+                seat: ownerSeat,
+                tile: targetTile,
+                hand: GetHandText(ownerSeat),
+                wallCount: gameState.Wall.Count,
+                turnIndex: gameState.TurnIndex,
+                activeSkill: $"{skillEffectKind}:{targetTile}:ReservationRejected");
         }
 
         private void LogSkillEffectResolved(DrawResult result)

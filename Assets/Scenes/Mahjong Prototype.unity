@@ -1251,6 +1251,7 @@ MonoBehaviour:
   initialActiveSeats: 00000000
   initialHandTileCount: 13
   autoStart: 1
+  enableAutoDraw: 1
   useFixedRandomSeed: 0
   fixedRandomSeed: 12345
   eventNotifier: {fileID: 1264733449}
