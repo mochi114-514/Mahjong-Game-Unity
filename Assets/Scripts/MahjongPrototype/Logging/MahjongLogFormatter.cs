@@ -44,6 +44,15 @@ namespace MahjongPrototype.Logging
                 case "DrawCompleted":
                     return TrimLine($"DrawDone {entry.Seat} T{entry.TurnIndex} {entry.Tile} {entry.Message}");
 
+                case "AutoDrawStarted":
+                    return TrimLine($"AutoDrawStart {entry.Seat} T{entry.TurnIndex} {entry.Message}");
+
+                case "AutoDrawCompleted":
+                    return TrimLine($"AutoDrawDone {entry.Seat} T{entry.TurnIndex} {entry.Tile} {entry.Message}");
+
+                case "AutoDrawSkipped":
+                    return TrimLine($"AutoDrawSkip {entry.Message}");
+
                 case "DiscardCompleted":
                     return TrimLine($"DiscardDone {entry.Seat} T{entry.TurnIndex} {entry.Tile} {entry.Message}");
 

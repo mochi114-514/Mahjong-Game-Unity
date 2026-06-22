@@ -19,6 +19,7 @@ namespace MahjongPrototype
         [Header("Round Setup")]
         [SerializeField, Min(1)] private int initialHandTileCount = 13;
         [SerializeField] private bool autoStart = true;
+        [SerializeField] private bool enableAutoDraw;
         [SerializeField] private bool useFixedRandomSeed = false;
         [SerializeField] private int fixedRandomSeed = 12345;
 
@@ -114,26 +115,40 @@ namespace MahjongPrototype
             if (!CanUseGameState())
                 return;
 
+            TryDrawCurrentTurn("DrawCompleted", "DrawBlocked", true);
+        }
+
+        private bool TryDrawCurrentTurn(
+            string completedEventName,
+            string blockedEventName,
+            bool warnOnBlocked)
+        {
             if (gameState.IsRoundEnded)
             {
-                Warn("Round already ended. Press Retry.");
-                LogTurnBlocked("DrawBlocked", "RoundEnded");
-                return;
+                if (warnOnBlocked)
+                    Warn("Round already ended. Press Retry.");
+
+                LogTurnBlocked(blockedEventName, "RoundEnded");
+                return false;
             }
 
             if (isWinDecisionPending)
             {
-                Warn("Declare or decline win before drawing.");
-                LogTurnBlocked("DrawBlocked", "WinDecisionPending");
-                return;
+                if (warnOnBlocked)
+                    Warn("Declare or decline win before drawing.");
+
+                LogTurnBlocked(blockedEventName, "WinDecisionPending");
+                return false;
             }
 
             PlayerSeat currentPlayerSeat = gameState.GetPlayerSeat(gameState.CurrentSeat);
             if (currentPlayerSeat.HasDrawnTile)
             {
-                Warn("Already drew this turn. Discard a tile first.");
-                LogTurnBlocked("DrawBlocked", "DrawnTileExists");
-                return;
+                if (warnOnBlocked)
+                    Warn("Already drew this turn. Discard a tile first.");
+
+                LogTurnBlocked(blockedEventName, "DrawnTileExists");
+                return false;
             }
 
             DrawResult result = drawService.DrawTile(gameState.CurrentSeat, gameState, DrawPurpose.TurnDraw);
@@ -142,13 +157,13 @@ namespace MahjongPrototype
             {
                 HandleSkillResolutionLogs(result);
                 EndRound("WallEmpty");
-                return;
+                return false;
             }
 
             currentPlayerSeat.SetDrawnTile(result.Tile);
             playerTurnManager.RefreshPhaseFromState(gameState);
             LogTurnDebug(
-                "DrawCompleted",
+                completedEventName,
                 $"phase={playerTurnManager.Phase}; drawnTile={result.Tile}",
                 seat: gameState.CurrentSeat,
                 tile: result.Tile,
@@ -157,6 +172,7 @@ namespace MahjongPrototype
             NotifyTileDrawn(result);
             LogTileDrawn(result);
             CheckWinPrototype();
+            return true;
         }
 
         public void RequestDiscard(int handIndex)
@@ -394,6 +410,21 @@ namespace MahjongPrototype
                 $"phase={playerTurnManager.Phase}; hasDrawnTile={gameState.GetPlayerSeat(seat).HasDrawnTile}",
                 seat: seat,
                 turnIndex: turnIndex);
+            TryAutoDrawAtTurnStart(seat, turnIndex);
+        }
+
+        private void TryAutoDrawAtTurnStart(SeatId seat, int turnIndex)
+        {
+            if (!enableAutoDraw)
+                return;
+
+            LogTurnDebug(
+                "AutoDrawStarted",
+                $"phase={playerTurnManager.Phase}; hasDrawnTile={gameState.GetPlayerSeat(seat).HasDrawnTile}",
+                seat: seat,
+                turnIndex: turnIndex);
+
+            TryDrawCurrentTurn("AutoDrawCompleted", "AutoDrawSkipped", false);
         }
 
         private void CheckWinPrototype()

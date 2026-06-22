@@ -94,9 +94,7 @@ namespace MahjongPrototype.Tests
             GameObject gameObject = new GameObject("MahjongGameFlowTest");
             try
             {
-                object gameFlow = gameObject.AddComponent(GetMahjongGameFlowType());
-                SetPrivateField(gameFlow, "enableDevLog", false);
-                SetPrivateField(gameFlow, "logWarnings", false);
+                object gameFlow = AddConfiguredGameFlow(gameObject, false);
 
                 Invoke(gameFlow, "StartNewRound");
                 object gameState = GetProperty(gameFlow, "CurrentState");
@@ -126,6 +124,169 @@ namespace MahjongPrototype.Tests
             {
                 UnityEngine.Object.DestroyImmediate(gameObject);
             }
+        }
+
+        [Test]
+        public void AutoDraw_StartNewRoundPlacesDrawnTile()
+        {
+            GameObject gameObject = new GameObject("MahjongGameFlowAutoDrawStartTest");
+            try
+            {
+                object gameFlow = AddConfiguredGameFlow(gameObject, true);
+
+                Invoke(gameFlow, "StartNewRound");
+
+                object gameState = GetProperty(gameFlow, "CurrentState");
+                object playerSeat = GetCurrentPlayerSeat(gameState);
+                object manager = GetPrivateField(gameFlow, "playerTurnManager");
+
+                Assert.That(GetProperty(playerSeat, "HasDrawnTile"), Is.True);
+                Assert.That(GetProperty(manager, "Phase").ToString(), Is.EqualTo("WaitingForDiscard"));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
+        public void AutoDraw_SkipsWhenDrawnTileAlreadyExists()
+        {
+            GameObject gameObject = new GameObject("MahjongGameFlowAutoDrawExistingTileTest");
+            try
+            {
+                object gameFlow = AddConfiguredGameFlow(gameObject, true);
+                Invoke(gameFlow, "StartNewRound");
+                object gameState = GetProperty(gameFlow, "CurrentState");
+                object wall = GetProperty(gameState, "Wall");
+                int wallCount = (int)GetProperty(wall, "Count");
+                object drawnTile = GetProperty(GetCurrentPlayerSeat(gameState), "DrawnTile");
+
+                Invoke(gameFlow, "StartTurn", GetProperty(gameState, "CurrentSeat"), GetProperty(gameState, "TurnIndex"));
+
+                object playerSeat = GetCurrentPlayerSeat(gameState);
+                Assert.That(GetProperty(playerSeat, "DrawnTile"), Is.EqualTo(drawnTile));
+                Assert.That(GetProperty(wall, "Count"), Is.EqualTo(wallCount));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
+        public void AutoDraw_SkipsWhenRoundEnded()
+        {
+            GameObject gameObject = new GameObject("MahjongGameFlowAutoDrawRoundEndedTest");
+            try
+            {
+                object gameFlow = AddConfiguredGameFlow(gameObject, true);
+                Invoke(gameFlow, "StartNewRound");
+                object gameState = GetProperty(gameFlow, "CurrentState");
+                object playerSeat = GetCurrentPlayerSeat(gameState);
+                Invoke(playerSeat, "ClearDrawnTile");
+                SetProperty(gameState, "IsRoundEnded", true);
+                object wall = GetProperty(gameState, "Wall");
+                int wallCount = (int)GetProperty(wall, "Count");
+
+                Invoke(gameFlow, "StartTurn", GetProperty(gameState, "CurrentSeat"), GetProperty(gameState, "TurnIndex"));
+
+                Assert.That(GetProperty(playerSeat, "HasDrawnTile"), Is.False);
+                Assert.That(GetProperty(wall, "Count"), Is.EqualTo(wallCount));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
+        public void AutoDraw_SkipsDuringWinDecision()
+        {
+            GameObject gameObject = new GameObject("MahjongGameFlowAutoDrawWinDecisionTest");
+            try
+            {
+                object gameFlow = AddConfiguredGameFlow(gameObject, true);
+                Invoke(gameFlow, "StartNewRound");
+                object gameState = GetProperty(gameFlow, "CurrentState");
+                object playerSeat = GetCurrentPlayerSeat(gameState);
+                Invoke(playerSeat, "ClearDrawnTile");
+                Invoke(
+                    gameFlow,
+                    "SetWinDecisionPending",
+                    true,
+                    GetProperty(gameState, "CurrentSeat"),
+                    GetProperty(gameState, "TurnIndex"));
+                object wall = GetProperty(gameState, "Wall");
+                int wallCount = (int)GetProperty(wall, "Count");
+
+                Invoke(gameFlow, "StartTurn", GetProperty(gameState, "CurrentSeat"), GetProperty(gameState, "TurnIndex"));
+
+                Assert.That(GetProperty(playerSeat, "HasDrawnTile"), Is.False);
+                Assert.That(GetProperty(wall, "Count"), Is.EqualTo(wallCount));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
+        public void AutoDraw_DrawsAgainAfterDiscard()
+        {
+            GameObject gameObject = new GameObject("MahjongGameFlowAutoDrawAfterDiscardTest");
+            try
+            {
+                object gameFlow = AddConfiguredGameFlow(gameObject, true);
+                Invoke(gameFlow, "StartNewRound");
+                object gameState = GetProperty(gameFlow, "CurrentState");
+
+                Invoke(gameFlow, "RequestDiscardDrawnTile");
+
+                object playerSeat = GetCurrentPlayerSeat(gameState);
+                object manager = GetPrivateField(gameFlow, "playerTurnManager");
+                Assert.That(GetProperty(gameState, "TurnIndex"), Is.EqualTo(2));
+                Assert.That(GetProperty(playerSeat, "HasDrawnTile"), Is.True);
+                Assert.That(GetProperty(manager, "Phase").ToString(), Is.EqualTo("WaitingForDiscard"));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
+        public void AutoDraw_RetryStartsWithDrawnTile()
+        {
+            GameObject gameObject = new GameObject("MahjongGameFlowAutoDrawRetryTest");
+            try
+            {
+                object gameFlow = AddConfiguredGameFlow(gameObject, true);
+                Invoke(gameFlow, "StartNewRound");
+
+                Invoke(gameFlow, "RetryPrototype");
+
+                object gameState = GetProperty(gameFlow, "CurrentState");
+                object playerSeat = GetCurrentPlayerSeat(gameState);
+                Assert.That(GetProperty(gameState, "TurnIndex"), Is.EqualTo(1));
+                Assert.That(GetProperty(playerSeat, "HasDrawnTile"), Is.True);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        private static object AddConfiguredGameFlow(GameObject gameObject, bool enableAutoDraw)
+        {
+            object gameFlow = gameObject.AddComponent(GetMahjongGameFlowType());
+            SetPrivateField(gameFlow, "enableDevLog", false);
+            SetPrivateField(gameFlow, "logWarnings", false);
+            SetPrivateField(gameFlow, "initialHandTileCount", 1);
+            SetPrivateField(gameFlow, "useFixedRandomSeed", true);
+            SetPrivateField(gameFlow, "fixedRandomSeed", 12345);
+            SetPrivateField(gameFlow, "enableAutoDraw", enableAutoDraw);
+            return gameFlow;
         }
 
         private static object CreatePlayerTurnManager()
@@ -178,6 +339,15 @@ namespace MahjongPrototype.Tests
                 BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
             Assert.That(property, Is.Not.Null);
             return property.GetValue(target);
+        }
+
+        private static void SetProperty(object target, string propertyName, object value)
+        {
+            PropertyInfo property = target.GetType().GetProperty(
+                propertyName,
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.That(property, Is.Not.Null);
+            property.SetValue(target, value);
         }
 
         private static object GetPrivateField(object target, string fieldName)
