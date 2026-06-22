@@ -35,7 +35,7 @@ namespace MahjongPrototype
         [Header("Hand Sort")]
         [SerializeField] private bool autoSortEnabled;
 
-        private readonly TurnOrderService turnOrderService = new TurnOrderService();
+        private readonly PlayerTurnManager playerTurnManager = new PlayerTurnManager(new TurnOrderService());
         private readonly DrawService drawService = new DrawService();
         private readonly DiscardService discardService = new DiscardService();
         private readonly HandWinChecker handWinChecker = new HandWinChecker();
@@ -93,6 +93,7 @@ namespace MahjongPrototype
 
             int? seed = useFixedRandomSeed ? fixedRandomSeed : (int?)null;
             gameState = new MahjongGameState(Wall.CreateStandardShuffled(seed), initialActiveSeats);
+            playerTurnManager.InitializeRound(gameState, gameState.CurrentSeat);
 
             NotifyRoundStarted();
             LogRoundStarted();
@@ -287,6 +288,7 @@ namespace MahjongPrototype
             int turnIndex = pendingWinTurnIndex;
             ClearWinDecision();
             gameState.IsRoundEnded = true;
+            playerTurnManager.MarkRoundEnded();
 
             NotifyWinDeclared(seat, turnIndex);
             LogWinDeclared(seat, turnIndex);
@@ -337,9 +339,7 @@ namespace MahjongPrototype
 
         private void AdvanceTurn()
         {
-            SeatId nextSeat = turnOrderService.GetNextSeat(gameState.ActiveSeats, gameState.CurrentSeat);
-            gameState.CurrentSeat = nextSeat;
-            gameState.TurnIndex++;
+            SeatId nextSeat = playerTurnManager.EndTurnAndSelectNext(gameState, gameState.ActiveSeats);
             StartTurn(nextSeat, gameState.TurnIndex);
         }
 
@@ -393,6 +393,23 @@ namespace MahjongPrototype
             isWinDecisionPending = isPending;
             pendingWinSeat = isPending ? seat : default;
             pendingWinTurnIndex = isPending ? turnIndex : 0;
+
+            if (gameState == null)
+                return;
+
+            if (isPending)
+            {
+                playerTurnManager.MarkWinDecision();
+                return;
+            }
+
+            if (gameState.IsRoundEnded)
+            {
+                playerTurnManager.MarkRoundEnded();
+                return;
+            }
+
+            playerTurnManager.BeginTurn(gameState, gameState.CurrentSeat);
         }
 
         private void ClearWinDecision()
@@ -403,6 +420,7 @@ namespace MahjongPrototype
         private void EndRound(string reason)
         {
             gameState.IsRoundEnded = true;
+            playerTurnManager.MarkRoundEnded();
             eventNotifier?.NotifyRoundEnded(reason);
 
             DevLog.Record(
