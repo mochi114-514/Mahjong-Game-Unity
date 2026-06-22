@@ -103,8 +103,6 @@ namespace MahjongPrototype
 
         public void RetryPrototype()
         {
-            // PROTOTYPE: Reset the current flow state without reloading the scene.
-            StartNewRound();
             // PROTOTYPE: シーン再読み込みではなく、現在のFlow内状態だけを初期化する。
             StartNewRound();
         }
@@ -173,6 +171,13 @@ namespace MahjongPrototype
                 return;
             }
 
+            PlayerSeat currentPlayerSeat = gameState.GetPlayerSeat(gameState.CurrentSeat);
+            if (!currentPlayerSeat.HasDrawnTile)
+            {
+                Warn("Drawn tile is missing. Draw before discarding.");
+                return;
+            }
+
             DiscardResult result = discardService.DiscardTile(gameState, gameState.CurrentSeat, handIndex);
             if (!result.Success)
             {
@@ -207,6 +212,13 @@ namespace MahjongPrototype
             if (isWinDecisionPending)
             {
                 Warn("Declare or decline win before discarding.");
+                return;
+            }
+
+            PlayerSeat currentPlayerSeat = gameState.GetPlayerSeat(gameState.CurrentSeat);
+            if (!currentPlayerSeat.HasDrawnTile)
+            {
+                Warn("Drawn tile is missing. Draw before discarding.");
                 return;
             }
 
