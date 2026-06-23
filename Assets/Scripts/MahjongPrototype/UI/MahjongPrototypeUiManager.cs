@@ -20,6 +20,9 @@ namespace MahjongPrototype.UI
         [Tooltip("Controller for status, skill, and discard text.")]
         [SerializeField] private MahjongUiDisplayController displayController;
 
+        [Header("Player UI Controllers")]
+        [SerializeField] private MahjongPlayerUiController selfBottomPlayerUiController;
+
         [Header("Tile Areas")]
         [Tooltip("View for hand tiles.")]
         [SerializeField] private MahjongHandView handView;
@@ -75,7 +78,8 @@ namespace MahjongPrototype.UI
             SubscribeHandBoardViewEvents();
             EnsureDrawnTileView();
             SubscribeDrawnTileViewEvents();
-            EnsureDiscardRiverView();
+            if (selfBottomPlayerUiController == null)
+                EnsureDiscardRiverView();
             EnsureInputController();
             SubscribeInputControllerEvents();
             SyncAutoSortToggleFromFlow();
@@ -94,7 +98,8 @@ namespace MahjongPrototype.UI
             SubscribeHandBoardViewEvents();
             EnsureDrawnTileView();
             SubscribeDrawnTileViewEvents();
-            EnsureDiscardRiverView();
+            if (selfBottomPlayerUiController == null)
+                EnsureDiscardRiverView();
             EnsureInputController();
             SubscribeInputControllerEvents();
             SyncAutoSortToggleFromFlow();
@@ -147,6 +152,9 @@ namespace MahjongPrototype.UI
 
             if (displayController == null)
                 displayController = GetComponentInChildren<MahjongUiDisplayController>(true);
+
+            if (selfBottomPlayerUiController == null)
+                selfBottomPlayerUiController = FindPlayerUiController(ViewSlot.SelfBottom);
 
             if (handView == null)
                 handView = GetComponentInChildren<MahjongHandView>(true);
@@ -474,6 +482,15 @@ namespace MahjongPrototype.UI
 
         private void RefreshDiscardRiver(MahjongGameState state)
         {
+            if (selfBottomPlayerUiController == null)
+                selfBottomPlayerUiController = FindPlayerUiController(ViewSlot.SelfBottom);
+
+            if (selfBottomPlayerUiController != null)
+            {
+                selfBottomPlayerUiController.RenderDiscardRiver(state, state.SelfSeat);
+                return;
+            }
+
             if (discardRiverView == null)
                 EnsureDiscardRiverView();
 
@@ -603,6 +620,19 @@ namespace MahjongPrototype.UI
                 RectTransform rectTransform = rectTransforms[i];
                 if (rectTransform != null && rectTransform.gameObject.name == objectName)
                     return rectTransform;
+            }
+
+            return null;
+        }
+
+        private MahjongPlayerUiController FindPlayerUiController(ViewSlot targetViewSlot)
+        {
+            MahjongPlayerUiController[] controllers = GetComponentsInChildren<MahjongPlayerUiController>(true);
+            for (int i = 0; i < controllers.Length; i++)
+            {
+                MahjongPlayerUiController controller = controllers[i];
+                if (controller != null && controller.ViewSlot == targetViewSlot)
+                    return controller;
             }
 
             return null;
