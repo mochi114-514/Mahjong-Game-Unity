@@ -106,7 +106,7 @@ namespace MahjongPrototype
             gameState = new MahjongGameState(Wall.CreateStandardShuffled(seed), initialActiveSeats);
             SeatId selfSeat = ResolveSelfSeat();
             gameState.SetSelfSeat(selfSeat);
-            gameState.SetActiveSeats(new List<SeatId> { selfSeat });
+            gameState.RebuildActiveTurnSeatsFromSeatSlots();
             playerTurnManager.InitializeRound(gameState, gameState.CurrentTurn);
 
             LogSeatSlotsAssigned();
@@ -439,10 +439,10 @@ namespace MahjongPrototype
 
         private void DealInitialHands()
         {
-            // PROTOTYPE: Deal a fixed starting hand only to active seats.
-            for (int seatIndex = 0; seatIndex < gameState.ActiveSeats.Count; seatIndex++)
+            // PROTOTYPE: Deal a fixed starting hand only to active turn seats.
+            for (int seatIndex = 0; seatIndex < gameState.ActiveTurnSeats.Count; seatIndex++)
             {
-                SeatId seat = gameState.ActiveSeats[seatIndex];
+                SeatId seat = gameState.ActiveTurnSeats[seatIndex];
                 for (int i = 0; i < initialHandTileCount; i++)
                 {
                     DrawResult result = drawService.DrawTile(seat, gameState, DrawPurpose.InitialDeal);
@@ -464,7 +464,7 @@ namespace MahjongPrototype
         private void AdvanceTurn()
         {
             SeatId fromSeat = gameState.CurrentTurn;
-            SeatId nextSeat = playerTurnManager.EndTurnAndSelectNext(gameState, gameState.ActiveSeats);
+            SeatId nextSeat = playerTurnManager.EndTurnAndSelectNext(gameState, gameState.ActiveTurnSeats);
             LogTurnDebug(
                 "EndTurn",
                 $"from={fromSeat}; to={nextSeat}; phase={playerTurnManager.Phase}",
@@ -672,9 +672,9 @@ namespace MahjongPrototype
             if (gameState == null)
                 return false;
 
-            for (int i = 0; i < gameState.ActiveSeats.Count; i++)
+            for (int i = 0; i < gameState.ActiveTurnSeats.Count; i++)
             {
-                if (gameState.ActiveSeats[i] == seat)
+                if (gameState.ActiveTurnSeats[i] == seat)
                     return true;
             }
 
@@ -794,8 +794,8 @@ namespace MahjongPrototype
             if (!autoSortEnabled || gameState == null)
                 return;
 
-            for (int i = 0; i < gameState.ActiveSeats.Count; i++)
-                ApplyAutoSort(gameState.ActiveSeats[i], reason, true);
+            for (int i = 0; i < gameState.ActiveTurnSeats.Count; i++)
+                ApplyAutoSort(gameState.ActiveTurnSeats[i], reason, true);
         }
 
         private void ApplyAutoSortIfEnabled(SeatId seat, string reason, bool notify)

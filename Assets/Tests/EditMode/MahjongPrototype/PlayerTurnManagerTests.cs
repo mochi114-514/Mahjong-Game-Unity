@@ -279,45 +279,99 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void GameFlow_FixedSelfSeatSetsSingleActiveTurnPlayer()
+        public void RetryPrototype_RebuildsOccupiedSeatsWithoutOldSelfSeat()
+        {
+            GameObject gameObject = new GameObject("MahjongGameFlowRetryOccupiedSeatsTest");
+            try
+            {
+                object gameFlow = AddConfiguredGameFlow(gameObject, false);
+                SetPrivateField(gameFlow, "fixedSelfSeat", ParseSeat("South"));
+
+                Invoke(gameFlow, "StartNewRound");
+                object firstState = GetProperty(gameFlow, "CurrentState");
+                AssertOccupiedSeats(firstState, "South");
+                AssertSeatList(GetProperty(firstState, "ActiveTurnSeats"), "South");
+                Assert.That(GetProperty(firstState, "CurrentTurn").ToString(), Is.EqualTo("South"));
+
+                SetPrivateField(gameFlow, "fixedSelfSeat", ParseSeat("West"));
+                Invoke(gameFlow, "RetryPrototype");
+
+                object retryState = GetProperty(gameFlow, "CurrentState");
+                AssertOccupiedSeats(retryState, "West");
+                AssertSeatList(GetProperty(retryState, "ActiveTurnSeats"), "West");
+                Assert.That(GetProperty(retryState, "CurrentTurn").ToString(), Is.EqualTo("West"));
+
+                object seatSlots = GetProperty(retryState, "SeatSlots");
+                AssertSeatSlot(seatSlots, 0, "East", null);
+                AssertSeatSlot(seatSlots, 1, "South", null);
+                AssertSeatSlot(seatSlots, 2, "West", "Player1");
+                AssertSeatSlot(seatSlots, 3, "North", null);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
+        public void RebuildActiveTurnSeatsFromSeatSlots_SkipsEmptySeatsAndRepairsCurrentTurn()
+        {
+            object gameState = CreateGameState("East", "South", "West", "North");
+            Invoke(gameState, "SetSelfSeat", ParseSeat("South"));
+            Invoke(gameState, "AssignPlayerToSeat", ParsePlayerId("Player2"), ParseSeat("North"));
+            SetProperty(gameState, "CurrentTurn", ParseSeat("East"));
+
+            Invoke(gameState, "RebuildActiveTurnSeatsFromSeatSlots");
+
+            AssertSeatList(GetProperty(gameState, "ActiveTurnSeats"), "South", "North");
+            AssertSeatList(GetProperty(gameState, "ActiveSeats"), "South", "North");
+            Assert.That(GetProperty(gameState, "CurrentTurn").ToString(), Is.EqualTo("South"));
+            Assert.That(GetProperty(gameState, "CurrentTurnPlayerId").ToString(), Is.EqualTo("Player1"));
+        }
+
+        [TestCase("East")]
+        [TestCase("South")]
+        [TestCase("West")]
+        [TestCase("North")]
+        public void GameFlow_FixedSelfSeatSetsSingleActiveTurnPlayer(string selfSeatName)
         {
             GameObject gameObject = new GameObject("MahjongGameFlowFixedSelfSeatTest");
             try
             {
                 object gameFlow = AddConfiguredGameFlow(gameObject, false);
                 SetPrivateField(gameFlow, "randomizeSelfSeat", false);
-                SetPrivateField(gameFlow, "fixedSelfSeat", ParseSeat("South"));
+                SetPrivateField(gameFlow, "fixedSelfSeat", ParseSeat(selfSeatName));
 
                 Invoke(gameFlow, "StartNewRound");
 
                 object gameState = GetProperty(gameFlow, "CurrentState");
-                object activeSeats = GetProperty(gameState, "ActiveSeats");
-                PropertyInfo itemProperty = activeSeats.GetType().GetProperty("Item");
+                object activeTurnSeats = GetProperty(gameState, "ActiveTurnSeats");
+                PropertyInfo itemProperty = activeTurnSeats.GetType().GetProperty("Item");
                 Assert.That(itemProperty, Is.Not.Null);
 
-                Assert.That(GetProperty(gameState, "SelfSeat").ToString(), Is.EqualTo("South"));
-                Assert.That(GetProperty(gameState, "SelfWind").ToString(), Is.EqualTo("South"));
+                Assert.That(GetProperty(gameState, "SelfSeat").ToString(), Is.EqualTo(selfSeatName));
+                Assert.That(GetProperty(gameState, "SelfWind").ToString(), Is.EqualTo(selfSeatName));
                 Assert.That(GetProperty(gameState, "SelfPlayerId").ToString(), Is.EqualTo("Player1"));
-                Assert.That(GetProperty(gameState, "CurrentTurn").ToString(), Is.EqualTo("South"));
+                Assert.That(GetProperty(gameState, "CurrentTurn").ToString(), Is.EqualTo(selfSeatName));
                 Assert.That(GetProperty(gameState, "CurrentTurnPlayerId").ToString(), Is.EqualTo("Player1"));
                 Assert.That(GetProperty(gameState, "IsSelfTurn"), Is.True);
-                Assert.That(GetProperty(activeSeats, "Count"), Is.EqualTo(1));
-                Assert.That(itemProperty.GetValue(activeSeats, new object[] { 0 }).ToString(), Is.EqualTo("South"));
+                Assert.That(GetProperty(activeTurnSeats, "Count"), Is.EqualTo(1));
+                Assert.That(itemProperty.GetValue(activeTurnSeats, new object[] { 0 }).ToString(), Is.EqualTo(selfSeatName));
+                AssertSeatList(GetProperty(gameState, "ActiveSeats"), selfSeatName);
 
                 object seatSlots = GetProperty(gameState, "SeatSlots");
                 Assert.That(GetProperty(seatSlots, "Count"), Is.EqualTo(4));
-                AssertSeatSlot(seatSlots, 0, "East", null);
-                AssertSeatSlot(seatSlots, 1, "South", "Player1");
-                AssertSeatSlot(seatSlots, 2, "West", null);
-                AssertSeatSlot(seatSlots, 3, "North", null);
+                AssertSeatSlot(seatSlots, 0, "East", selfSeatName == "East" ? "Player1" : null);
+                AssertSeatSlot(seatSlots, 1, "South", selfSeatName == "South" ? "Player1" : null);
+                AssertSeatSlot(seatSlots, 2, "West", selfSeatName == "West" ? "Player1" : null);
+                AssertSeatSlot(seatSlots, 3, "North", selfSeatName == "North" ? "Player1" : null);
 
                 object selfSeatSlot = Invoke(gameState, "GetSelfSeatSlot");
-                Assert.That(GetProperty(selfSeatSlot, "Wind").ToString(), Is.EqualTo("South"));
+                Assert.That(GetProperty(selfSeatSlot, "Wind").ToString(), Is.EqualTo(selfSeatName));
                 object currentTurnSlot = GetProperty(gameState, "CurrentTurnSlot");
-                Assert.That(GetProperty(currentTurnSlot, "Wind").ToString(), Is.EqualTo("South"));
-                Assert.That(Invoke(gameState, "GetSeatByPlayerId", ParsePlayerId("Player1")).ToString(), Is.EqualTo("South"));
-                Assert.That((bool)Invoke(gameState, "IsSelfSeat", ParseSeat("South")), Is.True);
-                Assert.That((bool)Invoke(gameState, "IsSelfSeat", ParseSeat("East")), Is.False);
+                Assert.That(GetProperty(currentTurnSlot, "Wind").ToString(), Is.EqualTo(selfSeatName));
+                Assert.That(Invoke(gameState, "GetSeatByPlayerId", ParsePlayerId("Player1")).ToString(), Is.EqualTo(selfSeatName));
+                Assert.That((bool)Invoke(gameState, "IsSelfSeat", ParseSeat(selfSeatName)), Is.True);
             }
             finally
             {
@@ -416,6 +470,27 @@ namespace MahjongPrototype.Tests
                 BindingFlags.NonPublic | BindingFlags.Instance);
             Assert.That(field, Is.Not.Null);
             field.SetValue(target, value);
+        }
+
+        private static void AssertOccupiedSeats(object gameState, params string[] expectedSeatNames)
+        {
+            object occupiedSeats = GetProperty(gameState, "OccupiedSeats");
+            AssertSeatList(occupiedSeats, expectedSeatNames);
+        }
+
+        private static void AssertSeatList(object seats, params string[] expectedSeatNames)
+        {
+            PropertyInfo countProperty = seats.GetType().GetProperty("Count");
+            PropertyInfo itemProperty = seats.GetType().GetProperty("Item");
+            Assert.That(countProperty, Is.Not.Null);
+            Assert.That(itemProperty, Is.Not.Null);
+
+            Assert.That(countProperty.GetValue(seats), Is.EqualTo(expectedSeatNames.Length));
+            for (int i = 0; i < expectedSeatNames.Length; i++)
+            {
+                object seat = itemProperty.GetValue(seats, new object[] { i });
+                Assert.That(seat.ToString(), Is.EqualTo(expectedSeatNames[i]));
+            }
         }
 
         private static void AssertSeatSlot(object seatSlots, int index, string wind, string playerId)

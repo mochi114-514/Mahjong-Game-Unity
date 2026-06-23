@@ -45,6 +45,7 @@ namespace MahjongPrototype.Domain
         public bool IsRoundEnded { get; set; }
         public IReadOnlyList<SeatId> ActiveSeats => activeSeats;
         public IReadOnlyList<SeatId> ActiveTurnSeats => activeSeats;
+        public IReadOnlyList<SeatId> OccupiedSeats => GetOccupiedSeats();
         public IReadOnlyList<SeatSlot> SeatSlots => seatSlots;
         public IReadOnlyList<DiscardRecord> Discards => discards;
         public IReadOnlyList<ActiveSkillEffect> ActiveSkillEffects => activeSkillEffects;
@@ -83,6 +84,26 @@ namespace MahjongPrototype.Domain
             CurrentTurn = activeSeats[0];
         }
 
+        public void RebuildActiveTurnSeatsFromSeatSlots()
+        {
+            activeSeats.Clear();
+            for (int i = 0; i < seatSlots.Count; i++)
+            {
+                SeatSlot slot = seatSlots[i];
+                if (!slot.HasPlayer)
+                    continue;
+
+                activeSeats.Add(slot.Wind);
+                GetPlayerSeat(slot.Wind);
+            }
+
+            if (activeSeats.Count <= 0)
+                throw new InvalidOperationException("Cannot rebuild active turn seats because no seat slots have players.");
+
+            if (!ContainsActiveTurnSeat(CurrentTurn))
+                CurrentTurn = activeSeats[0];
+        }
+
         public void AssignPlayerToSeat(PlayerId playerId, SeatId seat)
         {
             ClearPlayerFromSeatSlots(playerId);
@@ -92,6 +113,19 @@ namespace MahjongPrototype.Domain
         public SeatSlot GetSelfSeatSlot()
         {
             return GetSeatSlot(GetSeatByPlayerId(SelfPlayerId));
+        }
+
+        public IReadOnlyList<SeatId> GetOccupiedSeats()
+        {
+            List<SeatId> occupiedSeats = new List<SeatId>();
+            for (int i = 0; i < seatSlots.Count; i++)
+            {
+                SeatSlot slot = seatSlots[i];
+                if (slot.HasPlayer)
+                    occupiedSeats.Add(slot.Wind);
+            }
+
+            return occupiedSeats;
         }
 
         public bool IsSelfSeat(SeatId seat)
@@ -187,6 +221,17 @@ namespace MahjongPrototype.Domain
         public bool RemoveActiveSkillEffect(ActiveSkillEffect effect)
         {
             return effect != null && activeSkillEffects.Remove(effect);
+        }
+
+        private bool ContainsActiveTurnSeat(SeatId seat)
+        {
+            for (int i = 0; i < activeSeats.Count; i++)
+            {
+                if (activeSeats[i] == seat)
+                    return true;
+            }
+
+            return false;
         }
 
         private void InitializeSeatSlots()

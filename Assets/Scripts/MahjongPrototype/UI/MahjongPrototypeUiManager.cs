@@ -23,6 +23,7 @@ namespace MahjongPrototype.UI
         [Header("Tile Areas")]
         [Tooltip("View for hand tiles.")]
         [SerializeField] private MahjongHandView handView;
+        [SerializeField] private MahjongHandBoardView handBoardView;
         [SerializeField] private MahjongDrawnTileView drawnTileView;
         [SerializeField] private MahjongDiscardRiverView discardRiverView;
         [Tooltip("Container for hand tile buttons.")]
@@ -51,7 +52,7 @@ namespace MahjongPrototype.UI
         private bool warnedMissingWinDecisionController;
         private bool warnedMissingLogPreviewController;
         private bool warnedMissingDiscardArea;
-        private bool isHandViewSubscribed;
+        private bool isHandBoardViewSubscribed;
         private bool isDrawnTileViewSubscribed;
         private bool isInputControllerSubscribed;
 
@@ -70,7 +71,8 @@ namespace MahjongPrototype.UI
             CacheReferences();
             EnsureDisplayController();
             EnsureHandView();
-            SubscribeHandViewEvents();
+            EnsureHandBoardView();
+            SubscribeHandBoardViewEvents();
             EnsureDrawnTileView();
             SubscribeDrawnTileViewEvents();
             EnsureDiscardRiverView();
@@ -88,7 +90,8 @@ namespace MahjongPrototype.UI
             CacheReferences();
             EnsureDisplayController();
             EnsureHandView();
-            SubscribeHandViewEvents();
+            EnsureHandBoardView();
+            SubscribeHandBoardViewEvents();
             EnsureDrawnTileView();
             SubscribeDrawnTileViewEvents();
             EnsureDiscardRiverView();
@@ -103,7 +106,7 @@ namespace MahjongPrototype.UI
 
         private void OnDisable()
         {
-            UnsubscribeHandViewEvents();
+            UnsubscribeHandBoardViewEvents();
             UnsubscribeDrawnTileViewEvents();
             UnsubscribeInputControllerEvents();
             UnsubscribeNotifications();
@@ -147,6 +150,9 @@ namespace MahjongPrototype.UI
 
             if (handView == null)
                 handView = GetComponentInChildren<MahjongHandView>(true);
+
+            if (handBoardView == null)
+                handBoardView = GetComponentInChildren<MahjongHandBoardView>(true);
 
             if (drawnTileView == null)
                 drawnTileView = GetComponentInChildren<MahjongDrawnTileView>(true);
@@ -361,6 +367,19 @@ namespace MahjongPrototype.UI
             handView.ConfigureMissingReferences(handContainer, tileButtonPrefab);
         }
 
+        private void EnsureHandBoardView()
+        {
+            if (handBoardView == null)
+            {
+                handBoardView = GetComponentInChildren<MahjongHandBoardView>(true);
+            }
+
+            if (handBoardView == null)
+                handBoardView = gameObject.AddComponent<MahjongHandBoardView>();
+
+            handBoardView.ConfigureMissingReferences(handView);
+        }
+
         private void EnsureDrawnTileView()
         {
             if (drawnTileView == null)
@@ -396,22 +415,22 @@ namespace MahjongPrototype.UI
             discardRiverView.ConfigureMissingReferences(container, tileButtonPrefab);
         }
 
-        private void SubscribeHandViewEvents()
+        private void SubscribeHandBoardViewEvents()
         {
-            if (handView == null || isHandViewSubscribed)
+            if (handBoardView == null || isHandBoardViewSubscribed)
                 return;
 
-            handView.TileClicked += HandleTileClicked;
-            isHandViewSubscribed = true;
+            handBoardView.TileClicked += HandleHandBoardTileClicked;
+            isHandBoardViewSubscribed = true;
         }
 
-        private void UnsubscribeHandViewEvents()
+        private void UnsubscribeHandBoardViewEvents()
         {
-            if (handView == null || !isHandViewSubscribed)
+            if (handBoardView == null || !isHandBoardViewSubscribed)
                 return;
 
-            handView.TileClicked -= HandleTileClicked;
-            isHandViewSubscribed = false;
+            handBoardView.TileClicked -= HandleHandBoardTileClicked;
+            isHandBoardViewSubscribed = false;
         }
 
         private void SubscribeDrawnTileViewEvents()
@@ -437,16 +456,11 @@ namespace MahjongPrototype.UI
             if (handView == null)
                 EnsureHandView();
 
-            if (handView != null)
-            {
-                SeatId dataSeat = state.SelfSeat;
-                handView.Render(
-                    state.GetPlayerSeat(dataSeat).Hand.GetTiles(),
-                    dataSeat,
-                    ViewSlot.SelfBottom,
-                    true,
-                    CanUseSelfGameplayInput(state));
-            }
+            if (handBoardView == null)
+                EnsureHandBoardView();
+
+            if (handBoardView != null)
+                handBoardView.Render(state, state.OccupiedSeats, CanUseSelfGameplayInput(state));
         }
 
         private void RefreshDrawnTile(MahjongGameState state)
@@ -483,8 +497,8 @@ namespace MahjongPrototype.UI
             if (inputController != null)
                 inputController.SetGameplayInputInteractable(canUseGameplayInput);
 
-            if (handView != null)
-                handView.SetTilesInteractable(canUseGameplayInput);
+            if (handBoardView != null)
+                handBoardView.SetSelfInteractable(state, canUseGameplayInput);
 
             if (drawnTileView != null)
                 drawnTileView.SetTileInteractable(canUseGameplayInput);
@@ -498,13 +512,17 @@ namespace MahjongPrototype.UI
                 !gameFlow.IsInteractionLocked;
         }
 
-        private void HandleTileClicked(int handIndex)
+        private void HandleHandBoardTileClicked(SeatId dataSeat, int handIndex)
         {
             if (gameFlow == null)
             {
                 WarnMissingOnce(ref warnedMissingFlow, "Cannot discard because MahjongGameFlow is not assigned.");
                 return;
             }
+
+            MahjongGameState state = gameFlow.CurrentState;
+            if (state == null || dataSeat != state.SelfSeat)
+                return;
 
             gameFlow.RequestDiscard(handIndex);
         }

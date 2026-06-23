@@ -172,7 +172,7 @@ GameObject:
   - component: {fileID: 45752824}
   - component: {fileID: 45752823}
   - component: {fileID: 45752828}
-  - component: {fileID: 45752829}
+  - component: {fileID: 6100000125}
   - component: {fileID: 45752830}
   - component: {fileID: 45752831}
   - component: {fileID: 6100000001}
@@ -200,7 +200,8 @@ MonoBehaviour:
   gameFlow: {fileID: 508243329}
   eventNotifier: {fileID: 1264733449}
   displayController: {fileID: 45752831}
-  handView: {fileID: 45752829}
+  handView: {fileID: 1532270228}
+  handBoardView: {fileID: 6100000125}
   drawnTileView: {fileID: 6100000123}
   discardRiverView: {fileID: 6100000124}
   handContainer: {fileID: 1972641026}
@@ -286,12 +287,10 @@ RectTransform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 41506177}
-  - {fileID: 1972641026}
-  - {fileID: 6100000121}
   - {fileID: 1535265299}
   - {fileID: 1217582412}
   - {fileID: 821242413}
-  - {fileID: 1955799013}
+  - {fileID: 325955649}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
@@ -313,22 +312,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI.MahjongLogPreviewController
   recentLogText: {fileID: 312434043}
   maxVisibleLogLines: 7
---- !u!114 &45752829
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 45752822}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 14004cb01e7a4114bacf9ee94146a441, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI.MahjongHandView
-  handContainer: {fileID: 1972641026}
-  faceUpTileButtonPrefab: {fileID: 8792027050792319394, guid: 5f307326666617c4e8318056c650e193, type: 3}
-  faceDownTileButtonPrefab: {fileID: 0}
-  viewSlot: 0
 --- !u!114 &45752830
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -761,6 +744,42 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 312434041}
   m_CullTransparentMesh: 1
+--- !u!1 &325955648
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 325955649}
+  m_Layer: 5
+  m_Name: 'HandBoardRoot '
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &325955649
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 325955648}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 1532270227}
+  m_Father: {fileID: 45752827}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0.5, y: 0.5}
+  m_AnchorMax: {x: 0.5, y: 0.5}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 100, y: 100}
+  m_Pivot: {x: 0.5, y: 0.5}
 --- !u!1 &382517919
 GameObject:
   m_ObjectHideFlags: 0
@@ -2177,6 +2196,61 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1477977272}
   m_CullTransparentMesh: 1
+--- !u!1 &1532270226
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1532270227}
+  - component: {fileID: 1532270228}
+  m_Layer: 5
+  m_Name: SelfBottomHandArea
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &1532270227
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1532270226}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 1955799013}
+  - {fileID: 1972641026}
+  - {fileID: 6100000121}
+  m_Father: {fileID: 325955649}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0.5, y: 0.5}
+  m_AnchorMax: {x: 0.5, y: 0.5}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 100, y: 100}
+  m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &1532270228
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1532270226}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 14004cb01e7a4114bacf9ee94146a441, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI.MahjongHandView
+  handContainer: {fileID: 1972641026}
+  faceUpTileButtonPrefab: {fileID: 8792027050792319394, guid: 5f307326666617c4e8318056c650e193, type: 3}
+  faceDownTileButtonPrefab: {fileID: 4322355495218845144, guid: 7717136aef892bf419fe25f605ef1a30, type: 3}
+  viewSlot: 0
 --- !u!1 &1535265298
 GameObject:
   m_ObjectHideFlags: 0
@@ -2211,7 +2285,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: 214}
+  m_AnchoredPosition: {x: 70, y: 69}
   m_SizeDelta: {x: 100, y: 100}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!1 &1553984469
@@ -3066,16 +3140,16 @@ RectTransform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1955799012}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 45752827}
+  m_Father: {fileID: 1532270227}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -357, y: -148}
+  m_AnchoredPosition: {x: -151, y: -152.6}
   m_SizeDelta: {x: 200, y: 50}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1955799014
@@ -3207,12 +3281,12 @@ RectTransform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 45752827}
+  m_Father: {fileID: 1532270227}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -74, y: -207}
-  m_SizeDelta: {x: 800, y: 130}
+  m_AnchoredPosition: {x: 0, y: -219.6}
+  m_SizeDelta: {x: 500, y: 100}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1972641027
 MonoBehaviour:
@@ -3231,7 +3305,7 @@ MonoBehaviour:
     m_Right: 0
     m_Top: 0
     m_Bottom: 0
-  m_ChildAlignment: 4
+  m_ChildAlignment: 7
   m_Spacing: 0
   m_ChildForceExpandWidth: 0
   m_ChildForceExpandHeight: 1
@@ -4355,12 +4429,12 @@ RectTransform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 45752827}
+  m_Father: {fileID: 1532270227}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 415, y: -207}
-  m_SizeDelta: {x: 80, y: 130}
+  m_AnchoredPosition: {x: 325, y: -219.6}
+  m_SizeDelta: {x: 80, y: 100}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &6100000122
 MonoBehaviour:
@@ -4379,7 +4453,7 @@ MonoBehaviour:
     m_Right: 0
     m_Top: 0
     m_Bottom: 0
-  m_ChildAlignment: 4
+  m_ChildAlignment: 7
   m_Spacing: 0
   m_ChildForceExpandWidth: 0
   m_ChildForceExpandHeight: 1
@@ -4420,6 +4494,22 @@ MonoBehaviour:
   columns: 6
   spacingX: 3
   spacingY: 3
+--- !u!114 &6100000125
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 45752822}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: af6a747e08d54d2b91b47dd7a4bc080f, type: 3}
+  m_Name: MahjongHandBoardView
+  m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI.MahjongHandBoardView
+  selfBottomHandView: {fileID: 0}
+  nextLeftHandView: {fileID: 0}
+  acrossTopHandView: {fileID: 0}
+  previousRightHandView: {fileID: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
