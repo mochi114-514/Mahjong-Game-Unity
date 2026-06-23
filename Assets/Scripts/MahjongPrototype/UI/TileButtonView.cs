@@ -64,6 +64,17 @@ namespace MahjongPrototype.UI
             }
         }
 
+        public void InitializeFaceDown(int index, Action<int> onClicked)
+        {
+            CacheReferences();
+
+            handIndex = index;
+            clicked = onClicked;
+
+            if (label != null)
+                label.text = string.Empty;
+        }
+
         public void SetInteractable(bool interactable)
         {
             CacheReferences();

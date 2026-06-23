@@ -119,7 +119,7 @@ namespace MahjongPrototype.UI
             RefreshDrawnTile(state);
             RefreshDiscardRiver(state);
             RefreshWinDecision();
-            RefreshInteractionState();
+            RefreshInteractionState(state);
             RefreshLogPreview();
         }
 
@@ -438,7 +438,15 @@ namespace MahjongPrototype.UI
                 EnsureHandView();
 
             if (handView != null)
-                handView.Rebuild(state.GetPlayerSeat(state.CurrentTurn).Hand.GetTiles());
+            {
+                SeatId dataSeat = state.SelfSeat;
+                handView.Render(
+                    state.GetPlayerSeat(dataSeat).Hand.GetTiles(),
+                    dataSeat,
+                    ViewSlot.SelfBottom,
+                    true,
+                    CanUseSelfGameplayInput(state));
+            }
         }
 
         private void RefreshDrawnTile(MahjongGameState state)
@@ -447,7 +455,7 @@ namespace MahjongPrototype.UI
                 EnsureDrawnTileView();
 
             if (drawnTileView != null)
-                drawnTileView.Rebuild(state.GetPlayerSeat(state.CurrentTurn).DrawnTile);
+                drawnTileView.Rebuild(state.GetPlayerSeat(state.SelfSeat).DrawnTile);
         }
 
         private void RefreshDiscardRiver(MahjongGameState state)
@@ -468,9 +476,9 @@ namespace MahjongPrototype.UI
                 winDecisionController.SetVisible(gameFlow != null && gameFlow.IsWinDecisionPending);
         }
 
-        private void RefreshInteractionState()
+        private void RefreshInteractionState(MahjongGameState state)
         {
-            bool canUseGameplayInput = gameFlow != null && !gameFlow.IsInteractionLocked;
+            bool canUseGameplayInput = CanUseSelfGameplayInput(state);
 
             if (inputController != null)
                 inputController.SetGameplayInputInteractable(canUseGameplayInput);
@@ -480,6 +488,14 @@ namespace MahjongPrototype.UI
 
             if (drawnTileView != null)
                 drawnTileView.SetTileInteractable(canUseGameplayInput);
+        }
+
+        private bool CanUseSelfGameplayInput(MahjongGameState state)
+        {
+            return gameFlow != null &&
+                state != null &&
+                state.IsSelfTurn &&
+                !gameFlow.IsInteractionLocked;
         }
 
         private void HandleTileClicked(int handIndex)

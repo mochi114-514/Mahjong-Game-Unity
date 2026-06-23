@@ -7,11 +7,6 @@ using UnityEngine.UI;
 namespace MahjongPrototype.UI
 {
     // PROTOTYPE: only the self/bottom river slot is rendered until full 4-seat river UI exists.
-    public enum DiscardRiverViewSlot
-    {
-        SelfBottom = 0
-    }
-
     [DisallowMultipleComponent]
     [AddComponentMenu("Mahjong Prototype/UI/Mahjong Discard River View")]
     public sealed class MahjongDiscardRiverView : MonoBehaviour
@@ -20,7 +15,7 @@ namespace MahjongPrototype.UI
         [FormerlySerializedAs("eastDiscardRiverContainer")]
         [SerializeField] private RectTransform selfBottomDiscardRiverContainer;
         [SerializeField] private TileButtonView tileButtonPrefab;
-        [SerializeField] private DiscardRiverViewSlot viewSlot = DiscardRiverViewSlot.SelfBottom;
+        [SerializeField] private ViewSlot viewSlot = ViewSlot.SelfBottom;
         [SerializeField] private int columns = 6;
         [SerializeField] private float spacingX = 3f;
         [SerializeField] private float spacingY = 3f;
@@ -52,10 +47,10 @@ namespace MahjongPrototype.UI
 
         public void Rebuild(IReadOnlyList<DiscardRecord> discards, SeatId dataSeat)
         {
-            Rebuild(discards, dataSeat, DiscardRiverViewSlot.SelfBottom);
+            Rebuild(discards, dataSeat, ViewSlot.SelfBottom);
         }
 
-        public void Rebuild(IReadOnlyList<DiscardRecord> discards, SeatId dataSeat, DiscardRiverViewSlot viewSlot)
+        public void Rebuild(IReadOnlyList<DiscardRecord> discards, SeatId dataSeat, ViewSlot viewSlot)
         {
             this.dataSeat = dataSeat;
             this.viewSlot = viewSlot;
@@ -112,17 +107,17 @@ namespace MahjongPrototype.UI
             activeTileButtons.Clear();
         }
 
-        private RectTransform GetContainerForViewSlot(DiscardRiverViewSlot slot)
+        private RectTransform GetContainerForViewSlot(ViewSlot slot)
         {
             switch (slot)
             {
-                case DiscardRiverViewSlot.SelfBottom:
+                case ViewSlot.SelfBottom:
                 default:
                     return selfBottomDiscardRiverContainer;
             }
         }
 
-        private void ApplyTileTransform(TileButtonView view, int discardIndex, DiscardRiverViewSlot slot)
+        private void ApplyTileTransform(TileButtonView view, int discardIndex, ViewSlot slot)
         {
             if (view == null)
                 return;
@@ -167,11 +162,11 @@ namespace MahjongPrototype.UI
             return new Vector2(x, y);
         }
 
-        private static Quaternion CalculateTileRotation(DiscardRiverViewSlot slot)
+        private static Quaternion CalculateTileRotation(ViewSlot slot)
         {
             switch (slot)
             {
-                case DiscardRiverViewSlot.SelfBottom:
+                case ViewSlot.SelfBottom:
                 default:
                     return Quaternion.identity;
             }

@@ -326,7 +326,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI.MahjongHandView
   handContainer: {fileID: 1972641026}
-  tileButtonPrefab: {fileID: 8792027050792319394, guid: 5f307326666617c4e8318056c650e193, type: 3}
+  faceUpTileButtonPrefab: {fileID: 8792027050792319394, guid: 5f307326666617c4e8318056c650e193, type: 3}
+  faceDownTileButtonPrefab: {fileID: 0}
+  viewSlot: 0
 --- !u!114 &45752830
 MonoBehaviour:
   m_ObjectHideFlags: 0

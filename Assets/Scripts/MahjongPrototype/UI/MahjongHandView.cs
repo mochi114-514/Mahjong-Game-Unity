@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using MahjongPrototype.Domain;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace MahjongPrototype.UI
 {
@@ -13,19 +14,28 @@ namespace MahjongPrototype.UI
         [Tooltip("手牌ボタンを生成する親RectTransformです。Canvas/HandArea を割り当てます。")]
         [SerializeField] private RectTransform handContainer;
         [Tooltip("手牌1枚分のTileButtonViewテンプレートまたはPrefabです。")]
-        [SerializeField] private TileButtonView tileButtonPrefab;
+        [FormerlySerializedAs("tileButtonPrefab")]
+        [SerializeField] private TileButtonView faceUpTileButtonPrefab;
+        [SerializeField] private TileButtonView faceDownTileButtonPrefab;
+        [SerializeField] private ViewSlot viewSlot = ViewSlot.SelfBottom;
 
         private readonly List<TileButtonView> activeTileButtons = new List<TileButtonView>();
+        private SeatId dataSeat = SeatId.East;
+        private bool faceUp = true;
         private bool tilesInteractable = true;
         private bool warnedMissingHandContainer;
-        private bool warnedMissingTileButtonPrefab;
+        private bool warnedMissingFaceUpTileButtonPrefab;
+        private bool warnedMissingFaceDownTileButtonPrefab;
 
         public event Action<int> TileClicked;
+        public SeatId DataSeat => dataSeat;
+        public ViewSlot ViewSlot => viewSlot;
+        public bool FaceUp => faceUp;
 
         public void Configure(RectTransform container, TileButtonView prefab)
         {
             handContainer = container;
-            tileButtonPrefab = prefab;
+            faceUpTileButtonPrefab = prefab;
         }
 
         public void ConfigureMissingReferences(RectTransform fallbackContainer, TileButtonView fallbackPrefab)
@@ -33,11 +43,30 @@ namespace MahjongPrototype.UI
             if (handContainer == null)
                 handContainer = fallbackContainer;
 
-            if (tileButtonPrefab == null)
-                tileButtonPrefab = fallbackPrefab;
+            if (faceUpTileButtonPrefab == null)
+                faceUpTileButtonPrefab = fallbackPrefab;
         }
 
         public void Rebuild(IReadOnlyList<Tile> handTiles)
+        {
+            Render(handTiles, dataSeat, viewSlot, true, tilesInteractable);
+        }
+
+        public void Render(
+            IReadOnlyList<Tile> handTiles,
+            SeatId dataSeat,
+            ViewSlot viewSlot,
+            bool faceUp,
+            bool interactable)
+        {
+            this.dataSeat = dataSeat;
+            this.viewSlot = viewSlot;
+            this.faceUp = faceUp;
+            tilesInteractable = faceUp && interactable;
+            RebuildInternal(handTiles);
+        }
+
+        private void RebuildInternal(IReadOnlyList<Tile> handTiles)
         {
             Clear();
 
@@ -50,16 +79,18 @@ namespace MahjongPrototype.UI
                 return;
             }
 
-            if (tileButtonPrefab == null)
-            {
-                WarnMissingOnce(ref warnedMissingTileButtonPrefab, "TileButtonView prefab is not assigned.");
+            TileButtonView prefab = GetTileButtonPrefab(faceUp);
+            if (prefab == null)
                 return;
-            }
 
             for (int i = 0; i < handTiles.Count; i++)
             {
-                TileButtonView view = Instantiate(tileButtonPrefab, handContainer);
-                view.Initialize(i, handTiles[i], HandleTileClicked);
+                TileButtonView view = Instantiate(prefab, handContainer);
+                if (faceUp)
+                    view.Initialize(i, handTiles[i], HandleTileClicked);
+                else
+                    view.InitializeFaceDown(i, null);
+
                 view.SetInteractable(tilesInteractable);
                 activeTileButtons.Add(view);
             }
@@ -67,13 +98,13 @@ namespace MahjongPrototype.UI
 
         public void SetTilesInteractable(bool interactable)
         {
-            tilesInteractable = interactable;
+            tilesInteractable = faceUp && interactable;
 
             for (int i = 0; i < activeTileButtons.Count; i++)
             {
                 TileButtonView view = activeTileButtons[i];
                 if (view != null)
-                    view.SetInteractable(interactable);
+                    view.SetInteractable(tilesInteractable);
             }
         }
 
@@ -87,6 +118,25 @@ namespace MahjongPrototype.UI
             }
 
             activeTileButtons.Clear();
+        }
+
+        private TileButtonView GetTileButtonPrefab(bool faceUp)
+        {
+            if (faceUp)
+            {
+                if (faceUpTileButtonPrefab == null)
+                    WarnMissingOnce(ref warnedMissingFaceUpTileButtonPrefab, "Face-up TileButtonView prefab is not assigned.");
+
+                return faceUpTileButtonPrefab;
+            }
+
+            if (faceDownTileButtonPrefab != null)
+                return faceDownTileButtonPrefab;
+
+            WarnMissingOnce(
+                ref warnedMissingFaceDownTileButtonPrefab,
+                "Face-down TileButtonView prefab is not assigned. Falling back to face-up prefab with hidden label.");
+            return faceUpTileButtonPrefab;
         }
 
         private void HandleTileClicked(int handIndex)
