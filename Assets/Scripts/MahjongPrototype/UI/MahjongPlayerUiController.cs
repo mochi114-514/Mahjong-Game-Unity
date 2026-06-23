@@ -1,3 +1,4 @@
+using System;
 using MahjongPrototype.Domain;
 using UnityEngine;
 
@@ -17,11 +18,44 @@ namespace MahjongPrototype.UI
 
         private bool warnedMissingGameState;
         private bool warnedMissingDiscardRiverView;
+        private bool warnedMissingDrawnTileView;
+        private bool isDrawnTileViewSubscribed;
+
+        public event Action DrawnTileClicked;
 
         public ViewSlot ViewSlot => viewSlot;
         public MahjongHandView HandView => handView;
         public MahjongDiscardRiverView DiscardRiverView => discardRiverView;
         public MahjongDrawnTileView DrawnTileView => drawnTileView;
+
+        private void OnEnable()
+        {
+            CacheMissingViewReferences();
+            SubscribeViewEvents();
+        }
+
+        private void OnDisable()
+        {
+            UnsubscribeViewEvents();
+        }
+
+        public void ConfigureMissingViews(
+            MahjongHandView fallbackHandView,
+            MahjongDiscardRiverView fallbackDiscardRiverView,
+            MahjongDrawnTileView fallbackDrawnTileView)
+        {
+            if (handView == null)
+                handView = fallbackHandView;
+
+            if (discardRiverView == null)
+                discardRiverView = fallbackDiscardRiverView;
+
+            if (drawnTileView == null)
+                drawnTileView = fallbackDrawnTileView;
+
+            CacheMissingViewReferences();
+            SubscribeViewEvents();
+        }
 
         public void RenderDiscardRiver(MahjongGameState state, SeatId dataSeat)
         {
@@ -38,6 +72,69 @@ namespace MahjongPrototype.UI
             }
 
             discardRiverView.Rebuild(state.Discards, dataSeat, viewSlot);
+        }
+
+        public void RenderDrawnTile(MahjongGameState state, SeatId dataSeat)
+        {
+            if (state == null)
+            {
+                WarnMissingOnce(ref warnedMissingGameState, "Cannot render drawn tile because game state is not assigned.");
+                return;
+            }
+
+            if (drawnTileView == null)
+            {
+                WarnMissingOnce(ref warnedMissingDrawnTileView, "Drawn tile view is not assigned.");
+                return;
+            }
+
+            drawnTileView.Rebuild(state.GetPlayerSeat(dataSeat).DrawnTile);
+        }
+
+        public void SetDrawnTileInteractable(bool interactable)
+        {
+            if (drawnTileView == null)
+            {
+                WarnMissingOnce(ref warnedMissingDrawnTileView, "Drawn tile view is not assigned.");
+                return;
+            }
+
+            drawnTileView.SetTileInteractable(interactable);
+        }
+
+        private void CacheMissingViewReferences()
+        {
+            if (handView == null)
+                handView = GetComponentInChildren<MahjongHandView>(true);
+
+            if (discardRiverView == null)
+                discardRiverView = GetComponentInChildren<MahjongDiscardRiverView>(true);
+
+            if (drawnTileView == null)
+                drawnTileView = GetComponentInChildren<MahjongDrawnTileView>(true);
+        }
+
+        private void SubscribeViewEvents()
+        {
+            if (drawnTileView == null || isDrawnTileViewSubscribed)
+                return;
+
+            drawnTileView.DrawnTileClicked += HandleDrawnTileClicked;
+            isDrawnTileViewSubscribed = true;
+        }
+
+        private void UnsubscribeViewEvents()
+        {
+            if (drawnTileView == null || !isDrawnTileViewSubscribed)
+                return;
+
+            drawnTileView.DrawnTileClicked -= HandleDrawnTileClicked;
+            isDrawnTileViewSubscribed = false;
+        }
+
+        private void HandleDrawnTileClicked()
+        {
+            DrawnTileClicked?.Invoke();
         }
 
         private void WarnMissingOnce(ref bool warned, string message)
