@@ -37,12 +37,39 @@ namespace MahjongPrototype.Tests
                 object discardRiverView = CreateDiscardRiverView(root, prefab, out RectTransform container);
                 object controller = CreateController(root, discardRiverView, "SelfBottom");
 
-                Invoke(controller, "RenderDiscardRiver", gameState, ParseSeat("North"));
+                Invoke(controller, "RenderDiscardRiver", GetProperty(gameState, "Discards"), ParseSeat("North"));
 
                 Assert.That(container.childCount, Is.EqualTo(2));
                 Assert.That(GetTileLabelText(container.GetChild(0)), Is.EqualTo("9m"));
                 Assert.That(GetTileLabelText(container.GetChild(1)), Is.EqualTo("7p"));
                 Assert.That(GetProperty(controller, "ViewSlot").ToString(), Is.EqualTo("SelfBottom"));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(prefab);
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void ClearDiscardRiver_DelegatesToDiscardRiverView()
+        {
+            GameObject root = new GameObject("PlayerUiControllerClearDiscardRiverTest");
+            GameObject prefab = CreateTileButtonPrefab();
+            try
+            {
+                object gameState = CreateGameState("North");
+                AddDiscard(gameState, "North", "9m", 1);
+
+                object discardRiverView = CreateDiscardRiverView(root, prefab, out RectTransform container);
+                object controller = CreateController(root, discardRiverView, "SelfBottom");
+
+                Invoke(controller, "RenderDiscardRiver", GetProperty(gameState, "Discards"), ParseSeat("North"));
+                Assert.That(container.childCount, Is.EqualTo(1));
+
+                Invoke(controller, "ClearDiscardRiver");
+
+                Assert.That(container.childCount, Is.EqualTo(0));
             }
             finally
             {
@@ -64,7 +91,7 @@ namespace MahjongPrototype.Tests
                 object drawnTileView = CreateDrawnTileView(root, prefab, out RectTransform container);
                 object controller = CreateController(root, null, "SelfBottom", drawnTileView);
 
-                Invoke(controller, "RenderDrawnTile", gameState, ParseSeat("North"));
+                Invoke(controller, "RenderDrawnTile", GetDrawnTile(gameState, "North"));
 
                 Assert.That(container.childCount, Is.EqualTo(1));
                 Assert.That(GetTileLabelText(container.GetChild(0)), Is.EqualTo("5p"));
@@ -72,6 +99,33 @@ namespace MahjongPrototype.Tests
                 Invoke(controller, "SetDrawnTileInteractable", false);
 
                 Assert.That(GetTileButton(container.GetChild(0)).interactable, Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(prefab);
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void ClearDrawnTile_DelegatesToDrawnTileView()
+        {
+            GameObject root = new GameObject("PlayerUiControllerClearDrawnTileTest");
+            GameObject prefab = CreateTileButtonPrefab();
+            try
+            {
+                object gameState = CreateGameState("North");
+                SetDrawnTile(gameState, "North", "5p");
+
+                object drawnTileView = CreateDrawnTileView(root, prefab, out RectTransform container);
+                object controller = CreateController(root, null, "SelfBottom", drawnTileView);
+
+                Invoke(controller, "RenderDrawnTile", GetDrawnTile(gameState, "North"));
+                Assert.That(container.childCount, Is.EqualTo(1));
+
+                Invoke(controller, "ClearDrawnTile");
+
+                Assert.That(container.childCount, Is.EqualTo(0));
             }
             finally
             {
@@ -97,7 +151,7 @@ namespace MahjongPrototype.Tests
                 Assert.That(eventInfo, Is.Not.Null);
                 eventInfo.AddEventHandler(controller, (Action)(() => wasClicked = true));
 
-                Invoke(controller, "RenderDrawnTile", gameState, ParseSeat("North"));
+                Invoke(controller, "RenderDrawnTile", GetDrawnTile(gameState, "North"));
                 GetTileButton(container.GetChild(0)).onClick.Invoke();
 
                 Assert.That(wasClicked, Is.True);
@@ -171,6 +225,12 @@ namespace MahjongPrototype.Tests
         {
             object playerSeat = Invoke(gameState, "GetPlayerSeat", ParseSeat(seatName));
             Invoke(playerSeat, "SetDrawnTile", CreateTile(tileCode));
+        }
+
+        private static object GetDrawnTile(object gameState, string seatName)
+        {
+            object playerSeat = Invoke(gameState, "GetPlayerSeat", ParseSeat(seatName));
+            return GetProperty(playerSeat, "DrawnTile");
         }
 
         private static void AddDiscard(object gameState, string actorSeat, string tileCode, int turnIndex)

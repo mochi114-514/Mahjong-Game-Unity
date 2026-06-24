@@ -518,7 +518,7 @@ namespace MahjongPrototype.UI
             ConfigureSelfBottomPlayerUiControllerViews();
             if (selfBottomPlayerUiController != null)
             {
-                selfBottomPlayerUiController.RenderDrawnTile(state, state.SelfSeat);
+                selfBottomPlayerUiController.RenderDrawnTile(state.GetPlayerSeat(state.SelfSeat).DrawnTile);
                 return;
             }
 
@@ -531,16 +531,29 @@ namespace MahjongPrototype.UI
 
         private void RefreshDiscardRiver(MahjongGameState state)
         {
+            if (TryRefreshDiscardRiverThroughPlayerController(state))
+                return;
+
+            RefreshDiscardRiverFallback(state);
+        }
+
+        private bool TryRefreshDiscardRiverThroughPlayerController(MahjongGameState state)
+        {
             if (selfBottomPlayerUiController == null)
                 selfBottomPlayerUiController = FindPlayerUiController(ViewSlot.SelfBottom);
 
             ConfigureSelfBottomPlayerUiControllerViews();
             if (selfBottomPlayerUiController != null)
             {
-                selfBottomPlayerUiController.RenderDiscardRiver(state, state.SelfSeat);
-                return;
+                selfBottomPlayerUiController.RenderDiscardRiver(state.Discards, state.SelfSeat);
+                return true;
             }
 
+            return false;
+        }
+
+        private void RefreshDiscardRiverFallback(MahjongGameState state)
+        {
             if (discardRiverView == null)
                 EnsureDiscardRiverView();
 

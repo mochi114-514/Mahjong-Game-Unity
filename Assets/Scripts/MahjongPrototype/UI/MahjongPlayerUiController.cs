@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using MahjongPrototype.Domain;
 using UnityEngine;
 
@@ -16,7 +17,6 @@ namespace MahjongPrototype.UI
         [SerializeField] private MahjongDiscardRiverView discardRiverView;
         [SerializeField] private MahjongDrawnTileView drawnTileView;
 
-        private bool warnedMissingGameState;
         private bool warnedMissingDiscardRiverView;
         private bool warnedMissingDrawnTileView;
         private bool isDrawnTileViewSubscribed;
@@ -57,38 +57,45 @@ namespace MahjongPrototype.UI
             SubscribeViewEvents();
         }
 
-        public void RenderDiscardRiver(MahjongGameState state, SeatId dataSeat)
+        public void RenderDiscardRiver(IReadOnlyList<DiscardRecord> discards, SeatId dataSeat)
         {
-            if (state == null)
-            {
-                WarnMissingOnce(ref warnedMissingGameState, "Cannot render discard river because game state is not assigned.");
-                return;
-            }
-
             if (discardRiverView == null)
             {
                 WarnMissingOnce(ref warnedMissingDiscardRiverView, "Discard river view is not assigned.");
                 return;
             }
 
-            discardRiverView.Rebuild(state.Discards, dataSeat, viewSlot);
+            discardRiverView.Rebuild(discards, dataSeat, viewSlot);
         }
 
-        public void RenderDrawnTile(MahjongGameState state, SeatId dataSeat)
+        public void ClearDiscardRiver()
         {
-            if (state == null)
+            if (discardRiverView == null)
             {
-                WarnMissingOnce(ref warnedMissingGameState, "Cannot render drawn tile because game state is not assigned.");
+                WarnMissingOnce(ref warnedMissingDiscardRiverView, "Discard river view is not assigned.");
                 return;
             }
 
+            discardRiverView.Clear();
+        }
+
+        public void RenderDrawnTile(Tile? drawnTile)
+        {
             if (drawnTileView == null)
             {
                 WarnMissingOnce(ref warnedMissingDrawnTileView, "Drawn tile view is not assigned.");
                 return;
             }
 
-            drawnTileView.Rebuild(state.GetPlayerSeat(dataSeat).DrawnTile);
+            drawnTileView.Rebuild(drawnTile);
+        }
+
+        public void ClearDrawnTile()
+        {
+            if (drawnTileView == null)
+                return;
+
+            drawnTileView.Clear();
         }
 
         public void SetDrawnTileInteractable(bool interactable)
