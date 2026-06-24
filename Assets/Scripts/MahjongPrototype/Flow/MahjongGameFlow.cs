@@ -171,10 +171,9 @@ namespace MahjongPrototype
             }
 
             currentPlayerSeat.SetDrawnTile(result.Tile);
-            playerTurnManager.RefreshPhaseFromState(gameState);
             LogTurnDebug(
                 completedEventName,
-                $"phase={playerTurnManager.Phase}; drawnTile={result.Tile}",
+                $"phase={gameState.TurnPhase}; drawnTile={result.Tile}",
                 seat: gameState.CurrentTurn,
                 tile: result.Tile,
                 turnIndex: gameState.TurnIndex);
@@ -220,10 +219,9 @@ namespace MahjongPrototype
             }
 
             CommitDrawnTileToHandIfPresent(gameState.CurrentTurn);
-            playerTurnManager.RefreshPhaseFromState(gameState);
             LogTurnDebug(
                 "DiscardCompleted",
-                $"phase={playerTurnManager.Phase}; discardTile={result.Record.Tile}",
+                $"phase={gameState.TurnPhase}; discardTile={result.Record.Tile}",
                 seat: result.Record.ActorSeat,
                 tile: result.Record.Tile,
                 turnIndex: result.Record.TurnIndex);
@@ -266,10 +264,9 @@ namespace MahjongPrototype
                 return;
             }
 
-            playerTurnManager.RefreshPhaseFromState(gameState);
             LogTurnDebug(
                 "DiscardCompleted",
-                $"phase={playerTurnManager.Phase}; discardTile={result.Record.Tile}",
+                $"phase={gameState.TurnPhase}; discardTile={result.Record.Tile}",
                 seat: result.Record.ActorSeat,
                 tile: result.Record.Tile,
                 turnIndex: result.Record.TurnIndex);
@@ -404,10 +401,9 @@ namespace MahjongPrototype
             int turnIndex = gameState.WinDecisionTurnIndex;
             ClearWinDecision();
             gameState.IsRoundEnded = true;
-            playerTurnManager.MarkRoundEnded();
             LogTurnDebug(
                 "RoundEnded",
-                $"phase={playerTurnManager.Phase}; reason=WinDeclared",
+                $"phase={gameState.TurnPhase}; reason=WinDeclared",
                 seat: seat,
                 turnIndex: turnIndex);
 
@@ -464,7 +460,7 @@ namespace MahjongPrototype
             SeatId nextSeat = playerTurnManager.EndTurnAndSelectNext(gameState, gameState.ActiveTurnSeats);
             LogTurnDebug(
                 "EndTurn",
-                $"from={fromSeat}; to={nextSeat}; phase={playerTurnManager.Phase}",
+                $"from={fromSeat}; to={nextSeat}; phase={gameState.TurnPhase}",
                 seat: nextSeat,
                 turnIndex: gameState.TurnIndex);
             StartTurn(nextSeat, gameState.TurnIndex);
@@ -476,7 +472,7 @@ namespace MahjongPrototype
             LogTurnStarted(seat, turnIndex);
             LogTurnDebug(
                 "BeginTurn",
-                $"phase={playerTurnManager.Phase}; hasDrawnTile={gameState.GetPlayerSeat(seat).HasDrawnTile}",
+                $"phase={gameState.TurnPhase}; hasDrawnTile={gameState.GetPlayerSeat(seat).HasDrawnTile}",
                 seat: seat,
                 turnIndex: turnIndex);
             ResolveReservedSkillBeforeDraw(seat);
@@ -515,7 +511,7 @@ namespace MahjongPrototype
 
             LogTurnDebug(
                 "AutoDrawStarted",
-                $"phase={playerTurnManager.Phase}; hasDrawnTile={gameState.GetPlayerSeat(seat).HasDrawnTile}",
+                $"phase={gameState.TurnPhase}; hasDrawnTile={gameState.GetPlayerSeat(seat).HasDrawnTile}",
                 seat: seat,
                 turnIndex: turnIndex);
 
@@ -569,23 +565,15 @@ namespace MahjongPrototype
             if (isPending)
             {
                 gameState.BeginWinDecision(seat, turnIndex);
-                playerTurnManager.MarkWinDecision();
                 LogTurnDebug(
                     "WinDecision",
-                    $"phase={playerTurnManager.Phase}",
+                    $"phase={gameState.TurnPhase}",
                     seat: seat,
                     turnIndex: turnIndex);
                 return;
             }
 
             gameState.ClearWinDecision();
-            if (gameState.IsRoundEnded)
-            {
-                playerTurnManager.MarkRoundEnded();
-                return;
-            }
-
-            playerTurnManager.BeginTurn(gameState, gameState.CurrentTurn);
         }
 
         private void ClearWinDecision()
@@ -597,10 +585,9 @@ namespace MahjongPrototype
         {
             gameState.ClearWinDecision();
             gameState.IsRoundEnded = true;
-            playerTurnManager.MarkRoundEnded();
             LogTurnDebug(
                 "RoundEnded",
-                $"phase={playerTurnManager.Phase}; reason={reason}",
+                $"phase={gameState.TurnPhase}; reason={reason}",
                 seat: gameState.CurrentTurn,
                 turnIndex: gameState.TurnIndex);
             eventNotifier?.NotifyRoundEnded(reason);
@@ -694,7 +681,7 @@ namespace MahjongPrototype
             PlayerSeat currentPlayerSeat = gameState.GetPlayerSeat(gameState.CurrentTurn);
             LogTurnDebug(
                 eventName,
-                $"reason={reason}; phase={playerTurnManager.Phase}; hasDrawnTile={currentPlayerSeat.HasDrawnTile}",
+                $"reason={reason}; phase={gameState.TurnPhase}; hasDrawnTile={currentPlayerSeat.HasDrawnTile}",
                 seat: gameState.CurrentTurn,
                 turnIndex: gameState.TurnIndex);
         }

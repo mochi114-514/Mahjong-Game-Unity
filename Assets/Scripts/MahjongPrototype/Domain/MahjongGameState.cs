@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using MahjongPrototype.Skills;
+using TurnPhaseType = MahjongPrototype.Domain.TurnPhase;
 
 namespace MahjongPrototype.Domain
 {
@@ -46,7 +47,17 @@ namespace MahjongPrototype.Domain
         public bool IsWinDecisionPending { get; private set; }
         public SeatId WinDecisionSeat { get; private set; }
         public int WinDecisionTurnIndex { get; private set; }
-        public bool IsInteractionLocked => IsWinDecisionPending || IsRoundEnded;
+        public TurnPhaseType TurnPhase =>
+            IsRoundEnded
+                ? TurnPhaseType.RoundEnded
+                : IsWinDecisionPending
+                    ? TurnPhaseType.WinDecision
+                    : GetPlayerSeat(CurrentTurn).HasDrawnTile
+                        ? TurnPhaseType.WaitingForDiscard
+                        : TurnPhaseType.WaitingForDraw;
+        public bool IsInteractionLocked =>
+            TurnPhase == TurnPhaseType.WinDecision ||
+            TurnPhase == TurnPhaseType.RoundEnded;
         public IReadOnlyList<SeatId> ActiveSeats => activeSeats;
         public IReadOnlyList<SeatId> ActiveTurnSeats => activeSeats;
         public IReadOnlyList<SeatId> OccupiedSeats => GetOccupiedSeats();

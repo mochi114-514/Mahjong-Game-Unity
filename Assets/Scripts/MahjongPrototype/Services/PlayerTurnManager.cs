@@ -11,10 +11,7 @@ namespace MahjongPrototype.Services
         public PlayerTurnManager(TurnOrderService turnOrderService)
         {
             this.turnOrderService = turnOrderService ?? throw new ArgumentNullException(nameof(turnOrderService));
-            Phase = TurnPhase.NotStarted;
         }
-
-        public TurnPhase Phase { get; private set; }
 
         public void InitializeRound(MahjongGameState gameState, SeatId firstSeat)
         {
@@ -32,19 +29,6 @@ namespace MahjongPrototype.Services
                 throw new ArgumentNullException(nameof(gameState));
 
             gameState.CurrentTurn = seat;
-            RefreshPhaseFromState(gameState);
-        }
-
-        public void RefreshPhaseFromState(MahjongGameState gameState)
-        {
-            if (gameState == null)
-                throw new ArgumentNullException(nameof(gameState));
-
-            Phase = gameState.IsRoundEnded
-                ? TurnPhase.RoundEnded
-                : gameState.GetPlayerSeat(gameState.CurrentTurn).HasDrawnTile
-                    ? TurnPhase.WaitingForDiscard
-                    : TurnPhase.WaitingForDraw;
         }
 
         public SeatId EndTurnAndSelectNext(
@@ -59,26 +43,6 @@ namespace MahjongPrototype.Services
             gameState.TurnIndex++;
             BeginTurn(gameState, nextSeat);
             return nextSeat;
-        }
-
-        public bool IsTurnActive(MahjongGameState gameState, SeatId seat)
-        {
-            return gameState != null &&
-                !gameState.IsRoundEnded &&
-                Phase != TurnPhase.NotStarted &&
-                Phase != TurnPhase.WinDecision &&
-                Phase != TurnPhase.RoundEnded &&
-                gameState.CurrentTurn == seat;
-        }
-
-        public void MarkWinDecision()
-        {
-            Phase = TurnPhase.WinDecision;
-        }
-
-        public void MarkRoundEnded()
-        {
-            Phase = TurnPhase.RoundEnded;
         }
     }
 }

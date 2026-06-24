@@ -1,4 +1,4 @@
-namespace MahjongPrototype.Services
+namespace MahjongPrototype.Domain
 {
     public enum TurnPhase
     {
