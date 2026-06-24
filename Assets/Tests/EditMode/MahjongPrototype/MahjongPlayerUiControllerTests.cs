@@ -297,6 +297,53 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
+        public void RenderDrawnTile_FaceDown_HidesTileAndDisablesClick()
+        {
+            GameObject root = new GameObject("PlayerUiControllerFaceDownDrawnTileTest");
+            GameObject faceUpPrefab = CreateTileButtonPrefab();
+            GameObject faceDownPrefab = CreateTileButtonPrefab();
+            try
+            {
+                object gameState = CreateGameState("East");
+                SetDrawnTile(gameState, "West", "8p");
+
+                object drawnTileView = CreateDrawnTileView(
+                    root,
+                    faceUpPrefab,
+                    faceDownPrefab,
+                    out RectTransform container);
+                object controller = CreateController(root, null, "AcrossTop", drawnTileView);
+                bool wasClicked = false;
+                EventInfo eventInfo = controller.GetType().GetEvent("DrawnTileClicked");
+                Assert.That(eventInfo, Is.Not.Null);
+                eventInfo.AddEventHandler(controller, (Action)(() => wasClicked = true));
+
+                Invoke(
+                    controller,
+                    "RenderDrawnTile",
+                    GetDrawnTile(gameState, "West"),
+                    false,
+                    false);
+
+                Assert.That(container.childCount, Is.EqualTo(1));
+                Assert.That(GetTileLabelText(container.GetChild(0)), Is.EqualTo(string.Empty));
+                Assert.That(GetTileButton(container.GetChild(0)).interactable, Is.False);
+
+                Invoke(controller, "SetDrawnTileInteractable", true);
+                Assert.That(GetTileButton(container.GetChild(0)).interactable, Is.False);
+
+                GetTileButton(container.GetChild(0)).onClick.Invoke();
+                Assert.That(wasClicked, Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(faceDownPrefab);
+                UnityEngine.Object.DestroyImmediate(faceUpPrefab);
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
         public void UiManager_SubscribeNotifications_UsesTypedEventsWithoutAnyEventRefresh()
         {
             GameObject root = new GameObject("TypedUiNotificationSubscriptionTest");
@@ -386,6 +433,58 @@ namespace MahjongPrototype.Tests
             }
         }
 
+        [Test]
+        public void RefreshDrawnTileForSeat_RendersOpponentDrawnTileFaceDown()
+        {
+            GameObject root = new GameObject("OpponentDrawnTilePartialRefreshTest");
+            GameObject faceUpPrefab = CreateTileButtonPrefab();
+            GameObject faceDownPrefab = CreateTileButtonPrefab();
+            root.SetActive(false);
+            try
+            {
+                object gameState = CreateGameState("East");
+                Invoke(
+                    gameState,
+                    "AssignPlayerToSeat",
+                    ParsePlayerId("Player2"),
+                    ParseSeat("West"));
+                Invoke(gameState, "RebuildActiveTurnSeatsFromSeatSlots");
+                SetDrawnTile(gameState, "West", "8p");
+
+                object gameFlow = root.AddComponent(Type.GetType(MahjongGameFlowTypeName, true));
+                SetField(gameFlow, "gameState", gameState);
+
+                GameObject opponentObject = new GameObject("AcrossTopPlayerUi");
+                opponentObject.transform.SetParent(root.transform, false);
+                object drawnTileView = CreateDrawnTileView(
+                    opponentObject,
+                    faceUpPrefab,
+                    faceDownPrefab,
+                    out RectTransform opponentContainer);
+                object opponentController = CreateController(
+                    opponentObject,
+                    null,
+                    "AcrossTop",
+                    drawnTileView);
+
+                object uiManager = root.AddComponent(Type.GetType(MahjongPrototypeUiManagerTypeName, true));
+                SetField(uiManager, "gameFlow", gameFlow);
+                SetField(uiManager, "acrossTopPlayerUiController", opponentController);
+
+                Invoke(uiManager, "RefreshDrawnTileForSeat", ParseSeat("West"));
+
+                Assert.That(opponentContainer.childCount, Is.EqualTo(1));
+                Assert.That(GetTileLabelText(opponentContainer.GetChild(0)), Is.EqualTo(string.Empty));
+                Assert.That(GetTileButton(opponentContainer.GetChild(0)).interactable, Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(faceDownPrefab);
+                UnityEngine.Object.DestroyImmediate(faceUpPrefab);
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
         private static object CreateController(
             GameObject root,
             object discardRiverView,
@@ -457,6 +556,31 @@ namespace MahjongPrototype.Tests
 
             object tileButtonPrefab = prefab.GetComponent(Type.GetType(TileButtonViewTypeName, true));
             Invoke(view, "Configure", container, tileButtonPrefab);
+            return view;
+        }
+
+        private static object CreateDrawnTileView(
+            GameObject root,
+            GameObject faceUpPrefab,
+            GameObject faceDownPrefab,
+            out RectTransform container)
+        {
+            Type viewType = Type.GetType(MahjongDrawnTileViewTypeName, true);
+            object view = root.AddComponent(viewType);
+
+            GameObject containerObject = new GameObject("DrawnTileContainer", typeof(RectTransform));
+            container = containerObject.GetComponent<RectTransform>();
+            container.SetParent(root.transform, false);
+
+            Type tileButtonViewType = Type.GetType(TileButtonViewTypeName, true);
+            object faceUpTileButtonPrefab = faceUpPrefab.GetComponent(tileButtonViewType);
+            object faceDownTileButtonPrefab = faceDownPrefab.GetComponent(tileButtonViewType);
+            Invoke(
+                view,
+                "Configure",
+                container,
+                faceUpTileButtonPrefab,
+                faceDownTileButtonPrefab);
             return view;
         }
 

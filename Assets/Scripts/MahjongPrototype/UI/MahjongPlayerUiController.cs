@@ -121,6 +121,17 @@ namespace MahjongPrototype.UI
             drawnTileView.Rebuild(drawnTile);
         }
 
+        public void RenderDrawnTile(Tile? drawnTile, bool faceUp, bool interactable)
+        {
+            if (drawnTileView == null)
+            {
+                WarnMissingOnce(ref warnedMissingDrawnTileView, "Drawn tile view is not assigned.");
+                return;
+            }
+
+            drawnTileView.Render(drawnTile, faceUp, interactable);
+        }
+
         public void ClearDrawnTile()
         {
             if (drawnTileView == null)

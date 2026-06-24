@@ -577,24 +577,76 @@ namespace MahjongPrototype.UI
 
         private void RefreshDrawnTile(MahjongGameState state)
         {
-            MahjongPlayerUiController controller = GetPlayerUiController(ViewSlot.SelfBottom);
-            if (controller == null)
-                return;
+            HashSet<ViewSlot> renderedViewSlots = new HashSet<ViewSlot>();
+            IReadOnlyList<SeatId> displaySeats = state.OccupiedSeats;
+            for (int i = 0; i < displaySeats.Count; i++)
+            {
+                SeatId seat = displaySeats[i];
+                SeatSlot seatSlot = state.GetSeatSlot(seat);
+                if (seatSlot.IsEmpty)
+                    continue;
 
-            Tile? drawnTile = state.GetPlayerSeat(state.SelfSeat).DrawnTile;
-            if (drawnTile.HasValue)
-                controller.RenderDrawnTile(drawnTile);
-            else
-                controller.ClearDrawnTile();
+                ViewSlot viewSlot = SeatToViewSlotResolver.Resolve(state.SelfSeat, seat);
+                RefreshDrawnTileForSeat(state, seat);
+                renderedViewSlots.Add(viewSlot);
+            }
+
+            ClearUnrenderedDrawnTiles(renderedViewSlots);
         }
 
         private void RefreshDrawnTileForSeat(SeatId seat)
         {
             MahjongGameState state = gameFlow != null ? gameFlow.CurrentState : null;
-            if (state == null || !state.IsSelfSeat(seat))
+            if (state == null)
                 return;
 
-            RefreshDrawnTile(state);
+            RefreshDrawnTileForSeat(state, seat);
+        }
+
+        private void RefreshDrawnTileForSeat(MahjongGameState state, SeatId seat)
+        {
+            SeatSlot seatSlot = state.GetSeatSlot(seat);
+            if (seatSlot.IsEmpty)
+                return;
+
+            ViewSlot viewSlot = SeatToViewSlotResolver.Resolve(state.SelfSeat, seat);
+            MahjongPlayerUiController controller = GetPlayerUiController(viewSlot);
+            if (controller == null)
+                return;
+
+            bool isSelf = seatSlot.PlayerId == state.SelfPlayerId;
+            Tile? drawnTile = state.GetPlayerSeat(seat).DrawnTile;
+            if (drawnTile.HasValue)
+            {
+                controller.RenderDrawnTile(
+                    drawnTile,
+                    isSelf,
+                    isSelf && CanUseSelfGameplayInput(state));
+            }
+            else
+            {
+                controller.ClearDrawnTile();
+            }
+        }
+
+        private void ClearUnrenderedDrawnTiles(HashSet<ViewSlot> renderedViewSlots)
+        {
+            ClearPlayerDrawnTileIfUnrendered(ViewSlot.SelfBottom, renderedViewSlots);
+            ClearPlayerDrawnTileIfUnrendered(ViewSlot.NextLeft, renderedViewSlots);
+            ClearPlayerDrawnTileIfUnrendered(ViewSlot.AcrossTop, renderedViewSlots);
+            ClearPlayerDrawnTileIfUnrendered(ViewSlot.PreviousRight, renderedViewSlots);
+        }
+
+        private void ClearPlayerDrawnTileIfUnrendered(
+            ViewSlot viewSlot,
+            HashSet<ViewSlot> renderedViewSlots)
+        {
+            if (renderedViewSlots.Contains(viewSlot))
+                return;
+
+            MahjongPlayerUiController controller = GetPlayerUiController(viewSlot);
+            if (controller != null)
+                controller.ClearDrawnTile();
         }
 
         private void RefreshDiscardRiver(MahjongGameState state)

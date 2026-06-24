@@ -1900,7 +1900,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI.MahjongDrawnTileView
   drawnTileContainer: {fileID: 413054171}
-  tileButtonPrefab: {fileID: 8792027050792319394, guid: 5f307326666617c4e8318056c650e193, type: 3}
+  faceUpTileButtonPrefab: {fileID: 8792027050792319394, guid: 5f307326666617c4e8318056c650e193, type: 3}
+  faceDownTileButtonPrefab: {fileID: 4322355495218845144, guid: 7717136aef892bf419fe25f605ef1a30, type: 3}
 --- !u!1 &619394800
 GameObject:
   m_ObjectHideFlags: 0
@@ -2674,7 +2675,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI.MahjongDrawnTileView
   drawnTileContainer: {fileID: 69184541}
-  tileButtonPrefab: {fileID: 8792027050792319394, guid: 5f307326666617c4e8318056c650e193, type: 3}
+  faceUpTileButtonPrefab: {fileID: 8792027050792319394, guid: 5f307326666617c4e8318056c650e193, type: 3}
+  faceDownTileButtonPrefab: {fileID: 4322355495218845144, guid: 7717136aef892bf419fe25f605ef1a30, type: 3}
 --- !u!114 &1475011001
 MonoBehaviour:
   m_ObjectHideFlags: 0
