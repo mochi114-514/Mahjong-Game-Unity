@@ -462,7 +462,7 @@ namespace MahjongPrototype.Tests
         [Test]
         public void RebuildActiveTurnSeatsFromSeatSlots_SkipsEmptySeatsAndRepairsCurrentTurn()
         {
-            object gameState = CreateGameState("East", "South", "West", "North");
+            object gameState = CreateGameState("East");
             Invoke(gameState, "SetSelfSeat", ParseSeat("South"));
             Invoke(gameState, "AssignPlayerToSeat", ParsePlayerId("Player2"), ParseSeat("North"));
             SetProperty(gameState, "CurrentTurn", ParseSeat("East"));
@@ -525,6 +525,110 @@ namespace MahjongPrototype.Tests
             }
         }
 
+        [TestCase("East", "West")]
+        [TestCase("South", "North")]
+        [TestCase("West", "East")]
+        [TestCase("North", "South")]
+        public void GameFlow_TwoParticipantsPlacesPlayer2AcrossFromSelf(
+            string selfSeatName,
+            string player2SeatName)
+        {
+            GameObject gameObject = new GameObject("MahjongGameFlowTwoParticipantSeatTest");
+            try
+            {
+                object gameFlow = AddConfiguredGameFlow(gameObject, false);
+                SetPrivateField(gameFlow, "participantCount", 2);
+                SetPrivateField(gameFlow, "fixedSelfSeat", ParseSeat(selfSeatName));
+
+                Invoke(gameFlow, "StartNewRound");
+
+                object gameState = GetProperty(gameFlow, "CurrentState");
+                Assert.That(
+                    Invoke(gameState, "GetSeatByPlayerId", ParsePlayerId("Player1")).ToString(),
+                    Is.EqualTo(selfSeatName));
+                Assert.That(
+                    Invoke(gameState, "GetSeatByPlayerId", ParsePlayerId("Player2")).ToString(),
+                    Is.EqualTo(player2SeatName));
+                Assert.That(GetProperty(gameState, "CurrentTurn").ToString(), Is.EqualTo(selfSeatName));
+                Assert.That(GetProperty(gameState, "CurrentTurnPlayerId").ToString(), Is.EqualTo("Player1"));
+                Assert.That(GetProperty(GetProperty(gameState, "OccupiedSeats"), "Count"), Is.EqualTo(2));
+                Assert.That(GetProperty(GetProperty(gameState, "ActiveTurnSeats"), "Count"), Is.EqualTo(2));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
+        public void GameFlow_ThreeParticipantsAssignsPlayer1ThroughPlayer3()
+        {
+            GameObject gameObject = new GameObject("MahjongGameFlowThreeParticipantSeatTest");
+            try
+            {
+                object gameFlow = AddConfiguredGameFlow(gameObject, false);
+                SetPrivateField(gameFlow, "participantCount", 3);
+                SetPrivateField(gameFlow, "fixedSelfSeat", ParseSeat("East"));
+
+                Invoke(gameFlow, "StartNewRound");
+
+                object gameState = GetProperty(gameFlow, "CurrentState");
+                AssertSeatList(GetProperty(gameState, "OccupiedSeats"), "East", "South", "West");
+                AssertSeatList(GetProperty(gameState, "ActiveTurnSeats"), "East", "South", "West");
+                Assert.That(GetProperty(gameState, "CurrentTurn").ToString(), Is.EqualTo("East"));
+                Assert.That(GetProperty(gameState, "CurrentTurnPlayerId").ToString(), Is.EqualTo("Player1"));
+                Assert.That(
+                    Invoke(gameState, "GetSeatByPlayerId", ParsePlayerId("Player1")).ToString(),
+                    Is.EqualTo("East"));
+                Assert.That(
+                    Invoke(gameState, "GetSeatByPlayerId", ParsePlayerId("Player2")).ToString(),
+                    Is.EqualTo("South"));
+                Assert.That(
+                    Invoke(gameState, "GetSeatByPlayerId", ParsePlayerId("Player3")).ToString(),
+                    Is.EqualTo("West"));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
+        public void GameFlow_FourParticipantsAssignsAllPlayers()
+        {
+            GameObject gameObject = new GameObject("MahjongGameFlowFourParticipantSeatTest");
+            try
+            {
+                object gameFlow = AddConfiguredGameFlow(gameObject, false);
+                SetPrivateField(gameFlow, "participantCount", 4);
+                SetPrivateField(gameFlow, "fixedSelfSeat", ParseSeat("East"));
+
+                Invoke(gameFlow, "StartNewRound");
+
+                object gameState = GetProperty(gameFlow, "CurrentState");
+                AssertSeatList(GetProperty(gameState, "OccupiedSeats"), "East", "South", "West", "North");
+                AssertSeatList(GetProperty(gameState, "ActiveTurnSeats"), "East", "South", "West", "North");
+                Assert.That(GetProperty(gameState, "CurrentTurn").ToString(), Is.EqualTo("East"));
+                Assert.That(GetProperty(gameState, "CurrentTurnPlayerId").ToString(), Is.EqualTo("Player1"));
+                Assert.That(
+                    Invoke(gameState, "GetSeatByPlayerId", ParsePlayerId("Player1")).ToString(),
+                    Is.EqualTo("East"));
+                Assert.That(
+                    Invoke(gameState, "GetSeatByPlayerId", ParsePlayerId("Player2")).ToString(),
+                    Is.EqualTo("South"));
+                Assert.That(
+                    Invoke(gameState, "GetSeatByPlayerId", ParsePlayerId("Player3")).ToString(),
+                    Is.EqualTo("West"));
+                Assert.That(
+                    Invoke(gameState, "GetSeatByPlayerId", ParsePlayerId("Player4")).ToString(),
+                    Is.EqualTo("North"));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
         private static object AddConfiguredGameFlow(GameObject gameObject, bool enableAutoDraw)
         {
             object gameFlow = gameObject.AddComponent(GetMahjongGameFlowType());
@@ -555,7 +659,23 @@ namespace MahjongPrototype.Tests
             Assert.That(createWall, Is.Not.Null);
 
             object wall = createWall.Invoke(null, new object[] { null });
-            return Activator.CreateInstance(gameStateType, wall, CreateSeatList(seatNames));
+            object gameState = Activator.CreateInstance(gameStateType, wall);
+            AssignPlayersToSeats(gameState, seatNames);
+            return gameState;
+        }
+
+        private static void AssignPlayersToSeats(object gameState, string[] seatNames)
+        {
+            for (int i = 0; i < seatNames.Length; i++)
+            {
+                Invoke(
+                    gameState,
+                    "AssignPlayerToSeat",
+                    ParsePlayerId($"Player{i + 1}"),
+                    ParseSeat(seatNames[i]));
+            }
+
+            Invoke(gameState, "RebuildActiveTurnSeatsFromSeatSlots");
         }
 
         private static object CreateTile(string code)

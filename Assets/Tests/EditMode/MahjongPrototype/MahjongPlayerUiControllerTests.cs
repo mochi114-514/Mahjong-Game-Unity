@@ -1,5 +1,4 @@
 using System;
-using System.Collections;
 using System.Linq.Expressions;
 using System.Reflection;
 using NUnit.Framework;
@@ -375,9 +374,9 @@ namespace MahjongPrototype.Tests
             Assert.That(createWall, Is.Not.Null);
 
             object wall = createWall.Invoke(null, new object[] { null });
-            object gameState = Activator.CreateInstance(gameStateType, wall, CreateSeatList(selfSeat));
+            object gameState = Activator.CreateInstance(gameStateType, wall);
             Invoke(gameState, "SetSelfSeat", ParseSeat(selfSeat));
-            Invoke(gameState, "SetActiveSeats", CreateSeatList(selfSeat));
+            Invoke(gameState, "RebuildActiveTurnSeatsFromSeatSlots");
             return gameState;
         }
 
@@ -438,18 +437,6 @@ namespace MahjongPrototype.Tests
 
             prefab.AddComponent(Type.GetType(TileButtonViewTypeName, true));
             return prefab;
-        }
-
-        private static IList CreateSeatList(params string[] seatNames)
-        {
-            Type seatIdType = Type.GetType(SeatIdTypeName, true);
-            Type listType = typeof(System.Collections.Generic.List<>).MakeGenericType(seatIdType);
-            IList list = (IList)Activator.CreateInstance(listType);
-
-            for (int i = 0; i < seatNames.Length; i++)
-                list.Add(ParseSeat(seatNames[i]));
-
-            return list;
         }
 
         private static object ParseSeat(string seatName)

@@ -1375,7 +1375,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.MahjongGameFlow
   viewerSeat: 0
-  initialActiveSeats: 00000000
+  participantCount: 1
   randomizeSelfSeat: 1
   fixedSelfSeat: 0
   initialHandTileCount: 13

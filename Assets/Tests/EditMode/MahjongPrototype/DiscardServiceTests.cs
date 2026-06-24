@@ -1,5 +1,4 @@
 using System;
-using System.Collections;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
@@ -117,7 +116,24 @@ namespace MahjongPrototype.Tests
             Assert.That(createWall, Is.Not.Null);
 
             object wall = createWall.Invoke(null, new object[] { 12345 });
-            return Activator.CreateInstance(gameStateType, wall, CreateSeatList(seatNames));
+            object gameState = Activator.CreateInstance(gameStateType, wall);
+            AssignPlayersToSeats(gameState, seatNames);
+            return gameState;
+        }
+
+        private static void AssignPlayersToSeats(object gameState, string[] seatNames)
+        {
+            Type playerIdType = Type.GetType("MahjongPrototype.Domain.PlayerId, Assembly-CSharp", true);
+            for (int i = 0; i < seatNames.Length; i++)
+            {
+                Invoke(
+                    gameState,
+                    "AssignPlayerToSeat",
+                    Enum.Parse(playerIdType, $"Player{i + 1}"),
+                    ParseSeat(seatNames[i]));
+            }
+
+            Invoke(gameState, "RebuildActiveTurnSeatsFromSeatSlots");
         }
 
         private static void AddHandTile(object gameState, string seatName, string tileCode)
@@ -172,18 +188,6 @@ namespace MahjongPrototype.Tests
                 BindingFlags.NonPublic | BindingFlags.Instance);
             Assert.That(field, Is.Not.Null);
             field.SetValue(target, value);
-        }
-
-        private static IList CreateSeatList(params string[] seatNames)
-        {
-            Type seatIdType = Type.GetType(SeatIdTypeName, true);
-            Type listType = typeof(System.Collections.Generic.List<>).MakeGenericType(seatIdType);
-            IList list = (IList)Activator.CreateInstance(listType);
-
-            for (int i = 0; i < seatNames.Length; i++)
-                list.Add(ParseSeat(seatNames[i]));
-
-            return list;
         }
 
         private static object ParseSeat(string seatName)

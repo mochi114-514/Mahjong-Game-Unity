@@ -56,7 +56,6 @@ namespace MahjongPrototype.Tests
             try
             {
                 object gameState = CreateGameState("North");
-                Invoke(gameState, "SetActiveSeats", CreateSeatList("East"));
                 AddHandTile(gameState, "North", "8m");
 
                 object boardView = CreateBoardView(root, prefab, out object handView, out RectTransform container);
@@ -139,9 +138,9 @@ namespace MahjongPrototype.Tests
             Assert.That(createWall, Is.Not.Null);
 
             object wall = createWall.Invoke(null, new object[] { null });
-            object gameState = Activator.CreateInstance(gameStateType, wall, CreateSeatList(selfSeat));
+            object gameState = Activator.CreateInstance(gameStateType, wall);
             Invoke(gameState, "SetSelfSeat", ParseSeat(selfSeat));
-            Invoke(gameState, "SetActiveSeats", CreateSeatList(selfSeat));
+            Invoke(gameState, "RebuildActiveTurnSeatsFromSeatSlots");
             return gameState;
         }
 

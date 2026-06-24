@@ -21,16 +21,13 @@ namespace MahjongPrototype.Domain
         private readonly List<DiscardRecord> discards = new List<DiscardRecord>();
         private readonly List<ActiveSkillEffect> activeSkillEffects = new List<ActiveSkillEffect>();
 
-        public MahjongGameState(Wall wall, IEnumerable<SeatId> initialActiveSeats)
+        public MahjongGameState(Wall wall)
         {
             Wall = wall ?? throw new ArgumentNullException(nameof(wall));
 
-            if (initialActiveSeats == null)
-                throw new ArgumentNullException(nameof(initialActiveSeats));
-
             InitializeSeatSlots();
             SetSelfSeat(SeatId.East);
-            SetActiveSeats(initialActiveSeats);
+            RebuildActiveTurnSeatsFromSeatSlots();
             TurnIndex = 1;
         }
 
@@ -73,30 +70,6 @@ namespace MahjongPrototype.Domain
         public void SetSelfSeat(SeatId selfSeat)
         {
             AssignPlayerToSeat(SelfPlayerId, selfSeat);
-        }
-
-        public void SetActiveSeats(IEnumerable<SeatId> seats)
-        {
-            if (seats == null)
-                throw new ArgumentNullException(nameof(seats));
-
-            activeSeats.Clear();
-            foreach (SeatId seat in seats)
-            {
-                if (activeSeats.Contains(seat))
-                    continue;
-
-                activeSeats.Add(seat);
-                GetPlayerSeat(seat);
-            }
-
-            if (activeSeats.Count <= 0)
-            {
-                activeSeats.Add(SelfSeat);
-                GetPlayerSeat(SelfSeat);
-            }
-
-            CurrentTurn = activeSeats[0];
         }
 
         public void RebuildActiveTurnSeatsFromSeatSlots()

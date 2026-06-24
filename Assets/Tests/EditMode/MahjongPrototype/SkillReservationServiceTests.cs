@@ -1,5 +1,4 @@
 using System;
-using System.Collections;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
@@ -63,11 +62,11 @@ namespace MahjongPrototype.Tests
             GameObject gameObject = new GameObject("ReservationResolutionRegistersSkillTest");
             try
             {
-                object gameFlow = AddConfiguredGameFlow(gameObject, false, "East", "South");
+                object gameFlow = AddConfiguredGameFlow(gameObject, false, 2);
                 Invoke(gameFlow, "StartNewRound");
                 object gameState = GetProperty(gameFlow, "CurrentState");
 
-                SetProperty(gameState, "CurrentTurn", ParseSeat("South"));
+                SetProperty(gameState, "CurrentTurn", ParseSeat("West"));
                 Invoke(gameFlow, "RequestForceDrawSkillForSeat", ParseSeat("East"), "3m");
 
                 Assert.That(GetActiveSkillEffectCount(gameState), Is.EqualTo(0));
@@ -92,11 +91,11 @@ namespace MahjongPrototype.Tests
             GameObject gameObject = new GameObject("ReservationAutoDrawAppliesSkillTest");
             try
             {
-                object gameFlow = AddConfiguredGameFlow(gameObject, true, "East", "South");
+                object gameFlow = AddConfiguredGameFlow(gameObject, true, 2);
                 Invoke(gameFlow, "StartNewRound");
                 object gameState = GetProperty(gameFlow, "CurrentState");
 
-                SetProperty(gameState, "CurrentTurn", ParseSeat("South"));
+                SetProperty(gameState, "CurrentTurn", ParseSeat("West"));
                 Invoke(gameFlow, "RequestForceDrawSkillForSeat", ParseSeat("East"), "4m");
 
                 object eastSeat = Invoke(gameState, "GetPlayerSeat", ParseSeat("East"));
@@ -119,7 +118,7 @@ namespace MahjongPrototype.Tests
             GameObject gameObject = new GameObject("CurrentTurnSkillKeepsDrawnTileTest");
             try
             {
-                object gameFlow = AddConfiguredGameFlow(gameObject, false, "East");
+                object gameFlow = AddConfiguredGameFlow(gameObject, false, 1);
                 Invoke(gameFlow, "StartNewRound");
                 object gameState = GetProperty(gameFlow, "CurrentState");
 
@@ -157,7 +156,7 @@ namespace MahjongPrototype.Tests
             Assert.That(GetProperty(effect, "OwnerSeat").ToString(), Is.EqualTo("East"));
         }
 
-        private static object AddConfiguredGameFlow(GameObject gameObject, bool enableAutoDraw, params string[] activeSeats)
+        private static object AddConfiguredGameFlow(GameObject gameObject, bool enableAutoDraw, int participantCount)
         {
             object gameFlow = gameObject.AddComponent(Type.GetType(MahjongGameFlowTypeName, true));
             SetPrivateField(gameFlow, "enableDevLog", false);
@@ -168,7 +167,7 @@ namespace MahjongPrototype.Tests
             SetPrivateField(gameFlow, "enableAutoDraw", enableAutoDraw);
             SetPrivateField(gameFlow, "randomizeSelfSeat", false);
             SetPrivateField(gameFlow, "fixedSelfSeat", ParseSeat("East"));
-            SetPrivateField(gameFlow, "initialActiveSeats", CreateSeatList(activeSeats));
+            SetPrivateField(gameFlow, "participantCount", participantCount);
             return gameFlow;
         }
 
@@ -202,7 +201,24 @@ namespace MahjongPrototype.Tests
             Assert.That(createWall, Is.Not.Null);
 
             object wall = createWall.Invoke(null, new object[] { 12345 });
-            return Activator.CreateInstance(gameStateType, wall, CreateSeatList(seatNames));
+            object gameState = Activator.CreateInstance(gameStateType, wall);
+            AssignPlayersToSeats(gameState, seatNames);
+            return gameState;
+        }
+
+        private static void AssignPlayersToSeats(object gameState, string[] seatNames)
+        {
+            Type playerIdType = Type.GetType("MahjongPrototype.Domain.PlayerId, Assembly-CSharp", true);
+            for (int i = 0; i < seatNames.Length; i++)
+            {
+                Invoke(
+                    gameState,
+                    "AssignPlayerToSeat",
+                    Enum.Parse(playerIdType, $"Player{i + 1}"),
+                    ParseSeat(seatNames[i]));
+            }
+
+            Invoke(gameState, "RebuildActiveTurnSeatsFromSeatSlots");
         }
 
         private static object CreateTile(string code)
@@ -271,18 +287,6 @@ namespace MahjongPrototype.Tests
                 BindingFlags.NonPublic | BindingFlags.Instance);
             Assert.That(field, Is.Not.Null);
             field.SetValue(target, value);
-        }
-
-        private static IList CreateSeatList(params string[] seatNames)
-        {
-            Type seatIdType = Type.GetType(SeatIdTypeName, true);
-            Type listType = typeof(System.Collections.Generic.List<>).MakeGenericType(seatIdType);
-            IList list = (IList)Activator.CreateInstance(listType);
-
-            for (int i = 0; i < seatNames.Length; i++)
-                list.Add(ParseSeat(seatNames[i]));
-
-            return list;
         }
 
         private static object ParseSeat(string seatName)

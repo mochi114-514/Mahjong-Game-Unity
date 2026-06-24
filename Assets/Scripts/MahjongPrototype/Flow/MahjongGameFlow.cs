@@ -13,9 +13,11 @@ namespace MahjongPrototype
     [AddComponentMenu("Mahjong Prototype/Mahjong Game Flow")]
     public sealed class MahjongGameFlow : MonoBehaviour
     {
-        [Header("Prototype Seats")]
+        [Header("Prototype Players")]
+        [SerializeField, Range(1, 4)] private int participantCount = 1;
+
+        [Header("Prototype View")]
         [SerializeField] private SeatId viewerSeat = SeatId.East;
-        [SerializeField] private List<SeatId> initialActiveSeats = new List<SeatId> { SeatId.East };
 
         [Header("Self Seat")]
         [FormerlySerializedAs("randomizeSelfWind")]
@@ -64,13 +66,13 @@ namespace MahjongPrototype
         private void Reset()
         {
             CacheReferences();
-            NormalizeInitialActiveSeats();
+            NormalizeParticipantCount();
         }
 
         private void Awake()
         {
             CacheReferences();
-            NormalizeInitialActiveSeats();
+            NormalizeParticipantCount();
         }
 
         private void Start()
@@ -82,8 +84,8 @@ namespace MahjongPrototype
 #if UNITY_EDITOR
         private void OnValidate()
         {
+            NormalizeParticipantCount();
             initialHandTileCount = Mathf.Max(1, initialHandTileCount);
-            NormalizeInitialActiveSeats();
         }
 #endif
 
@@ -91,7 +93,7 @@ namespace MahjongPrototype
         public void StartNewRound()
         {
             CacheReferences();
-            NormalizeInitialActiveSeats();
+            NormalizeParticipantCount();
 
             DevLog.Initialize(enableDevLog, enableReleaseBuildLogging);
             ClearWinDecision();
@@ -100,11 +102,11 @@ namespace MahjongPrototype
             LogRunStarted();
 
             int? seed = useFixedRandomSeed ? fixedRandomSeed : (int?)null;
-            gameState = new MahjongGameState(Wall.CreateStandardShuffled(seed), initialActiveSeats);
+            gameState = new MahjongGameState(Wall.CreateStandardShuffled(seed));
             SeatId selfSeat = ResolveSelfSeat();
-            gameState.SetSelfSeat(selfSeat);
+            AssignParticipantsToSeats(selfSeat);
             gameState.RebuildActiveTurnSeatsFromSeatSlots();
-            playerTurnManager.InitializeRound(gameState, gameState.CurrentTurn);
+            playerTurnManager.InitializeRound(gameState, selfSeat);
 
             LogSeatSlotsAssigned();
             NotifyRoundStarted();
@@ -633,13 +635,34 @@ namespace MahjongPrototype
                 eventNotifier = GetComponent<MahjongEventNotifier>();
         }
 
-        private void NormalizeInitialActiveSeats()
+        private void NormalizeParticipantCount()
         {
-            if (initialActiveSeats == null)
-                initialActiveSeats = new List<SeatId>();
+            participantCount = Mathf.Clamp(participantCount, 1, 4);
+        }
 
-            if (initialActiveSeats.Count <= 0)
-                initialActiveSeats.Add(SeatId.East);
+        private void AssignParticipantsToSeats(SeatId selfSeat)
+        {
+            gameState.SetSelfSeat(selfSeat);
+
+            if (participantCount <= 1)
+                return;
+
+            if (participantCount == 2)
+            {
+                gameState.AssignPlayerToSeat(PlayerId.Player2, GetRelativeSeat(selfSeat, 2));
+                return;
+            }
+
+            gameState.AssignPlayerToSeat(PlayerId.Player2, GetRelativeSeat(selfSeat, 1));
+            gameState.AssignPlayerToSeat(PlayerId.Player3, GetRelativeSeat(selfSeat, 2));
+
+            if (participantCount >= 4)
+                gameState.AssignPlayerToSeat(PlayerId.Player4, GetRelativeSeat(selfSeat, 3));
+        }
+
+        private static SeatId GetRelativeSeat(SeatId originSeat, int offset)
+        {
+            return (SeatId)(((int)originSeat + offset) % 4);
         }
 
         private SeatId ResolveSelfSeat()
