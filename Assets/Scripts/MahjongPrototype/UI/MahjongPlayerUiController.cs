@@ -34,7 +34,6 @@ namespace MahjongPrototype.UI
 
         private void OnEnable()
         {
-            CacheMissingViewReferences();
             SubscribeViewEvents();
         }
 
@@ -46,24 +45,6 @@ namespace MahjongPrototype.UI
         private void OnDestroy()
         {
             UnsubscribeViewEvents();
-        }
-
-        public void ConfigureMissingViews(
-            MahjongHandView fallbackHandView,
-            MahjongDiscardRiverView fallbackDiscardRiverView,
-            MahjongDrawnTileView fallbackDrawnTileView)
-        {
-            if (handView == null)
-                handView = fallbackHandView;
-
-            if (discardRiverView == null)
-                discardRiverView = fallbackDiscardRiverView;
-
-            if (drawnTileView == null)
-                drawnTileView = fallbackDrawnTileView;
-
-            CacheMissingViewReferences();
-            SubscribeViewEvents();
         }
 
         public void RenderHand(
@@ -154,18 +135,6 @@ namespace MahjongPrototype.UI
             }
 
             drawnTileView.SetTileInteractable(interactable);
-        }
-
-        private void CacheMissingViewReferences()
-        {
-            if (handView == null)
-                handView = GetComponentInChildren<MahjongHandView>(true);
-
-            if (discardRiverView == null)
-                discardRiverView = GetComponentInChildren<MahjongDiscardRiverView>(true);
-
-            if (drawnTileView == null)
-                drawnTileView = GetComponentInChildren<MahjongDrawnTileView>(true);
         }
 
         private void SubscribeViewEvents()

@@ -279,7 +279,7 @@ namespace MahjongPrototype.Tests
             SetField(controller, "handView", handView);
             SetField(controller, "discardRiverView", discardRiverView);
             SetField(controller, "drawnTileView", drawnTileView);
-            Invoke(controller, "ConfigureMissingViews", handView, discardRiverView, drawnTileView);
+            Invoke(controller, "SubscribeViewEvents");
             return controller;
         }
 
