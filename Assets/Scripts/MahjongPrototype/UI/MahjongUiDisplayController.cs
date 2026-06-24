@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.Text;
 using MahjongPrototype.Domain;
 using TMPro;
@@ -13,19 +12,14 @@ namespace MahjongPrototype.UI
         [Header("Status Text")]
         [Tooltip("Displays the seat whose turn is active.")]
         [SerializeField] private TMP_Text currentTurnText;
-        [Tooltip("Displays the self seat wind.")]
-        [SerializeField] private TMP_Text selfWindText;
         [Tooltip("Displays the current turn index.")]
         [SerializeField] private TMP_Text turnIndexText;
         [Tooltip("Displays the remaining wall tile count.")]
         [SerializeField] private TMP_Text wallCountText;
         [Tooltip("Displays active skill effects.")]
         [SerializeField] private TMP_Text activeSkillText;
-        [Tooltip("Displays discard log text.")]
-        [SerializeField] private TMP_Text discardText;
 
         private bool warnedMissingStatusText;
-        private bool warnedMissingDiscardText;
 
         private void Reset()
         {
@@ -46,20 +40,15 @@ namespace MahjongPrototype.UI
             WarnMissingStaticReferences();
 
             SetText(currentTurnText, $"CurrentTurn: {state.CurrentTurn}");
-            SetText(selfWindText, state.SelfSeat.ToString());
             SetText(turnIndexText, $"Turn: {state.TurnIndex}");
             SetText(wallCountText, $"Wall: {state.Wall.Count}");
             SetText(activeSkillText, BuildActiveSkillText(state));
-            RefreshDiscards(state.Discards);
         }
 
         private void CacheReferences()
         {
             if (currentTurnText == null)
                 currentTurnText = FindTextByName("CurrentTurnText");
-
-            if (selfWindText == null)
-                selfWindText = FindTextByName("SelfWindText");
 
             if (turnIndexText == null)
                 turnIndexText = FindTextByName("TurnIndexText");
@@ -69,35 +58,6 @@ namespace MahjongPrototype.UI
 
             if (activeSkillText == null)
                 activeSkillText = FindTextByName("ActiveSkillText");
-
-            if (discardText == null)
-                discardText = FindTextByName("Discard Text");
-        }
-
-        private void RefreshDiscards(IReadOnlyList<DiscardRecord> discards)
-        {
-            if (discardText == null)
-            {
-                WarnMissingOnce(ref warnedMissingDiscardText, "DiscardText is not assigned.");
-                return;
-            }
-
-            StringBuilder builder = new StringBuilder();
-            for (int i = 0; i < discards.Count; i++)
-            {
-                DiscardRecord record = discards[i];
-                builder.Append(record.ActorSeat)
-                    .Append(" ")
-                    .Append(record.Tile)
-                    .Append(" (T")
-                    .Append(record.TurnIndex)
-                    .Append(')');
-
-                if (i + 1 < discards.Count)
-                    builder.AppendLine();
-            }
-
-            discardText.text = builder.ToString();
         }
 
         private TMP_Text FindTextByName(string objectName)

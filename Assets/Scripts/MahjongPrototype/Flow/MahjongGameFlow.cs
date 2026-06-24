@@ -52,17 +52,14 @@ namespace MahjongPrototype
         private readonly SkillReservationService skillReservationService = new SkillReservationService();
 
         private MahjongGameState gameState;
-        private bool isWinDecisionPending;
-        private SeatId pendingWinSeat;
-        private int pendingWinTurnIndex;
         private bool warnedMissingNotifier;
 
         public MahjongGameState CurrentState => gameState;
         public MahjongEventNotifier EventNotifier => eventNotifier;
         public SeatId ViewerSeat => viewerSeat;
-        public bool IsWinDecisionPending => isWinDecisionPending;
+        public bool IsWinDecisionPending => gameState != null && gameState.IsWinDecisionPending;
         public bool IsAutoSortEnabled => autoSortEnabled;
-        public bool IsInteractionLocked => isWinDecisionPending || (gameState != null && gameState.IsRoundEnded);
+        public bool IsInteractionLocked => gameState != null && gameState.IsInteractionLocked;
 
         private void Reset()
         {
@@ -145,7 +142,7 @@ namespace MahjongPrototype
                 return false;
             }
 
-            if (isWinDecisionPending)
+            if (gameState.IsWinDecisionPending)
             {
                 if (warnOnBlocked)
                     Warn("Declare or decline win before drawing.");
@@ -208,7 +205,7 @@ namespace MahjongPrototype
                 return;
             }
 
-            if (isWinDecisionPending)
+            if (gameState.IsWinDecisionPending)
             {
                 Warn("Declare or decline win before discarding.");
                 LogTurnBlocked("DiscardBlocked", "WinDecisionPending");
@@ -255,7 +252,7 @@ namespace MahjongPrototype
                 return;
             }
 
-            if (isWinDecisionPending)
+            if (gameState.IsWinDecisionPending)
             {
                 Warn("Declare or decline win before discarding.");
                 LogTurnBlocked("DiscardBlocked", "WinDecisionPending");
@@ -297,7 +294,7 @@ namespace MahjongPrototype
                 return;
             }
 
-            if (isWinDecisionPending)
+            if (gameState.IsWinDecisionPending)
             {
                 Warn("Declare or decline win before activating another skill.");
                 return;
@@ -397,14 +394,14 @@ namespace MahjongPrototype
             if (!CanUseGameState())
                 return;
 
-            if (!isWinDecisionPending)
+            if (!gameState.IsWinDecisionPending)
             {
                 Warn("No winning hand decision is pending.");
                 return;
             }
 
-            SeatId seat = pendingWinSeat;
-            int turnIndex = pendingWinTurnIndex;
+            SeatId seat = gameState.WinDecisionSeat;
+            int turnIndex = gameState.WinDecisionTurnIndex;
             ClearWinDecision();
             gameState.IsRoundEnded = true;
             playerTurnManager.MarkRoundEnded();
@@ -423,14 +420,14 @@ namespace MahjongPrototype
             if (!CanUseGameState())
                 return;
 
-            if (!isWinDecisionPending)
+            if (!gameState.IsWinDecisionPending)
             {
                 Warn("No winning hand decision is pending.");
                 return;
             }
 
-            SeatId seat = pendingWinSeat;
-            int turnIndex = pendingWinTurnIndex;
+            SeatId seat = gameState.WinDecisionSeat;
+            int turnIndex = gameState.WinDecisionTurnIndex;
             ClearWinDecision();
 
             NotifyWinDeclined(seat, turnIndex);
@@ -488,7 +485,7 @@ namespace MahjongPrototype
 
         private void ResolveReservedSkillBeforeDraw(SeatId seat)
         {
-            if (gameState.IsRoundEnded || isWinDecisionPending)
+            if (gameState.IsRoundEnded || gameState.IsWinDecisionPending)
                 return;
 
             if (!skillReservationService.TryConsumeForTurn(seat, out PendingSkillReservation reservation))
@@ -566,15 +563,12 @@ namespace MahjongPrototype
 
         private void SetWinDecisionPending(bool isPending, SeatId seat, int turnIndex)
         {
-            isWinDecisionPending = isPending;
-            pendingWinSeat = isPending ? seat : default;
-            pendingWinTurnIndex = isPending ? turnIndex : 0;
-
             if (gameState == null)
                 return;
 
             if (isPending)
             {
+                gameState.BeginWinDecision(seat, turnIndex);
                 playerTurnManager.MarkWinDecision();
                 LogTurnDebug(
                     "WinDecision",
@@ -584,6 +578,7 @@ namespace MahjongPrototype
                 return;
             }
 
+            gameState.ClearWinDecision();
             if (gameState.IsRoundEnded)
             {
                 playerTurnManager.MarkRoundEnded();
@@ -600,6 +595,7 @@ namespace MahjongPrototype
 
         private void EndRound(string reason)
         {
+            gameState.ClearWinDecision();
             gameState.IsRoundEnded = true;
             playerTurnManager.MarkRoundEnded();
             LogTurnDebug(

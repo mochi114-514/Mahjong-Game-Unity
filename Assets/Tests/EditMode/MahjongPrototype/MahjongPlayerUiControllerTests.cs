@@ -20,9 +20,37 @@ namespace MahjongPrototype.Tests
         private const string MahjongHandViewTypeName = "MahjongPrototype.UI.MahjongHandView, Assembly-CSharp";
         private const string MahjongDiscardRiverViewTypeName = "MahjongPrototype.UI.MahjongDiscardRiverView, Assembly-CSharp";
         private const string MahjongDrawnTileViewTypeName = "MahjongPrototype.UI.MahjongDrawnTileView, Assembly-CSharp";
+        private const string MahjongSeatWindViewTypeName = "MahjongPrototype.UI.MahjongSeatWindView, Assembly-CSharp";
         private const string MahjongPlayerUiControllerTypeName = "MahjongPrototype.UI.MahjongPlayerUiController, Assembly-CSharp";
         private const string TextMeshProUguiTypeName = "TMPro.TextMeshProUGUI, Unity.TextMeshPro";
         private const string TmpTextTypeName = "TMPro.TMP_Text, Unity.TextMeshPro";
+
+        [Test]
+        public void RenderAndClearWind_DelegateToSeatWindView()
+        {
+            GameObject root = new GameObject("PlayerUiControllerSeatWindTest");
+            try
+            {
+                object seatWindView = CreateSeatWindView(root, out Component windText);
+                object controller = CreateController(
+                    root,
+                    null,
+                    "SelfBottom",
+                    seatWindView: seatWindView);
+
+                Invoke(controller, "RenderWind", ParseSeat("North"));
+
+                Assert.That(GetProperty(windText, "text"), Is.EqualTo("North"));
+
+                Invoke(controller, "ClearWind");
+
+                Assert.That(GetProperty(windText, "text"), Is.EqualTo(string.Empty));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
 
         [Test]
         public void RenderHand_DelegatesToHandViewWithSeatAndViewSlot()
@@ -270,7 +298,8 @@ namespace MahjongPrototype.Tests
             object discardRiverView,
             string viewSlot,
             object drawnTileView = null,
-            object handView = null)
+            object handView = null,
+            object seatWindView = null)
         {
             Type controllerType = Type.GetType(MahjongPlayerUiControllerTypeName, true);
             object controller = root.AddComponent(controllerType);
@@ -279,8 +308,21 @@ namespace MahjongPrototype.Tests
             SetField(controller, "handView", handView);
             SetField(controller, "discardRiverView", discardRiverView);
             SetField(controller, "drawnTileView", drawnTileView);
+            SetField(controller, "seatWindView", seatWindView);
             Invoke(controller, "SubscribeViewEvents");
             return controller;
+        }
+
+        private static object CreateSeatWindView(GameObject root, out Component windText)
+        {
+            Type viewType = Type.GetType(MahjongSeatWindViewTypeName, true);
+            object view = root.AddComponent(viewType);
+
+            GameObject labelObject = new GameObject("WindLabel", typeof(RectTransform));
+            labelObject.transform.SetParent(root.transform, false);
+            windText = labelObject.AddComponent(Type.GetType(TextMeshProUguiTypeName, true));
+            SetField(view, "windText", windText);
+            return view;
         }
 
         private static object CreateHandView(GameObject root, GameObject prefab, out RectTransform container)

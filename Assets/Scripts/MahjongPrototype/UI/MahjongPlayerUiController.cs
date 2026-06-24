@@ -16,11 +16,13 @@ namespace MahjongPrototype.UI
         [SerializeField] private MahjongHandView handView;
         [SerializeField] private MahjongDiscardRiverView discardRiverView;
         [SerializeField] private MahjongDrawnTileView drawnTileView;
+        [SerializeField] private MahjongSeatWindView seatWindView;
 
         private SeatId handDataSeat = SeatId.East;
         private bool warnedMissingHandView;
         private bool warnedMissingDiscardRiverView;
         private bool warnedMissingDrawnTileView;
+        private bool warnedMissingSeatWindView;
         private bool isHandViewSubscribed;
         private bool isDrawnTileViewSubscribed;
 
@@ -31,6 +33,7 @@ namespace MahjongPrototype.UI
         public MahjongHandView HandView => handView;
         public MahjongDiscardRiverView DiscardRiverView => discardRiverView;
         public MahjongDrawnTileView DrawnTileView => drawnTileView;
+        public MahjongSeatWindView SeatWindView => seatWindView;
 
         private void OnEnable()
         {
@@ -135,6 +138,28 @@ namespace MahjongPrototype.UI
             }
 
             drawnTileView.SetTileInteractable(interactable);
+        }
+
+        public void RenderWind(SeatId seatId)
+        {
+            if (seatWindView == null)
+            {
+                WarnMissingOnce(ref warnedMissingSeatWindView, "Seat wind view is not assigned.");
+                return;
+            }
+
+            seatWindView.Render(seatId);
+        }
+
+        public void ClearWind()
+        {
+            if (seatWindView == null)
+            {
+                WarnMissingOnce(ref warnedMissingSeatWindView, "Seat wind view is not assigned.");
+                return;
+            }
+
+            seatWindView.Clear();
         }
 
         private void SubscribeViewEvents()

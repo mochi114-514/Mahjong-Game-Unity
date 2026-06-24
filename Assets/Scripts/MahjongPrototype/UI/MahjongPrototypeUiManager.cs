@@ -17,7 +17,7 @@ namespace MahjongPrototype.UI
         [SerializeField] private MahjongEventNotifier eventNotifier;
 
         [Header("Display")]
-        [Tooltip("Controller for status, skill, and discard text.")]
+        [Tooltip("Controller for global status and skill text.")]
         [SerializeField] private MahjongUiDisplayController displayController;
 
         [Header("Player UI Controllers")]
@@ -102,10 +102,11 @@ namespace MahjongPrototype.UI
                 return;
 
             RefreshDisplay(state);
+            RefreshPlayerWinds(state);
             RefreshHand(state);
             RefreshDrawnTile(state);
             RefreshDiscardRiver(state);
-            RefreshWinDecision();
+            RefreshWinDecision(state);
             RefreshInteractionState(state);
             RefreshLogPreview();
         }
@@ -177,7 +178,7 @@ namespace MahjongPrototype.UI
             {
                 WarnMissingOnce(
                     ref warnedMissingDisplayController,
-                    "MahjongUiDisplayController is not assigned. Add it to the UI GameObject and assign the status/discard texts.");
+                    "MahjongUiDisplayController is not assigned. Add it to the UI GameObject and assign the global status texts.");
             }
         }
 
@@ -406,6 +407,29 @@ namespace MahjongPrototype.UI
             ClearUnrenderedPlayerHands(renderedViewSlots);
         }
 
+        private void RefreshPlayerWinds(MahjongGameState state)
+        {
+            HashSet<ViewSlot> renderedViewSlots = new HashSet<ViewSlot>();
+            IReadOnlyList<SeatId> displaySeats = state.OccupiedSeats;
+            for (int i = 0; i < displaySeats.Count; i++)
+            {
+                SeatId dataSeat = displaySeats[i];
+                SeatSlot seatSlot = state.GetSeatSlot(dataSeat);
+                if (seatSlot.IsEmpty)
+                    continue;
+
+                ViewSlot viewSlot = SeatToViewSlotResolver.Resolve(state.SelfSeat, dataSeat);
+                MahjongPlayerUiController controller = GetPlayerUiController(viewSlot);
+                if (controller == null)
+                    continue;
+
+                controller.RenderWind(dataSeat);
+                renderedViewSlots.Add(viewSlot);
+            }
+
+            ClearUnrenderedPlayerWinds(renderedViewSlots);
+        }
+
         private void RefreshDrawnTile(MahjongGameState state)
         {
             MahjongPlayerUiController controller = GetPlayerUiController(ViewSlot.SelfBottom);
@@ -426,13 +450,19 @@ namespace MahjongPrototype.UI
                 controller.RenderDiscardRiver(state.Discards, state.SelfSeat);
         }
 
-        private void RefreshWinDecision()
+        private void RefreshWinDecision(MahjongGameState state)
         {
             if (winDecisionController == null)
                 EnsureWinDecisionController();
 
             if (winDecisionController != null)
-                winDecisionController.SetVisible(gameFlow != null && gameFlow.IsWinDecisionPending);
+            {
+                bool showSelfWinDecision =
+                    state != null &&
+                    state.IsWinDecisionPending &&
+                    state.WinDecisionSeat == state.SelfSeat;
+                winDecisionController.SetVisible(showSelfWinDecision);
+            }
         }
 
         private void RefreshInteractionState(MahjongGameState state)
@@ -456,7 +486,7 @@ namespace MahjongPrototype.UI
             return gameFlow != null &&
                 state != null &&
                 state.IsSelfTurn &&
-                !gameFlow.IsInteractionLocked;
+                !state.IsInteractionLocked;
         }
 
         private void HandleHandTileClicked(SeatId dataSeat, int handIndex)
@@ -573,6 +603,26 @@ namespace MahjongPrototype.UI
             MahjongPlayerUiController controller = GetPlayerUiController(viewSlot);
             if (controller != null)
                 controller.ClearHand();
+        }
+
+        private void ClearUnrenderedPlayerWinds(HashSet<ViewSlot> renderedViewSlots)
+        {
+            ClearPlayerWindIfUnrendered(ViewSlot.SelfBottom, renderedViewSlots);
+            ClearPlayerWindIfUnrendered(ViewSlot.NextLeft, renderedViewSlots);
+            ClearPlayerWindIfUnrendered(ViewSlot.AcrossTop, renderedViewSlots);
+            ClearPlayerWindIfUnrendered(ViewSlot.PreviousRight, renderedViewSlots);
+        }
+
+        private void ClearPlayerWindIfUnrendered(
+            ViewSlot viewSlot,
+            HashSet<ViewSlot> renderedViewSlots)
+        {
+            if (renderedViewSlots.Contains(viewSlot))
+                return;
+
+            MahjongPlayerUiController controller = GetPlayerUiController(viewSlot);
+            if (controller != null)
+                controller.ClearWind();
         }
 
         private void WarnMissingOnce(ref bool warned, string message)

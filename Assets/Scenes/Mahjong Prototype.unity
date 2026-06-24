@@ -263,11 +263,6 @@ MonoBehaviour:
   nextLeftPlayerUiController: {fileID: 0}
   acrossTopPlayerUiController: {fileID: 0}
   previousRightPlayerUiController: {fileID: 0}
-  drawnTileView: {fileID: 1475011000}
-  discardRiverView: {fileID: 1290110537}
-  drawnTileContainer: {fileID: 69184541}
-  selfBottomDiscardRiverContainer: {fileID: 0}
-  tileButtonPrefab: {fileID: 8792027050792319394, guid: 5f307326666617c4e8318056c650e193, type: 3}
   inputController: {fileID: 45752830}
   winDecisionController: {fileID: 6100000001}
   logPreviewController: {fileID: 45752828}
@@ -347,10 +342,10 @@ RectTransform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 41506177}
-  - {fileID: 6100000011}
   - {fileID: 1217582412}
   - {fileID: 821242413}
   - {fileID: 990030475}
+  - {fileID: 6100000011}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
@@ -404,11 +399,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI.MahjongUiDisplayController
   currentTurnText: {fileID: 1553984471}
-  selfWindText: {fileID: 0}
   turnIndexText: {fileID: 1222914383}
   wallCountText: {fileID: 1917315620}
   activeSkillText: {fileID: 1807224747}
-  discardText: {fileID: 0}
 --- !u!1 &59872338
 GameObject:
   m_ObjectHideFlags: 0
@@ -885,6 +878,7 @@ GameObject:
   - component: {fileID: 313243258}
   - component: {fileID: 313243260}
   - component: {fileID: 313243259}
+  - component: {fileID: 313243261}
   m_Layer: 5
   m_Name: Self Wind
   m_TagString: Untagged
@@ -1011,6 +1005,19 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 313243257}
   m_CullTransparentMesh: 1
+--- !u!114 &313243261
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 313243257}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9b71e3f120cb43f4ab77d1587fb8f48a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI.MahjongSeatWindView
+  windText: {fileID: 313243259}
 --- !u!1 &382517919
 GameObject:
   m_ObjectHideFlags: 0
@@ -1883,6 +1890,7 @@ MonoBehaviour:
   handView: {fileID: 1274267639}
   discardRiverView: {fileID: 1290110537}
   drawnTileView: {fileID: 1475011000}
+  seatWindView: {fileID: 313243261}
 --- !u!1 &1217582411
 GameObject:
   m_ObjectHideFlags: 0

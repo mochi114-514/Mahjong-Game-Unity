@@ -17,6 +17,152 @@ namespace MahjongPrototype.Tests
         private const string PlayerIdTypeName = "MahjongPrototype.Domain.PlayerId, Assembly-CSharp";
 
         [Test]
+        public void WinDecisionState_BeginsAndClearsInGameState()
+        {
+            object gameState = CreateGameState("East");
+
+            Invoke(gameState, "BeginWinDecision", ParseSeat("East"), 7);
+
+            Assert.That(GetProperty(gameState, "IsWinDecisionPending"), Is.True);
+            Assert.That(GetProperty(gameState, "WinDecisionSeat").ToString(), Is.EqualTo("East"));
+            Assert.That(GetProperty(gameState, "WinDecisionTurnIndex"), Is.EqualTo(7));
+            Assert.That(GetProperty(gameState, "IsInteractionLocked"), Is.True);
+
+            Invoke(gameState, "ClearWinDecision");
+
+            Assert.That(GetProperty(gameState, "IsWinDecisionPending"), Is.False);
+            Assert.That(GetProperty(gameState, "WinDecisionTurnIndex"), Is.EqualTo(0));
+            Assert.That(GetProperty(gameState, "IsInteractionLocked"), Is.False);
+        }
+
+        [Test]
+        public void CheckWinPrototype_StoresPendingDecisionInGameState()
+        {
+            GameObject gameObject = new GameObject("MahjongGameFlowWinDecisionStateTest");
+            try
+            {
+                object gameFlow = AddConfiguredGameFlow(gameObject, false);
+                SetPrivateField(gameFlow, "initialHandTileCount", 0);
+                Invoke(gameFlow, "StartNewRound");
+                object gameState = GetProperty(gameFlow, "CurrentState");
+                object playerSeat = GetCurrentPlayerSeat(gameState);
+                object hand = GetProperty(playerSeat, "Hand");
+
+                string[] handTiles =
+                {
+                    "1m", "2m", "3m",
+                    "1p", "2p", "3p",
+                    "1s", "2s", "3s",
+                    "E", "E", "E",
+                    "C"
+                };
+                for (int i = 0; i < handTiles.Length; i++)
+                    Invoke(hand, "Add", CreateTile(handTiles[i]));
+
+                Invoke(playerSeat, "SetDrawnTile", CreateTile("C"));
+                Invoke(gameFlow, "CheckWinPrototype");
+
+                Assert.That(GetProperty(gameState, "IsWinDecisionPending"), Is.True);
+                Assert.That(
+                    GetProperty(gameState, "WinDecisionSeat"),
+                    Is.EqualTo(GetProperty(gameState, "CurrentTurn")));
+                Assert.That(
+                    GetProperty(gameState, "WinDecisionTurnIndex"),
+                    Is.EqualTo(GetProperty(gameState, "TurnIndex")));
+                Assert.That(GetProperty(gameFlow, "IsWinDecisionPending"), Is.True);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
+        public void RequestDeclineWin_ClearsGameStateWinDecision()
+        {
+            GameObject gameObject = new GameObject("MahjongGameFlowDeclineWinDecisionTest");
+            try
+            {
+                object gameFlow = AddConfiguredGameFlow(gameObject, false);
+                Invoke(gameFlow, "StartNewRound");
+                object gameState = GetProperty(gameFlow, "CurrentState");
+                Invoke(
+                    gameFlow,
+                    "SetWinDecisionPending",
+                    true,
+                    GetProperty(gameState, "CurrentTurn"),
+                    GetProperty(gameState, "TurnIndex"));
+
+                Invoke(gameFlow, "RequestDeclineWin");
+
+                Assert.That(GetProperty(gameState, "IsWinDecisionPending"), Is.False);
+                Assert.That(GetProperty(gameState, "IsRoundEnded"), Is.False);
+                Assert.That(GetProperty(gameState, "IsInteractionLocked"), Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
+        public void RequestDeclareWin_ClearsDecisionAndEndsRound()
+        {
+            GameObject gameObject = new GameObject("MahjongGameFlowDeclareWinDecisionTest");
+            try
+            {
+                object gameFlow = AddConfiguredGameFlow(gameObject, false);
+                Invoke(gameFlow, "StartNewRound");
+                object gameState = GetProperty(gameFlow, "CurrentState");
+                Invoke(
+                    gameFlow,
+                    "SetWinDecisionPending",
+                    true,
+                    GetProperty(gameState, "CurrentTurn"),
+                    GetProperty(gameState, "TurnIndex"));
+
+                Invoke(gameFlow, "RequestDeclareWin");
+
+                Assert.That(GetProperty(gameState, "IsWinDecisionPending"), Is.False);
+                Assert.That(GetProperty(gameState, "IsRoundEnded"), Is.True);
+                Assert.That(GetProperty(gameState, "IsInteractionLocked"), Is.True);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
+        public void RetryPrototype_StartsWithNoWinDecisionPending()
+        {
+            GameObject gameObject = new GameObject("MahjongGameFlowRetryWinDecisionTest");
+            try
+            {
+                object gameFlow = AddConfiguredGameFlow(gameObject, false);
+                Invoke(gameFlow, "StartNewRound");
+                object firstState = GetProperty(gameFlow, "CurrentState");
+                Invoke(
+                    gameFlow,
+                    "SetWinDecisionPending",
+                    true,
+                    GetProperty(firstState, "CurrentTurn"),
+                    GetProperty(firstState, "TurnIndex"));
+
+                Invoke(gameFlow, "RetryPrototype");
+
+                object retryState = GetProperty(gameFlow, "CurrentState");
+                Assert.That(GetProperty(retryState, "IsWinDecisionPending"), Is.False);
+                Assert.That(GetProperty(retryState, "WinDecisionTurnIndex"), Is.EqualTo(0));
+                Assert.That(GetProperty(retryState, "IsInteractionLocked"), Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
         public void InitializeRound_SetsCurrentTurnAndTurnIndex()
         {
             object gameState = CreateGameState("East", "South");
@@ -213,9 +359,8 @@ namespace MahjongPrototype.Tests
                 object playerSeat = GetCurrentPlayerSeat(gameState);
                 Invoke(playerSeat, "ClearDrawnTile");
                 Invoke(
-                    gameFlow,
-                    "SetWinDecisionPending",
-                    true,
+                    gameState,
+                    "BeginWinDecision",
                     GetProperty(gameState, "CurrentTurn"),
                     GetProperty(gameState, "TurnIndex"));
                 object wall = GetProperty(gameState, "Wall");

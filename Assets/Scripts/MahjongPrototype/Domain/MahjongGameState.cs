@@ -43,6 +43,10 @@ namespace MahjongPrototype.Domain
         public bool IsSelfTurn => CurrentTurnPlayerId == SelfPlayerId;
         public int TurnIndex { get; set; }
         public bool IsRoundEnded { get; set; }
+        public bool IsWinDecisionPending { get; private set; }
+        public SeatId WinDecisionSeat { get; private set; }
+        public int WinDecisionTurnIndex { get; private set; }
+        public bool IsInteractionLocked => IsWinDecisionPending || IsRoundEnded;
         public IReadOnlyList<SeatId> ActiveSeats => activeSeats;
         public IReadOnlyList<SeatId> ActiveTurnSeats => activeSeats;
         public IReadOnlyList<SeatId> OccupiedSeats => GetOccupiedSeats();
@@ -180,6 +184,20 @@ namespace MahjongPrototype.Domain
         public void AddDiscard(DiscardRecord record)
         {
             discards.Add(record);
+        }
+
+        public void BeginWinDecision(SeatId seat, int turnIndex)
+        {
+            IsWinDecisionPending = true;
+            WinDecisionSeat = seat;
+            WinDecisionTurnIndex = turnIndex;
+        }
+
+        public void ClearWinDecision()
+        {
+            IsWinDecisionPending = false;
+            WinDecisionSeat = default;
+            WinDecisionTurnIndex = 0;
         }
 
         public void AddActiveSkillEffect(ActiveSkillEffect effect)
