@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using MahjongPrototype.Domain;
 using UnityEngine;
@@ -15,29 +14,12 @@ namespace MahjongPrototype.UI
         [SerializeField] private MahjongHandView acrossTopHandView;
         [SerializeField] private MahjongHandView previousRightHandView;
 
-        private readonly Dictionary<MahjongHandView, Action<int>> tileClickHandlers =
-            new Dictionary<MahjongHandView, Action<int>>();
-
-        public event Action<SeatId, int> TileClicked;
-
         public MahjongHandView SelfBottomHandView => selfBottomHandView;
-
-        private void OnEnable()
-        {
-            SubscribeConfiguredViews();
-        }
-
-        private void OnDisable()
-        {
-            UnsubscribeConfiguredViews();
-        }
 
         public void ConfigureMissingReferences(MahjongHandView selfBottomFallback)
         {
             if (selfBottomHandView == null)
                 selfBottomHandView = selfBottomFallback;
-
-            SubscribeConfiguredViews();
         }
 
         public void Render(MahjongGameState state, IReadOnlyList<SeatId> displaySeats, bool canUseSelfInput)
@@ -47,8 +29,6 @@ namespace MahjongPrototype.UI
                 ClearAll();
                 return;
             }
-
-            SubscribeConfiguredViews();
 
             List<MahjongHandView> renderedViews = new List<MahjongHandView>();
             for (int i = 0; i < displaySeats.Count; i++)
@@ -131,41 +111,5 @@ namespace MahjongPrototype.UI
                 handView.Clear();
         }
 
-        private void SubscribeConfiguredViews()
-        {
-            SubscribeView(selfBottomHandView);
-            SubscribeView(nextLeftHandView);
-            SubscribeView(acrossTopHandView);
-            SubscribeView(previousRightHandView);
-        }
-
-        private void SubscribeView(MahjongHandView handView)
-        {
-            if (handView == null || tileClickHandlers.ContainsKey(handView))
-                return;
-
-            Action<int> handler = handIndex => HandleTileClicked(handView, handIndex);
-            tileClickHandlers.Add(handView, handler);
-            handView.TileClicked += handler;
-        }
-
-        private void UnsubscribeConfiguredViews()
-        {
-            foreach (KeyValuePair<MahjongHandView, Action<int>> entry in tileClickHandlers)
-            {
-                if (entry.Key != null)
-                    entry.Key.TileClicked -= entry.Value;
-            }
-
-            tileClickHandlers.Clear();
-        }
-
-        private void HandleTileClicked(MahjongHandView handView, int handIndex)
-        {
-            if (handView == null)
-                return;
-
-            TileClicked?.Invoke(handView.DataSeat, handIndex);
-        }
     }
 }

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using MahjongPrototype;
 using MahjongPrototype.Domain;
 using MahjongPrototype.Notifications;
@@ -22,15 +23,13 @@ namespace MahjongPrototype.UI
 
         [Header("Player UI Controllers")]
         [SerializeField] private MahjongPlayerUiController selfBottomPlayerUiController;
+        [SerializeField] private MahjongPlayerUiController nextLeftPlayerUiController;
+        [SerializeField] private MahjongPlayerUiController acrossTopPlayerUiController;
+        [SerializeField] private MahjongPlayerUiController previousRightPlayerUiController;
 
         [Header("Tile Areas")]
-        [Tooltip("View for hand tiles.")]
-        [SerializeField] private MahjongHandView handView;
-        [SerializeField] private MahjongHandBoardView handBoardView;
         [SerializeField] private MahjongDrawnTileView drawnTileView;
         [SerializeField] private MahjongDiscardRiverView discardRiverView;
-        [Tooltip("Container for hand tile buttons.")]
-        [SerializeField] private RectTransform handContainer;
         [SerializeField] private RectTransform drawnTileContainer;
         [FormerlySerializedAs("eastDiscardRiverContainer")]
         [SerializeField] private RectTransform selfBottomDiscardRiverContainer;
@@ -55,7 +54,8 @@ namespace MahjongPrototype.UI
         private bool warnedMissingWinDecisionController;
         private bool warnedMissingLogPreviewController;
         private bool warnedMissingDiscardArea;
-        private bool isHandBoardViewSubscribed;
+        private readonly HashSet<MahjongPlayerUiController> handEventSubscribedControllers =
+            new HashSet<MahjongPlayerUiController>();
         private bool isSelfBottomPlayerUiControllerSubscribed;
         private bool isDrawnTileViewSubscribed;
         private bool isInputControllerSubscribed;
@@ -74,11 +74,9 @@ namespace MahjongPrototype.UI
         {
             CacheReferences();
             EnsureDisplayController();
-            EnsureHandView();
-            EnsureHandBoardView();
-            SubscribeHandBoardViewEvents();
             EnsureDrawnTileView();
             ConfigureSelfBottomPlayerUiControllerViews();
+            SubscribePlayerHandEvents();
             SubscribeDrawnTileViewEvents();
             if (selfBottomPlayerUiController == null)
                 EnsureDiscardRiverView();
@@ -95,11 +93,9 @@ namespace MahjongPrototype.UI
         {
             CacheReferences();
             EnsureDisplayController();
-            EnsureHandView();
-            EnsureHandBoardView();
-            SubscribeHandBoardViewEvents();
             EnsureDrawnTileView();
             ConfigureSelfBottomPlayerUiControllerViews();
+            SubscribePlayerHandEvents();
             SubscribeDrawnTileViewEvents();
             if (selfBottomPlayerUiController == null)
                 EnsureDiscardRiverView();
@@ -114,7 +110,7 @@ namespace MahjongPrototype.UI
 
         private void OnDisable()
         {
-            UnsubscribeHandBoardViewEvents();
+            UnsubscribePlayerHandEvents();
             UnsubscribeDrawnTileViewEvents();
             UnsubscribeInputControllerEvents();
             UnsubscribeNotifications();
@@ -156,14 +152,7 @@ namespace MahjongPrototype.UI
             if (displayController == null)
                 displayController = GetComponentInChildren<MahjongUiDisplayController>(true);
 
-            if (selfBottomPlayerUiController == null)
-                selfBottomPlayerUiController = FindPlayerUiController(ViewSlot.SelfBottom);
-
-            if (handView == null)
-                handView = GetComponentInChildren<MahjongHandView>(true);
-
-            if (handBoardView == null)
-                handBoardView = GetComponentInChildren<MahjongHandBoardView>(true);
+            CachePlayerUiControllerReferences();
 
             if (drawnTileView == null)
                 drawnTileView = GetComponentInChildren<MahjongDrawnTileView>(true);
@@ -363,36 +352,6 @@ namespace MahjongPrototype.UI
                 displayController.Refresh(state);
         }
 
-        private void EnsureHandView()
-        {
-            if (handView == null)
-            {
-                handView = GetComponentInChildren<MahjongHandView>(true);
-            }
-
-            if (handView == null)
-            {
-                handView = gameObject.AddComponent<MahjongHandView>();
-                handView.Configure(handContainer, tileButtonPrefab);
-                return;
-            }
-
-            handView.ConfigureMissingReferences(handContainer, tileButtonPrefab);
-        }
-
-        private void EnsureHandBoardView()
-        {
-            if (handBoardView == null)
-            {
-                handBoardView = GetComponentInChildren<MahjongHandBoardView>(true);
-            }
-
-            if (handBoardView == null)
-                handBoardView = gameObject.AddComponent<MahjongHandBoardView>();
-
-            handBoardView.ConfigureMissingReferences(handView);
-        }
-
         private void EnsureDrawnTileView()
         {
             if (drawnTileView == null)
@@ -436,25 +395,36 @@ namespace MahjongPrototype.UI
             if (selfBottomPlayerUiController == null)
                 return;
 
-            selfBottomPlayerUiController.ConfigureMissingViews(handView, discardRiverView, drawnTileView);
+            selfBottomPlayerUiController.ConfigureMissingViews(null, discardRiverView, drawnTileView);
         }
 
-        private void SubscribeHandBoardViewEvents()
+        private void SubscribePlayerHandEvents()
         {
-            if (handBoardView == null || isHandBoardViewSubscribed)
-                return;
-
-            handBoardView.TileClicked += HandleHandBoardTileClicked;
-            isHandBoardViewSubscribed = true;
+            CachePlayerUiControllerReferences();
+            SubscribePlayerHandEvents(selfBottomPlayerUiController);
+            SubscribePlayerHandEvents(nextLeftPlayerUiController);
+            SubscribePlayerHandEvents(acrossTopPlayerUiController);
+            SubscribePlayerHandEvents(previousRightPlayerUiController);
         }
 
-        private void UnsubscribeHandBoardViewEvents()
+        private void SubscribePlayerHandEvents(MahjongPlayerUiController controller)
         {
-            if (handBoardView == null || !isHandBoardViewSubscribed)
+            if (controller == null || handEventSubscribedControllers.Contains(controller))
                 return;
 
-            handBoardView.TileClicked -= HandleHandBoardTileClicked;
-            isHandBoardViewSubscribed = false;
+            controller.HandTileClicked += HandleHandTileClicked;
+            handEventSubscribedControllers.Add(controller);
+        }
+
+        private void UnsubscribePlayerHandEvents()
+        {
+            foreach (MahjongPlayerUiController controller in handEventSubscribedControllers)
+            {
+                if (controller != null)
+                    controller.HandTileClicked -= HandleHandTileClicked;
+            }
+
+            handEventSubscribedControllers.Clear();
         }
 
         private void SubscribeDrawnTileViewEvents()
@@ -503,14 +473,33 @@ namespace MahjongPrototype.UI
 
         private void RefreshHand(MahjongGameState state)
         {
-            if (handView == null)
-                EnsureHandView();
+            SubscribePlayerHandEvents();
 
-            if (handBoardView == null)
-                EnsureHandBoardView();
+            bool canUseSelfInput = CanUseSelfGameplayInput(state);
+            HashSet<ViewSlot> renderedViewSlots = new HashSet<ViewSlot>();
+            IReadOnlyList<SeatId> displaySeats = state.OccupiedSeats;
+            for (int i = 0; i < displaySeats.Count; i++)
+            {
+                SeatId dataSeat = displaySeats[i];
+                SeatSlot seatSlot = state.GetSeatSlot(dataSeat);
+                if (seatSlot.IsEmpty)
+                    continue;
 
-            if (handBoardView != null)
-                handBoardView.Render(state, state.OccupiedSeats, CanUseSelfGameplayInput(state));
+                ViewSlot viewSlot = SeatToViewSlotResolver.Resolve(state.SelfSeat, dataSeat);
+                MahjongPlayerUiController controller = GetPlayerUiController(viewSlot);
+                if (controller == null)
+                    continue;
+
+                bool isSelf = seatSlot.PlayerId == state.SelfPlayerId;
+                controller.RenderHand(
+                    state.GetPlayerSeat(dataSeat).Hand.GetTiles(),
+                    dataSeat,
+                    isSelf,
+                    isSelf && canUseSelfInput);
+                renderedViewSlots.Add(viewSlot);
+            }
+
+            ClearUnrenderedPlayerHands(renderedViewSlots);
         }
 
         private void RefreshDrawnTile(MahjongGameState state)
@@ -577,8 +566,10 @@ namespace MahjongPrototype.UI
             if (inputController != null)
                 inputController.SetGameplayInputInteractable(canUseGameplayInput);
 
-            if (handBoardView != null)
-                handBoardView.SetSelfInteractable(state, canUseGameplayInput);
+            MahjongPlayerUiController selfController = GetPlayerUiController(
+                SeatToViewSlotResolver.Resolve(state.SelfSeat, state.SelfSeat));
+            if (selfController != null)
+                selfController.SetHandInteractable(canUseGameplayInput);
 
             ConfigureSelfBottomPlayerUiControllerViews();
             if (selfBottomPlayerUiController != null)
@@ -595,7 +586,7 @@ namespace MahjongPrototype.UI
                 !gameFlow.IsInteractionLocked;
         }
 
-        private void HandleHandBoardTileClicked(SeatId dataSeat, int handIndex)
+        private void HandleHandTileClicked(SeatId dataSeat, int handIndex)
         {
             if (gameFlow == null)
             {
@@ -702,6 +693,59 @@ namespace MahjongPrototype.UI
             }
 
             return null;
+        }
+
+        private void CachePlayerUiControllerReferences()
+        {
+            if (selfBottomPlayerUiController == null)
+                selfBottomPlayerUiController = FindPlayerUiController(ViewSlot.SelfBottom);
+
+            if (nextLeftPlayerUiController == null)
+                nextLeftPlayerUiController = FindPlayerUiController(ViewSlot.NextLeft);
+
+            if (acrossTopPlayerUiController == null)
+                acrossTopPlayerUiController = FindPlayerUiController(ViewSlot.AcrossTop);
+
+            if (previousRightPlayerUiController == null)
+                previousRightPlayerUiController = FindPlayerUiController(ViewSlot.PreviousRight);
+        }
+
+        private MahjongPlayerUiController GetPlayerUiController(ViewSlot viewSlot)
+        {
+            CachePlayerUiControllerReferences();
+            switch (viewSlot)
+            {
+                case ViewSlot.SelfBottom:
+                    return selfBottomPlayerUiController;
+                case ViewSlot.NextLeft:
+                    return nextLeftPlayerUiController;
+                case ViewSlot.AcrossTop:
+                    return acrossTopPlayerUiController;
+                case ViewSlot.PreviousRight:
+                    return previousRightPlayerUiController;
+                default:
+                    return null;
+            }
+        }
+
+        private void ClearUnrenderedPlayerHands(HashSet<ViewSlot> renderedViewSlots)
+        {
+            ClearPlayerHandIfUnrendered(ViewSlot.SelfBottom, renderedViewSlots);
+            ClearPlayerHandIfUnrendered(ViewSlot.NextLeft, renderedViewSlots);
+            ClearPlayerHandIfUnrendered(ViewSlot.AcrossTop, renderedViewSlots);
+            ClearPlayerHandIfUnrendered(ViewSlot.PreviousRight, renderedViewSlots);
+        }
+
+        private void ClearPlayerHandIfUnrendered(
+            ViewSlot viewSlot,
+            HashSet<ViewSlot> renderedViewSlots)
+        {
+            if (renderedViewSlots.Contains(viewSlot))
+                return;
+
+            MahjongPlayerUiController controller = GetPlayerUiController(viewSlot);
+            if (controller != null)
+                controller.ClearHand();
         }
 
         private void WarnMissingOnce(ref bool warned, string message)

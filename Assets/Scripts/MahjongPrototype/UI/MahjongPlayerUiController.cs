@@ -17,10 +17,14 @@ namespace MahjongPrototype.UI
         [SerializeField] private MahjongDiscardRiverView discardRiverView;
         [SerializeField] private MahjongDrawnTileView drawnTileView;
 
+        private SeatId handDataSeat = SeatId.East;
+        private bool warnedMissingHandView;
         private bool warnedMissingDiscardRiverView;
         private bool warnedMissingDrawnTileView;
+        private bool isHandViewSubscribed;
         private bool isDrawnTileViewSubscribed;
 
+        public event Action<SeatId, int> HandTileClicked;
         public event Action DrawnTileClicked;
 
         public ViewSlot ViewSlot => viewSlot;
@@ -35,6 +39,11 @@ namespace MahjongPrototype.UI
         }
 
         private void OnDisable()
+        {
+            UnsubscribeViewEvents();
+        }
+
+        private void OnDestroy()
         {
             UnsubscribeViewEvents();
         }
@@ -55,6 +64,44 @@ namespace MahjongPrototype.UI
 
             CacheMissingViewReferences();
             SubscribeViewEvents();
+        }
+
+        public void RenderHand(
+            IReadOnlyList<Tile> handTiles,
+            SeatId dataSeat,
+            bool faceUp,
+            bool interactable)
+        {
+            handDataSeat = dataSeat;
+            if (handView == null)
+            {
+                WarnMissingOnce(ref warnedMissingHandView, "Hand view is not assigned.");
+                return;
+            }
+
+            handView.Render(handTiles, dataSeat, viewSlot, faceUp, interactable);
+        }
+
+        public void ClearHand()
+        {
+            if (handView == null)
+            {
+                WarnMissingOnce(ref warnedMissingHandView, "Hand view is not assigned.");
+                return;
+            }
+
+            handView.Clear();
+        }
+
+        public void SetHandInteractable(bool interactable)
+        {
+            if (handView == null)
+            {
+                WarnMissingOnce(ref warnedMissingHandView, "Hand view is not assigned.");
+                return;
+            }
+
+            handView.SetTilesInteractable(interactable);
         }
 
         public void RenderDiscardRiver(IReadOnlyList<DiscardRecord> discards, SeatId dataSeat)
@@ -123,6 +170,21 @@ namespace MahjongPrototype.UI
 
         private void SubscribeViewEvents()
         {
+            SubscribeHandViewEvents();
+            SubscribeDrawnTileViewEvents();
+        }
+
+        private void SubscribeHandViewEvents()
+        {
+            if (handView == null || isHandViewSubscribed)
+                return;
+
+            handView.TileClicked += HandleHandTileClicked;
+            isHandViewSubscribed = true;
+        }
+
+        private void SubscribeDrawnTileViewEvents()
+        {
             if (drawnTileView == null || isDrawnTileViewSubscribed)
                 return;
 
@@ -132,11 +194,31 @@ namespace MahjongPrototype.UI
 
         private void UnsubscribeViewEvents()
         {
+            UnsubscribeHandViewEvents();
+            UnsubscribeDrawnTileViewEvents();
+        }
+
+        private void UnsubscribeHandViewEvents()
+        {
+            if (handView == null || !isHandViewSubscribed)
+                return;
+
+            handView.TileClicked -= HandleHandTileClicked;
+            isHandViewSubscribed = false;
+        }
+
+        private void UnsubscribeDrawnTileViewEvents()
+        {
             if (drawnTileView == null || !isDrawnTileViewSubscribed)
                 return;
 
             drawnTileView.DrawnTileClicked -= HandleDrawnTileClicked;
             isDrawnTileViewSubscribed = false;
+        }
+
+        private void HandleHandTileClicked(int handIndex)
+        {
+            HandTileClicked?.Invoke(handDataSeat, handIndex);
         }
 
         private void HandleDrawnTileClicked()

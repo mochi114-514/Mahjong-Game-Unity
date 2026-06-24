@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Linq.Expressions;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
@@ -16,11 +17,112 @@ namespace MahjongPrototype.Tests
         private const string MahjongGameStateTypeName = "MahjongPrototype.Domain.MahjongGameState, Assembly-CSharp";
         private const string ViewSlotTypeName = "MahjongPrototype.UI.ViewSlot, Assembly-CSharp";
         private const string TileButtonViewTypeName = "MahjongPrototype.UI.TileButtonView, Assembly-CSharp";
+        private const string MahjongHandViewTypeName = "MahjongPrototype.UI.MahjongHandView, Assembly-CSharp";
         private const string MahjongDiscardRiverViewTypeName = "MahjongPrototype.UI.MahjongDiscardRiverView, Assembly-CSharp";
         private const string MahjongDrawnTileViewTypeName = "MahjongPrototype.UI.MahjongDrawnTileView, Assembly-CSharp";
         private const string MahjongPlayerUiControllerTypeName = "MahjongPrototype.UI.MahjongPlayerUiController, Assembly-CSharp";
         private const string TextMeshProUguiTypeName = "TMPro.TextMeshProUGUI, Unity.TextMeshPro";
         private const string TmpTextTypeName = "TMPro.TMP_Text, Unity.TextMeshPro";
+
+        [Test]
+        public void RenderHand_DelegatesToHandViewWithSeatAndViewSlot()
+        {
+            GameObject root = new GameObject("PlayerUiControllerHandTest");
+            GameObject prefab = CreateTileButtonPrefab();
+            try
+            {
+                object gameState = CreateGameState("North");
+                AddHandTile(gameState, "North", "8m");
+
+                object handView = CreateHandView(root, prefab, out RectTransform container);
+                object controller = CreateController(root, null, "SelfBottom", null, handView);
+
+                Invoke(controller, "RenderHand", GetHandTiles(gameState, "North"), ParseSeat("North"), true, true);
+
+                Assert.That(container.childCount, Is.EqualTo(1));
+                Assert.That(GetTileLabelText(container.GetChild(0)), Is.EqualTo("8m"));
+                Assert.That(GetTileButton(container.GetChild(0)).interactable, Is.True);
+                Assert.That(GetProperty(handView, "DataSeat").ToString(), Is.EqualTo("North"));
+                Assert.That(GetProperty(handView, "ViewSlot").ToString(), Is.EqualTo("SelfBottom"));
+
+                Invoke(controller, "SetHandInteractable", false);
+
+                Assert.That(GetTileButton(container.GetChild(0)).interactable, Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(prefab);
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void ClearHand_DelegatesToHandView()
+        {
+            GameObject root = new GameObject("PlayerUiControllerClearHandTest");
+            GameObject prefab = CreateTileButtonPrefab();
+            try
+            {
+                object gameState = CreateGameState("North");
+                AddHandTile(gameState, "North", "8m");
+
+                object handView = CreateHandView(root, prefab, out RectTransform container);
+                object controller = CreateController(root, null, "SelfBottom", null, handView);
+
+                Invoke(controller, "RenderHand", GetHandTiles(gameState, "North"), ParseSeat("North"), true, true);
+                Assert.That(container.childCount, Is.EqualTo(1));
+
+                Invoke(controller, "ClearHand");
+
+                Assert.That(container.childCount, Is.EqualTo(0));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(prefab);
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void HandTileClicked_ForwardsRenderedSeatAndHandIndexOnce()
+        {
+            GameObject root = new GameObject("PlayerUiControllerHandClickTest");
+            GameObject prefab = CreateTileButtonPrefab();
+            try
+            {
+                object gameState = CreateGameState("North");
+                AddHandTile(gameState, "North", "8m");
+
+                object handView = CreateHandView(root, prefab, out RectTransform container);
+                object controller = CreateController(root, null, "SelfBottom", null, handView);
+                int clickCount = 0;
+                object clickedSeat = null;
+                int clickedIndex = -1;
+                EventInfo eventInfo = controller.GetType().GetEvent("HandTileClicked");
+                Assert.That(eventInfo, Is.Not.Null);
+                Delegate handler = CreateHandTileClickedHandler(
+                    eventInfo,
+                    (seat, handIndex) =>
+                    {
+                        clickCount++;
+                        clickedSeat = seat;
+                        clickedIndex = handIndex;
+                    });
+                eventInfo.AddEventHandler(controller, handler);
+
+                Invoke(controller, "RenderHand", GetHandTiles(gameState, "North"), ParseSeat("North"), true, true);
+                GetTileButton(container.GetChild(0)).onClick.Invoke();
+
+                Assert.That(clickCount, Is.EqualTo(1));
+                Assert.That(clickedSeat.ToString(), Is.EqualTo("North"));
+                Assert.That(clickedIndex, Is.EqualTo(0));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(prefab);
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
 
         [Test]
         public void RenderDiscardRiver_DelegatesToDiscardRiverViewWithDataSeat()
@@ -167,16 +269,32 @@ namespace MahjongPrototype.Tests
             GameObject root,
             object discardRiverView,
             string viewSlot,
-            object drawnTileView = null)
+            object drawnTileView = null,
+            object handView = null)
         {
             Type controllerType = Type.GetType(MahjongPlayerUiControllerTypeName, true);
             object controller = root.AddComponent(controllerType);
 
             SetField(controller, "viewSlot", ParseViewSlot(viewSlot));
+            SetField(controller, "handView", handView);
             SetField(controller, "discardRiverView", discardRiverView);
             SetField(controller, "drawnTileView", drawnTileView);
-            Invoke(controller, "ConfigureMissingViews", null, discardRiverView, drawnTileView);
+            Invoke(controller, "ConfigureMissingViews", handView, discardRiverView, drawnTileView);
             return controller;
+        }
+
+        private static object CreateHandView(GameObject root, GameObject prefab, out RectTransform container)
+        {
+            Type viewType = Type.GetType(MahjongHandViewTypeName, true);
+            object view = root.AddComponent(viewType);
+
+            GameObject containerObject = new GameObject("HandContainer", typeof(RectTransform));
+            container = containerObject.GetComponent<RectTransform>();
+            container.SetParent(root.transform, false);
+
+            object tileButtonPrefab = prefab.GetComponent(Type.GetType(TileButtonViewTypeName, true));
+            Invoke(view, "Configure", container, tileButtonPrefab);
+            return view;
         }
 
         private static object CreateDiscardRiverView(GameObject root, GameObject prefab, out RectTransform container)
@@ -231,6 +349,20 @@ namespace MahjongPrototype.Tests
         {
             object playerSeat = Invoke(gameState, "GetPlayerSeat", ParseSeat(seatName));
             return GetProperty(playerSeat, "DrawnTile");
+        }
+
+        private static void AddHandTile(object gameState, string seatName, string tileCode)
+        {
+            object playerSeat = Invoke(gameState, "GetPlayerSeat", ParseSeat(seatName));
+            object hand = GetProperty(playerSeat, "Hand");
+            Invoke(hand, "Add", CreateTile(tileCode));
+        }
+
+        private static object GetHandTiles(object gameState, string seatName)
+        {
+            object playerSeat = Invoke(gameState, "GetPlayerSeat", ParseSeat(seatName));
+            object hand = GetProperty(playerSeat, "Hand");
+            return Invoke(hand, "GetTiles");
         }
 
         private static void AddDiscard(object gameState, string actorSeat, string tileCode, int turnIndex)
@@ -312,6 +444,30 @@ namespace MahjongPrototype.Tests
             Button button = tileTransform.GetComponent<Button>();
             Assert.That(button, Is.Not.Null);
             return button;
+        }
+
+        private static Delegate CreateHandTileClickedHandler(
+            EventInfo eventInfo,
+            Action<object, int> callback)
+        {
+            Type delegateType = eventInfo.EventHandlerType;
+            Assert.That(delegateType, Is.Not.Null);
+            MethodInfo invokeMethod = delegateType.GetMethod("Invoke");
+            Assert.That(invokeMethod, Is.Not.Null);
+            ParameterInfo[] parameters = invokeMethod.GetParameters();
+            Assert.That(parameters.Length, Is.EqualTo(2));
+
+            ParameterExpression seatParameter = Expression.Parameter(parameters[0].ParameterType, "seat");
+            ParameterExpression handIndexParameter = Expression.Parameter(parameters[1].ParameterType, "handIndex");
+            InvocationExpression callbackInvocation = Expression.Invoke(
+                Expression.Constant(callback),
+                Expression.Convert(seatParameter, typeof(object)),
+                handIndexParameter);
+            return Expression.Lambda(
+                delegateType,
+                callbackInvocation,
+                seatParameter,
+                handIndexParameter).Compile();
         }
 
         private static object GetProperty(object target, string propertyName)

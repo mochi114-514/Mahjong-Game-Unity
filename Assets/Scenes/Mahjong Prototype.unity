@@ -198,11 +198,11 @@ MonoBehaviour:
   eventNotifier: {fileID: 1264733449}
   displayController: {fileID: 45752831}
   selfBottomPlayerUiController: {fileID: 990030476}
-  handView: {fileID: 1532270228}
-  handBoardView: {fileID: 0}
+  nextLeftPlayerUiController: {fileID: 0}
+  acrossTopPlayerUiController: {fileID: 0}
+  previousRightPlayerUiController: {fileID: 0}
   drawnTileView: {fileID: 1475011000}
   discardRiverView: {fileID: 1290110537}
-  handContainer: {fileID: 1972641026}
   drawnTileContainer: {fileID: 69184541}
   selfBottomDiscardRiverContainer: {fileID: 967759132}
   tileButtonPrefab: {fileID: 8792027050792319394, guid: 5f307326666617c4e8318056c650e193, type: 3}
@@ -2265,7 +2265,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI.MahjongPlayerUiController
   viewSlot: 0
-  handView: {fileID: 0}
+  handView: {fileID: 1274267639}
   discardRiverView: {fileID: 0}
   drawnTileView: {fileID: 1475011000}
 --- !u!1 &1085818673
