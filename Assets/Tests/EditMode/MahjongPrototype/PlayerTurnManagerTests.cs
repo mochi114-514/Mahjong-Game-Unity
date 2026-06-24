@@ -629,6 +629,237 @@ namespace MahjongPrototype.Tests
             }
         }
 
+        [Test]
+        public void AutoSortToggle_DuringOpponentTurn_SortsOnlySelfHand()
+        {
+            GameObject gameObject = new GameObject("AutoSortToggleSelfHandTest");
+            try
+            {
+                object gameFlow = AddTwoPlayerFlowWithoutInitialHand(gameObject);
+                Invoke(gameFlow, "StartNewRound");
+                object gameState = GetProperty(gameFlow, "CurrentState");
+                object selfSeat = GetProperty(gameState, "SelfSeat");
+                object opponentSeat = Invoke(gameState, "GetSeatByPlayerId", ParsePlayerId("Player2"));
+                object selfPlayerSeat = Invoke(gameState, "GetPlayerSeat", selfSeat);
+                object opponentPlayerSeat = Invoke(gameState, "GetPlayerSeat", opponentSeat);
+                AddHandTiles(selfPlayerSeat, "9m", "1m");
+                AddHandTiles(opponentPlayerSeat, "9p", "1p");
+                SetProperty(gameState, "CurrentTurn", opponentSeat);
+
+                Invoke(gameFlow, "RequestSetAutoSortEnabled", true);
+
+                Assert.That(GetHandDisplayString(selfPlayerSeat), Is.EqualTo("1m 9m"));
+                Assert.That(GetHandDisplayString(opponentPlayerSeat), Is.EqualTo("9p 1p"));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
+        public void InitialDealAutoSort_SortsOnlySelfHand()
+        {
+            GameObject gameObject = new GameObject("InitialDealAutoSortSelfHandTest");
+            try
+            {
+                object gameFlow = AddTwoPlayerFlowWithoutInitialHand(gameObject);
+                Invoke(gameFlow, "StartNewRound");
+                object gameState = GetProperty(gameFlow, "CurrentState");
+                object selfSeat = GetProperty(gameState, "SelfSeat");
+                object opponentSeat = Invoke(gameState, "GetSeatByPlayerId", ParsePlayerId("Player2"));
+                object selfPlayerSeat = Invoke(gameState, "GetPlayerSeat", selfSeat);
+                object opponentPlayerSeat = Invoke(gameState, "GetPlayerSeat", opponentSeat);
+                AddHandTiles(selfPlayerSeat, "9m", "1m");
+                AddHandTiles(opponentPlayerSeat, "9p", "1p");
+                SetPrivateField(gameFlow, "autoSortEnabled", true);
+
+                Invoke(gameFlow, "DealInitialHands");
+
+                Assert.That(GetHandDisplayString(selfPlayerSeat), Is.EqualTo("1m 9m"));
+                Assert.That(GetHandDisplayString(opponentPlayerSeat), Is.EqualTo("9p 1p"));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
+        public void AutoSortAfterHandChange_IgnoresOpponentSeat()
+        {
+            GameObject gameObject = new GameObject("AutoSortChangedHandSelfGuardTest");
+            try
+            {
+                object gameFlow = AddTwoPlayerFlowWithoutInitialHand(gameObject);
+                Invoke(gameFlow, "StartNewRound");
+                object gameState = GetProperty(gameFlow, "CurrentState");
+                object selfSeat = GetProperty(gameState, "SelfSeat");
+                object opponentSeat = Invoke(gameState, "GetSeatByPlayerId", ParsePlayerId("Player2"));
+                object selfPlayerSeat = Invoke(gameState, "GetPlayerSeat", selfSeat);
+                object opponentPlayerSeat = Invoke(gameState, "GetPlayerSeat", opponentSeat);
+                AddHandTiles(selfPlayerSeat, "9m", "1m");
+                AddHandTiles(opponentPlayerSeat, "9p", "1p");
+                SetPrivateField(gameFlow, "autoSortEnabled", true);
+
+                Invoke(gameFlow, "ApplyAutoSortIfEnabled", opponentSeat, "Test", false);
+                Invoke(gameFlow, "ApplyAutoSortIfEnabled", selfSeat, "Test", false);
+
+                Assert.That(GetHandDisplayString(selfPlayerSeat), Is.EqualTo("1m 9m"));
+                Assert.That(GetHandDisplayString(opponentPlayerSeat), Is.EqualTo("9p 1p"));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
+        public void RequestDraw_DuringOpponentTurn_DoesNotDraw()
+        {
+            GameObject gameObject = new GameObject("RequestDrawSelfTurnGuardTest");
+            try
+            {
+                object gameFlow = AddTwoPlayerFlowWithoutInitialHand(gameObject);
+                Invoke(gameFlow, "StartNewRound");
+                object gameState = GetProperty(gameFlow, "CurrentState");
+                object opponentSeat = Invoke(gameState, "GetSeatByPlayerId", ParsePlayerId("Player2"));
+                object opponentPlayerSeat = Invoke(gameState, "GetPlayerSeat", opponentSeat);
+                SetProperty(gameState, "CurrentTurn", opponentSeat);
+                int wallCount = (int)GetProperty(GetProperty(gameState, "Wall"), "Count");
+
+                Invoke(gameFlow, "RequestDraw");
+
+                Assert.That(GetProperty(GetProperty(gameState, "Wall"), "Count"), Is.EqualTo(wallCount));
+                Assert.That(GetProperty(opponentPlayerSeat, "HasDrawnTile"), Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
+        public void RequestDiscard_DuringOpponentTurn_DoesNotDiscard()
+        {
+            GameObject gameObject = new GameObject("RequestDiscardSelfTurnGuardTest");
+            try
+            {
+                object gameFlow = AddTwoPlayerFlowWithoutInitialHand(gameObject);
+                Invoke(gameFlow, "StartNewRound");
+                object gameState = GetProperty(gameFlow, "CurrentState");
+                object opponentSeat = Invoke(gameState, "GetSeatByPlayerId", ParsePlayerId("Player2"));
+                object opponentPlayerSeat = Invoke(gameState, "GetPlayerSeat", opponentSeat);
+                AddHandTiles(opponentPlayerSeat, "9p");
+                Invoke(opponentPlayerSeat, "SetDrawnTile", CreateTile("1p"));
+                SetProperty(gameState, "CurrentTurn", opponentSeat);
+
+                Invoke(gameFlow, "RequestDiscard", 0);
+
+                Assert.That(GetProperty(GetProperty(opponentPlayerSeat, "Hand"), "Count"), Is.EqualTo(1));
+                Assert.That(GetProperty(opponentPlayerSeat, "HasDrawnTile"), Is.True);
+                Assert.That(GetProperty(GetProperty(gameState, "Discards"), "Count"), Is.EqualTo(0));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
+        public void RequestDiscardDrawnTile_DuringOpponentTurn_DoesNotDiscard()
+        {
+            GameObject gameObject = new GameObject("RequestDiscardDrawnTileSelfTurnGuardTest");
+            try
+            {
+                object gameFlow = AddTwoPlayerFlowWithoutInitialHand(gameObject);
+                Invoke(gameFlow, "StartNewRound");
+                object gameState = GetProperty(gameFlow, "CurrentState");
+                object opponentSeat = Invoke(gameState, "GetSeatByPlayerId", ParsePlayerId("Player2"));
+                object opponentPlayerSeat = Invoke(gameState, "GetPlayerSeat", opponentSeat);
+                Invoke(opponentPlayerSeat, "SetDrawnTile", CreateTile("1p"));
+                SetProperty(gameState, "CurrentTurn", opponentSeat);
+
+                Invoke(gameFlow, "RequestDiscardDrawnTile");
+
+                Assert.That(GetProperty(opponentPlayerSeat, "HasDrawnTile"), Is.True);
+                Assert.That(GetProperty(GetProperty(gameState, "Discards"), "Count"), Is.EqualTo(0));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
+        public void RequestForceDrawSkill_DuringOpponentTurn_DoesNotActivateSkill()
+        {
+            GameObject gameObject = new GameObject("RequestSkillSelfTurnGuardTest");
+            try
+            {
+                object gameFlow = AddTwoPlayerFlowWithoutInitialHand(gameObject);
+                Invoke(gameFlow, "StartNewRound");
+                object gameState = GetProperty(gameFlow, "CurrentState");
+                object opponentSeat = Invoke(gameState, "GetSeatByPlayerId", ParsePlayerId("Player2"));
+                SetProperty(gameState, "CurrentTurn", opponentSeat);
+
+                Invoke(gameFlow, "RequestForceDrawSkill", "5m");
+
+                Assert.That(GetProperty(GetProperty(gameState, "ActiveSkillEffects"), "Count"), Is.EqualTo(0));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
+        public void RequestForceDrawSkill_DuringSelfTurn_UsesSelfSeatAsOwner()
+        {
+            GameObject gameObject = new GameObject("RequestSkillSelfOwnerTest");
+            try
+            {
+                object gameFlow = AddTwoPlayerFlowWithoutInitialHand(gameObject);
+                Invoke(gameFlow, "StartNewRound");
+                object gameState = GetProperty(gameFlow, "CurrentState");
+
+                Invoke(gameFlow, "RequestForceDrawSkill", "5m");
+
+                object effects = GetProperty(gameState, "ActiveSkillEffects");
+                Assert.That(GetProperty(effects, "Count"), Is.EqualTo(1));
+                PropertyInfo itemProperty = effects.GetType().GetProperty("Item");
+                Assert.That(itemProperty, Is.Not.Null);
+                object effect = itemProperty.GetValue(effects, new object[] { 0 });
+                Assert.That(
+                    GetProperty(effect, "OwnerSeat"),
+                    Is.EqualTo(GetProperty(gameState, "SelfSeat")));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        private static object AddTwoPlayerFlowWithoutInitialHand(GameObject gameObject)
+        {
+            object gameFlow = AddConfiguredGameFlow(gameObject, false);
+            SetPrivateField(gameFlow, "participantCount", 2);
+            SetPrivateField(gameFlow, "initialHandTileCount", 0);
+            return gameFlow;
+        }
+
+        private static void AddHandTiles(object playerSeat, params string[] tileCodes)
+        {
+            object hand = GetProperty(playerSeat, "Hand");
+            for (int i = 0; i < tileCodes.Length; i++)
+                Invoke(hand, "Add", CreateTile(tileCodes[i]));
+        }
+
+        private static string GetHandDisplayString(object playerSeat)
+        {
+            return (string)Invoke(GetProperty(playerSeat, "Hand"), "ToDisplayString");
+        }
+
         private static object AddConfiguredGameFlow(GameObject gameObject, bool enableAutoDraw)
         {
             object gameFlow = gameObject.AddComponent(GetMahjongGameFlowType());

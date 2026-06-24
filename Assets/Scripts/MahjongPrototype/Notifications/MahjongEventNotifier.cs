@@ -12,6 +12,7 @@ namespace MahjongPrototype.Notifications
     {
         public event Action<string> RunStarted;
         public event Action<int, int> RoundStarted;
+        public event Action RoundSetupCompleted;
         public event Action<SeatId, int> TurnStarted;
         public event Action<DrawResult> TileDrawn;
         public event Action<DiscardRecord> TileDiscarded;
@@ -35,6 +36,12 @@ namespace MahjongPrototype.Notifications
         public void NotifyRoundStarted(int turnIndex, int wallCount)
         {
             RoundStarted?.Invoke(turnIndex, wallCount);
+            NotifyAny();
+        }
+
+        public void NotifyRoundSetupCompleted()
+        {
+            RoundSetupCompleted?.Invoke();
             NotifyAny();
         }
 

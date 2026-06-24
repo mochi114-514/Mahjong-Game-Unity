@@ -21,6 +21,10 @@ namespace MahjongPrototype.Tests
         private const string MahjongDrawnTileViewTypeName = "MahjongPrototype.UI.MahjongDrawnTileView, Assembly-CSharp";
         private const string MahjongSeatWindViewTypeName = "MahjongPrototype.UI.MahjongSeatWindView, Assembly-CSharp";
         private const string MahjongPlayerUiControllerTypeName = "MahjongPrototype.UI.MahjongPlayerUiController, Assembly-CSharp";
+        private const string MahjongPrototypeUiManagerTypeName = "MahjongPrototype.UI.MahjongPrototypeUiManager, Assembly-CSharp";
+        private const string MahjongGameFlowTypeName = "MahjongPrototype.MahjongGameFlow, Assembly-CSharp";
+        private const string MahjongEventNotifierTypeName = "MahjongPrototype.Notifications.MahjongEventNotifier, Assembly-CSharp";
+        private const string PlayerIdTypeName = "MahjongPrototype.Domain.PlayerId, Assembly-CSharp";
         private const string TextMeshProUguiTypeName = "TMPro.TextMeshProUGUI, Unity.TextMeshPro";
         private const string TmpTextTypeName = "TMPro.TMP_Text, Unity.TextMeshPro";
 
@@ -292,6 +296,96 @@ namespace MahjongPrototype.Tests
             }
         }
 
+        [Test]
+        public void UiManager_SubscribeNotifications_UsesTypedEventsWithoutAnyEventRefresh()
+        {
+            GameObject root = new GameObject("TypedUiNotificationSubscriptionTest");
+            root.SetActive(false);
+            try
+            {
+                object notifier = root.AddComponent(Type.GetType(MahjongEventNotifierTypeName, true));
+                object gameFlow = root.AddComponent(Type.GetType(MahjongGameFlowTypeName, true));
+                object uiManager = root.AddComponent(Type.GetType(MahjongPrototypeUiManagerTypeName, true));
+                SetField(gameFlow, "eventNotifier", notifier);
+                SetField(uiManager, "gameFlow", gameFlow);
+                SetField(uiManager, "eventNotifier", notifier);
+
+                Invoke(uiManager, "SubscribeNotifications");
+
+                Assert.That(HasEventSubscriberTarget(notifier, "AnyEventNotified", uiManager), Is.False);
+                Assert.That(HasEventSubscriberTarget(notifier, "RoundStarted", uiManager), Is.True);
+                Assert.That(HasEventSubscriberTarget(notifier, "RoundSetupCompleted", uiManager), Is.True);
+                Assert.That(HasEventSubscriberTarget(notifier, "TurnStarted", uiManager), Is.True);
+                Assert.That(HasEventSubscriberTarget(notifier, "TileDrawn", uiManager), Is.True);
+                Assert.That(HasEventSubscriberTarget(notifier, "TileDiscarded", uiManager), Is.True);
+                Assert.That(HasEventSubscriberTarget(notifier, "HandAutoSorted", uiManager), Is.True);
+                Assert.That(HasEventSubscriberTarget(notifier, "WinChecked", uiManager), Is.True);
+                Assert.That(HasEventSubscriberTarget(notifier, "RoundEnded", uiManager), Is.True);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void HandAutoSortedNotification_DoesNotRebuildOpponentHand()
+        {
+            GameObject root = new GameObject("HandAutoSortedPartialRefreshTest");
+            GameObject prefab = CreateTileButtonPrefab();
+            root.SetActive(false);
+            try
+            {
+                object gameState = CreateGameState("East");
+                Invoke(
+                    gameState,
+                    "AssignPlayerToSeat",
+                    ParsePlayerId("Player2"),
+                    ParseSeat("West"));
+                Invoke(gameState, "RebuildActiveTurnSeatsFromSeatSlots");
+                AddHandTile(gameState, "West", "8p");
+
+                object notifier = root.AddComponent(Type.GetType(MahjongEventNotifierTypeName, true));
+                object gameFlow = root.AddComponent(Type.GetType(MahjongGameFlowTypeName, true));
+                SetField(gameFlow, "eventNotifier", notifier);
+                SetField(gameFlow, "gameState", gameState);
+
+                GameObject opponentObject = new GameObject("AcrossTopPlayerUi");
+                opponentObject.transform.SetParent(root.transform, false);
+                object opponentHandView = CreateHandView(opponentObject, prefab, out RectTransform opponentContainer);
+                object opponentController = CreateController(
+                    opponentObject,
+                    null,
+                    "AcrossTop",
+                    handView: opponentHandView);
+                Invoke(
+                    opponentController,
+                    "RenderHand",
+                    GetHandTiles(gameState, "West"),
+                    ParseSeat("West"),
+                    false,
+                    false);
+                Assert.That(opponentContainer.childCount, Is.EqualTo(1));
+                Transform originalOpponentTile = opponentContainer.GetChild(0);
+
+                object uiManager = root.AddComponent(Type.GetType(MahjongPrototypeUiManagerTypeName, true));
+                SetField(uiManager, "gameFlow", gameFlow);
+                SetField(uiManager, "eventNotifier", notifier);
+                SetField(uiManager, "acrossTopPlayerUiController", opponentController);
+                Invoke(uiManager, "SubscribeNotifications");
+
+                Invoke(notifier, "NotifyHandAutoSorted", ParseSeat("East"), 1);
+
+                Assert.That(opponentContainer.childCount, Is.EqualTo(1));
+                Assert.That(opponentContainer.GetChild(0), Is.SameAs(originalOpponentTile));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(prefab);
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
         private static object CreateController(
             GameObject root,
             object discardRiverView,
@@ -444,6 +538,11 @@ namespace MahjongPrototype.Tests
             return Enum.Parse(Type.GetType(SeatIdTypeName, true), seatName);
         }
 
+        private static object ParsePlayerId(string playerId)
+        {
+            return Enum.Parse(Type.GetType(PlayerIdTypeName, true), playerId);
+        }
+
         private static object ParseViewSlot(string viewSlot)
         {
             return Enum.Parse(Type.GetType(ViewSlotTypeName, true), viewSlot);
@@ -511,6 +610,27 @@ namespace MahjongPrototype.Tests
             FieldInfo field = target.GetType().GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance);
             Assert.That(field, Is.Not.Null);
             field.SetValue(target, value);
+        }
+
+        private static bool HasEventSubscriberTarget(object source, string eventName, object expectedTarget)
+        {
+            FieldInfo eventField = source.GetType().GetField(
+                eventName,
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.That(eventField, Is.Not.Null);
+
+            Delegate eventDelegate = eventField.GetValue(source) as Delegate;
+            if (eventDelegate == null)
+                return false;
+
+            Delegate[] subscribers = eventDelegate.GetInvocationList();
+            for (int i = 0; i < subscribers.Length; i++)
+            {
+                if (ReferenceEquals(subscribers[i].Target, expectedTarget))
+                    return true;
+            }
+
+            return false;
         }
 
         private static object Invoke(object target, string methodName, params object[] args)

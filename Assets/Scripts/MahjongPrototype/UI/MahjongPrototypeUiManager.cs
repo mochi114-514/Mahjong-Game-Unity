@@ -2,6 +2,8 @@ using System.Collections.Generic;
 using MahjongPrototype;
 using MahjongPrototype.Domain;
 using MahjongPrototype.Notifications;
+using MahjongPrototype.Services;
+using MahjongPrototype.Skills;
 using UnityEngine;
 
 namespace MahjongPrototype.UI
@@ -148,11 +150,24 @@ namespace MahjongPrototype.UI
             {
                 WarnMissingOnce(
                     ref warnedMissingEventNotifier,
-                    "MahjongEventNotifier is not assigned. UI refresh depends on AnyEventNotified.");
+                    "MahjongEventNotifier is not assigned. Typed UI refresh events will not be received.");
                 return;
             }
 
-            eventNotifier.AnyEventNotified += RefreshFromFlow;
+            eventNotifier.RoundStarted += HandleRoundStarted;
+            eventNotifier.RoundSetupCompleted += HandleRoundSetupCompleted;
+            eventNotifier.TurnStarted += HandleTurnStarted;
+            eventNotifier.TileDrawn += HandleTileDrawn;
+            eventNotifier.TileDiscarded += HandleTileDiscarded;
+            eventNotifier.SkillActivated += HandleSkillActivated;
+            eventNotifier.SkillEffectRegistered += HandleSkillEffectRegistered;
+            eventNotifier.SkillEffectResolved += HandleSkillEffectResolved;
+            eventNotifier.SkillEffectExpired += HandleSkillEffectExpired;
+            eventNotifier.WinChecked += HandleWinChecked;
+            eventNotifier.WinDeclared += HandleWinDeclared;
+            eventNotifier.WinDeclined += HandleWinDeclined;
+            eventNotifier.HandAutoSorted += HandleHandAutoSorted;
+            eventNotifier.RoundEnded += HandleRoundEnded;
         }
 
         private void UnsubscribeNotifications()
@@ -160,7 +175,20 @@ namespace MahjongPrototype.UI
             if (eventNotifier == null)
                 return;
 
-            eventNotifier.AnyEventNotified -= RefreshFromFlow;
+            eventNotifier.RoundStarted -= HandleRoundStarted;
+            eventNotifier.RoundSetupCompleted -= HandleRoundSetupCompleted;
+            eventNotifier.TurnStarted -= HandleTurnStarted;
+            eventNotifier.TileDrawn -= HandleTileDrawn;
+            eventNotifier.TileDiscarded -= HandleTileDiscarded;
+            eventNotifier.SkillActivated -= HandleSkillActivated;
+            eventNotifier.SkillEffectRegistered -= HandleSkillEffectRegistered;
+            eventNotifier.SkillEffectResolved -= HandleSkillEffectResolved;
+            eventNotifier.SkillEffectExpired -= HandleSkillEffectExpired;
+            eventNotifier.WinChecked -= HandleWinChecked;
+            eventNotifier.WinDeclared -= HandleWinDeclared;
+            eventNotifier.WinDeclined -= HandleWinDeclined;
+            eventNotifier.HandAutoSorted -= HandleHandAutoSorted;
+            eventNotifier.RoundEnded -= HandleRoundEnded;
         }
 
         private void EnsureDisplayController()
@@ -289,7 +317,6 @@ namespace MahjongPrototype.UI
             }
 
             gameFlow.RetryPrototype();
-            RefreshFromFlow();
         }
 
         private void HandleWinRequested()
@@ -301,7 +328,6 @@ namespace MahjongPrototype.UI
             }
 
             gameFlow.RequestDeclareWin();
-            RefreshFromFlow();
         }
 
         private void HandleDeclineWinRequested()
@@ -313,7 +339,96 @@ namespace MahjongPrototype.UI
             }
 
             gameFlow.RequestDeclineWin();
+        }
+
+        private void HandleRoundStarted(int _, int __)
+        {
             RefreshFromFlow();
+        }
+
+        private void HandleRoundSetupCompleted()
+        {
+            RefreshFromFlow();
+        }
+
+        private void HandleTurnStarted(SeatId _, int __)
+        {
+            RefreshGlobalStatus();
+            RefreshWinDecisionUi();
+            RefreshInteractionUi();
+        }
+
+        private void HandleTileDrawn(DrawResult result)
+        {
+            if (!result.Success || result.Purpose == DrawPurpose.InitialDeal)
+                return;
+
+            RefreshHandForSeat(result.Seat);
+            RefreshDrawnTileForSeat(result.Seat);
+            RefreshGlobalStatus();
+            RefreshInteractionUi();
+        }
+
+        private void HandleTileDiscarded(DiscardRecord record)
+        {
+            RefreshHandForSeat(record.ActorSeat);
+            RefreshDrawnTileForSeat(record.ActorSeat);
+            RefreshDiscardRiverForSeat(record.ActorSeat);
+            RefreshGlobalStatus();
+            RefreshInteractionUi();
+        }
+
+        private void HandleSkillActivated(SeatId _, ActiveSkillEffect __)
+        {
+            RefreshGlobalStatus();
+        }
+
+        private void HandleSkillEffectRegistered(ActiveSkillEffect _)
+        {
+            RefreshGlobalStatus();
+        }
+
+        private void HandleSkillEffectResolved(DrawResult _)
+        {
+            RefreshGlobalStatus();
+        }
+
+        private void HandleSkillEffectExpired(ActiveSkillEffect _, string __)
+        {
+            RefreshGlobalStatus();
+        }
+
+        private void HandleWinChecked(SeatId _, int __, bool ___)
+        {
+            RefreshGlobalStatus();
+            RefreshWinDecisionUi();
+            RefreshInteractionUi();
+        }
+
+        private void HandleWinDeclared(SeatId _, int __)
+        {
+            RefreshGlobalStatus();
+            RefreshWinDecisionUi();
+            RefreshInteractionUi();
+        }
+
+        private void HandleWinDeclined(SeatId _, int __)
+        {
+            RefreshGlobalStatus();
+            RefreshWinDecisionUi();
+            RefreshInteractionUi();
+        }
+
+        private void HandleHandAutoSorted(SeatId seat, int _)
+        {
+            RefreshHandForSeat(seat);
+        }
+
+        private void HandleRoundEnded(string _)
+        {
+            RefreshGlobalStatus();
+            RefreshWinDecisionUi();
+            RefreshInteractionUi();
         }
 
         private void RefreshDisplay(MahjongGameState state)
@@ -323,6 +438,13 @@ namespace MahjongPrototype.UI
 
             if (displayController != null)
                 displayController.Refresh(state);
+        }
+
+        private void RefreshGlobalStatus()
+        {
+            MahjongGameState state = gameFlow != null ? gameFlow.CurrentState : null;
+            if (state != null)
+                RefreshDisplay(state);
         }
 
         private void SubscribePlayerHandEvents()
@@ -407,6 +529,29 @@ namespace MahjongPrototype.UI
             ClearUnrenderedPlayerHands(renderedViewSlots);
         }
 
+        private void RefreshHandForSeat(SeatId seat)
+        {
+            MahjongGameState state = gameFlow != null ? gameFlow.CurrentState : null;
+            if (state == null)
+                return;
+
+            SeatSlot seatSlot = state.GetSeatSlot(seat);
+            if (seatSlot.IsEmpty)
+                return;
+
+            ViewSlot viewSlot = SeatToViewSlotResolver.Resolve(state.SelfSeat, seat);
+            MahjongPlayerUiController controller = GetPlayerUiController(viewSlot);
+            if (controller == null)
+                return;
+
+            bool isSelf = seatSlot.PlayerId == state.SelfPlayerId;
+            controller.RenderHand(
+                state.GetPlayerSeat(seat).Hand.GetTiles(),
+                seat,
+                isSelf,
+                isSelf && CanUseSelfGameplayInput(state));
+        }
+
         private void RefreshPlayerWinds(MahjongGameState state)
         {
             HashSet<ViewSlot> renderedViewSlots = new HashSet<ViewSlot>();
@@ -443,11 +588,29 @@ namespace MahjongPrototype.UI
                 controller.ClearDrawnTile();
         }
 
+        private void RefreshDrawnTileForSeat(SeatId seat)
+        {
+            MahjongGameState state = gameFlow != null ? gameFlow.CurrentState : null;
+            if (state == null || !state.IsSelfSeat(seat))
+                return;
+
+            RefreshDrawnTile(state);
+        }
+
         private void RefreshDiscardRiver(MahjongGameState state)
         {
             MahjongPlayerUiController controller = GetPlayerUiController(ViewSlot.SelfBottom);
             if (controller != null)
                 controller.RenderDiscardRiver(state.Discards, state.SelfSeat);
+        }
+
+        private void RefreshDiscardRiverForSeat(SeatId seat)
+        {
+            MahjongGameState state = gameFlow != null ? gameFlow.CurrentState : null;
+            if (state == null || !state.IsSelfSeat(seat))
+                return;
+
+            RefreshDiscardRiver(state);
         }
 
         private void RefreshWinDecision(MahjongGameState state)
@@ -465,6 +628,13 @@ namespace MahjongPrototype.UI
             }
         }
 
+        private void RefreshWinDecisionUi()
+        {
+            MahjongGameState state = gameFlow != null ? gameFlow.CurrentState : null;
+            if (state != null)
+                RefreshWinDecision(state);
+        }
+
         private void RefreshInteractionState(MahjongGameState state)
         {
             bool canUseGameplayInput = CanUseSelfGameplayInput(state);
@@ -479,6 +649,13 @@ namespace MahjongPrototype.UI
 
             if (selfController != null)
                 selfController.SetDrawnTileInteractable(canUseGameplayInput);
+        }
+
+        private void RefreshInteractionUi()
+        {
+            MahjongGameState state = gameFlow != null ? gameFlow.CurrentState : null;
+            if (state != null)
+                RefreshInteractionState(state);
         }
 
         private bool CanUseSelfGameplayInput(MahjongGameState state)

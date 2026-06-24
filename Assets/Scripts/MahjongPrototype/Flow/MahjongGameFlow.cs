@@ -113,6 +113,7 @@ namespace MahjongPrototype
             LogRoundStarted();
 
             DealInitialHands();
+            NotifyRoundSetupCompleted();
             StartTurn(gameState.CurrentTurn, gameState.TurnIndex);
         }
 
@@ -124,17 +125,27 @@ namespace MahjongPrototype
 
         public void RequestDraw()
         {
-            if (!CanUseGameState())
+            if (!CanUseSelfTurnInput("DrawBlocked"))
                 return;
 
-            TryDrawCurrentTurn("DrawCompleted", "DrawBlocked", true);
+            TryDrawForSeat(gameState.SelfSeat, "DrawCompleted", "DrawBlocked", true);
         }
 
-        private bool TryDrawCurrentTurn(
+        private bool TryDrawForSeat(
+            SeatId seat,
             string completedEventName,
             string blockedEventName,
             bool warnOnBlocked)
         {
+            if (gameState.CurrentTurn != seat)
+            {
+                if (warnOnBlocked)
+                    Warn("Only the current seat can draw.");
+
+                LogTurnBlocked(blockedEventName, "NotCurrentTurn");
+                return false;
+            }
+
             if (gameState.IsRoundEnded)
             {
                 if (warnOnBlocked)
@@ -153,8 +164,8 @@ namespace MahjongPrototype
                 return false;
             }
 
-            PlayerSeat currentPlayerSeat = gameState.GetPlayerSeat(gameState.CurrentTurn);
-            if (currentPlayerSeat.HasDrawnTile)
+            PlayerSeat playerSeat = gameState.GetPlayerSeat(seat);
+            if (playerSeat.HasDrawnTile)
             {
                 if (warnOnBlocked)
                     Warn("Already drew this turn. Discard a tile first.");
@@ -163,7 +174,7 @@ namespace MahjongPrototype
                 return false;
             }
 
-            DrawResult result = drawService.DrawTile(gameState.CurrentTurn, gameState, DrawPurpose.TurnDraw);
+            DrawResult result = drawService.DrawTile(seat, gameState, DrawPurpose.TurnDraw);
 
             if (!result.Success)
             {
@@ -172,11 +183,11 @@ namespace MahjongPrototype
                 return false;
             }
 
-            currentPlayerSeat.SetDrawnTile(result.Tile);
+            playerSeat.SetDrawnTile(result.Tile);
             LogTurnDebug(
                 completedEventName,
                 $"phase={gameState.TurnPhase}; drawnTile={result.Tile}",
-                seat: gameState.CurrentTurn,
+                seat: seat,
                 tile: result.Tile,
                 turnIndex: gameState.TurnIndex);
             HandleSkillResolutionLogs(result);
@@ -188,7 +199,7 @@ namespace MahjongPrototype
 
         public void RequestDiscard(int handIndex)
         {
-            if (!CanUseGameState())
+            if (!CanUseSelfTurnInput("DiscardBlocked"))
                 return;
 
             if (gameState.IsRoundEnded)
@@ -198,8 +209,9 @@ namespace MahjongPrototype
                 return;
             }
 
-            PlayerSeat currentPlayerSeat = gameState.GetPlayerSeat(gameState.CurrentTurn);
-            if (!currentPlayerSeat.HasDrawnTile)
+            SeatId selfSeat = gameState.SelfSeat;
+            PlayerSeat selfPlayerSeat = gameState.GetPlayerSeat(selfSeat);
+            if (!selfPlayerSeat.HasDrawnTile)
             {
                 Warn("Draw before discarding.");
                 LogTurnBlocked("DiscardBlocked", "DrawnTileMissing");
@@ -213,14 +225,14 @@ namespace MahjongPrototype
                 return;
             }
 
-            DiscardResult result = discardService.DiscardTile(gameState, gameState.CurrentTurn, handIndex);
+            DiscardResult result = discardService.DiscardTile(gameState, selfSeat, handIndex);
             if (!result.Success)
             {
                 Warn(result.Reason);
                 return;
             }
 
-            CommitDrawnTileToHandIfPresent(gameState.CurrentTurn);
+            CommitDrawnTileToHandIfPresent(selfSeat);
             LogTurnDebug(
                 "DiscardCompleted",
                 $"phase={gameState.TurnPhase}; discardTile={result.Record.Tile}",
@@ -234,7 +246,7 @@ namespace MahjongPrototype
 
         public void RequestDiscardDrawnTile()
         {
-            if (!CanUseGameState())
+            if (!CanUseSelfTurnInput("DiscardBlocked"))
                 return;
 
             if (gameState.IsRoundEnded)
@@ -244,8 +256,9 @@ namespace MahjongPrototype
                 return;
             }
 
-            PlayerSeat currentPlayerSeat = gameState.GetPlayerSeat(gameState.CurrentTurn);
-            if (!currentPlayerSeat.HasDrawnTile)
+            SeatId selfSeat = gameState.SelfSeat;
+            PlayerSeat selfPlayerSeat = gameState.GetPlayerSeat(selfSeat);
+            if (!selfPlayerSeat.HasDrawnTile)
             {
                 Warn("Draw before discarding.");
                 LogTurnBlocked("DiscardBlocked", "DrawnTileMissing");
@@ -259,7 +272,7 @@ namespace MahjongPrototype
                 return;
             }
 
-            DiscardResult result = discardService.DiscardDrawnTile(gameState, gameState.CurrentTurn);
+            DiscardResult result = discardService.DiscardDrawnTile(gameState, selfSeat);
             if (!result.Success)
             {
                 Warn(result.Reason);
@@ -279,7 +292,10 @@ namespace MahjongPrototype
 
         public void RequestForceDrawSkill(string targetTileCode)
         {
-            RequestForceDrawSkillForSeat(gameState != null ? gameState.CurrentTurn : viewerSeat, targetTileCode);
+            if (!CanUseSelfTurnInput("SkillBlocked"))
+                return;
+
+            RequestForceDrawSkillForSeat(gameState.SelfSeat, targetTileCode);
         }
 
         public void RequestForceDrawSkillForSeat(SeatId ownerSeat, string targetTileCode)
@@ -385,7 +401,7 @@ namespace MahjongPrototype
             LogAutoSortChanged(enabled);
 
             if (enabled && gameState != null)
-                ApplyAutoSort(gameState.CurrentTurn, "ToggleEnabled", true);
+                ApplyAutoSort(gameState.SelfSeat, "ToggleEnabled", true);
         }
 
         public void RequestDeclareWin()
@@ -453,7 +469,7 @@ namespace MahjongPrototype
                 }
             }
 
-            ApplyAutoSortToActiveHandsIfEnabled("InitialDeal");
+            ApplyAutoSortToSelfHandIfEnabled("InitialDeal");
         }
 
         private void AdvanceTurn()
@@ -517,7 +533,7 @@ namespace MahjongPrototype
                 seat: seat,
                 turnIndex: turnIndex);
 
-            TryDrawCurrentTurn("AutoDrawCompleted", "AutoDrawSkipped", false);
+            TryDrawForSeat(seat, "AutoDrawCompleted", "AutoDrawSkipped", false);
         }
 
         private void CheckWinPrototype()
@@ -696,6 +712,19 @@ namespace MahjongPrototype
             return false;
         }
 
+        private bool CanUseSelfTurnInput(string blockedEventName)
+        {
+            if (!CanUseGameState())
+                return false;
+
+            if (gameState.IsSelfTurn)
+                return true;
+
+            Warn("User input is only available during the self player's turn.");
+            LogTurnBlocked(blockedEventName, "NotSelfTurn");
+            return false;
+        }
+
         private void LogTurnBlocked(string eventName, string reason)
         {
             if (gameState == null)
@@ -743,6 +772,11 @@ namespace MahjongPrototype
         private void NotifyRoundStarted()
         {
             eventNotifier?.NotifyRoundStarted(gameState.TurnIndex, gameState.Wall.Count);
+        }
+
+        private void NotifyRoundSetupCompleted()
+        {
+            eventNotifier?.NotifyRoundSetupCompleted();
         }
 
         private void NotifyTurnStarted(SeatId seat, int turnIndex)
@@ -795,18 +829,17 @@ namespace MahjongPrototype
             eventNotifier?.NotifyHandAutoSorted(seat, turnIndex);
         }
 
-        private void ApplyAutoSortToActiveHandsIfEnabled(string reason)
+        private void ApplyAutoSortToSelfHandIfEnabled(string reason)
         {
             if (!autoSortEnabled || gameState == null)
                 return;
 
-            for (int i = 0; i < gameState.ActiveTurnSeats.Count; i++)
-                ApplyAutoSort(gameState.ActiveTurnSeats[i], reason, true);
+            ApplyAutoSort(gameState.SelfSeat, reason, false);
         }
 
         private void ApplyAutoSortIfEnabled(SeatId seat, string reason, bool notify)
         {
-            if (!autoSortEnabled || gameState == null)
+            if (!autoSortEnabled || gameState == null || !gameState.IsSelfSeat(seat))
                 return;
 
             ApplyAutoSort(seat, reason, notify);
@@ -1068,8 +1101,8 @@ namespace MahjongPrototype
                 "Mahjong",
                 enabled ? "AutoSortEnabled" : "AutoSortDisabled",
                 enabled ? "Auto sort enabled." : "Auto sort disabled.",
-                seat: gameState.CurrentTurn,
-                hand: GetCurrentHandText(),
+                seat: gameState.SelfSeat,
+                hand: GetHandText(gameState.SelfSeat),
                 wallCount: gameState.Wall.Count,
                 turnIndex: gameState.TurnIndex);
         }
