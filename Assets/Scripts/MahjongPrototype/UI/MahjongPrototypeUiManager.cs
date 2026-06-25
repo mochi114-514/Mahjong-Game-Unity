@@ -651,18 +651,61 @@ namespace MahjongPrototype.UI
 
         private void RefreshDiscardRiver(MahjongGameState state)
         {
-            MahjongPlayerUiController controller = GetPlayerUiController(ViewSlot.SelfBottom);
-            if (controller != null)
-                controller.RenderDiscardRiver(state.Discards, state.SelfSeat);
+            HashSet<ViewSlot> renderedViewSlots = new HashSet<ViewSlot>();
+            IReadOnlyList<SeatId> displaySeats = state.OccupiedSeats;
+            for (int i = 0; i < displaySeats.Count; i++)
+            {
+                SeatId seat = displaySeats[i];
+                SeatSlot seatSlot = state.GetSeatSlot(seat);
+                if (seatSlot.IsEmpty)
+                    continue;
+
+                ViewSlot viewSlot = SeatToViewSlotResolver.Resolve(state.SelfSeat, seat);
+                MahjongPlayerUiController controller = GetPlayerUiController(viewSlot);
+                if (controller == null)
+                    continue;
+
+                controller.RenderDiscardRiver(state.Discards, seat);
+                renderedViewSlots.Add(viewSlot);
+            }
+
+            ClearUnrenderedDiscardRivers(renderedViewSlots);
         }
 
         private void RefreshDiscardRiverForSeat(SeatId seat)
         {
             MahjongGameState state = gameFlow != null ? gameFlow.CurrentState : null;
-            if (state == null || !state.IsSelfSeat(seat))
+            if (state == null)
                 return;
 
-            RefreshDiscardRiver(state);
+            SeatSlot seatSlot = state.GetSeatSlot(seat);
+            if (seatSlot.IsEmpty)
+                return;
+
+            ViewSlot viewSlot = SeatToViewSlotResolver.Resolve(state.SelfSeat, seat);
+            MahjongPlayerUiController controller = GetPlayerUiController(viewSlot);
+            if (controller != null)
+                controller.RenderDiscardRiver(state.Discards, seat);
+        }
+
+        private void ClearUnrenderedDiscardRivers(HashSet<ViewSlot> renderedViewSlots)
+        {
+            ClearPlayerDiscardRiverIfUnrendered(ViewSlot.SelfBottom, renderedViewSlots);
+            ClearPlayerDiscardRiverIfUnrendered(ViewSlot.NextLeft, renderedViewSlots);
+            ClearPlayerDiscardRiverIfUnrendered(ViewSlot.AcrossTop, renderedViewSlots);
+            ClearPlayerDiscardRiverIfUnrendered(ViewSlot.PreviousRight, renderedViewSlots);
+        }
+
+        private void ClearPlayerDiscardRiverIfUnrendered(
+            ViewSlot viewSlot,
+            HashSet<ViewSlot> renderedViewSlots)
+        {
+            if (renderedViewSlots.Contains(viewSlot))
+                return;
+
+            MahjongPlayerUiController controller = GetPlayerUiController(viewSlot);
+            if (controller != null)
+                controller.ClearDiscardRiver();
         }
 
         private void RefreshWinDecision(MahjongGameState state)

@@ -34,6 +34,7 @@ namespace MahjongPrototype
 
         [Header("Scene References")]
         [SerializeField] private MahjongEventNotifier eventNotifier;
+        [SerializeField] private CpuTurnController cpuTurnController;
 
         [Header("Dev Log")]
         [SerializeField] private bool enableDevLog = true;
@@ -72,6 +73,7 @@ namespace MahjongPrototype
         private void Awake()
         {
             CacheReferences();
+            EnsureCpuTurnController();
             NormalizeParticipantCount();
         }
 
@@ -93,7 +95,9 @@ namespace MahjongPrototype
         public void StartNewRound()
         {
             CacheReferences();
+            EnsureCpuTurnController();
             NormalizeParticipantCount();
+            cpuTurnController?.CancelPendingTurn();
 
             DevLog.Initialize(enableDevLog, enableReleaseBuildLogging);
             ClearWinDecision();
@@ -129,6 +133,18 @@ namespace MahjongPrototype
                 return;
 
             TryDrawForSeat(gameState.SelfSeat, "DrawCompleted", "DrawBlocked", true);
+        }
+
+        public bool TryRequestDrawForSeat(SeatId actorSeat)
+        {
+            if (!CanUseGameState())
+                return false;
+
+            return TryDrawForSeat(
+                actorSeat,
+                "DrawCompleted",
+                "DrawBlocked",
+                false);
         }
 
         private bool TryDrawForSeat(
@@ -249,34 +265,56 @@ namespace MahjongPrototype
             if (!CanUseSelfTurnInput("DiscardBlocked"))
                 return;
 
+            TryRequestDiscardDrawnTileForSeatInternal(gameState.SelfSeat, true);
+        }
+
+        public bool TryRequestDiscardDrawnTileForSeat(SeatId actorSeat)
+        {
+            return TryRequestDiscardDrawnTileForSeatInternal(actorSeat, false);
+        }
+
+        private bool TryRequestDiscardDrawnTileForSeatInternal(
+            SeatId actorSeat,
+            bool warnOnBlocked)
+        {
+            if (!CanUseGameState())
+                return false;
+
             if (gameState.IsRoundEnded)
             {
-                Warn("Round already ended. Press Retry.");
+                if (warnOnBlocked)
+                    Warn("Round already ended. Press Retry.");
+
                 LogTurnBlocked("DiscardBlocked", "RoundEnded");
-                return;
+                return false;
             }
 
-            SeatId selfSeat = gameState.SelfSeat;
-            PlayerSeat selfPlayerSeat = gameState.GetPlayerSeat(selfSeat);
-            if (!selfPlayerSeat.HasDrawnTile)
+            PlayerSeat actorPlayerSeat = gameState.GetPlayerSeat(actorSeat);
+            if (!actorPlayerSeat.HasDrawnTile)
             {
-                Warn("Draw before discarding.");
+                if (warnOnBlocked)
+                    Warn("Draw before discarding.");
+
                 LogTurnBlocked("DiscardBlocked", "DrawnTileMissing");
-                return;
+                return false;
             }
 
             if (gameState.IsWinDecisionPending)
             {
-                Warn("Declare or decline win before discarding.");
+                if (warnOnBlocked)
+                    Warn("Declare or decline win before discarding.");
+
                 LogTurnBlocked("DiscardBlocked", "WinDecisionPending");
-                return;
+                return false;
             }
 
-            DiscardResult result = discardService.DiscardDrawnTile(gameState, selfSeat);
+            DiscardResult result = discardService.DiscardDrawnTile(gameState, actorSeat);
             if (!result.Success)
             {
-                Warn(result.Reason);
-                return;
+                if (warnOnBlocked)
+                    Warn(result.Reason);
+
+                return false;
             }
 
             LogTurnDebug(
@@ -288,6 +326,7 @@ namespace MahjongPrototype
             NotifyTileDiscarded(result.Record);
             LogTileDiscarded(result.Record);
             AdvanceTurn();
+            return true;
         }
 
         public void RequestForceDrawSkill(string targetTileCode)
@@ -495,6 +534,7 @@ namespace MahjongPrototype
                 turnIndex: turnIndex);
             ResolveReservedSkillBeforeDraw(seat);
             TryAutoDrawAtTurnStart(seat, turnIndex);
+            cpuTurnController?.TryStartCpuTurn(this, gameState, seat, turnIndex);
         }
 
         private void ResolveReservedSkillBeforeDraw(SeatId seat)
@@ -649,6 +689,18 @@ namespace MahjongPrototype
         {
             if (eventNotifier == null)
                 eventNotifier = GetComponent<MahjongEventNotifier>();
+
+            if (cpuTurnController == null)
+                cpuTurnController = GetComponent<CpuTurnController>();
+        }
+
+        private void EnsureCpuTurnController()
+        {
+            if (cpuTurnController != null)
+                return;
+
+            // PROTOTYPE: Ensure the local prototype can run CPU turns without scene migration.
+            cpuTurnController = gameObject.AddComponent<CpuTurnController>();
         }
 
         private void NormalizeParticipantCount()
@@ -892,7 +944,9 @@ namespace MahjongPrototype
             if (slot == null || slot.IsEmpty)
                 return "Empty";
 
-            return gameState.IsSelfSeat(slot.Wind) ? "Self" : slot.StateLabel;
+            return gameState.IsSelfSeat(slot.Wind)
+                ? $"Self:{slot.ParticipantType}"
+                : $"{slot.StateLabel}:{slot.ParticipantType}";
         }
 
         private void LogTurnStarted(SeatId seat, int turnIndex)

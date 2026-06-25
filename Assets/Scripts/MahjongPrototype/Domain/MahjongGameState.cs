@@ -94,8 +94,21 @@ namespace MahjongPrototype.Domain
 
         public void AssignPlayerToSeat(PlayerId playerId, SeatId seat)
         {
+            // PROTOTYPE: Non-local participants default to CPU until network setup assigns RemoteHuman.
+            ParticipantType participantType = playerId == SelfPlayerId
+                ? ParticipantType.LocalHuman
+                : ParticipantType.Cpu;
             ClearPlayerFromSeatSlots(playerId);
-            GetSeatSlot(seat).AssignPlayer(playerId);
+            GetSeatSlot(seat).AssignPlayer(playerId, participantType);
+        }
+
+        public void SetParticipantType(SeatId seat, ParticipantType participantType)
+        {
+            SeatSlot slot = GetSeatSlot(seat);
+            if (!slot.HasPlayer)
+                throw new InvalidOperationException($"Cannot set participant type for empty seat {seat}.");
+
+            slot.SetParticipantType(participantType);
         }
 
         public SeatSlot GetSelfSeatSlot()
@@ -266,18 +279,26 @@ namespace MahjongPrototype.Domain
 
         public SeatId Wind { get; }
         public PlayerId? PlayerId { get; private set; }
+        public ParticipantType? ParticipantType { get; private set; }
         public bool HasPlayer => PlayerId.HasValue;
         public bool IsEmpty => !PlayerId.HasValue;
         public string StateLabel => PlayerId.HasValue ? PlayerId.Value.ToString() : "Empty";
 
-        internal void AssignPlayer(PlayerId playerId)
+        internal void AssignPlayer(PlayerId playerId, ParticipantType participantType)
         {
             PlayerId = playerId;
+            ParticipantType = participantType;
+        }
+
+        internal void SetParticipantType(ParticipantType participantType)
+        {
+            ParticipantType = participantType;
         }
 
         internal void Clear()
         {
             PlayerId = null;
+            ParticipantType = null;
         }
     }
 }

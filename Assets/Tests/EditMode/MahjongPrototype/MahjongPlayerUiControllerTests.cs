@@ -485,6 +485,156 @@ namespace MahjongPrototype.Tests
             }
         }
 
+        [Test]
+        public void TileDiscardedNotification_SelfSeatUpdatesOnlySelfBottomRiver()
+        {
+            GameObject root = new GameObject("SelfDiscardRiverPartialRefreshTest");
+            GameObject prefab = CreateTileButtonPrefab();
+            root.SetActive(false);
+            try
+            {
+                object gameState = CreateGameState("East");
+                Invoke(
+                    gameState,
+                    "AssignPlayerToSeat",
+                    ParsePlayerId("Player2"),
+                    ParseSeat("West"));
+                Invoke(gameState, "RebuildActiveTurnSeatsFromSeatSlots");
+
+                object notifier = root.AddComponent(Type.GetType(MahjongEventNotifierTypeName, true));
+                object gameFlow = root.AddComponent(Type.GetType(MahjongGameFlowTypeName, true));
+                SetField(gameFlow, "eventNotifier", notifier);
+                SetField(gameFlow, "gameState", gameState);
+
+                GameObject selfObject = new GameObject("SelfBottomPlayerUi");
+                selfObject.transform.SetParent(root.transform, false);
+                object selfRiverView = CreateDiscardRiverView(
+                    selfObject,
+                    prefab,
+                    out RectTransform selfContainer);
+                object selfController = CreateController(
+                    selfObject,
+                    selfRiverView,
+                    "SelfBottom");
+
+                GameObject opponentObject = new GameObject("AcrossTopPlayerUi");
+                opponentObject.transform.SetParent(root.transform, false);
+                object opponentRiverView = CreateDiscardRiverView(
+                    opponentObject,
+                    prefab,
+                    out RectTransform opponentContainer);
+                object opponentController = CreateController(
+                    opponentObject,
+                    opponentRiverView,
+                    "AcrossTop");
+
+                AddDiscard(gameState, "West", "9m", 1);
+                Invoke(
+                    opponentController,
+                    "RenderDiscardRiver",
+                    GetProperty(gameState, "Discards"),
+                    ParseSeat("West"));
+                Transform originalOpponentTile = opponentContainer.GetChild(0);
+
+                object uiManager = root.AddComponent(Type.GetType(MahjongPrototypeUiManagerTypeName, true));
+                SetField(uiManager, "gameFlow", gameFlow);
+                SetField(uiManager, "eventNotifier", notifier);
+                SetField(uiManager, "selfBottomPlayerUiController", selfController);
+                SetField(uiManager, "acrossTopPlayerUiController", opponentController);
+                Invoke(uiManager, "SubscribeNotifications");
+
+                object selfDiscard = CreateDiscardRecord("East", "1m", 2);
+                Invoke(gameState, "AddDiscard", selfDiscard);
+                Invoke(notifier, "NotifyTileDiscarded", selfDiscard);
+
+                Assert.That(selfContainer.childCount, Is.EqualTo(1));
+                Assert.That(GetTileLabelText(selfContainer.GetChild(0)), Is.EqualTo("1m"));
+                Assert.That(opponentContainer.childCount, Is.EqualTo(1));
+                Assert.That(opponentContainer.GetChild(0), Is.SameAs(originalOpponentTile));
+                Assert.That(GetTileLabelText(opponentContainer.GetChild(0)), Is.EqualTo("9m"));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(prefab);
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void TileDiscardedNotification_EnemySeatUpdatesOnlyResolvedEnemyRiver()
+        {
+            GameObject root = new GameObject("EnemyDiscardRiverPartialRefreshTest");
+            GameObject prefab = CreateTileButtonPrefab();
+            root.SetActive(false);
+            try
+            {
+                object gameState = CreateGameState("East");
+                Invoke(
+                    gameState,
+                    "AssignPlayerToSeat",
+                    ParsePlayerId("Player2"),
+                    ParseSeat("West"));
+                Invoke(gameState, "RebuildActiveTurnSeatsFromSeatSlots");
+
+                object notifier = root.AddComponent(Type.GetType(MahjongEventNotifierTypeName, true));
+                object gameFlow = root.AddComponent(Type.GetType(MahjongGameFlowTypeName, true));
+                SetField(gameFlow, "eventNotifier", notifier);
+                SetField(gameFlow, "gameState", gameState);
+
+                GameObject selfObject = new GameObject("SelfBottomPlayerUi");
+                selfObject.transform.SetParent(root.transform, false);
+                object selfRiverView = CreateDiscardRiverView(
+                    selfObject,
+                    prefab,
+                    out RectTransform selfContainer);
+                object selfController = CreateController(
+                    selfObject,
+                    selfRiverView,
+                    "SelfBottom");
+
+                GameObject acrossObject = new GameObject("AcrossTopPlayerUi");
+                acrossObject.transform.SetParent(root.transform, false);
+                object acrossRiverView = CreateDiscardRiverView(
+                    acrossObject,
+                    prefab,
+                    out RectTransform acrossContainer);
+                object acrossController = CreateController(
+                    acrossObject,
+                    acrossRiverView,
+                    "AcrossTop");
+
+                AddDiscard(gameState, "East", "1m", 1);
+                Invoke(
+                    selfController,
+                    "RenderDiscardRiver",
+                    GetProperty(gameState, "Discards"),
+                    ParseSeat("East"));
+                Transform originalSelfTile = selfContainer.GetChild(0);
+
+                object uiManager = root.AddComponent(Type.GetType(MahjongPrototypeUiManagerTypeName, true));
+                SetField(uiManager, "gameFlow", gameFlow);
+                SetField(uiManager, "eventNotifier", notifier);
+                SetField(uiManager, "selfBottomPlayerUiController", selfController);
+                SetField(uiManager, "acrossTopPlayerUiController", acrossController);
+                Invoke(uiManager, "SubscribeNotifications");
+
+                object enemyDiscard = CreateDiscardRecord("West", "9m", 2);
+                Invoke(gameState, "AddDiscard", enemyDiscard);
+                Invoke(notifier, "NotifyTileDiscarded", enemyDiscard);
+
+                Assert.That(acrossContainer.childCount, Is.EqualTo(1));
+                Assert.That(GetTileLabelText(acrossContainer.GetChild(0)), Is.EqualTo("9m"));
+                Assert.That(selfContainer.childCount, Is.EqualTo(1));
+                Assert.That(selfContainer.GetChild(0), Is.SameAs(originalSelfTile));
+                Assert.That(GetTileLabelText(selfContainer.GetChild(0)), Is.EqualTo("1m"));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(prefab);
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
         private static object CreateController(
             GameObject root,
             object discardRiverView,

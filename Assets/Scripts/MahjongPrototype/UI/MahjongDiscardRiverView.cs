@@ -6,14 +6,14 @@ using UnityEngine.UI;
 
 namespace MahjongPrototype.UI
 {
-    // PROTOTYPE: only the self/bottom river slot is rendered until full 4-seat river UI exists.
     [DisallowMultipleComponent]
     [AddComponentMenu("Mahjong Prototype/UI/Mahjong Discard River View")]
     public sealed class MahjongDiscardRiverView : MonoBehaviour
     {
         [Header("Discard River")]
         [FormerlySerializedAs("eastDiscardRiverContainer")]
-        [SerializeField] private RectTransform selfBottomDiscardRiverContainer;
+        [FormerlySerializedAs("selfBottomDiscardRiverContainer")]
+        [SerializeField] private RectTransform discardRiverContainer;
         [SerializeField] private TileButtonView tileButtonPrefab;
         [SerializeField] private ViewSlot viewSlot = ViewSlot.SelfBottom;
         [SerializeField] private int columns = 6;
@@ -27,14 +27,14 @@ namespace MahjongPrototype.UI
 
         public void Configure(RectTransform container, TileButtonView prefab)
         {
-            selfBottomDiscardRiverContainer = container;
+            discardRiverContainer = container;
             tileButtonPrefab = prefab;
         }
 
         public void ConfigureMissingReferences(RectTransform fallbackContainer, TileButtonView fallbackPrefab)
         {
-            if (selfBottomDiscardRiverContainer == null)
-                selfBottomDiscardRiverContainer = fallbackContainer;
+            if (discardRiverContainer == null)
+                discardRiverContainer = fallbackContainer;
 
             if (tileButtonPrefab == null)
                 tileButtonPrefab = fallbackPrefab;
@@ -109,12 +109,7 @@ namespace MahjongPrototype.UI
 
         private RectTransform GetContainerForViewSlot(ViewSlot slot)
         {
-            switch (slot)
-            {
-                case ViewSlot.SelfBottom:
-                default:
-                    return selfBottomDiscardRiverContainer;
-            }
+            return discardRiverContainer;
         }
 
         private void ApplyTileTransform(TileButtonView view, int discardIndex, ViewSlot slot)

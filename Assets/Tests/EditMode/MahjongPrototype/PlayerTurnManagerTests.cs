@@ -1,8 +1,11 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
+using System.Linq.Expressions;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.TestTools;
 
 namespace MahjongPrototype.Tests
 {
@@ -15,6 +18,7 @@ namespace MahjongPrototype.Tests
         private const string PlayerTurnManagerTypeName = "MahjongPrototype.Services.PlayerTurnManager, Assembly-CSharp";
         private const string MahjongGameFlowTypeName = "MahjongPrototype.MahjongGameFlow, Assembly-CSharp";
         private const string PlayerIdTypeName = "MahjongPrototype.Domain.PlayerId, Assembly-CSharp";
+        private const string ParticipantTypeName = "MahjongPrototype.Domain.ParticipantType, Assembly-CSharp";
 
         [Test]
         public void WinDecisionState_BeginsAndClearsInGameState()
@@ -840,6 +844,279 @@ namespace MahjongPrototype.Tests
             }
         }
 
+        [Test]
+        public void SeatSpecificDrawAndDiscardApis_UseActorSeatAndAdvanceTurn()
+        {
+            GameObject gameObject = new GameObject("SeatSpecificCpuApiTest");
+            try
+            {
+                object gameFlow = AddTwoPlayerFlowWithoutInitialHand(gameObject);
+                Invoke(gameFlow, "StartNewRound");
+                object gameState = GetProperty(gameFlow, "CurrentState");
+                object selfSeat = GetProperty(gameState, "SelfSeat");
+                object cpuSeat = Invoke(gameState, "GetSeatByPlayerId", ParsePlayerId("Player2"));
+                SetProperty(gameState, "CurrentTurn", cpuSeat);
+
+                bool drew = (bool)Invoke(gameFlow, "TryRequestDrawForSeat", cpuSeat);
+                object drawnTile = GetProperty(GetPlayerSeat(gameState, cpuSeat), "DrawnTile");
+                bool discarded = (bool)Invoke(
+                    gameFlow,
+                    "TryRequestDiscardDrawnTileForSeat",
+                    cpuSeat);
+
+                Assert.That(drew, Is.True);
+                Assert.That(discarded, Is.True);
+                object discards = GetProperty(gameState, "Discards");
+                object record = GetListItem(discards, 0);
+                Assert.That(GetProperty(record, "ActorSeat"), Is.EqualTo(cpuSeat));
+                Assert.That(GetProperty(record, "Tile"), Is.EqualTo(drawnTile));
+                Assert.That(GetProperty(record, "Source").ToString(), Is.EqualTo("DrawnTile"));
+                Assert.That(GetProperty(gameState, "CurrentTurn"), Is.EqualTo(selfSeat));
+                Assert.That(GetProperty(gameState, "TurnIndex"), Is.EqualTo(2));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
+        public void ParticipantTypes_AssignSelfAsLocalHumanAndOtherSeatsAsCpu()
+        {
+            GameObject gameObject = new GameObject("ParticipantTypeAssignmentTest");
+            try
+            {
+                object gameFlow = AddConfiguredGameFlow(gameObject, false);
+                SetPrivateField(gameFlow, "participantCount", 2);
+                Invoke(gameFlow, "StartNewRound");
+                object gameState = GetProperty(gameFlow, "CurrentState");
+                object selfSeat = GetProperty(gameState, "SelfSeat");
+                object cpuSeat = Invoke(gameState, "GetSeatByPlayerId", ParsePlayerId("Player2"));
+
+                object selfSlot = Invoke(gameState, "GetSeatSlot", selfSeat);
+                object cpuSlot = Invoke(gameState, "GetSeatSlot", cpuSeat);
+                object emptySlot = Invoke(gameState, "GetSeatSlot", ParseSeat("South"));
+
+                Assert.That(GetProperty(selfSlot, "ParticipantType").ToString(), Is.EqualTo("LocalHuman"));
+                Assert.That(GetProperty(cpuSlot, "ParticipantType").ToString(), Is.EqualTo("Cpu"));
+                Assert.That(GetProperty(emptySlot, "ParticipantType"), Is.Null);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator CpuTurn_AutoDrawsAndDiscardsDrawnTileThroughGameFlow()
+        {
+            GameObject gameObject = new GameObject("CpuAutoDiscardIntegrationTest");
+            try
+            {
+                object gameFlow = AddConfiguredGameFlow(gameObject, true);
+                SetPrivateField(gameFlow, "participantCount", 2);
+                SetPrivateField(gameFlow, "initialHandTileCount", 1);
+                object notifier = gameObject.AddComponent(
+                    Type.GetType("MahjongPrototype.Notifications.MahjongEventNotifier, Assembly-CSharp", true));
+                SetPrivateField(gameFlow, "eventNotifier", notifier);
+                SetCpuDiscardDelay(gameFlow, 0f);
+
+                Invoke(gameFlow, "StartNewRound");
+                object gameState = GetProperty(gameFlow, "CurrentState");
+                object selfSeat = GetProperty(gameState, "SelfSeat");
+                object cpuSeat = Invoke(gameState, "GetSeatByPlayerId", ParsePlayerId("Player2"));
+                List<string> eventOrder = new List<string>();
+                object cpuDiscardRecord = null;
+
+                AddSingleArgumentEventHandler(
+                    notifier,
+                    "TileDrawn",
+                    drawResult =>
+                    {
+                        if (GetProperty(drawResult, "Seat").Equals(cpuSeat) &&
+                            GetProperty(drawResult, "Purpose").ToString() == "TurnDraw")
+                        {
+                            eventOrder.Add("CpuTileDrawn");
+                        }
+                    });
+                AddSingleArgumentEventHandler(
+                    notifier,
+                    "TileDiscarded",
+                    discardRecord =>
+                    {
+                        if (GetProperty(discardRecord, "ActorSeat").Equals(cpuSeat))
+                        {
+                            cpuDiscardRecord = discardRecord;
+                            eventOrder.Add("CpuTileDiscarded");
+                        }
+                    });
+                AddTwoArgumentEventHandler(
+                    notifier,
+                    "TurnStarted",
+                    (seat, _) =>
+                    {
+                        if (seat.Equals(selfSeat) && eventOrder.Contains("CpuTileDiscarded"))
+                            eventOrder.Add("NextTurnStarted");
+                    });
+
+                Invoke(gameFlow, "RequestDiscardDrawnTile");
+
+                Assert.That(GetProperty(GetPlayerSeat(gameState, cpuSeat), "HasDrawnTile"), Is.True);
+
+                yield return null;
+                yield return null;
+
+                Assert.That(cpuDiscardRecord, Is.Not.Null);
+                Assert.That(GetProperty(cpuDiscardRecord, "ActorSeat"), Is.EqualTo(cpuSeat));
+                Assert.That(GetProperty(cpuDiscardRecord, "Source").ToString(), Is.EqualTo("DrawnTile"));
+                Assert.That(eventOrder.IndexOf("CpuTileDrawn"), Is.GreaterThanOrEqualTo(0));
+                Assert.That(
+                    eventOrder.IndexOf("CpuTileDiscarded"),
+                    Is.GreaterThan(eventOrder.IndexOf("CpuTileDrawn")));
+                Assert.That(
+                    eventOrder.IndexOf("NextTurnStarted"),
+                    Is.GreaterThan(eventOrder.IndexOf("CpuTileDiscarded")));
+                Assert.That(GetProperty(gameState, "CurrentTurn"), Is.EqualTo(selfSeat));
+                Assert.That(GetProperty(gameState, "TurnIndex"), Is.EqualTo(3));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator RemoteHumanTurn_DoesNotStartCpuAutoDiscard()
+        {
+            GameObject gameObject = new GameObject("RemoteHumanDoesNotAutoDiscardTest");
+            try
+            {
+                object gameFlow = AddConfiguredGameFlow(gameObject, true);
+                SetPrivateField(gameFlow, "participantCount", 2);
+                SetPrivateField(gameFlow, "initialHandTileCount", 1);
+                SetCpuDiscardDelay(gameFlow, 0f);
+                Invoke(gameFlow, "StartNewRound");
+                object gameState = GetProperty(gameFlow, "CurrentState");
+                object remoteSeat = Invoke(gameState, "GetSeatByPlayerId", ParsePlayerId("Player2"));
+                Invoke(
+                    gameState,
+                    "SetParticipantType",
+                    remoteSeat,
+                    ParseParticipantType("RemoteHuman"));
+
+                Invoke(gameFlow, "RequestDiscardDrawnTile");
+
+                yield return null;
+                yield return null;
+
+                Assert.That(GetProperty(gameState, "CurrentTurn"), Is.EqualTo(remoteSeat));
+                Assert.That(GetProperty(gameState, "TurnIndex"), Is.EqualTo(2));
+                Assert.That(GetProperty(GetPlayerSeat(gameState, remoteSeat), "HasDrawnTile"), Is.True);
+                Assert.That(GetProperty(GetProperty(gameState, "Discards"), "Count"), Is.EqualTo(1));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator CpuTurn_DoesNotDiscardWhileWinDecisionIsPending()
+        {
+            GameObject gameObject = new GameObject("CpuWinDecisionStopsDiscardTest");
+            try
+            {
+                object gameFlow = AddConfiguredGameFlow(gameObject, true);
+                SetPrivateField(gameFlow, "participantCount", 2);
+                SetPrivateField(gameFlow, "initialHandTileCount", 1);
+                SetCpuDiscardDelay(gameFlow, 0f);
+                Invoke(gameFlow, "StartNewRound");
+                object gameState = GetProperty(gameFlow, "CurrentState");
+                object cpuSeat = Invoke(gameState, "GetSeatByPlayerId", ParsePlayerId("Player2"));
+
+                Invoke(gameFlow, "RequestDiscardDrawnTile");
+                Invoke(
+                    gameState,
+                    "BeginWinDecision",
+                    cpuSeat,
+                    GetProperty(gameState, "TurnIndex"));
+
+                yield return null;
+                yield return null;
+
+                Assert.That(GetProperty(gameState, "CurrentTurn"), Is.EqualTo(cpuSeat));
+                Assert.That(GetProperty(GetPlayerSeat(gameState, cpuSeat), "HasDrawnTile"), Is.True);
+                Assert.That(GetProperty(GetProperty(gameState, "Discards"), "Count"), Is.EqualTo(1));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator CpuTurn_DoesNotDiscardAfterRoundEnds()
+        {
+            GameObject gameObject = new GameObject("CpuRoundEndStopsDiscardTest");
+            try
+            {
+                object gameFlow = AddConfiguredGameFlow(gameObject, true);
+                SetPrivateField(gameFlow, "participantCount", 2);
+                SetPrivateField(gameFlow, "initialHandTileCount", 1);
+                SetCpuDiscardDelay(gameFlow, 0f);
+                Invoke(gameFlow, "StartNewRound");
+                object gameState = GetProperty(gameFlow, "CurrentState");
+                object cpuSeat = Invoke(gameState, "GetSeatByPlayerId", ParsePlayerId("Player2"));
+
+                Invoke(gameFlow, "RequestDiscardDrawnTile");
+                SetProperty(gameState, "IsRoundEnded", true);
+
+                yield return null;
+                yield return null;
+
+                Assert.That(GetProperty(gameState, "CurrentTurn"), Is.EqualTo(cpuSeat));
+                Assert.That(GetProperty(GetPlayerSeat(gameState, cpuSeat), "HasDrawnTile"), Is.True);
+                Assert.That(GetProperty(GetProperty(gameState, "Discards"), "Count"), Is.EqualTo(1));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator RetryPrototype_CancelsCpuActionFromPreviousGameState()
+        {
+            GameObject gameObject = new GameObject("RetryCancelsOldCpuTurnTest");
+            try
+            {
+                object gameFlow = AddConfiguredGameFlow(gameObject, true);
+                SetPrivateField(gameFlow, "participantCount", 2);
+                SetPrivateField(gameFlow, "initialHandTileCount", 1);
+                SetCpuDiscardDelay(gameFlow, 0f);
+                Invoke(gameFlow, "StartNewRound");
+                object previousState = GetProperty(gameFlow, "CurrentState");
+
+                Invoke(gameFlow, "RequestDiscardDrawnTile");
+                Invoke(gameFlow, "RetryPrototype");
+                object retryState = GetProperty(gameFlow, "CurrentState");
+
+                yield return null;
+                yield return null;
+
+                Assert.That(retryState, Is.Not.SameAs(previousState));
+                Assert.That(GetProperty(GetProperty(retryState, "Discards"), "Count"), Is.EqualTo(0));
+                Assert.That(
+                    GetProperty(retryState, "CurrentTurn"),
+                    Is.EqualTo(GetProperty(retryState, "SelfSeat")));
+                Assert.That(GetProperty(retryState, "TurnIndex"), Is.EqualTo(1));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
         private static object AddTwoPlayerFlowWithoutInitialHand(GameObject gameObject)
         {
             object gameFlow = AddConfiguredGameFlow(gameObject, false);
@@ -866,6 +1143,7 @@ namespace MahjongPrototype.Tests
             SetPrivateField(gameFlow, "enableDevLog", false);
             SetPrivateField(gameFlow, "logWarnings", false);
             SetPrivateField(gameFlow, "initialHandTileCount", 1);
+            SetPrivateField(gameFlow, "autoStart", false);
             SetPrivateField(gameFlow, "useFixedRandomSeed", true);
             SetPrivateField(gameFlow, "fixedRandomSeed", 12345);
             SetPrivateField(gameFlow, "enableAutoDraw", enableAutoDraw);
@@ -922,6 +1200,13 @@ namespace MahjongPrototype.Tests
             MethodInfo method = gameState.GetType().GetMethod("GetPlayerSeat");
             Assert.That(method, Is.Not.Null);
             return method.Invoke(gameState, new[] { GetProperty(gameState, "CurrentTurn") });
+        }
+
+        private static object GetListItem(object list, int index)
+        {
+            PropertyInfo itemProperty = list.GetType().GetProperty("Item");
+            Assert.That(itemProperty, Is.Not.Null);
+            return itemProperty.GetValue(list, new object[] { index });
         }
 
         private static object Invoke(object target, string methodName, params object[] args)
@@ -1017,6 +1302,11 @@ namespace MahjongPrototype.Tests
             return Enum.Parse(Type.GetType(PlayerIdTypeName, true), playerId);
         }
 
+        private static object ParseParticipantType(string participantType)
+        {
+            return Enum.Parse(Type.GetType(ParticipantTypeName, true), participantType);
+        }
+
         private static Type GetSeatIdType()
         {
             return Type.GetType(SeatIdTypeName, true);
@@ -1025,6 +1315,79 @@ namespace MahjongPrototype.Tests
         private static Type GetMahjongGameFlowType()
         {
             return Type.GetType(MahjongGameFlowTypeName, true);
+        }
+
+        private static object GetPlayerSeat(object gameState, object seat)
+        {
+            return Invoke(gameState, "GetPlayerSeat", seat);
+        }
+
+        private static void SetCpuDiscardDelay(object gameFlow, float delaySeconds)
+        {
+            object cpuTurnController = GetPrivateField(gameFlow, "cpuTurnController");
+            Assert.That(cpuTurnController, Is.Not.Null);
+            SetPrivateField(cpuTurnController, "cpuDiscardDelaySeconds", delaySeconds);
+        }
+
+        private static object GetPrivateField(object target, string fieldName)
+        {
+            FieldInfo field = target.GetType().GetField(
+                fieldName,
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.That(field, Is.Not.Null);
+            return field.GetValue(target);
+        }
+
+        private static void AddSingleArgumentEventHandler(
+            object source,
+            string eventName,
+            Action<object> callback)
+        {
+            EventInfo eventInfo = source.GetType().GetEvent(eventName);
+            Assert.That(eventInfo, Is.Not.Null);
+            Type delegateType = eventInfo.EventHandlerType;
+            MethodInfo invokeMethod = delegateType.GetMethod("Invoke");
+            ParameterInfo[] parameters = invokeMethod.GetParameters();
+            Assert.That(parameters.Length, Is.EqualTo(1));
+
+            ParameterExpression valueParameter =
+                Expression.Parameter(parameters[0].ParameterType, "value");
+            InvocationExpression callbackInvocation = Expression.Invoke(
+                Expression.Constant(callback),
+                Expression.Convert(valueParameter, typeof(object)));
+            Delegate handler = Expression.Lambda(
+                delegateType,
+                callbackInvocation,
+                valueParameter).Compile();
+            eventInfo.AddEventHandler(source, handler);
+        }
+
+        private static void AddTwoArgumentEventHandler(
+            object source,
+            string eventName,
+            Action<object, int> callback)
+        {
+            EventInfo eventInfo = source.GetType().GetEvent(eventName);
+            Assert.That(eventInfo, Is.Not.Null);
+            Type delegateType = eventInfo.EventHandlerType;
+            MethodInfo invokeMethod = delegateType.GetMethod("Invoke");
+            ParameterInfo[] parameters = invokeMethod.GetParameters();
+            Assert.That(parameters.Length, Is.EqualTo(2));
+
+            ParameterExpression firstParameter =
+                Expression.Parameter(parameters[0].ParameterType, "first");
+            ParameterExpression secondParameter =
+                Expression.Parameter(parameters[1].ParameterType, "second");
+            InvocationExpression callbackInvocation = Expression.Invoke(
+                Expression.Constant(callback),
+                Expression.Convert(firstParameter, typeof(object)),
+                secondParameter);
+            Delegate handler = Expression.Lambda(
+                delegateType,
+                callbackInvocation,
+                firstParameter,
+                secondParameter).Compile();
+            eventInfo.AddEventHandler(source, handler);
         }
     }
 }
