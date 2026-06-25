@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using MahjongPrototype.Domain;
 using MahjongPrototype.Logging;
 using MahjongPrototype.Notifications;
@@ -50,7 +49,7 @@ namespace MahjongPrototype
         private readonly PlayerTurnManager playerTurnManager = new PlayerTurnManager(new TurnOrderService());
         private readonly DrawService drawService = new DrawService();
         private readonly DiscardService discardService = new DiscardService();
-        private readonly HandWinChecker handWinChecker = new HandWinChecker();
+        private readonly WinChecker winChecker = new WinChecker();
         private readonly SkillSystem skillSystem = new SkillSystem();
         private readonly SkillReservationService skillReservationService = new SkillReservationService();
 
@@ -257,7 +256,8 @@ namespace MahjongPrototype
                 turnIndex: result.Record.TurnIndex);
             NotifyTileDiscarded(result.Record);
             LogTileDiscarded(result.Record);
-            AdvanceTurn();
+            if (!TryBeginRonDecision(result.Record))
+                AdvanceTurn();
         }
 
         public void RequestDiscardDrawnTile()
@@ -325,7 +325,8 @@ namespace MahjongPrototype
                 turnIndex: result.Record.TurnIndex);
             NotifyTileDiscarded(result.Record);
             LogTileDiscarded(result.Record);
-            AdvanceTurn();
+            if (!TryBeginRonDecision(result.Record))
+                AdvanceTurn();
             return true;
         }
 
@@ -455,6 +456,7 @@ namespace MahjongPrototype
             }
 
             SeatId seat = gameState.WinDecisionSeat;
+            WinType? winType = gameState.WinDecisionType;
             int turnIndex = gameState.WinDecisionTurnIndex;
             ClearWinDecision();
             gameState.IsRoundEnded = true;
@@ -465,7 +467,7 @@ namespace MahjongPrototype
                 turnIndex: turnIndex);
 
             NotifyWinDeclared(seat, turnIndex);
-            LogWinDeclared(seat, turnIndex);
+            LogWinDeclared(seat, winType, turnIndex);
         }
 
         public void RequestDeclineWin()
@@ -480,11 +482,15 @@ namespace MahjongPrototype
             }
 
             SeatId seat = gameState.WinDecisionSeat;
+            WinType? winType = gameState.WinDecisionType;
             int turnIndex = gameState.WinDecisionTurnIndex;
             ClearWinDecision();
 
             NotifyWinDeclined(seat, turnIndex);
-            LogWinDeclined(seat, turnIndex);
+            LogWinDeclined(seat, winType, turnIndex);
+
+            if (winType == WinType.Ron && !gameState.IsRoundEnded)
+                AdvanceTurn();
         }
 
         private void DealInitialHands()
@@ -578,32 +584,91 @@ namespace MahjongPrototype
 
         private void CheckWinPrototype()
         {
-            // PROTOTYPE: Check only a simple self-draw win shape.
-            IReadOnlyList<Tile> handTiles = BuildWinCheckTiles(gameState.CurrentTurn);
-            bool isWin = handWinChecker.CanWinStandardHand(handTiles);
-            SetWinDecisionPending(isWin, gameState.CurrentTurn, gameState.TurnIndex);
-            eventNotifier?.NotifyWinChecked(gameState.CurrentTurn, gameState.TurnIndex, isWin);
+            // PROTOTYPE: Check only a standard closed-hand self-draw shape.
+            SeatId candidateSeat = gameState.CurrentTurn;
+            PlayerSeat playerSeat = gameState.GetPlayerSeat(candidateSeat);
+            Tile? winningTile = playerSeat.DrawnTile;
+            bool isWin =
+                winningTile.HasValue &&
+                winChecker.CanWinWithTile(playerSeat.Hand.GetTiles(), winningTile.Value);
+
+            if (isWin)
+            {
+                SetWinDecisionPendingDetailed(
+                    candidateSeat,
+                    WinType.Tsumo,
+                    winningTile.Value,
+                    null,
+                    gameState.TurnIndex);
+            }
+            else
+            {
+                ClearWinDecision();
+            }
+
+            eventNotifier?.NotifyWinChecked(candidateSeat, gameState.TurnIndex, isWin);
 
             DevLog.Record(
                 "Mahjong",
                 "WinChecked",
                 isWin
-                    ? "isWin=true; standard hand shape complete."
-                    : "isWin=false; standard hand shape incomplete.",
-                seat: gameState.CurrentTurn,
-                hand: GetCurrentHandText(),
+                    ? "winType=Tsumo; isWin=true; standard hand shape complete."
+                    : "winType=Tsumo; isWin=false; standard hand shape incomplete.",
+                seat: candidateSeat,
+                tile: winningTile,
+                hand: GetHandText(candidateSeat),
                 wallCount: gameState.Wall.Count,
                 turnIndex: gameState.TurnIndex);
         }
 
-        private IReadOnlyList<Tile> BuildWinCheckTiles(SeatId seat)
+        private bool TryBeginRonDecision(DiscardRecord discard)
         {
-            PlayerSeat playerSeat = gameState.GetPlayerSeat(seat);
-            List<Tile> tiles = new List<Tile>(playerSeat.Hand.GetTiles());
-            if (playerSeat.DrawnTile.HasValue)
-                tiles.Add(playerSeat.DrawnTile.Value);
+            // PROTOTYPE: Only locally-operated seats can answer the current single win decision.
+            // CPU/RemoteHuman ron decisions will be introduced with a reaction window.
+            for (int i = 0; i < gameState.SeatSlots.Count; i++)
+            {
+                SeatSlot candidateSlot = gameState.SeatSlots[i];
+                if (!candidateSlot.HasPlayer)
+                    continue;
 
-            return tiles;
+                SeatId candidateSeat = candidateSlot.Wind;
+                if (candidateSeat == discard.ActorSeat)
+                    continue;
+
+                if (candidateSlot.ParticipantType != ParticipantType.LocalHuman)
+                    continue;
+
+                PlayerSeat candidatePlayerSeat = gameState.GetPlayerSeat(candidateSeat);
+                bool isWin = winChecker.CanWinWithTile(
+                    candidatePlayerSeat.Hand.GetTiles(),
+                    discard.Tile);
+
+                if (isWin)
+                {
+                    SetWinDecisionPendingDetailed(
+                        candidateSeat,
+                        WinType.Ron,
+                        discard.Tile,
+                        discard.ActorSeat,
+                        discard.TurnIndex);
+                }
+
+                eventNotifier?.NotifyWinChecked(candidateSeat, discard.TurnIndex, isWin);
+                LogWinChecked(
+                    candidateSeat,
+                    WinType.Ron,
+                    discard.Tile,
+                    discard.ActorSeat,
+                    discard.TurnIndex,
+                    isWin);
+
+                if (!isWin)
+                    continue;
+
+                return true;
+            }
+
+            return false;
         }
 
         private void CommitDrawnTileToHandIfPresent(SeatId seat)
@@ -632,6 +697,30 @@ namespace MahjongPrototype
             }
 
             gameState.ClearWinDecision();
+        }
+
+        private void SetWinDecisionPendingDetailed(
+            SeatId seat,
+            WinType winType,
+            Tile winningTile,
+            SeatId? sourceSeat,
+            int turnIndex)
+        {
+            if (gameState == null)
+                return;
+
+            gameState.BeginWinDecisionDetailed(
+                seat,
+                winType,
+                winningTile,
+                sourceSeat,
+                turnIndex);
+            LogTurnDebug(
+                "WinDecision",
+                $"phase={gameState.TurnPhase}; winType={winType}; sourceSeat={sourceSeat}",
+                seat: seat,
+                tile: winningTile,
+                turnIndex: turnIndex);
         }
 
         private void ClearWinDecision()
@@ -1104,24 +1193,43 @@ namespace MahjongPrototype
                 activeSkill: effect.ToLogText());
         }
 
-        private void LogWinDeclared(SeatId seat, int turnIndex)
+        private void LogWinChecked(
+            SeatId seat,
+            WinType winType,
+            Tile winningTile,
+            SeatId? sourceSeat,
+            int turnIndex,
+            bool isWin)
+        {
+            DevLog.Record(
+                "Mahjong",
+                "WinChecked",
+                $"winType={winType}; sourceSeat={sourceSeat}; isWin={isWin}",
+                seat: seat,
+                tile: winningTile,
+                hand: GetHandText(seat),
+                wallCount: gameState.Wall.Count,
+                turnIndex: turnIndex);
+        }
+
+        private void LogWinDeclared(SeatId seat, WinType? winType, int turnIndex)
         {
             DevLog.Record(
                 "Mahjong",
                 "WinDeclared",
-                "Self draw win declared.",
+                $"winType={winType}; win declared.",
                 seat: seat,
                 hand: GetHandText(seat),
                 wallCount: gameState.Wall.Count,
                 turnIndex: turnIndex);
         }
 
-        private void LogWinDeclined(SeatId seat, int turnIndex)
+        private void LogWinDeclined(SeatId seat, WinType? winType, int turnIndex)
         {
             DevLog.Record(
                 "Mahjong",
                 "WinDeclined",
-                "Winning hand declined.",
+                $"winType={winType}; winning hand declined.",
                 seat: seat,
                 hand: GetHandText(seat),
                 wallCount: gameState.Wall.Count,

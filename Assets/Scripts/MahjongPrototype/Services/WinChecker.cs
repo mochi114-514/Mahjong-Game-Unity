@@ -3,12 +3,25 @@ using MahjongPrototype.Domain;
 
 namespace MahjongPrototype.Services
 {
-    public sealed class HandWinChecker
+    public sealed class WinChecker
     {
         private const int TileTypeCount = 34;
         private const int WinningHandTileCount = 14;
         private const int FirstHonorTileIndex = 27;
         private const int RanksPerSuit = 9;
+
+        public bool CanWinWithTile(IReadOnlyList<Tile> handTiles, Tile winningTile)
+        {
+            if (handTiles == null || !winningTile.IsValid)
+                return false;
+
+            List<Tile> completedTiles = new List<Tile>(handTiles.Count + 1);
+            for (int i = 0; i < handTiles.Count; i++)
+                completedTiles.Add(handTiles[i]);
+
+            completedTiles.Add(winningTile);
+            return CanWinStandardHand(completedTiles);
+        }
 
         public bool CanWinStandardHand(IReadOnlyList<Tile> tiles)
         {

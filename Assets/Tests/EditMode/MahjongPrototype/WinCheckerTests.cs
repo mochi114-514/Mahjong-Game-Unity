@@ -4,10 +4,10 @@ using NUnit.Framework;
 
 namespace MahjongPrototype.Tests
 {
-    public sealed class HandWinCheckerTests
+    public sealed class WinCheckerTests
     {
         private const string TileTypeName = "MahjongPrototype.Domain.Tile, Assembly-CSharp";
-        private const string HandWinCheckerTypeName = "MahjongPrototype.Services.HandWinChecker, Assembly-CSharp";
+        private const string WinCheckerTypeName = "MahjongPrototype.Services.WinChecker, Assembly-CSharp";
 
         [TestCase("1m 2m 3m 2p 3p 4p 7s 8s 9s E E E 5m 5m")]
         [TestCase("1m 1m 1m 2m 2m 2m 3p 4p 5p C C C 9s 9s")]
@@ -28,6 +28,16 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
+        public void CanWinWithTile_CompletesStandardHand()
+        {
+            Array handTiles = CreateTileArray(
+                "1m 2m 3m 1p 2p 3p 1s 2s 3s E E E C");
+            object winningTile = CreateTile("C");
+
+            Assert.That(CanWinWithTile(handTiles, winningTile), Is.True);
+        }
+
+        [Test]
         public void CanWinStandardHand_ReturnsFalseWhenHandContainsInvalidTile()
         {
             Type tileType = GetTileType();
@@ -44,12 +54,22 @@ namespace MahjongPrototype.Tests
 
         private static bool CanWinStandardHand(Array tiles)
         {
-            Type checkerType = Type.GetType(HandWinCheckerTypeName, true);
+            Type checkerType = Type.GetType(WinCheckerTypeName, true);
             object checker = Activator.CreateInstance(checkerType);
             MethodInfo method = checkerType.GetMethod("CanWinStandardHand");
             Assert.That(method, Is.Not.Null);
 
             return (bool)method.Invoke(checker, new object[] { tiles });
+        }
+
+        private static bool CanWinWithTile(Array handTiles, object winningTile)
+        {
+            Type checkerType = Type.GetType(WinCheckerTypeName, true);
+            object checker = Activator.CreateInstance(checkerType);
+            MethodInfo method = checkerType.GetMethod("CanWinWithTile");
+            Assert.That(method, Is.Not.Null);
+
+            return (bool)method.Invoke(checker, new[] { handTiles, winningTile });
         }
 
         private static Array CreateTileArray(string handText)
@@ -71,11 +91,17 @@ namespace MahjongPrototype.Tests
             Assert.That(constructor, Is.Not.Null);
 
             for (int i = 0; i < codes.Length; i++)
-            {
                 tiles.SetValue(constructor.Invoke(new object[] { codes[i] }), i);
-            }
 
             return tiles;
+        }
+
+        private static object CreateTile(string code)
+        {
+            Type tileType = GetTileType();
+            ConstructorInfo constructor = tileType.GetConstructor(new[] { typeof(string) });
+            Assert.That(constructor, Is.Not.Null);
+            return constructor.Invoke(new object[] { code });
         }
 
         private static string[] SplitCodes(string handText)

@@ -43,6 +43,9 @@ namespace MahjongPrototype.Domain
         public bool IsRoundEnded { get; set; }
         public bool IsWinDecisionPending { get; private set; }
         public SeatId WinDecisionSeat { get; private set; }
+        public WinType? WinDecisionType { get; private set; }
+        public Tile? WinningTile { get; private set; }
+        public SeatId? WinSourceSeat { get; private set; }
         public int WinDecisionTurnIndex { get; private set; }
         public TurnPhaseType TurnPhase =>
             IsRoundEnded
@@ -185,8 +188,26 @@ namespace MahjongPrototype.Domain
 
         public void BeginWinDecision(SeatId seat, int turnIndex)
         {
+            BeginWinDecisionDetailed(
+                seat,
+                WinType.Tsumo,
+                GetPlayerSeat(seat).DrawnTile,
+                null,
+                turnIndex);
+        }
+
+        public void BeginWinDecisionDetailed(
+            SeatId seat,
+            WinType winType,
+            Tile? winningTile,
+            SeatId? sourceSeat,
+            int turnIndex)
+        {
             IsWinDecisionPending = true;
             WinDecisionSeat = seat;
+            WinDecisionType = winType;
+            WinningTile = winningTile;
+            WinSourceSeat = sourceSeat;
             WinDecisionTurnIndex = turnIndex;
         }
 
@@ -194,6 +215,9 @@ namespace MahjongPrototype.Domain
         {
             IsWinDecisionPending = false;
             WinDecisionSeat = default;
+            WinDecisionType = null;
+            WinningTile = null;
+            WinSourceSeat = null;
             WinDecisionTurnIndex = 0;
         }
 

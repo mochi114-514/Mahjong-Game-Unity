@@ -29,6 +29,8 @@ namespace MahjongPrototype.Tests
 
             Assert.That(GetProperty(gameState, "IsWinDecisionPending"), Is.True);
             Assert.That(GetProperty(gameState, "WinDecisionSeat").ToString(), Is.EqualTo("East"));
+            Assert.That(GetProperty(gameState, "WinDecisionType").ToString(), Is.EqualTo("Tsumo"));
+            Assert.That(GetProperty(gameState, "WinSourceSeat"), Is.Null);
             Assert.That(GetProperty(gameState, "WinDecisionTurnIndex"), Is.EqualTo(7));
             Assert.That(GetProperty(gameState, "TurnPhase").ToString(), Is.EqualTo("WinDecision"));
             Assert.That(GetProperty(gameState, "IsInteractionLocked"), Is.True);
@@ -39,6 +41,9 @@ namespace MahjongPrototype.Tests
             Invoke(gameState, "ClearWinDecision");
 
             Assert.That(GetProperty(gameState, "IsWinDecisionPending"), Is.False);
+            Assert.That(GetProperty(gameState, "WinDecisionType"), Is.Null);
+            Assert.That(GetProperty(gameState, "WinningTile"), Is.Null);
+            Assert.That(GetProperty(gameState, "WinSourceSeat"), Is.Null);
             Assert.That(GetProperty(gameState, "WinDecisionTurnIndex"), Is.EqualTo(0));
             Assert.That(GetProperty(gameState, "TurnPhase").ToString(), Is.EqualTo("WaitingForDiscard"));
             Assert.That(GetProperty(gameState, "IsInteractionLocked"), Is.False);
@@ -94,6 +99,9 @@ namespace MahjongPrototype.Tests
                 Assert.That(
                     GetProperty(gameState, "WinDecisionTurnIndex"),
                     Is.EqualTo(GetProperty(gameState, "TurnIndex")));
+                Assert.That(GetProperty(gameState, "WinDecisionType").ToString(), Is.EqualTo("Tsumo"));
+                Assert.That(GetProperty(gameState, "WinningTile"), Is.EqualTo(CreateTile("C")));
+                Assert.That(GetProperty(gameState, "WinSourceSeat"), Is.Null);
                 Assert.That(GetProperty(gameFlow, "IsWinDecisionPending"), Is.True);
             }
             finally
@@ -873,6 +881,128 @@ namespace MahjongPrototype.Tests
                 Assert.That(GetProperty(record, "Source").ToString(), Is.EqualTo("DrawnTile"));
                 Assert.That(GetProperty(gameState, "CurrentTurn"), Is.EqualTo(selfSeat));
                 Assert.That(GetProperty(gameState, "TurnIndex"), Is.EqualTo(2));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
+        public void CpuDiscard_WhenSelfCanRon_CreatesRonDecisionWithoutAdvancingTurn()
+        {
+            GameObject gameObject = new GameObject("CpuDiscardCreatesRonDecisionTest");
+            try
+            {
+                object gameFlow = AddTwoPlayerFlowWithoutInitialHand(gameObject);
+                Invoke(gameFlow, "StartNewRound");
+                object gameState = GetProperty(gameFlow, "CurrentState");
+                object selfSeat = GetProperty(gameState, "SelfSeat");
+                object cpuSeat = Invoke(gameState, "GetSeatByPlayerId", ParsePlayerId("Player2"));
+                object selfPlayerSeat = GetPlayerSeat(gameState, selfSeat);
+                object cpuPlayerSeat = GetPlayerSeat(gameState, cpuSeat);
+                AddHandTiles(
+                    selfPlayerSeat,
+                    "1m", "2m", "3m",
+                    "1p", "2p", "3p",
+                    "1s", "2s", "3s",
+                    "E", "E", "E",
+                    "C");
+                Invoke(cpuPlayerSeat, "SetDrawnTile", CreateTile("C"));
+                SetProperty(gameState, "CurrentTurn", cpuSeat);
+                int turnIndexBeforeDiscard = (int)GetProperty(gameState, "TurnIndex");
+
+                bool discarded = (bool)Invoke(
+                    gameFlow,
+                    "TryRequestDiscardDrawnTileForSeat",
+                    cpuSeat);
+
+                Assert.That(discarded, Is.True);
+                Assert.That(GetProperty(gameState, "IsWinDecisionPending"), Is.True);
+                Assert.That(GetProperty(gameState, "WinDecisionSeat"), Is.EqualTo(selfSeat));
+                Assert.That(GetProperty(gameState, "WinDecisionType").ToString(), Is.EqualTo("Ron"));
+                Assert.That(GetProperty(gameState, "WinningTile"), Is.EqualTo(CreateTile("C")));
+                Assert.That(GetProperty(gameState, "WinSourceSeat"), Is.EqualTo(cpuSeat));
+                Assert.That(GetProperty(gameState, "WinDecisionTurnIndex"), Is.EqualTo(turnIndexBeforeDiscard));
+                Assert.That(GetProperty(gameState, "CurrentTurn"), Is.EqualTo(cpuSeat));
+                Assert.That(GetProperty(gameState, "TurnIndex"), Is.EqualTo(turnIndexBeforeDiscard));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
+        public void CpuDiscard_WhenSelfCannotRon_AdvancesTurnNormally()
+        {
+            GameObject gameObject = new GameObject("CpuDiscardWithoutRonAdvancesTest");
+            try
+            {
+                object gameFlow = AddTwoPlayerFlowWithoutInitialHand(gameObject);
+                Invoke(gameFlow, "StartNewRound");
+                object gameState = GetProperty(gameFlow, "CurrentState");
+                object selfSeat = GetProperty(gameState, "SelfSeat");
+                object cpuSeat = Invoke(gameState, "GetSeatByPlayerId", ParsePlayerId("Player2"));
+                object selfPlayerSeat = GetPlayerSeat(gameState, selfSeat);
+                object cpuPlayerSeat = GetPlayerSeat(gameState, cpuSeat);
+                AddHandTiles(
+                    selfPlayerSeat,
+                    "1m", "2m", "3m",
+                    "1p", "2p", "3p",
+                    "1s", "2s", "3s",
+                    "E", "E", "E",
+                    "P");
+                Invoke(cpuPlayerSeat, "SetDrawnTile", CreateTile("C"));
+                SetProperty(gameState, "CurrentTurn", cpuSeat);
+
+                bool discarded = (bool)Invoke(
+                    gameFlow,
+                    "TryRequestDiscardDrawnTileForSeat",
+                    cpuSeat);
+
+                Assert.That(discarded, Is.True);
+                Assert.That(GetProperty(gameState, "IsWinDecisionPending"), Is.False);
+                Assert.That(GetProperty(gameState, "CurrentTurn"), Is.EqualTo(selfSeat));
+                Assert.That(GetProperty(gameState, "TurnIndex"), Is.EqualTo(2));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
+        public void RequestDeclineWin_AfterRon_ClearsDecisionAndAdvancesTurn()
+        {
+            GameObject gameObject = new GameObject("DeclineRonAdvancesTurnTest");
+            try
+            {
+                object gameFlow = AddTwoPlayerFlowWithoutInitialHand(gameObject);
+                Invoke(gameFlow, "StartNewRound");
+                object gameState = GetProperty(gameFlow, "CurrentState");
+                object selfSeat = GetProperty(gameState, "SelfSeat");
+                object cpuSeat = Invoke(gameState, "GetSeatByPlayerId", ParsePlayerId("Player2"));
+                object selfPlayerSeat = GetPlayerSeat(gameState, selfSeat);
+                object cpuPlayerSeat = GetPlayerSeat(gameState, cpuSeat);
+                AddHandTiles(
+                    selfPlayerSeat,
+                    "1m", "2m", "3m",
+                    "1p", "2p", "3p",
+                    "1s", "2s", "3s",
+                    "E", "E", "E",
+                    "C");
+                Invoke(cpuPlayerSeat, "SetDrawnTile", CreateTile("C"));
+                SetProperty(gameState, "CurrentTurn", cpuSeat);
+                Invoke(gameFlow, "TryRequestDiscardDrawnTileForSeat", cpuSeat);
+
+                Invoke(gameFlow, "RequestDeclineWin");
+
+                Assert.That(GetProperty(gameState, "IsWinDecisionPending"), Is.False);
+                Assert.That(GetProperty(gameState, "WinDecisionType"), Is.Null);
+                Assert.That(GetProperty(gameState, "CurrentTurn"), Is.EqualTo(selfSeat));
+                Assert.That(GetProperty(gameState, "TurnIndex"), Is.EqualTo(2));
+                Assert.That(GetProperty(gameState, "IsRoundEnded"), Is.False);
             }
             finally
             {
