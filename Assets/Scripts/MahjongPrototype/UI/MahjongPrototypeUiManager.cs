@@ -719,7 +719,10 @@ namespace MahjongPrototype.UI
                     state != null &&
                     state.IsWinDecisionPending &&
                     state.WinDecisionSeat == state.SelfSeat;
-                winDecisionController.SetVisible(showSelfWinDecision);
+                WinType? winType = showSelfWinDecision
+                    ? state.WinDecisionType
+                    : null;
+                winDecisionController.SetWinDecision(showSelfWinDecision, winType);
             }
         }
 

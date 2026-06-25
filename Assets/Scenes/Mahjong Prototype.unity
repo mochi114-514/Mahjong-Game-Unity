@@ -4003,6 +4003,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI.MahjongWinDecisionController
   winDecisionRoot: {fileID: 6100000010}
+  winButtonLabel: {fileID: 6100000033}
 --- !u!1 &6100000010
 GameObject:
   m_ObjectHideFlags: 0
