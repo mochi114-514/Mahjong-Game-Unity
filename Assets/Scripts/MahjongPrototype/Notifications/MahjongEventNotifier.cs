@@ -25,7 +25,24 @@ namespace MahjongPrototype.Notifications
         public event Action<SeatId, int> WinDeclined;
         public event Action<SeatId, int> HandAutoSorted;
         public event Action<string> RoundEnded;
+        public event Action SeatSlotsAssigned;
+        public event Action<string, string, SeatId?, Tile?, int?> TurnDebug;
+        public event Action<SeatId, WinType, Tile?, SeatId?, int, bool> WinCheckedDetailed;
+        public event Action<SeatId, WinType?, int> WinDeclaredDetailed;
+        public event Action<SeatId, WinType?, int> WinDeclinedDetailed;
+        public event Action<SeatId, ActiveSkillEffect, bool> SkillActivatedDetailed;
+        public event Action<PendingSkillReservation> SkillReserved;
+        public event Action<PendingSkillReservation> SkillReservationConsumed;
+        public event Action<SeatId, SkillEffectKind, Tile, string> SkillReservationRejected;
+        public event Action<bool> AutoSortChanged;
+        public event Action<SeatId, int, string> HandAutoSortedDetailed;
         public event Action AnyEventNotified;
+
+        public void NotifyRunStarted()
+        {
+            RunStarted?.Invoke(string.Empty);
+            NotifyAny();
+        }
 
         public void NotifyRunStarted(string logFilePath)
         {
@@ -114,6 +131,90 @@ namespace MahjongPrototype.Notifications
         public void NotifyRoundEnded(string reason)
         {
             RoundEnded?.Invoke(reason);
+            NotifyAny();
+        }
+
+        public void NotifySeatSlotsAssigned()
+        {
+            SeatSlotsAssigned?.Invoke();
+            NotifyAny();
+        }
+
+        public void NotifyTurnDebug(
+            string eventName,
+            string message,
+            SeatId? seat = null,
+            Tile? tile = null,
+            int? turnIndex = null)
+        {
+            TurnDebug?.Invoke(eventName, message, seat, tile, turnIndex);
+            NotifyAny();
+        }
+
+        public void NotifyWinCheckedDetailed(
+            SeatId seat,
+            WinType winType,
+            Tile? winningTile,
+            SeatId? sourceSeat,
+            int turnIndex,
+            bool isWin)
+        {
+            WinCheckedDetailed?.Invoke(seat, winType, winningTile, sourceSeat, turnIndex, isWin);
+            NotifyAny();
+        }
+
+        public void NotifyWinDeclaredDetailed(SeatId seat, WinType? winType, int turnIndex)
+        {
+            WinDeclaredDetailed?.Invoke(seat, winType, turnIndex);
+            NotifyAny();
+        }
+
+        public void NotifyWinDeclinedDetailed(SeatId seat, WinType? winType, int turnIndex)
+        {
+            WinDeclinedDetailed?.Invoke(seat, winType, turnIndex);
+            NotifyAny();
+        }
+
+        public void NotifySkillActivatedDetailed(
+            SeatId actorSeat,
+            ActiveSkillEffect effect,
+            bool beforeDraw)
+        {
+            SkillActivatedDetailed?.Invoke(actorSeat, effect, beforeDraw);
+            NotifyAny();
+        }
+
+        public void NotifySkillReserved(PendingSkillReservation reservation)
+        {
+            SkillReserved?.Invoke(reservation);
+            NotifyAny();
+        }
+
+        public void NotifySkillReservationConsumed(PendingSkillReservation reservation)
+        {
+            SkillReservationConsumed?.Invoke(reservation);
+            NotifyAny();
+        }
+
+        public void NotifySkillReservationRejected(
+            SeatId ownerSeat,
+            SkillEffectKind skillEffectKind,
+            Tile targetTile,
+            string reason)
+        {
+            SkillReservationRejected?.Invoke(ownerSeat, skillEffectKind, targetTile, reason);
+            NotifyAny();
+        }
+
+        public void NotifyAutoSortChanged(bool enabled)
+        {
+            AutoSortChanged?.Invoke(enabled);
+            NotifyAny();
+        }
+
+        public void NotifyHandAutoSortedDetailed(SeatId seat, int turnIndex, string reason)
+        {
+            HandAutoSortedDetailed?.Invoke(seat, turnIndex, reason);
             NotifyAny();
         }
 

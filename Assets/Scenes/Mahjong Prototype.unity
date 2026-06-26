@@ -1628,9 +1628,6 @@ MonoBehaviour:
   fixedRandomSeed: 12345
   eventNotifier: {fileID: 1264733449}
   cpuTurnController: {fileID: 508243330}
-  enableDevLog: 1
-  enableReleaseBuildLogging: 0
-  enableTurnDebugLog: 1
   logWarnings: 1
   autoSortEnabled: 0
 --- !u!114 &508243330
@@ -1660,6 +1657,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.Logging.MahjongGameLogRecorder
   gameFlow: {fileID: 508243329}
   eventNotifier: {fileID: 1264733449}
+  enableDevLog: 1
+  enableReleaseBuildLogging: 0
+  enableTurnDebugLog: 1
 --- !u!1 &515161080
 GameObject:
   m_ObjectHideFlags: 0
