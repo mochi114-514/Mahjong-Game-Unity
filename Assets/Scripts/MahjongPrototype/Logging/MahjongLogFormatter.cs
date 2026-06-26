@@ -36,94 +36,72 @@ namespace MahjongPrototype.Logging
             switch (eventName)
             {
                 case "TurnStarted":
-                    return TrimLine($"TurnStarted {entry.Seat} turn={entry.TurnIndex} wall={entry.WallCount}");
+                    return TrimLine($"Turn {entry.Seat} {FormatWallCount(entry)}");
 
                 case "BeginTurn":
-                    return TrimLine($"BeginTurn {entry.Seat} T{entry.TurnIndex} {entry.Message}");
-
                 case "DrawCompleted":
-                    return TrimLine($"DrawDone {entry.Seat} T{entry.TurnIndex} {entry.Tile} {entry.Message}");
-
                 case "AutoDrawStarted":
-                    return TrimLine($"AutoDrawStart {entry.Seat} T{entry.TurnIndex} {entry.Message}");
-
                 case "AutoDrawCompleted":
-                    return TrimLine($"AutoDrawDone {entry.Seat} T{entry.TurnIndex} {entry.Tile} {entry.Message}");
-
                 case "AutoDrawSkipped":
-                    return TrimLine($"AutoDrawSkip {entry.Message}");
-
                 case "DiscardCompleted":
-                    return TrimLine($"DiscardDone {entry.Seat} T{entry.TurnIndex} {entry.Tile} {entry.Message}");
-
                 case "EndTurn":
-                    return TrimLine($"EndTurn T{entry.TurnIndex} {entry.Message}");
-
                 case "DrawBlocked":
-                    return TrimLine($"DrawBlocked {entry.Message}");
-
                 case "DiscardBlocked":
-                    return TrimLine($"DiscardBlocked {entry.Message}");
+                case "WinDecision":
+                    return string.Empty;
 
                 case "TileDrawn":
                     if (!string.IsNullOrEmpty(entry.ActiveSkill))
                         return string.Empty;
 
-                    return TrimLine($"Draw {entry.Tile}");
+                    return TrimLine($"{entry.Seat} Draw {entry.Tile}");
 
                 case "TileDiscarded":
-                    return TrimLine($"Discard {entry.Tile} turn={entry.TurnIndex}");
+                    return TrimLine($"{entry.Seat} Discard {entry.Tile}");
 
                 case "SkillActivated":
-                    return TrimLine($"Skill target={entry.Tile}");
+                    return TrimLine($"{entry.Seat} Skill {entry.Tile}");
 
                 case "SkillReserved":
-                    return TrimLine($"SkillReserved {entry.Seat} target={entry.Tile} {entry.Message}");
+                    return TrimLine($"{entry.Seat} SkillReserve {entry.Tile}");
 
                 case "SkillActivatedBeforeDraw":
-                    return TrimLine($"SkillBeforeDraw {entry.Seat} target={entry.Tile}");
+                    return TrimLine($"{entry.Seat} SkillBeforeDraw {entry.Tile}");
 
                 case "ReservationConsumed":
-                    return TrimLine($"ReservationConsumed {entry.Seat} target={entry.Tile}");
-
-                case "SkillReservationRejected":
-                    return TrimLine($"SkillReserveRejected {entry.Seat} {entry.Message}");
-
-                case "SkillEffectRegistered":
                     return string.Empty;
 
+                case "SkillReservationRejected":
+                    return TrimLine($"{entry.Seat} SkillRejected {entry.Tile}");
+
+                case "SkillEffectRegistered":
                 case "SkillEffectResolved":
+                case "SkillEffectExpired":
                     return string.Empty;
 
                 case "DrawModifiedBySkill":
                     if (!string.IsNullOrEmpty(entry.Message) &&
                         entry.Message.IndexOf("Fell back", System.StringComparison.OrdinalIgnoreCase) >= 0)
                     {
-                        return TrimLine($"SkillFallback {entry.Tile}");
+                        return TrimLine($"{entry.Seat} SkillFallback {entry.Tile}");
                     }
 
-                    return TrimLine($"SkillDraw {entry.Tile}");
-
-                case "SkillEffectExpired":
-                    return string.Empty;
+                    return TrimLine($"{entry.Seat} SkillDraw {entry.Tile}");
 
                 case "RoundStarted":
-                    return TrimLine($"RoundStarted wall={entry.WallCount}");
+                    return TrimLine($"RoundStarted {FormatWallCount(entry)}");
 
                 case "RoundEnded":
-                    return TrimLine($"RoundEnded {entry.Message}");
+                    return TrimLine($"RoundEnded {GetMessageValue(entry.Message, "reason", entry.Message)}");
 
                 case "WinChecked":
-                    return TrimLine($"WinChecked {entry.Message}");
+                    return FormatWinCheckedLine(entry);
 
                 case "WinDeclared":
-                    return TrimLine("WinDeclared self-draw");
+                    return FormatWinResultLine(entry, string.Empty);
 
                 case "WinDeclined":
-                    return TrimLine("WinDeclined");
-
-                case "WinDecision":
-                    return TrimLine($"WinDecision {entry.Seat} {entry.Message}");
+                    return FormatWinResultLine(entry, "Decline ");
 
                 case "HandAutoSorted":
                     return string.Empty;
@@ -135,7 +113,7 @@ namespace MahjongPrototype.Logging
                     return TrimLine("AutoSort OFF");
 
                 case "SlowFrame":
-                    return TrimLine("SlowFrame");
+                    return string.Empty;
 
                 case "Unity Console Warning":
                     return TrimLine($"Warning {entry.Message}");
@@ -147,10 +125,10 @@ namespace MahjongPrototype.Logging
                     return TrimLine($"Exception {entry.Message}");
 
                 case "RunStarted":
-                    return "RunStarted";
+                    return string.Empty;
 
                 default:
-                    return TrimLine($"{entry.EventName} {entry.Message}");
+                    return string.Empty;
             }
         }
 
@@ -221,6 +199,60 @@ namespace MahjongPrototype.Logging
             }
 
             return builder.ToString();
+        }
+
+        private static string FormatWallCount(MahjongLogEntry entry)
+        {
+            return entry != null && entry.WallCount.HasValue ? $"W{entry.WallCount.Value}" : string.Empty;
+        }
+
+        private static string FormatWinCheckedLine(MahjongLogEntry entry)
+        {
+            string isWin = GetMessageValue(entry.Message, "isWin", string.Empty);
+            if (!IsTrueText(isWin))
+                return string.Empty;
+
+            string winType = GetMessageValue(entry.Message, "winType", "Win");
+            string sourceSeat = GetMessageValue(entry.Message, "sourceSeat", string.Empty);
+            if (string.IsNullOrEmpty(sourceSeat) || sourceSeat == "null")
+                return TrimLine($"WinCheck {entry.Seat} {winType}");
+
+            return TrimLine($"WinCheck {entry.Seat} {winType} from {sourceSeat}");
+        }
+
+        private static string FormatWinResultLine(MahjongLogEntry entry, string actionPrefix)
+        {
+            string winType = GetMessageValue(entry.Message, "winType", "Win");
+            return TrimLine($"{entry.Seat} {actionPrefix}{winType}");
+        }
+
+        private static string GetMessageValue(string message, string key, string fallback)
+        {
+            if (string.IsNullOrEmpty(message) || string.IsNullOrEmpty(key))
+                return fallback;
+
+            string[] parts = message.Split(';');
+            for (int i = 0; i < parts.Length; i++)
+            {
+                string part = parts[i].Trim();
+                int separatorIndex = part.IndexOf('=');
+                if (separatorIndex <= 0)
+                    continue;
+
+                string partKey = part.Substring(0, separatorIndex).Trim();
+                if (!string.Equals(partKey, key, System.StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                string value = part.Substring(separatorIndex + 1).Trim();
+                return string.IsNullOrEmpty(value) ? fallback : value;
+            }
+
+            return fallback;
+        }
+
+        private static bool IsTrueText(string value)
+        {
+            return string.Equals(value, "true", System.StringComparison.OrdinalIgnoreCase);
         }
 
         private static string TrimLine(string value)
