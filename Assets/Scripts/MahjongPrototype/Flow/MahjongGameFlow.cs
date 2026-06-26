@@ -102,7 +102,6 @@ namespace MahjongPrototype
             ClearWinDecision();
             skillReservationService.Clear();
             NotifyRunStarted();
-            LogRunStarted();
 
             int? seed = useFixedRandomSeed ? fixedRandomSeed : (int?)null;
             gameState = new MahjongGameState(Wall.CreateStandardShuffled(seed));
@@ -113,7 +112,6 @@ namespace MahjongPrototype
 
             LogSeatSlotsAssigned();
             NotifyRoundStarted();
-            LogRoundStarted();
 
             DealInitialHands();
             NotifyRoundSetupCompleted();
@@ -207,7 +205,6 @@ namespace MahjongPrototype
                 turnIndex: gameState.TurnIndex);
             HandleSkillResolutionLogs(result);
             NotifyTileDrawn(result);
-            LogTileDrawn(result);
             CheckWinPrototype();
             return true;
         }
@@ -255,7 +252,6 @@ namespace MahjongPrototype
                 tile: result.Record.Tile,
                 turnIndex: result.Record.TurnIndex);
             NotifyTileDiscarded(result.Record);
-            LogTileDiscarded(result.Record);
             if (!TryBeginRonDecision(result.Record))
                 AdvanceTurn();
         }
@@ -324,7 +320,6 @@ namespace MahjongPrototype
                 tile: result.Record.Tile,
                 turnIndex: result.Record.TurnIndex);
             NotifyTileDiscarded(result.Record);
-            LogTileDiscarded(result.Record);
             if (!TryBeginRonDecision(result.Record))
                 AdvanceTurn();
             return true;
@@ -510,7 +505,6 @@ namespace MahjongPrototype
 
                     gameState.GetPlayerSeat(seat).Hand.Add(result.Tile);
                     NotifyTileDrawn(result);
-                    LogTileDrawn(result);
                 }
             }
 
@@ -532,7 +526,6 @@ namespace MahjongPrototype
         private void StartTurn(SeatId seat, int turnIndex)
         {
             NotifyTurnStarted(seat, turnIndex);
-            LogTurnStarted(seat, turnIndex);
             LogTurnDebug(
                 "BeginTurn",
                 $"phase={gameState.TurnPhase}; hasDrawnTile={gameState.GetPlayerSeat(seat).HasDrawnTile}",
@@ -738,14 +731,6 @@ namespace MahjongPrototype
                 seat: gameState.CurrentTurn,
                 turnIndex: gameState.TurnIndex);
             eventNotifier?.NotifyRoundEnded(reason);
-
-            DevLog.Record(
-                "GameFlow",
-                "RoundEnded",
-                reason,
-                seat: gameState.CurrentTurn,
-                wallCount: gameState.Wall.Count,
-                turnIndex: gameState.TurnIndex);
         }
 
         private void HandleSkillResolutionLogs(DrawResult result)
@@ -995,25 +980,6 @@ namespace MahjongPrototype
                 NotifyHandAutoSorted(seat, gameState.TurnIndex);
         }
 
-        private void LogRunStarted()
-        {
-            DevLog.Record(
-                "GameFlow",
-                "RunStarted",
-                $"LogFile={DevLog.CurrentLogFilePath}");
-        }
-
-        private void LogRoundStarted()
-        {
-            DevLog.Record(
-                "GameFlow",
-                "RoundStarted",
-                "Round started.",
-                seat: gameState.CurrentTurn,
-                wallCount: gameState.Wall.Count,
-                turnIndex: gameState.TurnIndex);
-        }
-
         private void LogSeatSlotsAssigned()
         {
             for (int i = 0; i < gameState.SeatSlots.Count; i++)
@@ -1036,44 +1002,6 @@ namespace MahjongPrototype
             return gameState.IsSelfSeat(slot.Wind)
                 ? $"Self:{slot.ParticipantType}"
                 : $"{slot.StateLabel}:{slot.ParticipantType}";
-        }
-
-        private void LogTurnStarted(SeatId seat, int turnIndex)
-        {
-            DevLog.Record(
-                "GameFlow",
-                "TurnStarted",
-                "Turn started.",
-                seat: seat,
-                wallCount: gameState.Wall.Count,
-                turnIndex: turnIndex);
-        }
-
-        private void LogTileDrawn(DrawResult result)
-        {
-            DevLog.Record(
-                "Mahjong",
-                "TileDrawn",
-                $"source={result.Source}; purpose={result.Purpose}; {result.Message}",
-                seat: result.Seat,
-                tile: result.Tile,
-                hand: GetHandText(result.Seat),
-                wallCount: result.WallCountAfterDraw,
-                turnIndex: gameState.TurnIndex,
-                activeSkill: result.ResolvedSkillEffect != null ? result.ResolvedSkillEffect.ToLogText() : null);
-        }
-
-        private void LogTileDiscarded(DiscardRecord record)
-        {
-            DevLog.Record(
-                "Mahjong",
-                "TileDiscarded",
-                "Tile discarded.",
-                seat: record.ActorSeat,
-                tile: record.Tile,
-                hand: GetHandText(record.ActorSeat),
-                wallCount: gameState.Wall.Count,
-                turnIndex: record.TurnIndex);
         }
 
         private void LogSkillActivated(SeatId actorSeat, ActiveSkillEffect effect)
