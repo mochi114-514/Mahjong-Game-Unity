@@ -21,6 +21,7 @@ namespace MahjongPrototype.Tests
         private const string MahjongDrawnTileViewTypeName = "MahjongPrototype.UI.MahjongDrawnTileView, Assembly-CSharp";
         private const string MahjongSeatWindViewTypeName = "MahjongPrototype.UI.MahjongSeatWindView, Assembly-CSharp";
         private const string MahjongPlayerUiControllerTypeName = "MahjongPrototype.UI.MahjongPlayerUiController, Assembly-CSharp";
+        private const string MahjongPlayerAreaPresenterTypeName = "MahjongPrototype.UI.MahjongPlayerAreaPresenter, Assembly-CSharp";
         private const string MahjongPrototypeUiManagerTypeName = "MahjongPrototype.UI.MahjongPrototypeUiManager, Assembly-CSharp";
         private const string MahjongGameFlowTypeName = "MahjongPrototype.MahjongGameFlow, Assembly-CSharp";
         private const string MahjongEventNotifierTypeName = "MahjongPrototype.Notifications.MahjongEventNotifier, Assembly-CSharp";
@@ -418,7 +419,6 @@ namespace MahjongPrototype.Tests
                 object uiManager = root.AddComponent(Type.GetType(MahjongPrototypeUiManagerTypeName, true));
                 SetField(uiManager, "gameFlow", gameFlow);
                 SetField(uiManager, "eventNotifier", notifier);
-                SetField(uiManager, "acrossTopPlayerUiController", opponentController);
                 Invoke(uiManager, "SubscribeNotifications");
 
                 Invoke(notifier, "NotifyHandAutoSorted", ParseSeat("East"), 1);
@@ -451,9 +451,6 @@ namespace MahjongPrototype.Tests
                 Invoke(gameState, "RebuildActiveTurnSeatsFromSeatSlots");
                 SetDrawnTile(gameState, "West", "8p");
 
-                object gameFlow = root.AddComponent(Type.GetType(MahjongGameFlowTypeName, true));
-                SetField(gameFlow, "gameState", gameState);
-
                 GameObject opponentObject = new GameObject("AcrossTopPlayerUi");
                 opponentObject.transform.SetParent(root.transform, false);
                 object drawnTileView = CreateDrawnTileView(
@@ -467,11 +464,9 @@ namespace MahjongPrototype.Tests
                     "AcrossTop",
                     drawnTileView);
 
-                object uiManager = root.AddComponent(Type.GetType(MahjongPrototypeUiManagerTypeName, true));
-                SetField(uiManager, "gameFlow", gameFlow);
-                SetField(uiManager, "acrossTopPlayerUiController", opponentController);
+                object presenter = root.AddComponent(Type.GetType(MahjongPlayerAreaPresenterTypeName, true));
 
-                Invoke(uiManager, "RefreshDrawnTileForSeat", ParseSeat("West"));
+                Invoke(presenter, "RefreshDrawnTileForSeat", gameState, ParseSeat("West"), false);
 
                 Assert.That(opponentContainer.childCount, Is.EqualTo(1));
                 Assert.That(GetTileLabelText(opponentContainer.GetChild(0)), Is.EqualTo(string.Empty));
@@ -539,8 +534,6 @@ namespace MahjongPrototype.Tests
                 object uiManager = root.AddComponent(Type.GetType(MahjongPrototypeUiManagerTypeName, true));
                 SetField(uiManager, "gameFlow", gameFlow);
                 SetField(uiManager, "eventNotifier", notifier);
-                SetField(uiManager, "selfBottomPlayerUiController", selfController);
-                SetField(uiManager, "acrossTopPlayerUiController", opponentController);
                 Invoke(uiManager, "SubscribeNotifications");
 
                 object selfDiscard = CreateDiscardRecord("East", "1m", 2);
@@ -614,8 +607,6 @@ namespace MahjongPrototype.Tests
                 object uiManager = root.AddComponent(Type.GetType(MahjongPrototypeUiManagerTypeName, true));
                 SetField(uiManager, "gameFlow", gameFlow);
                 SetField(uiManager, "eventNotifier", notifier);
-                SetField(uiManager, "selfBottomPlayerUiController", selfController);
-                SetField(uiManager, "acrossTopPlayerUiController", acrossController);
                 Invoke(uiManager, "SubscribeNotifications");
 
                 object enemyDiscard = CreateDiscardRecord("West", "9m", 2);
