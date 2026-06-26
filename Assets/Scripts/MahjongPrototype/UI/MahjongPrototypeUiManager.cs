@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using MahjongPrototype;
 using MahjongPrototype.Domain;
 using MahjongPrototype.Notifications;
@@ -44,9 +43,7 @@ namespace MahjongPrototype.UI
         private bool warnedMissingInputController;
         private bool warnedMissingWinDecisionController;
         private bool warnedMissingLogPreviewController;
-        private readonly HashSet<MahjongPlayerUiController> handEventSubscribedControllers =
-            new HashSet<MahjongPlayerUiController>();
-        private bool isDrawnTileControllerSubscribed;
+        private MahjongPlayerAreaPresenter subscribedPlayerAreaPresenter;
         private bool isInputControllerSubscribed;
 
         private void Reset()
@@ -64,8 +61,7 @@ namespace MahjongPrototype.UI
             CacheReferences();
             EnsureDisplayController();
             EnsurePlayerAreaPresenter();
-            SubscribePlayerHandEvents();
-            SubscribeDrawnTileEvents();
+            SubscribePlayerAreaPresenterEvents();
             EnsureInputController();
             SubscribeInputControllerEvents();
             SyncAutoSortToggleFromFlow();
@@ -80,8 +76,7 @@ namespace MahjongPrototype.UI
             CacheReferences();
             EnsureDisplayController();
             EnsurePlayerAreaPresenter();
-            SubscribePlayerHandEvents();
-            SubscribeDrawnTileEvents();
+            SubscribePlayerAreaPresenterEvents();
             EnsureInputController();
             SubscribeInputControllerEvents();
             SyncAutoSortToggleFromFlow();
@@ -93,8 +88,7 @@ namespace MahjongPrototype.UI
 
         private void OnDisable()
         {
-            UnsubscribePlayerHandEvents();
-            UnsubscribeDrawnTileEvents();
+            UnsubscribePlayerAreaPresenterEvents();
             UnsubscribeInputControllerEvents();
             UnsubscribeNotifications();
         }
@@ -465,68 +459,31 @@ namespace MahjongPrototype.UI
                 RefreshDisplay(state);
         }
 
-        private void SubscribePlayerHandEvents()
+        private void SubscribePlayerAreaPresenterEvents()
         {
             EnsurePlayerAreaPresenter();
-            if (playerAreaPresenter == null)
+            if (playerAreaPresenter == null || subscribedPlayerAreaPresenter == playerAreaPresenter)
                 return;
 
-            SubscribePlayerHandEvents(playerAreaPresenter.GetPlayerUiController(ViewSlot.SelfBottom));
-            SubscribePlayerHandEvents(playerAreaPresenter.GetPlayerUiController(ViewSlot.NextLeft));
-            SubscribePlayerHandEvents(playerAreaPresenter.GetPlayerUiController(ViewSlot.AcrossTop));
-            SubscribePlayerHandEvents(playerAreaPresenter.GetPlayerUiController(ViewSlot.PreviousRight));
+            UnsubscribePlayerAreaPresenterEvents();
+            playerAreaPresenter.HandTileClicked += HandleHandTileClicked;
+            playerAreaPresenter.DrawnTileClicked += HandleDrawnTileClicked;
+            subscribedPlayerAreaPresenter = playerAreaPresenter;
         }
 
-        private void SubscribePlayerHandEvents(MahjongPlayerUiController controller)
+        private void UnsubscribePlayerAreaPresenterEvents()
         {
-            if (controller == null || handEventSubscribedControllers.Contains(controller))
+            if (subscribedPlayerAreaPresenter == null)
                 return;
 
-            controller.HandTileClicked += HandleHandTileClicked;
-            handEventSubscribedControllers.Add(controller);
-        }
-
-        private void UnsubscribePlayerHandEvents()
-        {
-            foreach (MahjongPlayerUiController controller in handEventSubscribedControllers)
-            {
-                if (controller != null)
-                    controller.HandTileClicked -= HandleHandTileClicked;
-            }
-
-            handEventSubscribedControllers.Clear();
-        }
-
-        private void SubscribeDrawnTileEvents()
-        {
-            EnsurePlayerAreaPresenter();
-            MahjongPlayerUiController controller = playerAreaPresenter != null
-                ? playerAreaPresenter.GetPlayerUiController(ViewSlot.SelfBottom)
-                : null;
-            if (controller == null || isDrawnTileControllerSubscribed)
-                return;
-
-            controller.DrawnTileClicked += HandleDrawnTileClicked;
-            isDrawnTileControllerSubscribed = true;
-        }
-
-        private void UnsubscribeDrawnTileEvents()
-        {
-            if (!isDrawnTileControllerSubscribed)
-                return;
-
-            MahjongPlayerUiController controller = playerAreaPresenter != null
-                ? playerAreaPresenter.GetPlayerUiController(ViewSlot.SelfBottom)
-                : null;
-            if (controller != null)
-                controller.DrawnTileClicked -= HandleDrawnTileClicked;
-
-            isDrawnTileControllerSubscribed = false;
+            subscribedPlayerAreaPresenter.HandTileClicked -= HandleHandTileClicked;
+            subscribedPlayerAreaPresenter.DrawnTileClicked -= HandleDrawnTileClicked;
+            subscribedPlayerAreaPresenter = null;
         }
 
         private void RefreshPlayerArea(MahjongGameState state)
         {
-            SubscribePlayerHandEvents();
+            SubscribePlayerAreaPresenterEvents();
 
             if (playerAreaPresenter == null)
                 EnsurePlayerAreaPresenter();

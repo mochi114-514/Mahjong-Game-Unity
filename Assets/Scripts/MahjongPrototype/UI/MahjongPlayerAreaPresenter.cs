@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using MahjongPrototype.Domain;
 using UnityEngine;
@@ -14,6 +15,13 @@ namespace MahjongPrototype.UI
         [SerializeField] private MahjongPlayerUiController acrossTopPlayerUiController;
         [SerializeField] private MahjongPlayerUiController previousRightPlayerUiController;
 
+        private readonly HashSet<MahjongPlayerUiController> handEventSubscribedControllers =
+            new HashSet<MahjongPlayerUiController>();
+        private MahjongPlayerUiController drawnTileSubscribedController;
+
+        public event Action<SeatId, int> HandTileClicked;
+        public event Action DrawnTileClicked;
+
         private void Reset()
         {
             CachePlayerUiControllerReferences();
@@ -24,11 +32,27 @@ namespace MahjongPrototype.UI
             CachePlayerUiControllerReferences();
         }
 
+        private void OnEnable()
+        {
+            SubscribePlayerEvents();
+        }
+
+        private void OnDisable()
+        {
+            UnsubscribePlayerEvents();
+        }
+
+        private void OnDestroy()
+        {
+            UnsubscribePlayerEvents();
+        }
+
         public void Refresh(MahjongGameState state, bool canUseSelfInput)
         {
             if (state == null)
                 return;
 
+            SubscribePlayerEvents();
             RefreshPlayerWinds(state);
             RefreshHand(state, canUseSelfInput);
             RefreshDrawnTile(state, canUseSelfInput);
@@ -236,6 +260,71 @@ namespace MahjongPrototype.UI
                 default:
                     return null;
             }
+        }
+
+        private void SubscribePlayerEvents()
+        {
+            CachePlayerUiControllerReferences();
+            SubscribePlayerHandEvents(selfBottomPlayerUiController);
+            SubscribePlayerHandEvents(nextLeftPlayerUiController);
+            SubscribePlayerHandEvents(acrossTopPlayerUiController);
+            SubscribePlayerHandEvents(previousRightPlayerUiController);
+            SubscribeDrawnTileEvents(selfBottomPlayerUiController);
+        }
+
+        private void SubscribePlayerHandEvents(MahjongPlayerUiController controller)
+        {
+            if (controller == null || handEventSubscribedControllers.Contains(controller))
+                return;
+
+            controller.HandTileClicked += HandleHandTileClicked;
+            handEventSubscribedControllers.Add(controller);
+        }
+
+        private void SubscribeDrawnTileEvents(MahjongPlayerUiController controller)
+        {
+            if (controller == null || drawnTileSubscribedController == controller)
+                return;
+
+            UnsubscribeDrawnTileEvents();
+            controller.DrawnTileClicked += HandleDrawnTileClicked;
+            drawnTileSubscribedController = controller;
+        }
+
+        private void UnsubscribePlayerEvents()
+        {
+            UnsubscribePlayerHandEvents();
+            UnsubscribeDrawnTileEvents();
+        }
+
+        private void UnsubscribePlayerHandEvents()
+        {
+            foreach (MahjongPlayerUiController controller in handEventSubscribedControllers)
+            {
+                if (controller != null)
+                    controller.HandTileClicked -= HandleHandTileClicked;
+            }
+
+            handEventSubscribedControllers.Clear();
+        }
+
+        private void UnsubscribeDrawnTileEvents()
+        {
+            if (drawnTileSubscribedController == null)
+                return;
+
+            drawnTileSubscribedController.DrawnTileClicked -= HandleDrawnTileClicked;
+            drawnTileSubscribedController = null;
+        }
+
+        private void HandleHandTileClicked(SeatId dataSeat, int handIndex)
+        {
+            HandTileClicked?.Invoke(dataSeat, handIndex);
+        }
+
+        private void HandleDrawnTileClicked()
+        {
+            DrawnTileClicked?.Invoke();
         }
 
         private MahjongPlayerUiController FindPlayerUiController(ViewSlot targetViewSlot)

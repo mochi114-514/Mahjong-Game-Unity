@@ -298,6 +298,107 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
+        public void PlayerAreaPresenter_ForwardsHandTileClickedOnceAcrossRepeatedSubscribe()
+        {
+            GameObject root = new GameObject("PlayerAreaPresenterHandClickTest");
+            GameObject prefab = CreateTileButtonPrefab();
+            try
+            {
+                object gameState = CreateGameState("North");
+                AddHandTile(gameState, "North", "8m");
+
+                object handView = CreateHandView(root, prefab, out RectTransform container);
+                object controller = CreateController(root, null, "SelfBottom", null, handView);
+                object presenter = root.AddComponent(Type.GetType(MahjongPlayerAreaPresenterTypeName, true));
+                int clickCount = 0;
+                object clickedSeat = null;
+                int clickedIndex = -1;
+                EventInfo eventInfo = presenter.GetType().GetEvent("HandTileClicked");
+                Assert.That(eventInfo, Is.Not.Null);
+                Delegate handler = CreateHandTileClickedHandler(
+                    eventInfo,
+                    (seat, handIndex) =>
+                    {
+                        clickCount++;
+                        clickedSeat = seat;
+                        clickedIndex = handIndex;
+                    });
+                eventInfo.AddEventHandler(presenter, handler);
+
+                Invoke(presenter, "SubscribePlayerEvents");
+                Invoke(presenter, "SubscribePlayerEvents");
+                Invoke(controller, "RenderHand", GetHandTiles(gameState, "North"), ParseSeat("North"), true, true);
+                GetTileButton(container.GetChild(0)).onClick.Invoke();
+
+                Assert.That(clickCount, Is.EqualTo(1));
+                Assert.That(clickedSeat.ToString(), Is.EqualTo("North"));
+                Assert.That(clickedIndex, Is.EqualTo(0));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(prefab);
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void PlayerAreaPresenter_ForwardsDrawnTileClickedOnceAcrossRepeatedSubscribe()
+        {
+            GameObject root = new GameObject("PlayerAreaPresenterDrawnTileClickTest");
+            GameObject prefab = CreateTileButtonPrefab();
+            try
+            {
+                object gameState = CreateGameState("North");
+                SetDrawnTile(gameState, "North", "5p");
+
+                object drawnTileView = CreateDrawnTileView(root, prefab, out RectTransform container);
+                object controller = CreateController(root, null, "SelfBottom", drawnTileView);
+                object presenter = root.AddComponent(Type.GetType(MahjongPlayerAreaPresenterTypeName, true));
+                int clickCount = 0;
+                EventInfo eventInfo = presenter.GetType().GetEvent("DrawnTileClicked");
+                Assert.That(eventInfo, Is.Not.Null);
+                eventInfo.AddEventHandler(presenter, (Action)(() => clickCount++));
+
+                Invoke(presenter, "SubscribePlayerEvents");
+                Invoke(presenter, "SubscribePlayerEvents");
+                Invoke(controller, "RenderDrawnTile", GetDrawnTile(gameState, "North"), true, true);
+                GetTileButton(container.GetChild(0)).onClick.Invoke();
+
+                Assert.That(clickCount, Is.EqualTo(1));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(prefab);
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void UiManager_SubscribePlayerAreaPresenterEvents_DoesNotSubscribePlayerControllerDirectly()
+        {
+            GameObject root = new GameObject("UiManagerPlayerAreaEventSubscriptionTest");
+            root.SetActive(false);
+            try
+            {
+                object controller = CreateController(root, null, "SelfBottom");
+                object presenter = root.AddComponent(Type.GetType(MahjongPlayerAreaPresenterTypeName, true));
+                object uiManager = root.AddComponent(Type.GetType(MahjongPrototypeUiManagerTypeName, true));
+                SetField(uiManager, "playerAreaPresenter", presenter);
+
+                Invoke(uiManager, "SubscribePlayerAreaPresenterEvents");
+
+                Assert.That(HasEventSubscriberTarget(presenter, "HandTileClicked", uiManager), Is.True);
+                Assert.That(HasEventSubscriberTarget(presenter, "DrawnTileClicked", uiManager), Is.True);
+                Assert.That(HasEventSubscriberTarget(controller, "HandTileClicked", uiManager), Is.False);
+                Assert.That(HasEventSubscriberTarget(controller, "DrawnTileClicked", uiManager), Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
         public void RenderDrawnTile_FaceDown_HidesTileAndDisablesClick()
         {
             GameObject root = new GameObject("PlayerUiControllerFaceDownDrawnTileTest");
