@@ -238,6 +238,7 @@ GameObject:
   - component: {fileID: 45752831}
   - component: {fileID: 6100000001}
   - component: {fileID: 6100000002}
+  - component: {fileID: 6100000003}
   m_Layer: 5
   m_Name: Canvas
   m_TagString: Untagged
@@ -262,6 +263,7 @@ MonoBehaviour:
   displayController: {fileID: 45752831}
   playerAreaPresenter: {fileID: 6100000002}
   inputController: {fileID: 45752830}
+  commandRouter: {fileID: 6100000003}
   winDecisionController: {fileID: 6100000001}
   logPreviewController: {fileID: 45752828}
 --- !u!114 &45752824
@@ -4033,6 +4035,21 @@ MonoBehaviour:
   nextLeftPlayerUiController: {fileID: 0}
   acrossTopPlayerUiController: {fileID: 515161081}
   previousRightPlayerUiController: {fileID: 0}
+--- !u!114 &6100000003
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 45752822}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5fc1e2c9a3c641c48a56b3dfcb778ae1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI.MahjongUiCommandRouter
+  gameFlow: {fileID: 508243329}
+  inputController: {fileID: 45752830}
+  playerAreaPresenter: {fileID: 6100000002}
 --- !u!1 &6100000010
 GameObject:
   m_ObjectHideFlags: 0

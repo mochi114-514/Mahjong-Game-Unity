@@ -29,6 +29,10 @@ namespace MahjongPrototype.UI
         [Tooltip("Controller for draw, skill, retry, and win decision input.")]
         [SerializeField] private MahjongUiInputController inputController;
 
+        [Header("Command Routing")]
+        [Tooltip("Routes UI input events to MahjongGameFlow commands.")]
+        [SerializeField] private MahjongUiCommandRouter commandRouter;
+
         [Header("Win Decision")]
         [SerializeField] private MahjongWinDecisionController winDecisionController;
 
@@ -41,10 +45,9 @@ namespace MahjongPrototype.UI
         private bool warnedMissingDisplayController;
         private bool warnedMissingPlayerAreaPresenter;
         private bool warnedMissingInputController;
+        private bool warnedMissingCommandRouter;
         private bool warnedMissingWinDecisionController;
         private bool warnedMissingLogPreviewController;
-        private MahjongPlayerAreaPresenter subscribedPlayerAreaPresenter;
-        private bool isInputControllerSubscribed;
 
         private void Reset()
         {
@@ -61,9 +64,8 @@ namespace MahjongPrototype.UI
             CacheReferences();
             EnsureDisplayController();
             EnsurePlayerAreaPresenter();
-            SubscribePlayerAreaPresenterEvents();
             EnsureInputController();
-            SubscribeInputControllerEvents();
+            EnsureCommandRouter();
             SyncAutoSortToggleFromFlow();
             EnsureWinDecisionController();
             EnsureLogPreviewController();
@@ -76,9 +78,8 @@ namespace MahjongPrototype.UI
             CacheReferences();
             EnsureDisplayController();
             EnsurePlayerAreaPresenter();
-            SubscribePlayerAreaPresenterEvents();
             EnsureInputController();
-            SubscribeInputControllerEvents();
+            EnsureCommandRouter();
             SyncAutoSortToggleFromFlow();
             EnsureWinDecisionController();
             EnsureLogPreviewController();
@@ -88,8 +89,6 @@ namespace MahjongPrototype.UI
 
         private void OnDisable()
         {
-            UnsubscribePlayerAreaPresenterEvents();
-            UnsubscribeInputControllerEvents();
             UnsubscribeNotifications();
         }
 
@@ -132,6 +131,9 @@ namespace MahjongPrototype.UI
 
             if (inputController == null)
                 inputController = GetComponentInChildren<MahjongUiInputController>(true);
+
+            if (commandRouter == null)
+                commandRouter = GetComponentInChildren<MahjongUiCommandRouter>(true);
 
             if (logPreviewController == null)
                 logPreviewController = GetComponentInChildren<MahjongLogPreviewController>(true);
@@ -241,20 +243,6 @@ namespace MahjongPrototype.UI
             }
         }
 
-        private void SubscribeInputControllerEvents()
-        {
-            if (inputController == null || isInputControllerSubscribed)
-                return;
-
-            inputController.DrawRequested += HandleDrawRequested;
-            inputController.ForceDrawSkillRequested += HandleForceDrawSkillRequested;
-            inputController.AutoSortChanged += HandleAutoSortChanged;
-            inputController.RetryRequested += HandleRetryRequested;
-            inputController.WinRequested += HandleWinRequested;
-            inputController.DeclineWinRequested += HandleDeclineWinRequested;
-            isInputControllerSubscribed = true;
-        }
-
         private void SyncAutoSortToggleFromFlow()
         {
             if (inputController == null || gameFlow == null)
@@ -263,18 +251,30 @@ namespace MahjongPrototype.UI
             inputController.SetAutoSortWithoutNotify(gameFlow.IsAutoSortEnabled);
         }
 
-        private void UnsubscribeInputControllerEvents()
+        private void EnsureCommandRouter()
         {
-            if (inputController == null || !isInputControllerSubscribed)
-                return;
+            if (commandRouter == null)
+            {
+                commandRouter = GetComponentInChildren<MahjongUiCommandRouter>(true);
+            }
 
-            inputController.DrawRequested -= HandleDrawRequested;
-            inputController.ForceDrawSkillRequested -= HandleForceDrawSkillRequested;
-            inputController.AutoSortChanged -= HandleAutoSortChanged;
-            inputController.RetryRequested -= HandleRetryRequested;
-            inputController.WinRequested -= HandleWinRequested;
-            inputController.DeclineWinRequested -= HandleDeclineWinRequested;
-            isInputControllerSubscribed = false;
+            if (commandRouter != null)
+            {
+                commandRouter.RefreshSubscriptions();
+                return;
+            }
+
+            commandRouter = gameObject.AddComponent<MahjongUiCommandRouter>();
+            if (commandRouter != null)
+            {
+                commandRouter.RefreshSubscriptions();
+            }
+            else
+            {
+                WarnMissingOnce(
+                    ref warnedMissingCommandRouter,
+                    "MahjongUiCommandRouter is not assigned. UI input commands will not be routed.");
+            }
         }
 
         private void EnsureWinDecisionController()
@@ -285,72 +285,6 @@ namespace MahjongPrototype.UI
             WarnMissingOnce(
                 ref warnedMissingWinDecisionController,
                 "MahjongWinDecisionController is not assigned. Add it to the UI GameObject and assign WinDecisionArea and its buttons.");
-        }
-
-        private void HandleDrawRequested()
-        {
-            if (gameFlow == null)
-            {
-                WarnMissingOnce(ref warnedMissingFlow, "Cannot draw because MahjongGameFlow is not assigned.");
-                return;
-            }
-
-            gameFlow.RequestDraw();
-        }
-
-        private void HandleForceDrawSkillRequested(string targetTileText)
-        {
-            if (gameFlow == null)
-            {
-                WarnMissingOnce(ref warnedMissingFlow, "Cannot activate skill because MahjongGameFlow is not assigned.");
-                return;
-            }
-
-            gameFlow.RequestForceDrawSkill(targetTileText);
-        }
-
-        private void HandleAutoSortChanged(bool enabled)
-        {
-            if (gameFlow == null)
-            {
-                WarnMissingOnce(ref warnedMissingFlow, "Cannot change auto sort because MahjongGameFlow is not assigned.");
-                return;
-            }
-
-            gameFlow.RequestSetAutoSortEnabled(enabled);
-        }
-
-        private void HandleRetryRequested()
-        {
-            if (gameFlow == null)
-            {
-                WarnMissingOnce(ref warnedMissingFlow, "Cannot retry because MahjongGameFlow is not assigned.");
-                return;
-            }
-
-            gameFlow.RetryPrototype();
-        }
-
-        private void HandleWinRequested()
-        {
-            if (gameFlow == null)
-            {
-                WarnMissingOnce(ref warnedMissingFlow, "Cannot declare win because MahjongGameFlow is not assigned.");
-                return;
-            }
-
-            gameFlow.RequestDeclareWin();
-        }
-
-        private void HandleDeclineWinRequested()
-        {
-            if (gameFlow == null)
-            {
-                WarnMissingOnce(ref warnedMissingFlow, "Cannot decline win because MahjongGameFlow is not assigned.");
-                return;
-            }
-
-            gameFlow.RequestDeclineWin();
         }
 
         private void HandleRoundStarted(int _, int __)
@@ -459,32 +393,8 @@ namespace MahjongPrototype.UI
                 RefreshDisplay(state);
         }
 
-        private void SubscribePlayerAreaPresenterEvents()
-        {
-            EnsurePlayerAreaPresenter();
-            if (playerAreaPresenter == null || subscribedPlayerAreaPresenter == playerAreaPresenter)
-                return;
-
-            UnsubscribePlayerAreaPresenterEvents();
-            playerAreaPresenter.HandTileClicked += HandleHandTileClicked;
-            playerAreaPresenter.DrawnTileClicked += HandleDrawnTileClicked;
-            subscribedPlayerAreaPresenter = playerAreaPresenter;
-        }
-
-        private void UnsubscribePlayerAreaPresenterEvents()
-        {
-            if (subscribedPlayerAreaPresenter == null)
-                return;
-
-            subscribedPlayerAreaPresenter.HandTileClicked -= HandleHandTileClicked;
-            subscribedPlayerAreaPresenter.DrawnTileClicked -= HandleDrawnTileClicked;
-            subscribedPlayerAreaPresenter = null;
-        }
-
         private void RefreshPlayerArea(MahjongGameState state)
         {
-            SubscribePlayerAreaPresenterEvents();
-
             if (playerAreaPresenter == null)
                 EnsurePlayerAreaPresenter();
 
@@ -583,32 +493,6 @@ namespace MahjongPrototype.UI
                 state != null &&
                 state.IsSelfTurn &&
                 !state.IsInteractionLocked;
-        }
-
-        private void HandleHandTileClicked(SeatId dataSeat, int handIndex)
-        {
-            if (gameFlow == null)
-            {
-                WarnMissingOnce(ref warnedMissingFlow, "Cannot discard because MahjongGameFlow is not assigned.");
-                return;
-            }
-
-            MahjongGameState state = gameFlow.CurrentState;
-            if (state == null || dataSeat != state.SelfSeat)
-                return;
-
-            gameFlow.RequestDiscard(handIndex);
-        }
-
-        private void HandleDrawnTileClicked()
-        {
-            if (gameFlow == null)
-            {
-                WarnMissingOnce(ref warnedMissingFlow, "Cannot discard drawn tile because MahjongGameFlow is not assigned.");
-                return;
-            }
-
-            gameFlow.RequestDiscardDrawnTile();
         }
 
         private void EnsureLogPreviewController()

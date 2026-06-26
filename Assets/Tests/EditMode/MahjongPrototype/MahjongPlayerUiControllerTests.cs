@@ -22,7 +22,9 @@ namespace MahjongPrototype.Tests
         private const string MahjongSeatWindViewTypeName = "MahjongPrototype.UI.MahjongSeatWindView, Assembly-CSharp";
         private const string MahjongPlayerUiControllerTypeName = "MahjongPrototype.UI.MahjongPlayerUiController, Assembly-CSharp";
         private const string MahjongPlayerAreaPresenterTypeName = "MahjongPrototype.UI.MahjongPlayerAreaPresenter, Assembly-CSharp";
+        private const string MahjongUiCommandRouterTypeName = "MahjongPrototype.UI.MahjongUiCommandRouter, Assembly-CSharp";
         private const string MahjongPrototypeUiManagerTypeName = "MahjongPrototype.UI.MahjongPrototypeUiManager, Assembly-CSharp";
+        private const string MahjongUiInputControllerTypeName = "MahjongPrototype.UI.MahjongUiInputController, Assembly-CSharp";
         private const string MahjongGameFlowTypeName = "MahjongPrototype.MahjongGameFlow, Assembly-CSharp";
         private const string MahjongEventNotifierTypeName = "MahjongPrototype.Notifications.MahjongEventNotifier, Assembly-CSharp";
         private const string PlayerIdTypeName = "MahjongPrototype.Domain.PlayerId, Assembly-CSharp";
@@ -374,23 +376,29 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void UiManager_SubscribePlayerAreaPresenterEvents_DoesNotSubscribePlayerControllerDirectly()
+        public void CommandRouter_SubscribeEvents_SubscribesInputAndPlayerAreaEventsOnce()
         {
-            GameObject root = new GameObject("UiManagerPlayerAreaEventSubscriptionTest");
+            GameObject root = new GameObject("CommandRouterEventSubscriptionTest");
             root.SetActive(false);
             try
             {
-                object controller = CreateController(root, null, "SelfBottom");
+                object inputController = root.AddComponent(Type.GetType(MahjongUiInputControllerTypeName, true));
                 object presenter = root.AddComponent(Type.GetType(MahjongPlayerAreaPresenterTypeName, true));
-                object uiManager = root.AddComponent(Type.GetType(MahjongPrototypeUiManagerTypeName, true));
-                SetField(uiManager, "playerAreaPresenter", presenter);
+                object router = root.AddComponent(Type.GetType(MahjongUiCommandRouterTypeName, true));
+                SetField(router, "inputController", inputController);
+                SetField(router, "playerAreaPresenter", presenter);
 
-                Invoke(uiManager, "SubscribePlayerAreaPresenterEvents");
+                Invoke(router, "SubscribeEvents");
+                Invoke(router, "SubscribeEvents");
 
-                Assert.That(HasEventSubscriberTarget(presenter, "HandTileClicked", uiManager), Is.True);
-                Assert.That(HasEventSubscriberTarget(presenter, "DrawnTileClicked", uiManager), Is.True);
-                Assert.That(HasEventSubscriberTarget(controller, "HandTileClicked", uiManager), Is.False);
-                Assert.That(HasEventSubscriberTarget(controller, "DrawnTileClicked", uiManager), Is.False);
+                Assert.That(CountEventSubscriberTarget(inputController, "DrawRequested", router), Is.EqualTo(1));
+                Assert.That(CountEventSubscriberTarget(inputController, "ForceDrawSkillRequested", router), Is.EqualTo(1));
+                Assert.That(CountEventSubscriberTarget(inputController, "AutoSortChanged", router), Is.EqualTo(1));
+                Assert.That(CountEventSubscriberTarget(inputController, "RetryRequested", router), Is.EqualTo(1));
+                Assert.That(CountEventSubscriberTarget(inputController, "WinRequested", router), Is.EqualTo(1));
+                Assert.That(CountEventSubscriberTarget(inputController, "DeclineWinRequested", router), Is.EqualTo(1));
+                Assert.That(CountEventSubscriberTarget(presenter, "HandTileClicked", router), Is.EqualTo(1));
+                Assert.That(CountEventSubscriberTarget(presenter, "DrawnTileClicked", router), Is.EqualTo(1));
             }
             finally
             {
@@ -976,6 +984,28 @@ namespace MahjongPrototype.Tests
             FieldInfo field = target.GetType().GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance);
             Assert.That(field, Is.Not.Null);
             field.SetValue(target, value);
+        }
+
+        private static int CountEventSubscriberTarget(object source, string eventName, object expectedTarget)
+        {
+            FieldInfo eventField = source.GetType().GetField(
+                eventName,
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.That(eventField, Is.Not.Null);
+
+            Delegate eventDelegate = eventField.GetValue(source) as Delegate;
+            if (eventDelegate == null)
+                return 0;
+
+            int count = 0;
+            Delegate[] subscribers = eventDelegate.GetInvocationList();
+            for (int i = 0; i < subscribers.Length; i++)
+            {
+                if (ReferenceEquals(subscribers[i].Target, expectedTarget))
+                    count++;
+            }
+
+            return count;
         }
 
         private static bool HasEventSubscriberTarget(object source, string eventName, object expectedTarget)
