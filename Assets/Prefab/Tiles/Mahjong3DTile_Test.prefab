@@ -30,7 +30,7 @@ RectTransform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
-  - {fileID: 3770378392225136607}
+  - {fileID: 7115881407293483239}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
@@ -69,9 +69,9 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Size: {x: 1.9387817, y: 2.5660248, z: 1}
-  m_Center: {x: -0.005706787, y: 0.013435364, z: 0}
---- !u!1001 &2501160166108426768
+  m_Size: {x: 18.722595, y: 25.093239, z: 16.374382}
+  m_Center: {x: 0.30340004, y: 0.04826355, z: -1.6786709}
+--- !u!1001 &8369452482431296808
 PrefabInstance:
   m_ObjectHideFlags: 0
   serializedVersion: 2
@@ -129,7 +129,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1650275422075407823, guid: 1175b8eae4f2acc409cddeef86a95b0e, type: 3}
       propertyPath: m_LocalRotation.w
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 1650275422075407823, guid: 1175b8eae4f2acc409cddeef86a95b0e, type: 3}
       propertyPath: m_LocalRotation.x
@@ -137,7 +137,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1650275422075407823, guid: 1175b8eae4f2acc409cddeef86a95b0e, type: 3}
       propertyPath: m_LocalRotation.y
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 1650275422075407823, guid: 1175b8eae4f2acc409cddeef86a95b0e, type: 3}
       propertyPath: m_LocalRotation.z
@@ -157,7 +157,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1650275422075407823, guid: 1175b8eae4f2acc409cddeef86a95b0e, type: 3}
       propertyPath: m_LocalEulerAnglesHint.y
-      value: 0
+      value: 180
       objectReference: {fileID: 0}
     - target: {fileID: 1650275422075407823, guid: 1175b8eae4f2acc409cddeef86a95b0e, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
@@ -168,8 +168,8 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 1175b8eae4f2acc409cddeef86a95b0e, type: 3}
---- !u!224 &3770378392225136607 stripped
+--- !u!224 &7115881407293483239 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 1650275422075407823, guid: 1175b8eae4f2acc409cddeef86a95b0e, type: 3}
-  m_PrefabInstance: {fileID: 2501160166108426768}
+  m_PrefabInstance: {fileID: 8369452482431296808}
   m_PrefabAsset: {fileID: 0}
