@@ -3,6 +3,7 @@ using MahjongPrototype.Domain;
 using MahjongPrototype.Notifications;
 using MahjongPrototype.Services;
 using MahjongPrototype.Skills;
+using MahjongPrototype.UI3D;
 using UnityEngine;
 
 namespace MahjongPrototype.UI
@@ -24,6 +25,10 @@ namespace MahjongPrototype.UI
         [Header("Player Area")]
         [Tooltip("Presenter for the four player areas around the table.")]
         [SerializeField] private MahjongPlayerAreaPresenter playerAreaPresenter;
+
+        [Header("3D Player Area")]
+        [Tooltip("Optional presenter for experimental 3D player area views.")]
+        [SerializeField] private Mahjong3DPlayerAreaPresenter playerArea3DPresenter;
 
         [Header("Input")]
         [Tooltip("Controller for draw, skill, retry, and win decision input.")]
@@ -99,6 +104,7 @@ namespace MahjongPrototype.UI
 
             RefreshDisplay(state);
             RefreshPlayerArea(state);
+            RefreshPlayerArea3D(state);
             RefreshWinDecision(state);
             RefreshInteractionState(state);
             RefreshLogPreview();
@@ -128,6 +134,9 @@ namespace MahjongPrototype.UI
 
             if (playerAreaPresenter == null)
                 playerAreaPresenter = GetComponentInChildren<MahjongPlayerAreaPresenter>(true);
+
+            if (playerArea3DPresenter == null)
+                playerArea3DPresenter = GetComponentInChildren<Mahjong3DPlayerAreaPresenter>(true);
 
             if (inputController == null)
                 inputController = GetComponentInChildren<MahjongUiInputController>(true);
@@ -402,6 +411,22 @@ namespace MahjongPrototype.UI
                 playerAreaPresenter.Refresh(state, CanUseSelfGameplayInput(state));
         }
 
+        private void RefreshPlayerArea3D(MahjongGameState state)
+        {
+            if (playerArea3DPresenter == null)
+                return;
+
+            playerArea3DPresenter.Refresh(state, CanUseSelfGameplayInput(state));
+        }
+
+        private void RefreshSelfBottomHand3D(MahjongGameState state)
+        {
+            if (playerArea3DPresenter == null)
+                return;
+
+            playerArea3DPresenter.RefreshSelfBottomHand(state, CanUseSelfGameplayInput(state));
+        }
+
         private void RefreshPlayerHandForSeat(SeatId seat)
         {
             MahjongGameState state = gameFlow != null ? gameFlow.CurrentState : null;
@@ -413,6 +438,9 @@ namespace MahjongPrototype.UI
 
             if (playerAreaPresenter != null)
                 playerAreaPresenter.RefreshHandForSeat(state, seat, CanUseSelfGameplayInput(state));
+
+            if (seat == state.SelfSeat)
+                RefreshSelfBottomHand3D(state);
         }
 
         private void RefreshPlayerDrawnTileForSeat(SeatId seat)
@@ -484,7 +512,10 @@ namespace MahjongPrototype.UI
         {
             MahjongGameState state = gameFlow != null ? gameFlow.CurrentState : null;
             if (state != null)
+            {
                 RefreshInteractionState(state);
+                RefreshSelfBottomHand3D(state);
+            }
         }
 
         private bool CanUseSelfGameplayInput(MahjongGameState state)

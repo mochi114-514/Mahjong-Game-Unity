@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using MahjongPrototype.Domain;
 using UnityEngine;
 
 namespace MahjongPrototype.UI3D
@@ -14,6 +15,30 @@ namespace MahjongPrototype.UI3D
         [SerializeField] private float spacing = 0.45f;
 
         private readonly List<Mahjong3DTileView> activeTiles = new List<Mahjong3DTileView>();
+
+        public void RenderHand(IReadOnlyList<Tile> handTiles, bool faceUp, bool interactable)
+        {
+            Clear();
+
+            if (handTiles == null)
+                return;
+
+            if (tilePrefab == null)
+            {
+                Debug.LogWarning($"{nameof(Mahjong3DHandView)}: Tile prefab is not assigned.", this);
+                return;
+            }
+
+            Transform root = spawnRoot != null ? spawnRoot : transform;
+            float startX = -((handTiles.Count - 1) * spacing) * 0.5f;
+
+            for (int i = 0; i < handTiles.Count; i++)
+            {
+                Mahjong3DTileView tile = InstantiateTile(root, i, startX);
+                tile.Initialize(i, handTiles[i], faceUp, interactable);
+                activeTiles.Add(tile);
+            }
+        }
 
         public void SpawnTestTiles()
         {
@@ -33,10 +58,7 @@ namespace MahjongPrototype.UI3D
 
             for (int i = 0; i < testTileCount; i++)
             {
-                Mahjong3DTileView tile = Instantiate(tilePrefab, root);
-                tile.transform.localPosition = new Vector3(startX + (i * spacing), 0f, 0f);
-                tile.transform.localRotation = Quaternion.identity;
-                tile.transform.localScale = Vector3.one;
+                Mahjong3DTileView tile = InstantiateTile(root, i, startX);
                 tile.Initialize(i);
                 activeTiles.Add(tile);
             }
@@ -52,6 +74,15 @@ namespace MahjongPrototype.UI3D
             }
 
             activeTiles.Clear();
+        }
+
+        private Mahjong3DTileView InstantiateTile(Transform root, int index, float startX)
+        {
+            Mahjong3DTileView tile = Instantiate(tilePrefab, root);
+            tile.transform.localPosition = new Vector3(startX + (index * spacing), 0f, 0f);
+            tile.transform.localRotation = Quaternion.identity;
+            tile.transform.localScale = Vector3.one;
+            return tile;
         }
 
         private static void DestroyTile(Mahjong3DTileView tile)
