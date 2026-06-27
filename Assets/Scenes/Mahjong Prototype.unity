@@ -262,7 +262,7 @@ MonoBehaviour:
   eventNotifier: {fileID: 1264733449}
   displayController: {fileID: 45752831}
   playerAreaPresenter: {fileID: 6100000002}
-  playerArea3DPresenter: {fileID: 0}
+  playerArea3DPresenter: {fileID: 1893660903}
   inputController: {fileID: 45752830}
   commandRouter: {fileID: 6100000003}
   winDecisionController: {fileID: 6100000001}
@@ -347,7 +347,6 @@ RectTransform:
   - {fileID: 821242413}
   - {fileID: 1904362103}
   - {fileID: 6100000011}
-  - {fileID: 2062737447}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
@@ -3728,7 +3727,7 @@ Transform:
   m_GameObject: {fileID: 1417294268}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: -215, z: 0}
+  m_LocalPosition: {x: 0, y: -215, z: -10}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -4964,6 +4963,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1893660902}
+  - component: {fileID: 1893660903}
   m_Layer: 0
   m_Name: Mahjong3DWorld
   m_TagString: Untagged
@@ -4990,6 +4990,19 @@ Transform:
   - {fileID: 907156957}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1893660903
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1893660901}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f51bc95c7b0df8e4b889e4949b6bf889, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI3D.Mahjong3DPlayerAreaPresenter
+  selfBottomHandView: {fileID: 1914715867}
 --- !u!1 &1904362102
 GameObject:
   m_ObjectHideFlags: 0
@@ -5076,7 +5089,7 @@ MonoBehaviour:
   spawnRoot: {fileID: 1914715866}
   tilePrefab: {fileID: 3781737991026447910, guid: a9f8505a4f6dec34fa30ef58c92e940d, type: 3}
   testTileCount: 14
-  spacing: 0.45
+  spacing: 31
 --- !u!1 &1917315618
 GameObject:
   m_ObjectHideFlags: 0
@@ -5424,56 +5437,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 1893660902}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &2062737446
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 2062737447}
-  - component: {fileID: 2062737448}
-  m_Layer: 5
-  m_Name: spawnTest
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!224 &2062737447
-RectTransform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2062737446}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 45752827}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0.5, y: 0.5}
-  m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 100, y: 100}
-  m_Pivot: {x: 0.5, y: 0.5}
---- !u!114 &2062737448
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2062737446}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: c04a07a6b8043394faf27abb394a35cc, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI3D.Mahjong3DTileSpawnTest
-  handView: {fileID: 1914715867}
-  spawnOnStart: 1
 --- !u!1 &2122950670
 GameObject:
   m_ObjectHideFlags: 0
