@@ -1,9 +1,12 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.Controls;
 
 namespace MahjongPrototype.UI3D
 {
-    // PROTOTYPE: raycast bridge from screen pointer input to 3D tile views.
+    // PROTOTYPE: raycast bridge from Input System pointer input to 3D tile views.
     [DisallowMultipleComponent]
     [AddComponentMenu("Mahjong Prototype/UI3D/Mahjong 3D Tile Raycast Input")]
     public sealed class Mahjong3DTileRaycastInput : MonoBehaviour
@@ -17,6 +20,9 @@ namespace MahjongPrototype.UI3D
         [Header("UI Blocking")]
         [SerializeField] private bool ignorePointerOverUi = true;
 
+        private readonly List<RaycastResult> uiRaycastResults = new List<RaycastResult>();
+        private PointerEventData pointerEventData;
+        private EventSystem pointerEventSystem;
         private bool warnedMissingCamera;
 
         private void Awake()
@@ -27,47 +33,59 @@ namespace MahjongPrototype.UI3D
 
         private void Update()
         {
-            if (!TryGetPrimaryPointerDown(out Vector2 screenPosition, out int pointerId))
+            if (!TryGetPrimaryPointerDown(out Vector2 screenPosition))
                 return;
 
-            if (ignorePointerOverUi && IsPointerOverUi(pointerId))
+            if (ignorePointerOverUi && IsPointerOverUi(screenPosition))
                 return;
 
             TryNotifyTileClick(screenPosition);
         }
 
-        private bool TryGetPrimaryPointerDown(out Vector2 screenPosition, out int pointerId)
+        private bool TryGetPrimaryPointerDown(out Vector2 screenPosition)
         {
-            if (Input.GetMouseButtonDown(0))
+            Mouse mouse = Mouse.current;
+            if (mouse != null && mouse.leftButton.wasPressedThisFrame)
             {
-                screenPosition = Input.mousePosition;
-                pointerId = -1;
+                screenPosition = mouse.position.ReadValue();
                 return true;
             }
 
-            for (int i = 0; i < Input.touchCount; i++)
+            Touchscreen touchscreen = Touchscreen.current;
+            if (touchscreen != null)
             {
-                Touch touch = Input.GetTouch(i);
-                if (touch.phase != TouchPhase.Began)
-                    continue;
+                foreach (TouchControl touch in touchscreen.touches)
+                {
+                    if (!touch.press.wasPressedThisFrame)
+                        continue;
 
-                screenPosition = touch.position;
-                pointerId = touch.fingerId;
-                return true;
+                    screenPosition = touch.position.ReadValue();
+                    return true;
+                }
             }
 
             screenPosition = default;
-            pointerId = -1;
             return false;
         }
 
-        private static bool IsPointerOverUi(int pointerId)
+        private bool IsPointerOverUi(Vector2 screenPosition)
         {
             EventSystem eventSystem = EventSystem.current;
             if (eventSystem == null)
                 return false;
 
-            return eventSystem.IsPointerOverGameObject(pointerId);
+            if (pointerEventData == null || pointerEventSystem != eventSystem)
+            {
+                pointerEventData = new PointerEventData(eventSystem);
+                pointerEventSystem = eventSystem;
+            }
+
+            pointerEventData.Reset();
+            pointerEventData.position = screenPosition;
+
+            uiRaycastResults.Clear();
+            eventSystem.RaycastAll(pointerEventData, uiRaycastResults);
+            return uiRaycastResults.Count > 0;
         }
 
         private void TryNotifyTileClick(Vector2 screenPosition)

@@ -881,6 +881,7 @@ MonoBehaviour:
   viewSlot: 3
   handView: {fileID: 1291247606}
   drawnTileView: {fileID: 1189237188}
+  discardRiverView: {fileID: 1684105271}
 --- !u!4 &302940770
 Transform:
   m_ObjectHideFlags: 0
@@ -2364,6 +2365,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 636301887}
+  - component: {fileID: 636301888}
   m_Layer: 0
   m_Name: SelfBottm Discard
   m_TagString: Untagged
@@ -2380,12 +2382,29 @@ Transform:
   m_GameObject: {fileID: 636301886}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 140, z: 0}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1417294269}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &636301888
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 636301886}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3bb9af84c33247e980ebc5f2e63f81db, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI3D.Mahjong3DDiscardRiverView
+  spawnRoot: {fileID: 636301887}
+  tilePrefab: {fileID: 3781737991026447910, guid: a9f8505a4f6dec34fa30ef58c92e940d, type: 3}
+  columns: 6
+  spacingX: 0.45
+  spacingZ: 0.6
 --- !u!1 &666069244
 GameObject:
   m_ObjectHideFlags: 0
@@ -2502,6 +2521,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 695813522}
+  - component: {fileID: 695813523}
   m_Layer: 0
   m_Name: AcrossTop Discard
   m_TagString: Untagged
@@ -2518,12 +2538,29 @@ Transform:
   m_GameObject: {fileID: 695813521}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 140, z: 0}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 905030593}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &695813523
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 695813521}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3bb9af84c33247e980ebc5f2e63f81db, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI3D.Mahjong3DDiscardRiverView
+  spawnRoot: {fileID: 695813522}
+  tilePrefab: {fileID: 3781737991026447910, guid: a9f8505a4f6dec34fa30ef58c92e940d, type: 3}
+  columns: 6
+  spacingX: 0.45
+  spacingZ: 0.6
 --- !u!1 &774678288
 GameObject:
   m_ObjectHideFlags: 0
@@ -2934,6 +2971,7 @@ MonoBehaviour:
   viewSlot: 1
   handView: {fileID: 1393176125}
   drawnTileView: {fileID: 1177992612}
+  discardRiverView: {fileID: 695813523}
 --- !u!4 &905030593
 Transform:
   m_ObjectHideFlags: 0
@@ -3765,6 +3803,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1298846570}
+  - component: {fileID: 1298846571}
   m_Layer: 0
   m_Name: AcrossTop Discard
   m_TagString: Untagged
@@ -3781,12 +3820,29 @@ Transform:
   m_GameObject: {fileID: 1298846569}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 140, z: 0}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1638928077}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1298846571
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1298846569}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3bb9af84c33247e980ebc5f2e63f81db, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI3D.Mahjong3DDiscardRiverView
+  spawnRoot: {fileID: 1298846570}
+  tilePrefab: {fileID: 3781737991026447910, guid: a9f8505a4f6dec34fa30ef58c92e940d, type: 3}
+  columns: 6
+  spacingX: 0.45
+  spacingZ: 0.6
 --- !u!1 &1328381983
 GameObject:
   m_ObjectHideFlags: 0
@@ -3931,6 +3987,7 @@ MonoBehaviour:
   viewSlot: 0
   handView: {fileID: 1914715867}
   drawnTileView: {fileID: 1328381985}
+  discardRiverView: {fileID: 636301888}
 --- !u!1 &1457770051
 GameObject:
   m_ObjectHideFlags: 0
@@ -4577,6 +4634,7 @@ MonoBehaviour:
   viewSlot: 2
   handView: {fileID: 1571365216}
   drawnTileView: {fileID: 1839618430}
+  discardRiverView: {fileID: 1298846571}
 --- !u!4 &1638928077
 Transform:
   m_ObjectHideFlags: 0
@@ -4604,6 +4662,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1684105270}
+  - component: {fileID: 1684105271}
   m_Layer: 0
   m_Name: AcrossTop Discard
   m_TagString: Untagged
@@ -4620,12 +4679,29 @@ Transform:
   m_GameObject: {fileID: 1684105269}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 140, z: 0}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 302940770}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1684105271
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1684105269}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3bb9af84c33247e980ebc5f2e63f81db, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI3D.Mahjong3DDiscardRiverView
+  spawnRoot: {fileID: 1684105270}
+  tilePrefab: {fileID: 3781737991026447910, guid: a9f8505a4f6dec34fa30ef58c92e940d, type: 3}
+  columns: 6
+  spacingX: 0.45
+  spacingZ: 0.6
 --- !u!1 &1757886280
 GameObject:
   m_ObjectHideFlags: 0
@@ -5303,6 +5379,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1893660902}
   - component: {fileID: 1893660903}
+  - component: {fileID: 1893660904}
   m_Layer: 0
   m_Name: Mahjong3DWorld
   m_TagString: Untagged
@@ -5346,6 +5423,25 @@ MonoBehaviour:
   nextLeftPlayerUiController: {fileID: 905030592}
   acrossTopPlayerUiController: {fileID: 1638928076}
   previousRightPlayerUiController: {fileID: 302940769}
+--- !u!114 &1893660904
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1893660901}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 39da88b766ab40b8ba5cbcd68245b993, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI3D.Mahjong3DTileRaycastInput
+  raycastCamera: {fileID: 519420031}
+  tileLayerMask:
+    serializedVersion: 2
+    m_Bits: 64
+  maxDistance: 500
+  queryTriggerInteraction: 0
+  ignorePointerOverUi: 0
 --- !u!1 &1904362102
 GameObject:
   m_ObjectHideFlags: 0
@@ -6018,6 +6114,7 @@ MonoBehaviour:
   gameFlow: {fileID: 508243329}
   inputController: {fileID: 45752830}
   playerAreaPresenter: {fileID: 6100000002}
+  playerArea3DPresenter: {fileID: 0}
 --- !u!1 &6100000010
 GameObject:
   m_ObjectHideFlags: 0
