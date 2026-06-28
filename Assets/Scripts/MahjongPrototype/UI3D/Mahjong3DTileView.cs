@@ -36,5 +36,10 @@ namespace MahjongPrototype.UI3D
         {
             Clicked?.Invoke(HandIndex);
         }
+
+        public void SetInteractable(bool interactable)
+        {
+            Interactable = FaceUp && interactable;
+        }
     }
 }

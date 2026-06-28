@@ -15,12 +15,15 @@ namespace MahjongPrototype.UI3D
 
         [Header("Views")]
         [SerializeField] private Mahjong3DHandView handView;
+        [SerializeField] private Mahjong3DDrawnTileView drawnTileView;
 
         private SeatId handDataSeat = SeatId.East;
         private bool warnedMissingHandView;
+        private bool warnedMissingDrawnTileView;
 
         public ViewSlot ViewSlot => viewSlot;
         public Mahjong3DHandView HandView => handView;
+        public Mahjong3DDrawnTileView DrawnTileView => drawnTileView;
         public SeatId HandDataSeat => handDataSeat;
 
         public void RenderHand(
@@ -54,6 +57,36 @@ namespace MahjongPrototype.UI3D
         public void SetHandInteractable(bool interactable)
         {
             // PROTOTYPE: 3D click input is not implemented yet; RenderHand stores interactable state for spawned tiles.
+        }
+
+        public void RenderDrawnTile(Tile? drawnTile, bool faceUp, bool interactable)
+        {
+            if (drawnTileView == null)
+            {
+                WarnMissingOnce(ref warnedMissingDrawnTileView, "3D drawn tile view is not assigned.");
+                return;
+            }
+
+            drawnTileView.Render(drawnTile, faceUp, interactable);
+        }
+
+        public void ClearDrawnTile()
+        {
+            if (drawnTileView == null)
+                return;
+
+            drawnTileView.Clear();
+        }
+
+        public void SetDrawnTileInteractable(bool interactable)
+        {
+            if (drawnTileView == null)
+            {
+                WarnMissingOnce(ref warnedMissingDrawnTileView, "3D drawn tile view is not assigned.");
+                return;
+            }
+
+            drawnTileView.SetTileInteractable(interactable);
         }
 
         private void WarnMissingOnce(ref bool warned, string message)

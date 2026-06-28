@@ -427,6 +427,14 @@ namespace MahjongPrototype.UI
             playerArea3DPresenter.RefreshHandForSeat(state, seat, CanUseSelfGameplayInput(state));
         }
 
+        private void RefreshPlayerDrawnTile3DForSeat(MahjongGameState state, SeatId seat)
+        {
+            if (playerArea3DPresenter == null)
+                return;
+
+            playerArea3DPresenter.RefreshDrawnTileForSeat(state, seat, CanUseSelfGameplayInput(state));
+        }
+
         private void RefreshPlayerHandForSeat(SeatId seat)
         {
             MahjongGameState state = gameFlow != null ? gameFlow.CurrentState : null;
@@ -453,6 +461,8 @@ namespace MahjongPrototype.UI
 
             if (playerAreaPresenter != null)
                 playerAreaPresenter.RefreshDrawnTileForSeat(state, seat, CanUseSelfGameplayInput(state));
+
+            RefreshPlayerDrawnTile3DForSeat(state, seat);
         }
 
         private void RefreshPlayerDiscardRiverForSeat(SeatId seat)
@@ -514,6 +524,7 @@ namespace MahjongPrototype.UI
             {
                 RefreshInteractionState(state);
                 RefreshPlayerHand3DForSeat(state, state.SelfSeat);
+                RefreshPlayerDrawnTile3DForSeat(state, state.SelfSeat);
             }
         }
 
