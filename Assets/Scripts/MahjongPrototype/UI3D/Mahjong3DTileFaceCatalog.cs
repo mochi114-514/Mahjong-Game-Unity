@@ -23,14 +23,14 @@ namespace MahjongPrototype.UI3D
             for (int i = 0; i < entries.Count; i++)
             {
                 Entry entry = entries[i];
-                if (entry == null || entry.TypeIndex != typeIndex)
+                if (entry == null)
                     continue;
 
-                if (entry.FrontFaceMesh == null)
-                    return false;
-
-                mesh = entry.FrontFaceMesh;
-                return true;
+                if (entry.TypeIndex == typeIndex && entry.FrontFaceMesh != null)
+                {
+                    mesh = entry.FrontFaceMesh;
+                    return true;
+                }
             }
 
             return false;
