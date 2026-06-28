@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using MahjongPrototype.Domain;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace MahjongPrototype.UI3D
 {
@@ -13,7 +14,9 @@ namespace MahjongPrototype.UI3D
         [SerializeField] private Mahjong3DTileView tilePrefab;
         [SerializeField] private int columns = 6;
         [SerializeField] private float spacingX = 0.45f;
-        [SerializeField] private float spacingZ = 0.6f;
+
+        [FormerlySerializedAs("spacingZ")]
+        [SerializeField] private float spacingY = 0.6f;
 
         private readonly List<Mahjong3DTileView> activeTiles = new List<Mahjong3DTileView>();
         private bool warnedMissingTilePrefab;
@@ -43,7 +46,7 @@ namespace MahjongPrototype.UI3D
                 Mahjong3DTileView tile = Instantiate(tilePrefab, root);
                 int column = riverIndex % safeColumns;
                 int row = riverIndex / safeColumns;
-                tile.transform.localPosition = new Vector3(column * spacingX, 0f, row * spacingZ);
+                tile.transform.localPosition = new Vector3(column * spacingX, row * spacingY, 0f);
                 tile.transform.localRotation = Quaternion.identity;
                 tile.transform.localScale = Vector3.one;
                 tile.Initialize(riverIndex, record.Tile, true, false);
