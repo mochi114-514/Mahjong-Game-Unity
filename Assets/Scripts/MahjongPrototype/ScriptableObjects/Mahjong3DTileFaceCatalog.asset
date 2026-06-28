@@ -1,0 +1,21 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 33a83ff9c3ac9c945b08dca93be8f9ce, type: 3}
+  m_Name: Mahjong3DTileFaceCatalog
+  m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI3D.Mahjong3DTileFaceCatalog
+  entries:
+  - typeIndex: 0
+    frontFaceMesh: {fileID: 0}
+  - typeIndex: 0
+    frontFaceMesh: {fileID: 0}
+  - typeIndex: 0
+    frontFaceMesh: {fileID: 0}

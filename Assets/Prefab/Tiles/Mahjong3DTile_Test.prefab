@@ -46,6 +46,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2fc48b9ea75308a4f95d8e6688ba9542, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI3D.Mahjong3DTileView
+  frontFaceMeshFilter: {fileID: 4745214208037230526}
+  tileFaceCatalog: {fileID: 11400000, guid: 67bd77193bd7b4244ab364b23c14e1eb, type: 2}
 --- !u!65 &2181783063218979649
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -168,6 +170,11 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 1175b8eae4f2acc409cddeef86a95b0e, type: 3}
+--- !u!33 &4745214208037230526 stripped
+MeshFilter:
+  m_CorrespondingSourceObject: {fileID: 3890027741304992406, guid: 1175b8eae4f2acc409cddeef86a95b0e, type: 3}
+  m_PrefabInstance: {fileID: 8369452482431296808}
+  m_PrefabAsset: {fileID: 0}
 --- !u!4 &7115881407293483239 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 1650275422075407823, guid: 1175b8eae4f2acc409cddeef86a95b0e, type: 3}
