@@ -11,7 +11,7 @@ GameObject:
   - component: {fileID: 3974349850563558511}
   - component: {fileID: 3781737991026447910}
   - component: {fileID: 2181783063218979649}
-  m_Layer: 5
+  m_Layer: 6
   m_Name: Mahjong3DTile_Test
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -81,6 +81,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Chun
       objectReference: {fileID: 0}
+    - target: {fileID: 2349094947022695, guid: 1175b8eae4f2acc409cddeef86a95b0e, type: 3}
+      propertyPath: m_Layer
+      value: 6
+      objectReference: {fileID: 0}
     - target: {fileID: 1650275422075407823, guid: 1175b8eae4f2acc409cddeef86a95b0e, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
@@ -120,6 +124,18 @@ PrefabInstance:
     - target: {fileID: 1650275422075407823, guid: 1175b8eae4f2acc409cddeef86a95b0e, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5960415003098864182, guid: 1175b8eae4f2acc409cddeef86a95b0e, type: 3}
+      propertyPath: m_Layer
+      value: 6
+      objectReference: {fileID: 0}
+    - target: {fileID: 7717972664201974477, guid: 1175b8eae4f2acc409cddeef86a95b0e, type: 3}
+      propertyPath: m_Layer
+      value: 6
+      objectReference: {fileID: 0}
+    - target: {fileID: 8707042790881101419, guid: 1175b8eae4f2acc409cddeef86a95b0e, type: 3}
+      propertyPath: m_Layer
+      value: 6
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

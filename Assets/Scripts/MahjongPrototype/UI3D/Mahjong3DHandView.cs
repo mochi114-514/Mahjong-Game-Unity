@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using MahjongPrototype.Domain;
 using UnityEngine;
@@ -15,6 +16,8 @@ namespace MahjongPrototype.UI3D
         [SerializeField] private float spacing = 0.45f;
 
         private readonly List<Mahjong3DTileView> activeTiles = new List<Mahjong3DTileView>();
+
+        public event Action<int> TileClicked;
 
         public void RenderHand(IReadOnlyList<Tile> handTiles, bool faceUp, bool interactable)
         {
@@ -36,6 +39,7 @@ namespace MahjongPrototype.UI3D
             {
                 Mahjong3DTileView tile = InstantiateTile(root, i, startX);
                 tile.Initialize(i, handTiles[i], faceUp, interactable);
+                tile.Clicked += HandleTileClicked;
                 activeTiles.Add(tile);
             }
         }
@@ -80,10 +84,18 @@ namespace MahjongPrototype.UI3D
             {
                 Mahjong3DTileView tile = activeTiles[i];
                 if (tile != null)
+                {
+                    tile.Clicked -= HandleTileClicked;
                     DestroyTile(tile);
+                }
             }
 
             activeTiles.Clear();
+        }
+
+        private void HandleTileClicked(int handIndex)
+        {
+            TileClicked?.Invoke(handIndex);
         }
 
         private Mahjong3DTileView InstantiateTile(Transform root, int index, float startX)

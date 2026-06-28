@@ -43,6 +43,9 @@ namespace MahjongPrototype.UI3D
 
         public void NotifyClicked()
         {
+            if (!Interactable)
+                return;
+
             Clicked?.Invoke(HandIndex);
         }
 

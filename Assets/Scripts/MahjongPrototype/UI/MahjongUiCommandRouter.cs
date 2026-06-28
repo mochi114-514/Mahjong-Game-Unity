@@ -1,4 +1,5 @@
 using MahjongPrototype.Domain;
+using MahjongPrototype.UI3D;
 using UnityEngine;
 
 namespace MahjongPrototype.UI
@@ -14,9 +15,12 @@ namespace MahjongPrototype.UI
         [SerializeField] private MahjongUiInputController inputController;
         [Tooltip("Player area tile-click event source.")]
         [SerializeField] private MahjongPlayerAreaPresenter playerAreaPresenter;
+        [Tooltip("Optional 3D player area tile-click event source.")]
+        [SerializeField] private Mahjong3DPlayerAreaPresenter playerArea3DPresenter;
 
         private MahjongUiInputController subscribedInputController;
         private MahjongPlayerAreaPresenter subscribedPlayerAreaPresenter;
+        private Mahjong3DPlayerAreaPresenter subscribedPlayerArea3DPresenter;
         private bool warnedMissingFlow;
         private bool warnedMissingInputController;
         private bool warnedMissingPlayerAreaPresenter;
@@ -57,6 +61,9 @@ namespace MahjongPrototype.UI
 
             if (playerAreaPresenter == null)
                 playerAreaPresenter = GetComponentInChildren<MahjongPlayerAreaPresenter>(true);
+
+            if (playerArea3DPresenter == null)
+                playerArea3DPresenter = GetComponentInChildren<Mahjong3DPlayerAreaPresenter>(true);
         }
 
         public void RefreshSubscriptions()
@@ -69,12 +76,14 @@ namespace MahjongPrototype.UI
             CacheReferences();
             SubscribeInputControllerEvents();
             SubscribePlayerAreaPresenterEvents();
+            SubscribePlayerArea3DPresenterEvents();
         }
 
         private void UnsubscribeEvents()
         {
             UnsubscribeInputControllerEvents();
             UnsubscribePlayerAreaPresenterEvents();
+            UnsubscribePlayerArea3DPresenterEvents();
         }
 
         private void SubscribeInputControllerEvents()
@@ -141,6 +150,30 @@ namespace MahjongPrototype.UI
             subscribedPlayerAreaPresenter.HandTileClicked -= HandleHandTileClicked;
             subscribedPlayerAreaPresenter.DrawnTileClicked -= HandleDrawnTileClicked;
             subscribedPlayerAreaPresenter = null;
+        }
+
+        private void SubscribePlayerArea3DPresenterEvents()
+        {
+            if (playerArea3DPresenter == null)
+                return;
+
+            if (subscribedPlayerArea3DPresenter == playerArea3DPresenter)
+                return;
+
+            UnsubscribePlayerArea3DPresenterEvents();
+            playerArea3DPresenter.HandTileClicked += HandleHandTileClicked;
+            playerArea3DPresenter.DrawnTileClicked += HandleDrawnTileClicked;
+            subscribedPlayerArea3DPresenter = playerArea3DPresenter;
+        }
+
+        private void UnsubscribePlayerArea3DPresenterEvents()
+        {
+            if (subscribedPlayerArea3DPresenter == null)
+                return;
+
+            subscribedPlayerArea3DPresenter.HandTileClicked -= HandleHandTileClicked;
+            subscribedPlayerArea3DPresenter.DrawnTileClicked -= HandleDrawnTileClicked;
+            subscribedPlayerArea3DPresenter = null;
         }
 
         private void HandleDrawRequested()

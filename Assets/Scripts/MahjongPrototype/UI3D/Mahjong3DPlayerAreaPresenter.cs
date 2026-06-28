@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using MahjongPrototype.Domain;
 using MahjongPrototype.UI;
@@ -16,6 +17,13 @@ namespace MahjongPrototype.UI3D
         [SerializeField] private Mahjong3DPlayerUiController acrossTopPlayerUiController;
         [SerializeField] private Mahjong3DPlayerUiController previousRightPlayerUiController;
 
+        private readonly HashSet<Mahjong3DPlayerUiController> handEventSubscribedControllers =
+            new HashSet<Mahjong3DPlayerUiController>();
+        private Mahjong3DPlayerUiController drawnTileSubscribedController;
+
+        public event Action<SeatId, int> HandTileClicked;
+        public event Action DrawnTileClicked;
+
         private void Reset()
         {
             CachePlayerUiControllerReferences();
@@ -26,11 +34,27 @@ namespace MahjongPrototype.UI3D
             CachePlayerUiControllerReferences();
         }
 
+        private void OnEnable()
+        {
+            SubscribePlayerEvents();
+        }
+
+        private void OnDisable()
+        {
+            UnsubscribePlayerEvents();
+        }
+
+        private void OnDestroy()
+        {
+            UnsubscribePlayerEvents();
+        }
+
         public void Refresh(MahjongGameState state, bool canUseSelfInput)
         {
             if (state == null)
                 return;
 
+            SubscribePlayerEvents();
             RefreshHand(state, canUseSelfInput);
             RefreshDrawnTile(state, canUseSelfInput);
             RefreshDiscardRiver(state);
@@ -293,6 +317,71 @@ namespace MahjongPrototype.UI3D
 
             if (previousRightPlayerUiController == null)
                 previousRightPlayerUiController = FindPlayerUiController(ViewSlot.PreviousRight);
+        }
+
+        private void SubscribePlayerEvents()
+        {
+            CachePlayerUiControllerReferences();
+            SubscribePlayerHandEvents(selfBottomPlayerUiController);
+            SubscribePlayerHandEvents(nextLeftPlayerUiController);
+            SubscribePlayerHandEvents(acrossTopPlayerUiController);
+            SubscribePlayerHandEvents(previousRightPlayerUiController);
+            SubscribeDrawnTileEvents(selfBottomPlayerUiController);
+        }
+
+        private void SubscribePlayerHandEvents(Mahjong3DPlayerUiController controller)
+        {
+            if (controller == null || handEventSubscribedControllers.Contains(controller))
+                return;
+
+            controller.HandTileClicked += HandleHandTileClicked;
+            handEventSubscribedControllers.Add(controller);
+        }
+
+        private void SubscribeDrawnTileEvents(Mahjong3DPlayerUiController controller)
+        {
+            if (controller == null || drawnTileSubscribedController == controller)
+                return;
+
+            UnsubscribeDrawnTileEvents();
+            controller.DrawnTileClicked += HandleDrawnTileClicked;
+            drawnTileSubscribedController = controller;
+        }
+
+        private void UnsubscribePlayerEvents()
+        {
+            UnsubscribePlayerHandEvents();
+            UnsubscribeDrawnTileEvents();
+        }
+
+        private void UnsubscribePlayerHandEvents()
+        {
+            foreach (Mahjong3DPlayerUiController controller in handEventSubscribedControllers)
+            {
+                if (controller != null)
+                    controller.HandTileClicked -= HandleHandTileClicked;
+            }
+
+            handEventSubscribedControllers.Clear();
+        }
+
+        private void UnsubscribeDrawnTileEvents()
+        {
+            if (drawnTileSubscribedController == null)
+                return;
+
+            drawnTileSubscribedController.DrawnTileClicked -= HandleDrawnTileClicked;
+            drawnTileSubscribedController = null;
+        }
+
+        private void HandleHandTileClicked(SeatId dataSeat, int handIndex)
+        {
+            HandTileClicked?.Invoke(dataSeat, handIndex);
+        }
+
+        private void HandleDrawnTileClicked()
+        {
+            DrawnTileClicked?.Invoke();
         }
 
         private void ClearUnrenderedPlayerHands(HashSet<ViewSlot> renderedViewSlots)

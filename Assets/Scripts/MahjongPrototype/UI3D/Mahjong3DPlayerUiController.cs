@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using MahjongPrototype.Domain;
 using MahjongPrototype.UI;
@@ -22,12 +23,32 @@ namespace MahjongPrototype.UI3D
         private bool warnedMissingHandView;
         private bool warnedMissingDrawnTileView;
         private bool warnedMissingDiscardRiverView;
+        private bool isHandViewSubscribed;
+        private bool isDrawnTileViewSubscribed;
+
+        public event Action<SeatId, int> HandTileClicked;
+        public event Action DrawnTileClicked;
 
         public ViewSlot ViewSlot => viewSlot;
         public Mahjong3DHandView HandView => handView;
         public Mahjong3DDrawnTileView DrawnTileView => drawnTileView;
         public Mahjong3DDiscardRiverView DiscardRiverView => discardRiverView;
         public SeatId HandDataSeat => handDataSeat;
+
+        private void OnEnable()
+        {
+            SubscribeViewEvents();
+        }
+
+        private void OnDisable()
+        {
+            UnsubscribeViewEvents();
+        }
+
+        private void OnDestroy()
+        {
+            UnsubscribeViewEvents();
+        }
 
         public void RenderHand(
             IReadOnlyList<Tile> handTiles,
@@ -115,6 +136,64 @@ namespace MahjongPrototype.UI3D
                 return;
 
             discardRiverView.Clear();
+        }
+
+        private void SubscribeViewEvents()
+        {
+            SubscribeHandViewEvents();
+            SubscribeDrawnTileViewEvents();
+        }
+
+        private void SubscribeHandViewEvents()
+        {
+            if (handView == null || isHandViewSubscribed)
+                return;
+
+            handView.TileClicked += HandleHandTileClicked;
+            isHandViewSubscribed = true;
+        }
+
+        private void SubscribeDrawnTileViewEvents()
+        {
+            if (drawnTileView == null || isDrawnTileViewSubscribed)
+                return;
+
+            drawnTileView.DrawnTileClicked += HandleDrawnTileClicked;
+            isDrawnTileViewSubscribed = true;
+        }
+
+        private void UnsubscribeViewEvents()
+        {
+            UnsubscribeHandViewEvents();
+            UnsubscribeDrawnTileViewEvents();
+        }
+
+        private void UnsubscribeHandViewEvents()
+        {
+            if (handView == null || !isHandViewSubscribed)
+                return;
+
+            handView.TileClicked -= HandleHandTileClicked;
+            isHandViewSubscribed = false;
+        }
+
+        private void UnsubscribeDrawnTileViewEvents()
+        {
+            if (drawnTileView == null || !isDrawnTileViewSubscribed)
+                return;
+
+            drawnTileView.DrawnTileClicked -= HandleDrawnTileClicked;
+            isDrawnTileViewSubscribed = false;
+        }
+
+        private void HandleHandTileClicked(int handIndex)
+        {
+            HandTileClicked?.Invoke(handDataSeat, handIndex);
+        }
+
+        private void HandleDrawnTileClicked()
+        {
+            DrawnTileClicked?.Invoke();
         }
 
         private void WarnMissingOnce(ref bool warned, string message)

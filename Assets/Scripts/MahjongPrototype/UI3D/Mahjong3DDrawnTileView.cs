@@ -1,3 +1,4 @@
+using System;
 using MahjongPrototype.Domain;
 using UnityEngine;
 
@@ -15,6 +16,8 @@ namespace MahjongPrototype.UI3D
         private bool faceUp = true;
         private bool tileInteractable = true;
         private bool warnedMissingTilePrefab;
+
+        public event Action DrawnTileClicked;
 
         public void Render(Tile? drawnTile, bool faceUp, bool interactable)
         {
@@ -37,6 +40,7 @@ namespace MahjongPrototype.UI3D
             activeTile.transform.localRotation = Quaternion.identity;
             activeTile.transform.localScale = Vector3.one;
             activeTile.Initialize(0, drawnTile.Value, faceUp, tileInteractable);
+            activeTile.Clicked += HandleTileClicked;
         }
 
         public void Rebuild(Tile? drawnTile)
@@ -47,7 +51,10 @@ namespace MahjongPrototype.UI3D
         public void Clear()
         {
             if (activeTile != null)
+            {
+                activeTile.Clicked -= HandleTileClicked;
                 DestroyTile(activeTile);
+            }
 
             activeTile = null;
         }
@@ -58,6 +65,11 @@ namespace MahjongPrototype.UI3D
 
             if (activeTile != null)
                 activeTile.SetInteractable(tileInteractable);
+        }
+
+        private void HandleTileClicked(int _)
+        {
+            DrawnTileClicked?.Invoke();
         }
 
         private static void DestroyTile(Mahjong3DTileView tile)
