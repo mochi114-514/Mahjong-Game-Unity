@@ -14,8 +14,70 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI3D.Mahjong3DTileFaceCatalog
   entries:
   - typeIndex: 0
-    frontFaceMesh: {fileID: 0}
-  - typeIndex: 0
-    frontFaceMesh: {fileID: 0}
-  - typeIndex: 0
-    frontFaceMesh: {fileID: 0}
+    frontFaceMesh: {fileID: -2599854259009312908, guid: 2299a70308ecf53449af32a2b50da0dc, type: 3}
+  - typeIndex: 1
+    frontFaceMesh: {fileID: 2783233226188061551, guid: 2299a70308ecf53449af32a2b50da0dc, type: 3}
+  - typeIndex: 2
+    frontFaceMesh: {fileID: 1790804690922649793, guid: 2299a70308ecf53449af32a2b50da0dc, type: 3}
+  - typeIndex: 3
+    frontFaceMesh: {fileID: -9155462668151389690, guid: 2299a70308ecf53449af32a2b50da0dc, type: 3}
+  - typeIndex: 4
+    frontFaceMesh: {fileID: 7060824203263006723, guid: 2299a70308ecf53449af32a2b50da0dc, type: 3}
+  - typeIndex: 5
+    frontFaceMesh: {fileID: 1751298120504027682, guid: 2299a70308ecf53449af32a2b50da0dc, type: 3}
+  - typeIndex: 6
+    frontFaceMesh: {fileID: 7838500033718495100, guid: 2299a70308ecf53449af32a2b50da0dc, type: 3}
+  - typeIndex: 7
+    frontFaceMesh: {fileID: -1948831520500715271, guid: 2299a70308ecf53449af32a2b50da0dc, type: 3}
+  - typeIndex: 8
+    frontFaceMesh: {fileID: 133316859122007436, guid: 2299a70308ecf53449af32a2b50da0dc, type: 3}
+  - typeIndex: 9
+    frontFaceMesh: {fileID: -8048424867474391584, guid: 2299a70308ecf53449af32a2b50da0dc, type: 3}
+  - typeIndex: 10
+    frontFaceMesh: {fileID: -4590883831414510687, guid: 2299a70308ecf53449af32a2b50da0dc, type: 3}
+  - typeIndex: 11
+    frontFaceMesh: {fileID: 1989339613095478310, guid: 2299a70308ecf53449af32a2b50da0dc, type: 3}
+  - typeIndex: 12
+    frontFaceMesh: {fileID: -3948358649878719947, guid: 2299a70308ecf53449af32a2b50da0dc, type: 3}
+  - typeIndex: 13
+    frontFaceMesh: {fileID: -9175176403720516919, guid: 2299a70308ecf53449af32a2b50da0dc, type: 3}
+  - typeIndex: 14
+    frontFaceMesh: {fileID: -283798075082925554, guid: 2299a70308ecf53449af32a2b50da0dc, type: 3}
+  - typeIndex: 15
+    frontFaceMesh: {fileID: 8475848547655944121, guid: 2299a70308ecf53449af32a2b50da0dc, type: 3}
+  - typeIndex: 16
+    frontFaceMesh: {fileID: -6874196451726191155, guid: 2299a70308ecf53449af32a2b50da0dc, type: 3}
+  - typeIndex: 17
+    frontFaceMesh: {fileID: 4582182288990258954, guid: 2299a70308ecf53449af32a2b50da0dc, type: 3}
+  - typeIndex: 18
+    frontFaceMesh: {fileID: 546644854159085678, guid: 2299a70308ecf53449af32a2b50da0dc, type: 3}
+  - typeIndex: 19
+    frontFaceMesh: {fileID: -6381221499102287589, guid: 2299a70308ecf53449af32a2b50da0dc, type: 3}
+  - typeIndex: 20
+    frontFaceMesh: {fileID: 1847222324090374566, guid: 2299a70308ecf53449af32a2b50da0dc, type: 3}
+  - typeIndex: 21
+    frontFaceMesh: {fileID: -5239083094133444778, guid: 2299a70308ecf53449af32a2b50da0dc, type: 3}
+  - typeIndex: 22
+    frontFaceMesh: {fileID: -1429201192542165361, guid: 2299a70308ecf53449af32a2b50da0dc, type: 3}
+  - typeIndex: 23
+    frontFaceMesh: {fileID: -7364099435886151460, guid: 2299a70308ecf53449af32a2b50da0dc, type: 3}
+  - typeIndex: 24
+    frontFaceMesh: {fileID: 1111163621785222639, guid: 2299a70308ecf53449af32a2b50da0dc, type: 3}
+  - typeIndex: 25
+    frontFaceMesh: {fileID: -99454665372826648, guid: 2299a70308ecf53449af32a2b50da0dc, type: 3}
+  - typeIndex: 26
+    frontFaceMesh: {fileID: 2435184725842214532, guid: 2299a70308ecf53449af32a2b50da0dc, type: 3}
+  - typeIndex: 27
+    frontFaceMesh: {fileID: 5831157912774452817, guid: 2299a70308ecf53449af32a2b50da0dc, type: 3}
+  - typeIndex: 28
+    frontFaceMesh: {fileID: -2709290665868551059, guid: 2299a70308ecf53449af32a2b50da0dc, type: 3}
+  - typeIndex: 29
+    frontFaceMesh: {fileID: 3349393535051458319, guid: 2299a70308ecf53449af32a2b50da0dc, type: 3}
+  - typeIndex: 30
+    frontFaceMesh: {fileID: -3827478758199882477, guid: 2299a70308ecf53449af32a2b50da0dc, type: 3}
+  - typeIndex: 31
+    frontFaceMesh: {fileID: -5765520587575248814, guid: 2299a70308ecf53449af32a2b50da0dc, type: 3}
+  - typeIndex: 32
+    frontFaceMesh: {fileID: -3832179527341852573, guid: 2299a70308ecf53449af32a2b50da0dc, type: 3}
+  - typeIndex: 33
+    frontFaceMesh: {fileID: -4763983586728042654, guid: 2299a70308ecf53449af32a2b50da0dc, type: 3}
