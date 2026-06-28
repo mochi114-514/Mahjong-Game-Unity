@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace MahjongPrototype.UI3D
 {
-    // PROTOTYPE: sibling 3D presenter for player hand tiles only.
+    // PROTOTYPE: sibling 3D presenter for player tile areas.
     [DisallowMultipleComponent]
     [AddComponentMenu("Mahjong Prototype/UI3D/Mahjong 3D Player Area Presenter")]
     public sealed class Mahjong3DPlayerAreaPresenter : MonoBehaviour
@@ -33,6 +33,7 @@ namespace MahjongPrototype.UI3D
 
             RefreshHand(state, canUseSelfInput);
             RefreshDrawnTile(state, canUseSelfInput);
+            RefreshDiscardRiver(state);
         }
 
         public void RefreshHand(MahjongGameState state, bool canUseSelfInput)
@@ -165,6 +166,62 @@ namespace MahjongPrototype.UI3D
             ClearDrawnTile(ViewSlot.PreviousRight);
         }
 
+        public void RefreshDiscardRiver(MahjongGameState state)
+        {
+            if (state == null)
+                return;
+
+            CachePlayerUiControllerReferences();
+
+            HashSet<ViewSlot> renderedViewSlots = new HashSet<ViewSlot>();
+            IReadOnlyList<SeatId> displaySeats = state.OccupiedSeats;
+            for (int i = 0; i < displaySeats.Count; i++)
+            {
+                SeatId seat = displaySeats[i];
+                SeatSlot seatSlot = state.GetSeatSlot(seat);
+                if (seatSlot.IsEmpty)
+                    continue;
+
+                ViewSlot viewSlot = SeatToViewSlotResolver.Resolve(state.SelfSeat, seat);
+                Mahjong3DPlayerUiController controller = GetPlayerUiController(viewSlot);
+                if (controller == null)
+                    continue;
+
+                controller.RenderDiscardRiver(state.Discards, seat);
+                renderedViewSlots.Add(viewSlot);
+            }
+
+            ClearUnrenderedDiscardRivers(renderedViewSlots);
+        }
+
+        public void RefreshDiscardRiverForSeat(MahjongGameState state, SeatId seat)
+        {
+            if (state == null)
+                return;
+
+            SeatSlot seatSlot = state.GetSeatSlot(seat);
+            ViewSlot viewSlot = SeatToViewSlotResolver.Resolve(state.SelfSeat, seat);
+            Mahjong3DPlayerUiController controller = GetPlayerUiController(viewSlot);
+            if (controller == null)
+                return;
+
+            if (seatSlot.IsEmpty)
+            {
+                controller.ClearDiscardRiver();
+                return;
+            }
+
+            controller.RenderDiscardRiver(state.Discards, seat);
+        }
+
+        public void ClearDiscardRivers()
+        {
+            ClearDiscardRiver(ViewSlot.SelfBottom);
+            ClearDiscardRiver(ViewSlot.NextLeft);
+            ClearDiscardRiver(ViewSlot.AcrossTop);
+            ClearDiscardRiver(ViewSlot.PreviousRight);
+        }
+
         public void SetSelfInteractable(MahjongGameState state, bool interactable)
         {
             if (state == null)
@@ -286,6 +343,31 @@ namespace MahjongPrototype.UI3D
             Mahjong3DPlayerUiController controller = GetPlayerUiController(viewSlot);
             if (controller != null)
                 controller.ClearDrawnTile();
+        }
+
+        private void ClearUnrenderedDiscardRivers(HashSet<ViewSlot> renderedViewSlots)
+        {
+            ClearDiscardRiverIfUnrendered(ViewSlot.SelfBottom, renderedViewSlots);
+            ClearDiscardRiverIfUnrendered(ViewSlot.NextLeft, renderedViewSlots);
+            ClearDiscardRiverIfUnrendered(ViewSlot.AcrossTop, renderedViewSlots);
+            ClearDiscardRiverIfUnrendered(ViewSlot.PreviousRight, renderedViewSlots);
+        }
+
+        private void ClearDiscardRiverIfUnrendered(
+            ViewSlot viewSlot,
+            HashSet<ViewSlot> renderedViewSlots)
+        {
+            if (renderedViewSlots.Contains(viewSlot))
+                return;
+
+            ClearDiscardRiver(viewSlot);
+        }
+
+        private void ClearDiscardRiver(ViewSlot viewSlot)
+        {
+            Mahjong3DPlayerUiController controller = GetPlayerUiController(viewSlot);
+            if (controller != null)
+                controller.ClearDiscardRiver();
         }
     }
 }

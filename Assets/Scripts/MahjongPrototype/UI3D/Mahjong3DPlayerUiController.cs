@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace MahjongPrototype.UI3D
 {
-    // PROTOTYPE: 3D companion for one player's tile area. Currently renders hand tiles only.
+    // PROTOTYPE: 3D companion for one player's tile area.
     [DisallowMultipleComponent]
     [AddComponentMenu("Mahjong Prototype/UI3D/Mahjong 3D Player UI Controller")]
     public sealed class Mahjong3DPlayerUiController : MonoBehaviour
@@ -16,14 +16,17 @@ namespace MahjongPrototype.UI3D
         [Header("Views")]
         [SerializeField] private Mahjong3DHandView handView;
         [SerializeField] private Mahjong3DDrawnTileView drawnTileView;
+        [SerializeField] private Mahjong3DDiscardRiverView discardRiverView;
 
         private SeatId handDataSeat = SeatId.East;
         private bool warnedMissingHandView;
         private bool warnedMissingDrawnTileView;
+        private bool warnedMissingDiscardRiverView;
 
         public ViewSlot ViewSlot => viewSlot;
         public Mahjong3DHandView HandView => handView;
         public Mahjong3DDrawnTileView DrawnTileView => drawnTileView;
+        public Mahjong3DDiscardRiverView DiscardRiverView => discardRiverView;
         public SeatId HandDataSeat => handDataSeat;
 
         public void RenderHand(
@@ -93,6 +96,25 @@ namespace MahjongPrototype.UI3D
             }
 
             drawnTileView.SetTileInteractable(interactable);
+        }
+
+        public void RenderDiscardRiver(IReadOnlyList<DiscardRecord> discards, SeatId dataSeat)
+        {
+            if (discardRiverView == null)
+            {
+                WarnMissingOnce(ref warnedMissingDiscardRiverView, "3D discard river view is not assigned.");
+                return;
+            }
+
+            discardRiverView.RenderDiscardRiver(discards, dataSeat);
+        }
+
+        public void ClearDiscardRiver()
+        {
+            if (discardRiverView == null)
+                return;
+
+            discardRiverView.Clear();
         }
 
         private void WarnMissingOnce(ref bool warned, string message)
