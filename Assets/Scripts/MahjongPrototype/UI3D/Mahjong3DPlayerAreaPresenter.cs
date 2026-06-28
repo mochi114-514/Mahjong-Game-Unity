@@ -165,6 +165,20 @@ namespace MahjongPrototype.UI3D
             ClearDrawnTile(ViewSlot.PreviousRight);
         }
 
+        public void SetSelfInteractable(MahjongGameState state, bool interactable)
+        {
+            if (state == null)
+                return;
+
+            ViewSlot selfViewSlot = SeatToViewSlotResolver.Resolve(state.SelfSeat, state.SelfSeat);
+            Mahjong3DPlayerUiController controller = GetPlayerUiController(selfViewSlot);
+            if (controller == null)
+                return;
+
+            controller.SetHandInteractable(interactable);
+            controller.SetDrawnTileInteractable(interactable);
+        }
+
         public Mahjong3DPlayerUiController GetPlayerUiController(ViewSlot viewSlot)
         {
             CachePlayerUiControllerReferences();

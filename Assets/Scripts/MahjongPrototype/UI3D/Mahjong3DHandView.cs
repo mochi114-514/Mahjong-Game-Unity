@@ -64,6 +64,16 @@ namespace MahjongPrototype.UI3D
             }
         }
 
+        public void SetTilesInteractable(bool interactable)
+        {
+            for (int i = 0; i < activeTiles.Count; i++)
+            {
+                Mahjong3DTileView tile = activeTiles[i];
+                if (tile != null)
+                    tile.SetInteractable(interactable);
+            }
+        }
+
         public void Clear()
         {
             for (int i = 0; i < activeTiles.Count; i++)

@@ -515,17 +515,16 @@ namespace MahjongPrototype.UI
 
             if (playerAreaPresenter != null)
                 playerAreaPresenter.SetSelfInteractable(state, canUseGameplayInput);
+
+            if (playerArea3DPresenter != null)
+                playerArea3DPresenter.SetSelfInteractable(state, canUseGameplayInput);
         }
 
         private void RefreshInteractionUi()
         {
             MahjongGameState state = gameFlow != null ? gameFlow.CurrentState : null;
             if (state != null)
-            {
                 RefreshInteractionState(state);
-                RefreshPlayerHand3DForSeat(state, state.SelfSeat);
-                RefreshPlayerDrawnTile3DForSeat(state, state.SelfSeat);
-            }
         }
 
         private bool CanUseSelfGameplayInput(MahjongGameState state)

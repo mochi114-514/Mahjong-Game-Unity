@@ -56,7 +56,13 @@ namespace MahjongPrototype.UI3D
 
         public void SetHandInteractable(bool interactable)
         {
-            // PROTOTYPE: 3D click input is not implemented yet; RenderHand stores interactable state for spawned tiles.
+            if (handView == null)
+            {
+                WarnMissingOnce(ref warnedMissingHandView, "3D hand view is not assigned.");
+                return;
+            }
+
+            handView.SetTilesInteractable(interactable);
         }
 
         public void RenderDrawnTile(Tile? drawnTile, bool faceUp, bool interactable)
