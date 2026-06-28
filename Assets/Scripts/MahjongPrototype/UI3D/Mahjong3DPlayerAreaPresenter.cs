@@ -1,20 +1,121 @@
+using System.Collections.Generic;
 using MahjongPrototype.Domain;
+using MahjongPrototype.UI;
 using UnityEngine;
 
 namespace MahjongPrototype.UI3D
 {
-    // PROTOTYPE: sibling 3D presenter for SelfBottom hand only.
+    // PROTOTYPE: sibling 3D presenter for player hand tiles only.
     [DisallowMultipleComponent]
     [AddComponentMenu("Mahjong Prototype/UI3D/Mahjong 3D Player Area Presenter")]
     public sealed class Mahjong3DPlayerAreaPresenter : MonoBehaviour
     {
-        [SerializeField] private Mahjong3DHandView selfBottomHandView;
+        [Header("Player 3D UI Controllers")]
+        [SerializeField] private Mahjong3DPlayerUiController selfBottomPlayerUiController;
+        [SerializeField] private Mahjong3DPlayerUiController nextLeftPlayerUiController;
+        [SerializeField] private Mahjong3DPlayerUiController acrossTopPlayerUiController;
+        [SerializeField] private Mahjong3DPlayerUiController previousRightPlayerUiController;
 
-        private bool warnedMissingSelfBottomHandView;
+        private void Reset()
+        {
+            CachePlayerUiControllerReferences();
+        }
+
+        private void Awake()
+        {
+            CachePlayerUiControllerReferences();
+        }
 
         public void Refresh(MahjongGameState state, bool canUseSelfInput)
         {
-            RefreshSelfBottomHand(state, canUseSelfInput);
+            if (state == null)
+                return;
+
+            RefreshHand(state, canUseSelfInput);
+        }
+
+        public void RefreshHand(MahjongGameState state, bool canUseSelfInput)
+        {
+            if (state == null)
+                return;
+
+            CachePlayerUiControllerReferences();
+
+            HashSet<ViewSlot> renderedViewSlots = new HashSet<ViewSlot>();
+            IReadOnlyList<SeatId> displaySeats = state.OccupiedSeats;
+            for (int i = 0; i < displaySeats.Count; i++)
+            {
+                SeatId dataSeat = displaySeats[i];
+                SeatSlot seatSlot = state.GetSeatSlot(dataSeat);
+                if (seatSlot.IsEmpty)
+                    continue;
+
+                ViewSlot viewSlot = SeatToViewSlotResolver.Resolve(state.SelfSeat, dataSeat);
+                Mahjong3DPlayerUiController controller = GetPlayerUiController(viewSlot);
+                if (controller == null)
+                    continue;
+
+                bool isSelf = seatSlot.PlayerId == state.SelfPlayerId;
+                controller.RenderHand(
+                    state.GetPlayerSeat(dataSeat).Hand.GetTiles(),
+                    dataSeat,
+                    isSelf,
+                    isSelf && canUseSelfInput);
+                renderedViewSlots.Add(viewSlot);
+            }
+
+            ClearUnrenderedPlayerHands(renderedViewSlots);
+        }
+
+        public void RefreshHandForSeat(MahjongGameState state, SeatId seat, bool canUseSelfInput)
+        {
+            if (state == null)
+                return;
+
+            SeatSlot seatSlot = state.GetSeatSlot(seat);
+            ViewSlot viewSlot = SeatToViewSlotResolver.Resolve(state.SelfSeat, seat);
+            Mahjong3DPlayerUiController controller = GetPlayerUiController(viewSlot);
+            if (controller == null)
+                return;
+
+            if (seatSlot.IsEmpty)
+            {
+                controller.ClearHand();
+                return;
+            }
+
+            bool isSelf = seatSlot.PlayerId == state.SelfPlayerId;
+            controller.RenderHand(
+                state.GetPlayerSeat(seat).Hand.GetTiles(),
+                seat,
+                isSelf,
+                isSelf && canUseSelfInput);
+        }
+
+        public void ClearHands()
+        {
+            ClearHand(ViewSlot.SelfBottom);
+            ClearHand(ViewSlot.NextLeft);
+            ClearHand(ViewSlot.AcrossTop);
+            ClearHand(ViewSlot.PreviousRight);
+        }
+
+        public Mahjong3DPlayerUiController GetPlayerUiController(ViewSlot viewSlot)
+        {
+            CachePlayerUiControllerReferences();
+            switch (viewSlot)
+            {
+                case ViewSlot.SelfBottom:
+                    return selfBottomPlayerUiController;
+                case ViewSlot.NextLeft:
+                    return nextLeftPlayerUiController;
+                case ViewSlot.AcrossTop:
+                    return acrossTopPlayerUiController;
+                case ViewSlot.PreviousRight:
+                    return previousRightPlayerUiController;
+                default:
+                    return null;
+            }
         }
 
         public void RefreshSelfBottomHand(MahjongGameState state, bool canUseSelfInput)
@@ -22,45 +123,65 @@ namespace MahjongPrototype.UI3D
             if (state == null)
                 return;
 
-            if (selfBottomHandView == null)
-            {
-                WarnMissingOnce(
-                    ref warnedMissingSelfBottomHandView,
-                    "Self bottom 3D hand view is not assigned.");
-                return;
-            }
-
-            SeatSlot selfSeatSlot = state.GetSeatSlot(state.SelfSeat);
-            if (selfSeatSlot.IsEmpty)
-            {
-                selfBottomHandView.Clear();
-                return;
-            }
-
-            PlayerSeat selfPlayerSeat = state.GetPlayerSeat(state.SelfSeat);
-            selfBottomHandView.RenderHand(selfPlayerSeat.Hand.GetTiles(), true, canUseSelfInput);
+            RefreshHandForSeat(state, state.SelfSeat, canUseSelfInput);
         }
 
         public void ClearSelfBottomHand()
         {
-            if (selfBottomHandView == null)
-            {
-                WarnMissingOnce(
-                    ref warnedMissingSelfBottomHandView,
-                    "Self bottom 3D hand view is not assigned.");
-                return;
-            }
-
-            selfBottomHandView.Clear();
+            ClearHand(ViewSlot.SelfBottom);
         }
 
-        private void WarnMissingOnce(ref bool warned, string message)
+        private Mahjong3DPlayerUiController FindPlayerUiController(ViewSlot targetViewSlot)
         {
-            if (warned)
+            Mahjong3DPlayerUiController[] controllers = GetComponentsInChildren<Mahjong3DPlayerUiController>(true);
+            for (int i = 0; i < controllers.Length; i++)
+            {
+                Mahjong3DPlayerUiController controller = controllers[i];
+                if (controller != null && controller.ViewSlot == targetViewSlot)
+                    return controller;
+            }
+
+            return null;
+        }
+
+        private void CachePlayerUiControllerReferences()
+        {
+            if (selfBottomPlayerUiController == null)
+                selfBottomPlayerUiController = FindPlayerUiController(ViewSlot.SelfBottom);
+
+            if (nextLeftPlayerUiController == null)
+                nextLeftPlayerUiController = FindPlayerUiController(ViewSlot.NextLeft);
+
+            if (acrossTopPlayerUiController == null)
+                acrossTopPlayerUiController = FindPlayerUiController(ViewSlot.AcrossTop);
+
+            if (previousRightPlayerUiController == null)
+                previousRightPlayerUiController = FindPlayerUiController(ViewSlot.PreviousRight);
+        }
+
+        private void ClearUnrenderedPlayerHands(HashSet<ViewSlot> renderedViewSlots)
+        {
+            ClearPlayerHandIfUnrendered(ViewSlot.SelfBottom, renderedViewSlots);
+            ClearPlayerHandIfUnrendered(ViewSlot.NextLeft, renderedViewSlots);
+            ClearPlayerHandIfUnrendered(ViewSlot.AcrossTop, renderedViewSlots);
+            ClearPlayerHandIfUnrendered(ViewSlot.PreviousRight, renderedViewSlots);
+        }
+
+        private void ClearPlayerHandIfUnrendered(
+            ViewSlot viewSlot,
+            HashSet<ViewSlot> renderedViewSlots)
+        {
+            if (renderedViewSlots.Contains(viewSlot))
                 return;
 
-            warned = true;
-            Debug.LogWarning($"{nameof(Mahjong3DPlayerAreaPresenter)}: {message}", this);
+            ClearHand(viewSlot);
+        }
+
+        private void ClearHand(ViewSlot viewSlot)
+        {
+            Mahjong3DPlayerUiController controller = GetPlayerUiController(viewSlot);
+            if (controller != null)
+                controller.ClearHand();
         }
     }
 }

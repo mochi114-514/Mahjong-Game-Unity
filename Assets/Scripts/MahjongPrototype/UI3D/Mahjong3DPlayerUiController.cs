@@ -1,0 +1,68 @@
+using System.Collections.Generic;
+using MahjongPrototype.Domain;
+using MahjongPrototype.UI;
+using UnityEngine;
+
+namespace MahjongPrototype.UI3D
+{
+    // PROTOTYPE: 3D companion for one player's tile area. Currently renders hand tiles only.
+    [DisallowMultipleComponent]
+    [AddComponentMenu("Mahjong Prototype/UI3D/Mahjong 3D Player UI Controller")]
+    public sealed class Mahjong3DPlayerUiController : MonoBehaviour
+    {
+        [Header("View Slot")]
+        [SerializeField] private ViewSlot viewSlot = ViewSlot.SelfBottom;
+
+        [Header("Views")]
+        [SerializeField] private Mahjong3DHandView handView;
+
+        private SeatId handDataSeat = SeatId.East;
+        private bool warnedMissingHandView;
+
+        public ViewSlot ViewSlot => viewSlot;
+        public Mahjong3DHandView HandView => handView;
+        public SeatId HandDataSeat => handDataSeat;
+
+        public void RenderHand(
+            IReadOnlyList<Tile> handTiles,
+            SeatId dataSeat,
+            bool faceUp,
+            bool interactable)
+        {
+            handDataSeat = dataSeat;
+
+            if (handView == null)
+            {
+                WarnMissingOnce(ref warnedMissingHandView, "3D hand view is not assigned.");
+                return;
+            }
+
+            handView.RenderHand(handTiles, faceUp, interactable);
+        }
+
+        public void ClearHand()
+        {
+            if (handView == null)
+            {
+                WarnMissingOnce(ref warnedMissingHandView, "3D hand view is not assigned.");
+                return;
+            }
+
+            handView.Clear();
+        }
+
+        public void SetHandInteractable(bool interactable)
+        {
+            // PROTOTYPE: 3D click input is not implemented yet; RenderHand stores interactable state for spawned tiles.
+        }
+
+        private void WarnMissingOnce(ref bool warned, string message)
+        {
+            if (warned)
+                return;
+
+            warned = true;
+            Debug.LogWarning($"{nameof(Mahjong3DPlayerUiController)} ({viewSlot}): {message}", this);
+        }
+    }
+}
