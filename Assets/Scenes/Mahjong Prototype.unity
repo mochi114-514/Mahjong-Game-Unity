@@ -2382,7 +2382,7 @@ Transform:
   m_GameObject: {fileID: 636301886}
   serializedVersion: 2
   m_LocalRotation: {x: 0.7071068, y: 0, z: 0, w: 0.7071068}
-  m_LocalPosition: {x: -3, y: 0, z: 15}
+  m_LocalPosition: {x: -2.7, y: 0, z: 13.3}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -2404,7 +2404,7 @@ MonoBehaviour:
   tilePrefab: {fileID: 3781737991026447910, guid: a9f8505a4f6dec34fa30ef58c92e940d, type: 3}
   columns: 6
   spacingX: 2
-  spacingZ: 0.6
+  spacingY: -2.6
 --- !u!1 &666069244
 GameObject:
   m_ObjectHideFlags: 0
@@ -2538,7 +2538,7 @@ Transform:
   m_GameObject: {fileID: 695813521}
   serializedVersion: 2
   m_LocalRotation: {x: 0.7071068, y: 0, z: 0, w: 0.7071068}
-  m_LocalPosition: {x: -3, y: 0, z: 15}
+  m_LocalPosition: {x: -2.7, y: 0, z: 13.3}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -2560,7 +2560,7 @@ MonoBehaviour:
   tilePrefab: {fileID: 3781737991026447910, guid: a9f8505a4f6dec34fa30ef58c92e940d, type: 3}
   columns: 6
   spacingX: 2
-  spacingZ: 0.6
+  spacingY: -2.6
 --- !u!1 &774678288
 GameObject:
   m_ObjectHideFlags: 0
@@ -3820,7 +3820,7 @@ Transform:
   m_GameObject: {fileID: 1298846569}
   serializedVersion: 2
   m_LocalRotation: {x: 0.7071068, y: 0, z: 0, w: 0.7071068}
-  m_LocalPosition: {x: -3, y: 0, z: 15}
+  m_LocalPosition: {x: -2.7, y: 0, z: 13.3}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -3842,7 +3842,7 @@ MonoBehaviour:
   tilePrefab: {fileID: 3781737991026447910, guid: a9f8505a4f6dec34fa30ef58c92e940d, type: 3}
   columns: 6
   spacingX: 2
-  spacingZ: 0.6
+  spacingY: -2.6
 --- !u!1 &1328381983
 GameObject:
   m_ObjectHideFlags: 0
@@ -4679,7 +4679,7 @@ Transform:
   m_GameObject: {fileID: 1684105269}
   serializedVersion: 2
   m_LocalRotation: {x: 0.7071068, y: 0, z: 0, w: 0.7071068}
-  m_LocalPosition: {x: -3, y: 0, z: 15}
+  m_LocalPosition: {x: -2.7, y: 0, z: 13.3}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -4701,7 +4701,7 @@ MonoBehaviour:
   tilePrefab: {fileID: 3781737991026447910, guid: a9f8505a4f6dec34fa30ef58c92e940d, type: 3}
   columns: 6
   spacingX: 2
-  spacingZ: 0.6
+  spacingY: -2.6
 --- !u!1 &1757886280
 GameObject:
   m_ObjectHideFlags: 0
