@@ -14,9 +14,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI3D.Mahjong3DTileFaceCatalog
   entries:
   - typeIndex: 0
-    frontFaceMesh: {fileID: -2599854259009312908, guid: 2299a70308ecf53449af32a2b50da0dc, type: 3}
-  - typeIndex: 1
     frontFaceMesh: {fileID: 2783233226188061551, guid: 2299a70308ecf53449af32a2b50da0dc, type: 3}
+  - typeIndex: 1
+    frontFaceMesh: {fileID: -2599854259009312908, guid: 2299a70308ecf53449af32a2b50da0dc, type: 3}
   - typeIndex: 2
     frontFaceMesh: {fileID: 1790804690922649793, guid: 2299a70308ecf53449af32a2b50da0dc, type: 3}
   - typeIndex: 3
