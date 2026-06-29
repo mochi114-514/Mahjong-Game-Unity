@@ -23,10 +23,6 @@ namespace MahjongPrototype.UI
         [Tooltip("Controller for global status and skill text.")]
         [SerializeField] private MahjongUiDisplayController displayController;
 
-        [Header("Player Area")]
-        [Tooltip("Presenter for the four player areas around the table.")]
-        [SerializeField] private MahjongPlayerAreaPresenter playerAreaPresenter;
-
         [Header("3D Player Area")]
         [Tooltip("Optional presenter for experimental 3D player area views.")]
         [SerializeField] private Mahjong3DPlayerAreaPresenter playerArea3DPresenter;
@@ -52,7 +48,6 @@ namespace MahjongPrototype.UI
         private bool warnedMissingFlow;
         private bool warnedMissingEventNotifier;
         private bool warnedMissingDisplayController;
-        private bool warnedMissingPlayerAreaPresenter;
         private bool warnedMissingInputController;
         private bool warnedMissingCommandRouter;
         private bool warnedMissingWinDecisionController;
@@ -73,7 +68,6 @@ namespace MahjongPrototype.UI
         {
             CacheReferences();
             EnsureDisplayController();
-            EnsurePlayerAreaPresenter();
             EnsureInputController();
             EnsureCommandRouter();
             SyncAutoSortToggleFromFlow();
@@ -88,7 +82,6 @@ namespace MahjongPrototype.UI
         {
             CacheReferences();
             EnsureDisplayController();
-            EnsurePlayerAreaPresenter();
             EnsureInputController();
             EnsureCommandRouter();
             SyncAutoSortToggleFromFlow();
@@ -110,7 +103,6 @@ namespace MahjongPrototype.UI
                 return;
 
             RefreshDisplay(state);
-            RefreshPlayerArea(state);
             RefreshPlayerArea3D(state);
             RefreshWinDecision(state);
             RefreshReachDecision(state);
@@ -139,9 +131,6 @@ namespace MahjongPrototype.UI
 
             if (displayController == null)
                 displayController = GetComponentInChildren<MahjongUiDisplayController>(true);
-
-            if (playerAreaPresenter == null)
-                playerAreaPresenter = GetComponentInChildren<MahjongPlayerAreaPresenter>(true);
 
             if (playerArea3DPresenter == null)
                 playerArea3DPresenter = GetComponentInChildren<Mahjong3DPlayerAreaPresenter>(true);
@@ -230,25 +219,6 @@ namespace MahjongPrototype.UI
                 WarnMissingOnce(
                     ref warnedMissingDisplayController,
                     "MahjongUiDisplayController is not assigned. Add it to the UI GameObject and assign the global status texts.");
-            }
-        }
-
-        private void EnsurePlayerAreaPresenter()
-        {
-            if (playerAreaPresenter == null)
-            {
-                playerAreaPresenter = GetComponentInChildren<MahjongPlayerAreaPresenter>(true);
-            }
-
-            if (playerAreaPresenter != null)
-                return;
-
-            playerAreaPresenter = gameObject.AddComponent<MahjongPlayerAreaPresenter>();
-            if (playerAreaPresenter == null)
-            {
-                WarnMissingOnce(
-                    ref warnedMissingPlayerAreaPresenter,
-                    "MahjongPlayerAreaPresenter is not assigned. Add it to the UI GameObject and assign the player UI controllers.");
             }
         }
 
@@ -478,15 +448,6 @@ namespace MahjongPrototype.UI
                 RefreshDisplay(state);
         }
 
-        private void RefreshPlayerArea(MahjongGameState state)
-        {
-            if (playerAreaPresenter == null)
-                EnsurePlayerAreaPresenter();
-
-            if (playerAreaPresenter != null)
-                playerAreaPresenter.Refresh(state, CanUseSelfGameplayInput(state));
-        }
-
         private void RefreshPlayerArea3D(MahjongGameState state)
         {
             if (playerArea3DPresenter == null)
@@ -525,12 +486,6 @@ namespace MahjongPrototype.UI
             if (state == null)
                 return;
 
-            if (playerAreaPresenter == null)
-                EnsurePlayerAreaPresenter();
-
-            if (playerAreaPresenter != null)
-                playerAreaPresenter.RefreshHandForSeat(state, seat, CanUseSelfGameplayInput(state));
-
             RefreshPlayerHand3DForSeat(state, seat);
         }
 
@@ -540,12 +495,6 @@ namespace MahjongPrototype.UI
             if (state == null)
                 return;
 
-            if (playerAreaPresenter == null)
-                EnsurePlayerAreaPresenter();
-
-            if (playerAreaPresenter != null)
-                playerAreaPresenter.RefreshDrawnTileForSeat(state, seat, CanUseSelfGameplayInput(state));
-
             RefreshPlayerDrawnTile3DForSeat(state, seat);
         }
 
@@ -554,12 +503,6 @@ namespace MahjongPrototype.UI
             MahjongGameState state = gameFlow != null ? gameFlow.CurrentState : null;
             if (state == null)
                 return;
-
-            if (playerAreaPresenter == null)
-                EnsurePlayerAreaPresenter();
-
-            if (playerAreaPresenter != null)
-                playerAreaPresenter.RefreshDiscardRiverForSeat(state, seat);
 
             RefreshPlayerDiscardRiver3DForSeat(state, seat);
         }
@@ -621,12 +564,6 @@ namespace MahjongPrototype.UI
             if (inputController != null)
                 inputController.SetGameplayInputInteractable(canUseControlPanelInput);
 
-            if (playerAreaPresenter == null)
-                EnsurePlayerAreaPresenter();
-
-            if (playerAreaPresenter != null)
-                playerAreaPresenter.SetSelfInteractable(state, canUseGameplayInput);
-
             if (playerArea3DPresenter != null)
                 playerArea3DPresenter.SetSelfInteractable(state, canUseGameplayInput);
 
@@ -673,12 +610,6 @@ namespace MahjongPrototype.UI
                 }
             }
 
-            if (playerAreaPresenter != null)
-            {
-                playerAreaPresenter.SetSelfHandTileInteractableByIndices(state, handIndices);
-                playerAreaPresenter.SetSelfDrawnTileInteractable(state, drawnTileInteractable);
-            }
-
             if (playerArea3DPresenter != null)
             {
                 playerArea3DPresenter.SetSelfHandTileInteractableByIndices(state, handIndices);
@@ -697,12 +628,6 @@ namespace MahjongPrototype.UI
 
             int[] noHandIndices = new int[0];
             bool drawnTileInteractable = canUseGameplayInput && selfPlayerSeat.HasDrawnTile;
-
-            if (playerAreaPresenter != null)
-            {
-                playerAreaPresenter.SetSelfHandTileInteractableByIndices(state, noHandIndices);
-                playerAreaPresenter.SetSelfDrawnTileInteractable(state, drawnTileInteractable);
-            }
 
             if (playerArea3DPresenter != null)
             {

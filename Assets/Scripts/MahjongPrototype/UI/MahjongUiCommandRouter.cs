@@ -13,17 +13,13 @@ namespace MahjongPrototype.UI
         [SerializeField] private MahjongGameFlow gameFlow;
         [Tooltip("Control area input event source.")]
         [SerializeField] private MahjongUiInputController inputController;
-        [Tooltip("Player area tile-click event source.")]
-        [SerializeField] private MahjongPlayerAreaPresenter playerAreaPresenter;
-        [Tooltip("Optional 3D player area tile-click event source.")]
+        [Tooltip("3D player area tile-click event source.")]
         [SerializeField] private Mahjong3DPlayerAreaPresenter playerArea3DPresenter;
 
         private MahjongUiInputController subscribedInputController;
-        private MahjongPlayerAreaPresenter subscribedPlayerAreaPresenter;
         private Mahjong3DPlayerAreaPresenter subscribedPlayerArea3DPresenter;
         private bool warnedMissingFlow;
         private bool warnedMissingInputController;
-        private bool warnedMissingPlayerAreaPresenter;
 
         private void Reset()
         {
@@ -59,9 +55,6 @@ namespace MahjongPrototype.UI
             if (inputController == null)
                 inputController = GetComponentInChildren<MahjongUiInputController>(true);
 
-            if (playerAreaPresenter == null)
-                playerAreaPresenter = GetComponentInChildren<MahjongPlayerAreaPresenter>(true);
-
             if (playerArea3DPresenter == null)
                 playerArea3DPresenter = GetComponentInChildren<Mahjong3DPlayerAreaPresenter>(true);
         }
@@ -75,14 +68,12 @@ namespace MahjongPrototype.UI
         {
             CacheReferences();
             SubscribeInputControllerEvents();
-            SubscribePlayerAreaPresenterEvents();
             SubscribePlayerArea3DPresenterEvents();
         }
 
         private void UnsubscribeEvents()
         {
             UnsubscribeInputControllerEvents();
-            UnsubscribePlayerAreaPresenterEvents();
             UnsubscribePlayerArea3DPresenterEvents();
         }
 
@@ -125,35 +116,6 @@ namespace MahjongPrototype.UI
             subscribedInputController.ReachRequested -= HandleReachRequested;
             subscribedInputController.DeclineReachRequested -= HandleDeclineReachRequested;
             subscribedInputController = null;
-        }
-
-        private void SubscribePlayerAreaPresenterEvents()
-        {
-            if (playerAreaPresenter == null)
-            {
-                WarnMissingOnce(
-                    ref warnedMissingPlayerAreaPresenter,
-                    "MahjongPlayerAreaPresenter is not assigned. Player tile-click commands will not be routed.");
-                return;
-            }
-
-            if (subscribedPlayerAreaPresenter == playerAreaPresenter)
-                return;
-
-            UnsubscribePlayerAreaPresenterEvents();
-            playerAreaPresenter.HandTileClicked += HandleHandTileClicked;
-            playerAreaPresenter.DrawnTileClicked += HandleDrawnTileClicked;
-            subscribedPlayerAreaPresenter = playerAreaPresenter;
-        }
-
-        private void UnsubscribePlayerAreaPresenterEvents()
-        {
-            if (subscribedPlayerAreaPresenter == null)
-                return;
-
-            subscribedPlayerAreaPresenter.HandTileClicked -= HandleHandTileClicked;
-            subscribedPlayerAreaPresenter.DrawnTileClicked -= HandleDrawnTileClicked;
-            subscribedPlayerAreaPresenter = null;
         }
 
         private void SubscribePlayerArea3DPresenterEvents()

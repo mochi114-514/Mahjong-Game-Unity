@@ -198,7 +198,6 @@ MonoBehaviour:
   gameFlow: {fileID: 508243329}
   eventNotifier: {fileID: 1264733449}
   displayController: {fileID: 45752831}
-  playerAreaPresenter: {fileID: 0}
   playerArea3DPresenter: {fileID: 1893660903}
   inputController: {fileID: 45752830}
   commandRouter: {fileID: 6100000003}
@@ -4515,7 +4514,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI.MahjongUiCommandRouter
   gameFlow: {fileID: 508243329}
   inputController: {fileID: 45752830}
-  playerAreaPresenter: {fileID: 0}
   playerArea3DPresenter: {fileID: 1893660903}
 --- !u!1 &6100000010
 GameObject:
