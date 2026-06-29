@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using MahjongPrototype.Services;
 using MahjongPrototype.Skills;
 using TurnPhaseType = MahjongPrototype.Domain.TurnPhase;
 
@@ -20,6 +21,8 @@ namespace MahjongPrototype.Domain
         private readonly List<SeatSlot> seatSlots = new List<SeatSlot>();
         private readonly List<DiscardRecord> discards = new List<DiscardRecord>();
         private readonly List<ActiveSkillEffect> activeSkillEffects = new List<ActiveSkillEffect>();
+        private readonly List<ReachDiscardCandidate> reachDiscardCandidates =
+            new List<ReachDiscardCandidate>();
 
         public MahjongGameState(Wall wall)
         {
@@ -47,16 +50,25 @@ namespace MahjongPrototype.Domain
         public Tile? WinningTile { get; private set; }
         public SeatId? WinSourceSeat { get; private set; }
         public int WinDecisionTurnIndex { get; private set; }
+        public bool IsReachDecisionPending { get; private set; }
+        public bool IsReachDiscardSelectionPending { get; private set; }
+        public SeatId ReachDecisionSeat { get; private set; }
+        public int ReachDecisionTurnIndex { get; private set; }
         public TurnPhaseType TurnPhase =>
             IsRoundEnded
                 ? TurnPhaseType.RoundEnded
                 : IsWinDecisionPending
                     ? TurnPhaseType.WinDecision
-                    : GetPlayerSeat(CurrentTurn).HasDrawnTile
-                        ? TurnPhaseType.WaitingForDiscard
-                        : TurnPhaseType.WaitingForDraw;
+                    : IsReachDecisionPending
+                        ? TurnPhaseType.ReachDecision
+                        : IsReachDiscardSelectionPending
+                            ? TurnPhaseType.ReachDiscardSelection
+                            : GetPlayerSeat(CurrentTurn).HasDrawnTile
+                                ? TurnPhaseType.WaitingForDiscard
+                                : TurnPhaseType.WaitingForDraw;
         public bool IsInteractionLocked =>
             TurnPhase == TurnPhaseType.WinDecision ||
+            TurnPhase == TurnPhaseType.ReachDecision ||
             TurnPhase == TurnPhaseType.RoundEnded;
         public IReadOnlyList<SeatId> ActiveSeats => activeSeats;
         public IReadOnlyList<SeatId> ActiveTurnSeats => activeSeats;
@@ -64,6 +76,7 @@ namespace MahjongPrototype.Domain
         public IReadOnlyList<SeatSlot> SeatSlots => seatSlots;
         public IReadOnlyList<DiscardRecord> Discards => discards;
         public IReadOnlyList<ActiveSkillEffect> ActiveSkillEffects => activeSkillEffects;
+        public IReadOnlyList<ReachDiscardCandidate> ReachDiscardCandidates => reachDiscardCandidates;
 
         public void SetSelfWind(SeatId selfWind)
         {
@@ -203,6 +216,7 @@ namespace MahjongPrototype.Domain
             SeatId? sourceSeat,
             int turnIndex)
         {
+            ClearReachDecision();
             IsWinDecisionPending = true;
             WinDecisionSeat = seat;
             WinDecisionType = winType;
@@ -219,6 +233,52 @@ namespace MahjongPrototype.Domain
             WinningTile = null;
             WinSourceSeat = null;
             WinDecisionTurnIndex = 0;
+        }
+
+        public void BeginReachDecision(
+            SeatId seat,
+            IReadOnlyList<ReachDiscardCandidate> candidates,
+            int turnIndex)
+        {
+            List<ReachDiscardCandidate> copiedCandidates = new List<ReachDiscardCandidate>();
+            if (candidates != null)
+            {
+                for (int i = 0; i < candidates.Count; i++)
+                    copiedCandidates.Add(candidates[i]);
+            }
+
+            reachDiscardCandidates.Clear();
+            for (int i = 0; i < copiedCandidates.Count; i++)
+                reachDiscardCandidates.Add(copiedCandidates[i]);
+
+            if (reachDiscardCandidates.Count <= 0)
+            {
+                ClearReachDecision();
+                return;
+            }
+
+            IsReachDecisionPending = true;
+            IsReachDiscardSelectionPending = false;
+            ReachDecisionSeat = seat;
+            ReachDecisionTurnIndex = turnIndex;
+        }
+
+        public void BeginReachDiscardSelection(SeatId seat)
+        {
+            if (!IsReachDecisionPending || ReachDecisionSeat != seat || reachDiscardCandidates.Count <= 0)
+                return;
+
+            IsReachDecisionPending = false;
+            IsReachDiscardSelectionPending = true;
+        }
+
+        public void ClearReachDecision()
+        {
+            IsReachDecisionPending = false;
+            IsReachDiscardSelectionPending = false;
+            ReachDecisionSeat = default;
+            ReachDecisionTurnIndex = 0;
+            reachDiscardCandidates.Clear();
         }
 
         public void AddActiveSkillEffect(ActiveSkillEffect effect)

@@ -16,6 +16,8 @@ namespace MahjongPrototype.Domain
         public Hand Hand { get; }
         public bool HasDrawnTile => drawnTile.HasValue;
         public Tile? DrawnTile => drawnTile;
+        public bool IsReachDeclared { get; private set; }
+        public int ReachDeclaredTurnIndex { get; private set; }
 
         public void SetDrawnTile(Tile tile)
         {
@@ -53,6 +55,12 @@ namespace MahjongPrototype.Domain
         public void ClearDrawnTile()
         {
             drawnTile = null;
+        }
+
+        public void DeclareReach(int turnIndex)
+        {
+            IsReachDeclared = true;
+            ReachDeclaredTurnIndex = turnIndex;
         }
     }
 }

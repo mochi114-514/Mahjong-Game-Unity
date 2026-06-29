@@ -260,6 +260,30 @@ namespace MahjongPrototype.UI3D
             controller.SetDrawnTileInteractable(interactable);
         }
 
+        public void SetSelfHandTileInteractableByIndices(
+            MahjongGameState state,
+            IReadOnlyCollection<int> handIndices)
+        {
+            if (state == null)
+                return;
+
+            ViewSlot selfViewSlot = SeatToViewSlotResolver.Resolve(state.SelfSeat, state.SelfSeat);
+            Mahjong3DPlayerUiController controller = GetPlayerUiController(selfViewSlot);
+            if (controller != null)
+                controller.SetHandTileInteractableByIndices(handIndices);
+        }
+
+        public void SetSelfDrawnTileInteractable(MahjongGameState state, bool interactable)
+        {
+            if (state == null)
+                return;
+
+            ViewSlot selfViewSlot = SeatToViewSlotResolver.Resolve(state.SelfSeat, state.SelfSeat);
+            Mahjong3DPlayerUiController controller = GetPlayerUiController(selfViewSlot);
+            if (controller != null)
+                controller.SetDrawnTileInteractable(interactable);
+        }
+
         public Mahjong3DPlayerUiController GetPlayerUiController(ViewSlot viewSlot)
         {
             CachePlayerUiControllerReferences();

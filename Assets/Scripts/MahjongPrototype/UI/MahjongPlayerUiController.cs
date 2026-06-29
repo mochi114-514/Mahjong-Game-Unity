@@ -88,6 +88,17 @@ namespace MahjongPrototype.UI
             handView.SetTilesInteractable(interactable);
         }
 
+        public void SetHandTileInteractableByIndices(IReadOnlyCollection<int> handIndices)
+        {
+            if (handView == null)
+            {
+                WarnMissingOnce(ref warnedMissingHandView, "Hand view is not assigned.");
+                return;
+            }
+
+            handView.SetTileInteractableByIndices(handIndices);
+        }
+
         public void RenderDiscardRiver(IReadOnlyList<DiscardRecord> discards, SeatId dataSeat)
         {
             if (discardRiverView == null)

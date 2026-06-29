@@ -106,6 +106,8 @@ namespace MahjongPrototype.UI
             inputController.RetryRequested += HandleRetryRequested;
             inputController.WinRequested += HandleWinRequested;
             inputController.DeclineWinRequested += HandleDeclineWinRequested;
+            inputController.ReachRequested += HandleReachRequested;
+            inputController.DeclineReachRequested += HandleDeclineReachRequested;
             subscribedInputController = inputController;
         }
 
@@ -120,6 +122,8 @@ namespace MahjongPrototype.UI
             subscribedInputController.RetryRequested -= HandleRetryRequested;
             subscribedInputController.WinRequested -= HandleWinRequested;
             subscribedInputController.DeclineWinRequested -= HandleDeclineWinRequested;
+            subscribedInputController.ReachRequested -= HandleReachRequested;
+            subscribedInputController.DeclineReachRequested -= HandleDeclineReachRequested;
             subscribedInputController = null;
         }
 
@@ -222,6 +226,22 @@ namespace MahjongPrototype.UI
                 return;
 
             gameFlow.RequestDeclineWin();
+        }
+
+        private void HandleReachRequested()
+        {
+            if (!TryGetGameFlow("Cannot declare reach because MahjongGameFlow is not assigned."))
+                return;
+
+            gameFlow.RequestDeclareReach();
+        }
+
+        private void HandleDeclineReachRequested()
+        {
+            if (!TryGetGameFlow("Cannot decline reach because MahjongGameFlow is not assigned."))
+                return;
+
+            gameFlow.RequestDeclineReach();
         }
 
         private void HandleHandTileClicked(SeatId dataSeat, int handIndex)

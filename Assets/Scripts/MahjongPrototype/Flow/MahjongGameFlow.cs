@@ -44,6 +44,7 @@ namespace MahjongPrototype
         private readonly DrawService drawService = new DrawService();
         private readonly DiscardService discardService = new DiscardService();
         private readonly WinChecker winChecker = new WinChecker();
+        private readonly ReachChecker reachChecker = new ReachChecker();
         private readonly SkillSystem skillSystem = new SkillSystem();
         private readonly SkillReservationService skillReservationService = new SkillReservationService();
 
@@ -170,6 +171,15 @@ namespace MahjongPrototype
                 return false;
             }
 
+            if (gameState.IsReachDecisionPending || gameState.IsReachDiscardSelectionPending)
+            {
+                if (warnOnBlocked)
+                    Warn("Resolve reach decision before drawing.");
+
+                NotifyTurnBlocked(blockedEventName, "ReachDecisionPending");
+                return false;
+            }
+
             PlayerSeat playerSeat = gameState.GetPlayerSeat(seat);
             if (playerSeat.HasDrawnTile)
             {
@@ -199,6 +209,9 @@ namespace MahjongPrototype
             NotifySkillResolutionEvents(result);
             NotifyTileDrawn(result);
             CheckWinPrototype();
+            if (!gameState.IsWinDecisionPending)
+                TryBeginReachDecisionAfterDraw(seat);
+
             return true;
         }
 
@@ -230,6 +243,27 @@ namespace MahjongPrototype
                 return;
             }
 
+            if (gameState.IsReachDecisionPending)
+            {
+                Warn("Declare or decline reach before discarding.");
+                NotifyTurnBlocked("DiscardBlocked", "ReachDecisionPending");
+                return;
+            }
+
+            if (!IsValidReachDiscardCandidate(selfSeat, DiscardSource.Hand, handIndex))
+            {
+                Warn("Only reach discard candidates can be discarded.");
+                NotifyTurnBlocked("DiscardBlocked", "ReachDiscardCandidateMissing");
+                return;
+            }
+
+            if (selfPlayerSeat.IsReachDeclared)
+            {
+                Warn("Hand discards are locked after reach.");
+                NotifyTurnBlocked("DiscardBlocked", "ReachDeclaredHandLocked");
+                return;
+            }
+
             DiscardResult result = discardService.DiscardTile(gameState, selfSeat, handIndex);
             if (!result.Success)
             {
@@ -238,6 +272,7 @@ namespace MahjongPrototype
             }
 
             CommitDrawnTileToHandIfPresent(selfSeat);
+            CompleteReachDeclarationIfPending(result.Record);
             NotifyTurnDebug(
                 "DiscardCompleted",
                 $"phase={gameState.TurnPhase}; discardTile={result.Record.Tile}",
@@ -297,6 +332,24 @@ namespace MahjongPrototype
                 return false;
             }
 
+            if (gameState.IsReachDecisionPending)
+            {
+                if (warnOnBlocked)
+                    Warn("Declare or decline reach before discarding.");
+
+                NotifyTurnBlocked("DiscardBlocked", "ReachDecisionPending");
+                return false;
+            }
+
+            if (!IsValidReachDiscardCandidate(actorSeat, DiscardSource.DrawnTile, -1))
+            {
+                if (warnOnBlocked)
+                    Warn("Only reach discard candidates can be discarded.");
+
+                NotifyTurnBlocked("DiscardBlocked", "ReachDiscardCandidateMissing");
+                return false;
+            }
+
             DiscardResult result = discardService.DiscardDrawnTile(gameState, actorSeat);
             if (!result.Success)
             {
@@ -306,6 +359,7 @@ namespace MahjongPrototype
                 return false;
             }
 
+            CompleteReachDeclarationIfPending(result.Record);
             NotifyTurnDebug(
                 "DiscardCompleted",
                 $"phase={gameState.TurnPhase}; discardTile={result.Record.Tile}",
@@ -340,6 +394,12 @@ namespace MahjongPrototype
             if (gameState.IsWinDecisionPending)
             {
                 Warn("Declare or decline win before activating another skill.");
+                return;
+            }
+
+            if (gameState.IsReachDecisionPending || gameState.IsReachDiscardSelectionPending)
+            {
+                Warn("Resolve reach decision before activating another skill.");
                 return;
             }
 
@@ -476,6 +536,66 @@ namespace MahjongPrototype
                 AdvanceTurn();
         }
 
+        public void RequestDeclareReach()
+        {
+            if (!CanUseGameState())
+                return;
+
+            if (!gameState.IsReachDecisionPending)
+            {
+                Warn("No reach decision is pending.");
+                NotifyTurnBlocked("ReachBlocked", "ReachDecisionMissing");
+                return;
+            }
+
+            if (gameState.ReachDecisionSeat != gameState.SelfSeat)
+            {
+                Warn("Only the self player can declare reach from the current UI.");
+                NotifyTurnBlocked("ReachBlocked", "NotSelfReachDecision");
+                return;
+            }
+
+            SeatId seat = gameState.SelfSeat;
+            int turnIndex = gameState.ReachDecisionTurnIndex;
+            gameState.BeginReachDiscardSelection(seat);
+            if (!gameState.IsReachDiscardSelectionPending)
+            {
+                Warn("Reach discard candidates are not available.");
+                NotifyTurnBlocked("ReachBlocked", "ReachCandidatesMissing");
+                return;
+            }
+
+            NotifyTurnDebug(
+                "ReachDiscardSelection",
+                $"phase={gameState.TurnPhase}; candidates={gameState.ReachDiscardCandidates.Count}",
+                seat: seat,
+                turnIndex: turnIndex);
+            NotifyReachDiscardSelectionStarted(seat, turnIndex);
+        }
+
+        public void RequestDeclineReach()
+        {
+            if (!CanUseGameState())
+                return;
+
+            if (!gameState.IsReachDecisionPending)
+            {
+                Warn("No reach decision is pending.");
+                NotifyTurnBlocked("ReachBlocked", "ReachDecisionMissing");
+                return;
+            }
+
+            SeatId seat = gameState.ReachDecisionSeat;
+            int turnIndex = gameState.ReachDecisionTurnIndex;
+            gameState.ClearReachDecision();
+            NotifyTurnDebug(
+                "ReachDeclined",
+                $"phase={gameState.TurnPhase}",
+                seat: seat,
+                turnIndex: turnIndex);
+            NotifyReachDeclined(seat, turnIndex);
+        }
+
         private void DealInitialHands()
         {
             // PROTOTYPE: Deal a fixed starting hand only to active turn seats.
@@ -597,6 +717,48 @@ namespace MahjongPrototype
                 isWin);
         }
 
+        private void TryBeginReachDecisionAfterDraw(SeatId seat)
+        {
+            if (gameState == null ||
+                gameState.IsRoundEnded ||
+                gameState.IsWinDecisionPending ||
+                gameState.IsReachDecisionPending ||
+                gameState.IsReachDiscardSelectionPending)
+            {
+                return;
+            }
+
+            if (!gameState.IsSelfTurn || !gameState.IsSelfSeat(seat))
+                return;
+
+            PlayerSeat playerSeat = gameState.GetPlayerSeat(seat);
+            if (playerSeat.IsReachDeclared ||
+                !playerSeat.HasDrawnTile ||
+                !playerSeat.DrawnTile.HasValue ||
+                playerSeat.Hand.Count != 13)
+            {
+                return;
+            }
+
+            ReachCheckResult result = reachChecker.CheckReach(
+                playerSeat.Hand.GetTiles(),
+                playerSeat.DrawnTile.Value);
+            if (!result.CanReach)
+                return;
+
+            gameState.BeginReachDecision(seat, result.Candidates, gameState.TurnIndex);
+            if (!gameState.IsReachDecisionPending)
+                return;
+
+            NotifyTurnDebug(
+                "ReachDecision",
+                $"phase={gameState.TurnPhase}; candidates={gameState.ReachDiscardCandidates.Count}",
+                seat: seat,
+                tile: playerSeat.DrawnTile,
+                turnIndex: gameState.TurnIndex);
+            NotifyReachDecisionStarted(seat, gameState.TurnIndex);
+        }
+
         private bool TryBeginRonDecision(DiscardRecord discard)
         {
             // PROTOTYPE: Only locally-operated seats can answer the current single win decision.
@@ -656,6 +818,53 @@ namespace MahjongPrototype
             ApplyAutoSortIfEnabled(seat, "DrawnTileCommitted", false);
         }
 
+        private bool IsValidReachDiscardCandidate(SeatId seat, DiscardSource source, int handIndex)
+        {
+            if (gameState == null || !gameState.IsReachDiscardSelectionPending)
+                return true;
+
+            if (seat != gameState.ReachDecisionSeat)
+                return false;
+
+            for (int i = 0; i < gameState.ReachDiscardCandidates.Count; i++)
+            {
+                ReachDiscardCandidate candidate = gameState.ReachDiscardCandidates[i];
+                if (candidate.Source != source)
+                    continue;
+
+                if (source == DiscardSource.DrawnTile)
+                    return true;
+
+                if (candidate.HandIndex == handIndex)
+                    return true;
+            }
+
+            return false;
+        }
+
+        private void CompleteReachDeclarationIfPending(DiscardRecord record)
+        {
+            if (gameState == null ||
+                !gameState.IsReachDiscardSelectionPending ||
+                record.ActorSeat != gameState.ReachDecisionSeat)
+            {
+                return;
+            }
+
+            SeatId seat = record.ActorSeat;
+            int turnIndex = gameState.TurnIndex;
+            PlayerSeat playerSeat = gameState.GetPlayerSeat(seat);
+            playerSeat.DeclareReach(turnIndex);
+            gameState.ClearReachDecision();
+            NotifyReachDeclared(seat, turnIndex);
+            NotifyTurnDebug(
+                "ReachDeclared",
+                $"phase={gameState.TurnPhase}; discardTile={record.Tile}",
+                seat: seat,
+                tile: record.Tile,
+                turnIndex: turnIndex);
+        }
+
         private void SetWinDecisionPending(bool isPending, SeatId seat, int turnIndex)
         {
             if (gameState == null)
@@ -707,6 +916,7 @@ namespace MahjongPrototype
         private void EndRound(string reason)
         {
             gameState.ClearWinDecision();
+            gameState.ClearReachDecision();
             gameState.IsRoundEnded = true;
             NotifyTurnDebug(
                 "RoundEnded",
@@ -913,6 +1123,26 @@ namespace MahjongPrototype
         private void NotifyWinDeclined(SeatId seat, int turnIndex)
         {
             eventNotifier?.NotifyWinDeclined(seat, turnIndex);
+        }
+
+        private void NotifyReachDecisionStarted(SeatId seat, int turnIndex)
+        {
+            eventNotifier?.NotifyReachDecisionStarted(seat, turnIndex);
+        }
+
+        private void NotifyReachDiscardSelectionStarted(SeatId seat, int turnIndex)
+        {
+            eventNotifier?.NotifyReachDiscardSelectionStarted(seat, turnIndex);
+        }
+
+        private void NotifyReachDeclared(SeatId seat, int turnIndex)
+        {
+            eventNotifier?.NotifyReachDeclared(seat, turnIndex);
+        }
+
+        private void NotifyReachDeclined(SeatId seat, int turnIndex)
+        {
+            eventNotifier?.NotifyReachDeclined(seat, turnIndex);
         }
 
         private void NotifyHandAutoSorted(SeatId seat, int turnIndex)

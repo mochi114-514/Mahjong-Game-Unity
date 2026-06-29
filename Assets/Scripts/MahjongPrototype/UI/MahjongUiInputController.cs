@@ -21,6 +21,9 @@ namespace MahjongPrototype.UI
         [Header("Win Decision")]
         [SerializeField] private Button winButton;
         [SerializeField] private Button declineWinButton;
+        [Header("Reach Decision")]
+        [SerializeField] private Button reachButton;
+        [SerializeField] private Button declineReachButton;
         [Tooltip("指定牌ツモの対象を入力するTMP_InputFieldです。1m-9m, 1p-9p, 1s-9s, E/S/W/N/P/F/C を受け付けます。")]
         [SerializeField] private TMP_InputField targetTileInput;
 
@@ -32,6 +35,8 @@ namespace MahjongPrototype.UI
         private bool warnedMissingRetryButton;
         private bool warnedMissingWinButton;
         private bool warnedMissingDeclineWinButton;
+        private bool warnedMissingReachButton;
+        private bool warnedMissingDeclineReachButton;
 
         public event Action DrawRequested;
         public event Action<string> ForceDrawSkillRequested;
@@ -39,6 +44,8 @@ namespace MahjongPrototype.UI
         public event Action RetryRequested;
         public event Action WinRequested;
         public event Action DeclineWinRequested;
+        public event Action ReachRequested;
+        public event Action DeclineReachRequested;
 
         private void Reset()
         {
@@ -74,6 +81,18 @@ namespace MahjongPrototype.UI
 
             if (retryButton == null)
                 retryButton = FindButtonByName("RetryButton");
+
+            if (winButton == null)
+                winButton = FindButtonByName("WinButton");
+
+            if (declineWinButton == null)
+                declineWinButton = FindButtonByName("DeclineWinButton");
+
+            if (reachButton == null)
+                reachButton = FindButtonByName("ReachButton");
+
+            if (declineReachButton == null)
+                declineReachButton = FindButtonByName("DeclineReachButton");
 
             if (targetTileInput == null)
                 targetTileInput = FindComponentByName<TMP_InputField>("TargetTileInput");
@@ -138,6 +157,24 @@ namespace MahjongPrototype.UI
                 WarnMissingOnce(ref warnedMissingDeclineWinButton, "DeclineWinButton is not assigned.");
             }
 
+            if (reachButton != null)
+            {
+                reachButton.onClick.AddListener(HandleReachClicked);
+            }
+            else
+            {
+                WarnMissingOnce(ref warnedMissingReachButton, "ReachButton is not assigned.");
+            }
+
+            if (declineReachButton != null)
+            {
+                declineReachButton.onClick.AddListener(HandleDeclineReachClicked);
+            }
+            else
+            {
+                WarnMissingOnce(ref warnedMissingDeclineReachButton, "DeclineReachButton is not assigned.");
+            }
+
             isSubscribed = true;
         }
 
@@ -163,6 +200,12 @@ namespace MahjongPrototype.UI
 
             if (declineWinButton != null)
                 declineWinButton.onClick.RemoveListener(HandleDeclineWinClicked);
+
+            if (reachButton != null)
+                reachButton.onClick.RemoveListener(HandleReachClicked);
+
+            if (declineReachButton != null)
+                declineReachButton.onClick.RemoveListener(HandleDeclineReachClicked);
 
             isSubscribed = false;
         }
@@ -201,6 +244,16 @@ namespace MahjongPrototype.UI
         private void HandleDeclineWinClicked()
         {
             DeclineWinRequested?.Invoke();
+        }
+
+        private void HandleReachClicked()
+        {
+            ReachRequested?.Invoke();
+        }
+
+        private void HandleDeclineReachClicked()
+        {
+            DeclineReachRequested?.Invoke();
         }
 
         public void SetAutoSortWithoutNotify(bool enabled)

@@ -79,6 +79,36 @@ namespace MahjongPrototype.Tests
             }
         }
 
+        [Test]
+        public void SetTileInteractableByIndices_OnlyEnablesMatchingTiles()
+        {
+            GameObject root = new GameObject("HandViewReachCandidatesTest");
+            GameObject prefab = CreateTileButtonPrefab();
+            try
+            {
+                object view = CreateView(root, prefab, out RectTransform container);
+                Invoke(
+                    view,
+                    "Render",
+                    CreateTileList(CreateTile("1m"), CreateTile("2m"), CreateTile("3m")),
+                    ParseSeat("East"),
+                    ParseViewSlot("SelfBottom"),
+                    true,
+                    true);
+
+                Invoke(view, "SetTileInteractableByIndices", new System.Collections.Generic.List<int> { 1 });
+
+                Assert.That(GetTileButton(container.GetChild(0)).interactable, Is.False);
+                Assert.That(GetTileButton(container.GetChild(1)).interactable, Is.True);
+                Assert.That(GetTileButton(container.GetChild(2)).interactable, Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(prefab);
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
         private static object CreateView(GameObject root, GameObject prefab, out RectTransform container)
         {
             Type viewType = Type.GetType(MahjongHandViewTypeName, true);

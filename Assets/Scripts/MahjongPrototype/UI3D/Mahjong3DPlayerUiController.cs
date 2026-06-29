@@ -89,6 +89,17 @@ namespace MahjongPrototype.UI3D
             handView.SetTilesInteractable(interactable);
         }
 
+        public void SetHandTileInteractableByIndices(IReadOnlyCollection<int> handIndices)
+        {
+            if (handView == null)
+            {
+                WarnMissingOnce(ref warnedMissingHandView, "3D hand view is not assigned.");
+                return;
+            }
+
+            handView.SetTileInteractableByIndices(handIndices);
+        }
+
         public void RenderDrawnTile(Tile? drawnTile, bool faceUp, bool interactable)
         {
             if (drawnTileView == null)

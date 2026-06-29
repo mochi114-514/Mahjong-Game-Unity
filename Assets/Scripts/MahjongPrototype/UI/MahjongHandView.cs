@@ -108,6 +108,18 @@ namespace MahjongPrototype.UI
             }
         }
 
+        public void SetTileInteractableByIndices(IReadOnlyCollection<int> handIndices)
+        {
+            tilesInteractable = faceUp && handIndices != null && handIndices.Count > 0;
+
+            for (int i = 0; i < activeTileButtons.Count; i++)
+            {
+                TileButtonView view = activeTileButtons[i];
+                if (view != null)
+                    view.SetInteractable(faceUp && ContainsIndex(handIndices, i));
+            }
+        }
+
         public void Clear()
         {
             for (int i = 0; i < activeTileButtons.Count; i++)
@@ -142,6 +154,20 @@ namespace MahjongPrototype.UI
         private void HandleTileClicked(int handIndex)
         {
             TileClicked?.Invoke(handIndex);
+        }
+
+        private static bool ContainsIndex(IReadOnlyCollection<int> indices, int index)
+        {
+            if (indices == null)
+                return false;
+
+            foreach (int candidateIndex in indices)
+            {
+                if (candidateIndex == index)
+                    return true;
+            }
+
+            return false;
         }
 
         private void WarnMissingOnce(ref bool warned, string message)

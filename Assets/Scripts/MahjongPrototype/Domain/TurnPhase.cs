@@ -5,7 +5,9 @@ namespace MahjongPrototype.Domain
         NotStarted = 0,
         WaitingForDraw = 1,
         WaitingForDiscard = 2,
-        WinDecision = 3,
-        RoundEnded = 4
+        ReachDiscardSelection = 3,
+        ReachDecision = 4,
+        WinDecision = 5,
+        RoundEnded = 6
     }
 }

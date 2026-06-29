@@ -78,6 +78,16 @@ namespace MahjongPrototype.UI3D
             }
         }
 
+        public void SetTileInteractableByIndices(IReadOnlyCollection<int> handIndices)
+        {
+            for (int i = 0; i < activeTiles.Count; i++)
+            {
+                Mahjong3DTileView tile = activeTiles[i];
+                if (tile != null)
+                    tile.SetInteractable(ContainsIndex(handIndices, i));
+            }
+        }
+
         public void Clear()
         {
             for (int i = 0; i < activeTiles.Count; i++)
@@ -96,6 +106,20 @@ namespace MahjongPrototype.UI3D
         private void HandleTileClicked(int handIndex)
         {
             TileClicked?.Invoke(handIndex);
+        }
+
+        private static bool ContainsIndex(IReadOnlyCollection<int> indices, int index)
+        {
+            if (indices == null)
+                return false;
+
+            foreach (int candidateIndex in indices)
+            {
+                if (candidateIndex == index)
+                    return true;
+            }
+
+            return false;
         }
 
         private Mahjong3DTileView InstantiateTile(Transform root, int index, float startX)

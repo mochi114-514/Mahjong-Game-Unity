@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using MahjongPrototype;
 using MahjongPrototype.Domain;
 using MahjongPrototype.Notifications;
@@ -41,6 +42,9 @@ namespace MahjongPrototype.UI
         [Header("Win Decision")]
         [SerializeField] private MahjongWinDecisionController winDecisionController;
 
+        [Header("Reach Decision")]
+        [SerializeField] private MahjongReachDecisionController reachDecisionController;
+
         [Header("Log Preview")]
         [Tooltip("Controller for the on-screen recent log preview.")]
         [SerializeField] private MahjongLogPreviewController logPreviewController;
@@ -52,6 +56,7 @@ namespace MahjongPrototype.UI
         private bool warnedMissingInputController;
         private bool warnedMissingCommandRouter;
         private bool warnedMissingWinDecisionController;
+        private bool warnedMissingReachDecisionController;
         private bool warnedMissingLogPreviewController;
 
         private void Reset()
@@ -73,6 +78,7 @@ namespace MahjongPrototype.UI
             EnsureCommandRouter();
             SyncAutoSortToggleFromFlow();
             EnsureWinDecisionController();
+            EnsureReachDecisionController();
             EnsureLogPreviewController();
             SubscribeNotifications();
             RefreshFromFlow();
@@ -87,6 +93,7 @@ namespace MahjongPrototype.UI
             EnsureCommandRouter();
             SyncAutoSortToggleFromFlow();
             EnsureWinDecisionController();
+            EnsureReachDecisionController();
             EnsureLogPreviewController();
             RefreshFromFlow();
             RefreshLogPreview();
@@ -106,6 +113,7 @@ namespace MahjongPrototype.UI
             RefreshPlayerArea(state);
             RefreshPlayerArea3D(state);
             RefreshWinDecision(state);
+            RefreshReachDecision(state);
             RefreshInteractionState(state);
             RefreshLogPreview();
         }
@@ -144,6 +152,9 @@ namespace MahjongPrototype.UI
             if (commandRouter == null)
                 commandRouter = GetComponentInChildren<MahjongUiCommandRouter>(true);
 
+            if (reachDecisionController == null)
+                reachDecisionController = GetComponentInChildren<MahjongReachDecisionController>(true);
+
             if (logPreviewController == null)
                 logPreviewController = GetComponentInChildren<MahjongLogPreviewController>(true);
         }
@@ -170,6 +181,10 @@ namespace MahjongPrototype.UI
             eventNotifier.WinChecked += HandleWinChecked;
             eventNotifier.WinDeclared += HandleWinDeclared;
             eventNotifier.WinDeclined += HandleWinDeclined;
+            eventNotifier.ReachDecisionStarted += HandleReachDecisionStarted;
+            eventNotifier.ReachDiscardSelectionStarted += HandleReachDiscardSelectionStarted;
+            eventNotifier.ReachDeclared += HandleReachDeclared;
+            eventNotifier.ReachDeclined += HandleReachDeclined;
             eventNotifier.HandAutoSorted += HandleHandAutoSorted;
             eventNotifier.RoundEnded += HandleRoundEnded;
         }
@@ -191,6 +206,10 @@ namespace MahjongPrototype.UI
             eventNotifier.WinChecked -= HandleWinChecked;
             eventNotifier.WinDeclared -= HandleWinDeclared;
             eventNotifier.WinDeclined -= HandleWinDeclined;
+            eventNotifier.ReachDecisionStarted -= HandleReachDecisionStarted;
+            eventNotifier.ReachDiscardSelectionStarted -= HandleReachDiscardSelectionStarted;
+            eventNotifier.ReachDeclared -= HandleReachDeclared;
+            eventNotifier.ReachDeclined -= HandleReachDeclined;
             eventNotifier.HandAutoSorted -= HandleHandAutoSorted;
             eventNotifier.RoundEnded -= HandleRoundEnded;
         }
@@ -296,6 +315,28 @@ namespace MahjongPrototype.UI
                 "MahjongWinDecisionController is not assigned. Add it to the UI GameObject and assign WinDecisionArea and its buttons.");
         }
 
+        private void EnsureReachDecisionController()
+        {
+            if (reachDecisionController == null)
+                reachDecisionController = GetComponentInChildren<MahjongReachDecisionController>(true);
+
+            if (reachDecisionController != null)
+                return;
+
+            Transform reachDecisionRoot = FindChildByName(transform, "ReachDecisionArea");
+            if (reachDecisionRoot != null)
+            {
+                reachDecisionController =
+                    reachDecisionRoot.gameObject.AddComponent<MahjongReachDecisionController>();
+                reachDecisionController.Configure(reachDecisionRoot.gameObject);
+                return;
+            }
+
+            WarnMissingOnce(
+                ref warnedMissingReachDecisionController,
+                "MahjongReachDecisionController is not assigned. Add it to ReachDecisionArea.");
+        }
+
         private void HandleRoundStarted(int _, int __)
         {
             RefreshFromFlow();
@@ -310,6 +351,7 @@ namespace MahjongPrototype.UI
         {
             RefreshGlobalStatus();
             RefreshWinDecisionUi();
+            RefreshReachDecisionUi();
             RefreshInteractionUi();
         }
 
@@ -321,6 +363,7 @@ namespace MahjongPrototype.UI
             RefreshPlayerHandForSeat(result.Seat);
             RefreshPlayerDrawnTileForSeat(result.Seat);
             RefreshGlobalStatus();
+            RefreshReachDecisionUi();
             RefreshInteractionUi();
         }
 
@@ -330,6 +373,7 @@ namespace MahjongPrototype.UI
             RefreshPlayerDrawnTileForSeat(record.ActorSeat);
             RefreshPlayerDiscardRiverForSeat(record.ActorSeat);
             RefreshGlobalStatus();
+            RefreshReachDecisionUi();
             RefreshInteractionUi();
         }
 
@@ -357,6 +401,7 @@ namespace MahjongPrototype.UI
         {
             RefreshGlobalStatus();
             RefreshWinDecisionUi();
+            RefreshReachDecisionUi();
             RefreshInteractionUi();
         }
 
@@ -364,6 +409,7 @@ namespace MahjongPrototype.UI
         {
             RefreshGlobalStatus();
             RefreshWinDecisionUi();
+            RefreshReachDecisionUi();
             RefreshInteractionUi();
         }
 
@@ -371,6 +417,35 @@ namespace MahjongPrototype.UI
         {
             RefreshGlobalStatus();
             RefreshWinDecisionUi();
+            RefreshReachDecisionUi();
+            RefreshInteractionUi();
+        }
+
+        private void HandleReachDecisionStarted(SeatId _, int __)
+        {
+            RefreshGlobalStatus();
+            RefreshReachDecisionUi();
+            RefreshInteractionUi();
+        }
+
+        private void HandleReachDiscardSelectionStarted(SeatId _, int __)
+        {
+            RefreshGlobalStatus();
+            RefreshReachDecisionUi();
+            RefreshInteractionUi();
+        }
+
+        private void HandleReachDeclared(SeatId _, int __)
+        {
+            RefreshGlobalStatus();
+            RefreshReachDecisionUi();
+            RefreshInteractionUi();
+        }
+
+        private void HandleReachDeclined(SeatId _, int __)
+        {
+            RefreshGlobalStatus();
+            RefreshReachDecisionUi();
             RefreshInteractionUi();
         }
 
@@ -383,6 +458,7 @@ namespace MahjongPrototype.UI
         {
             RefreshGlobalStatus();
             RefreshWinDecisionUi();
+            RefreshReachDecisionUi();
             RefreshInteractionUi();
         }
 
@@ -513,12 +589,37 @@ namespace MahjongPrototype.UI
                 RefreshWinDecision(state);
         }
 
+        private void RefreshReachDecision(MahjongGameState state)
+        {
+            if (reachDecisionController == null)
+                EnsureReachDecisionController();
+
+            if (reachDecisionController != null)
+            {
+                bool showSelfReachDecision =
+                    state != null &&
+                    state.IsReachDecisionPending &&
+                    state.ReachDecisionSeat == state.SelfSeat;
+                reachDecisionController.SetVisible(showSelfReachDecision);
+            }
+        }
+
+        private void RefreshReachDecisionUi()
+        {
+            MahjongGameState state = gameFlow != null ? gameFlow.CurrentState : null;
+            if (state != null)
+                RefreshReachDecision(state);
+        }
+
         private void RefreshInteractionState(MahjongGameState state)
         {
             bool canUseGameplayInput = CanUseSelfGameplayInput(state);
+            bool canUseControlPanelInput =
+                canUseGameplayInput &&
+                (state == null || !state.IsReachDiscardSelectionPending);
 
             if (inputController != null)
-                inputController.SetGameplayInputInteractable(canUseGameplayInput);
+                inputController.SetGameplayInputInteractable(canUseControlPanelInput);
 
             if (playerAreaPresenter == null)
                 EnsurePlayerAreaPresenter();
@@ -528,6 +629,9 @@ namespace MahjongPrototype.UI
 
             if (playerArea3DPresenter != null)
                 playerArea3DPresenter.SetSelfInteractable(state, canUseGameplayInput);
+
+            ApplyReachDiscardCandidateInteractable(state);
+            ApplyDeclaredReachInteractable(state, canUseGameplayInput);
         }
 
         private void RefreshInteractionUi()
@@ -543,6 +647,68 @@ namespace MahjongPrototype.UI
                 state != null &&
                 state.IsSelfTurn &&
                 !state.IsInteractionLocked;
+        }
+
+        private void ApplyReachDiscardCandidateInteractable(MahjongGameState state)
+        {
+            if (state == null ||
+                !state.IsReachDiscardSelectionPending ||
+                state.ReachDecisionSeat != state.SelfSeat)
+            {
+                return;
+            }
+
+            HashSet<int> handIndices = new HashSet<int>();
+            bool drawnTileInteractable = false;
+            for (int i = 0; i < state.ReachDiscardCandidates.Count; i++)
+            {
+                ReachDiscardCandidate candidate = state.ReachDiscardCandidates[i];
+                if (candidate.Source == DiscardSource.Hand)
+                {
+                    handIndices.Add(candidate.HandIndex);
+                }
+                else if (candidate.Source == DiscardSource.DrawnTile)
+                {
+                    drawnTileInteractable = true;
+                }
+            }
+
+            if (playerAreaPresenter != null)
+            {
+                playerAreaPresenter.SetSelfHandTileInteractableByIndices(state, handIndices);
+                playerAreaPresenter.SetSelfDrawnTileInteractable(state, drawnTileInteractable);
+            }
+
+            if (playerArea3DPresenter != null)
+            {
+                playerArea3DPresenter.SetSelfHandTileInteractableByIndices(state, handIndices);
+                playerArea3DPresenter.SetSelfDrawnTileInteractable(state, drawnTileInteractable);
+            }
+        }
+
+        private void ApplyDeclaredReachInteractable(MahjongGameState state, bool canUseGameplayInput)
+        {
+            if (state == null || state.IsReachDiscardSelectionPending)
+                return;
+
+            PlayerSeat selfPlayerSeat = state.GetPlayerSeat(state.SelfSeat);
+            if (!selfPlayerSeat.IsReachDeclared)
+                return;
+
+            int[] noHandIndices = new int[0];
+            bool drawnTileInteractable = canUseGameplayInput && selfPlayerSeat.HasDrawnTile;
+
+            if (playerAreaPresenter != null)
+            {
+                playerAreaPresenter.SetSelfHandTileInteractableByIndices(state, noHandIndices);
+                playerAreaPresenter.SetSelfDrawnTileInteractable(state, drawnTileInteractable);
+            }
+
+            if (playerArea3DPresenter != null)
+            {
+                playerArea3DPresenter.SetSelfHandTileInteractableByIndices(state, noHandIndices);
+                playerArea3DPresenter.SetSelfDrawnTileInteractable(state, drawnTileInteractable);
+            }
         }
 
         private void EnsureLogPreviewController()
@@ -567,6 +733,22 @@ namespace MahjongPrototype.UI
 
             if (logPreviewController != null)
                 logPreviewController.Refresh();
+        }
+
+        private static Transform FindChildByName(Transform root, string objectName)
+        {
+            if (root == null)
+                return null;
+
+            Transform[] children = root.GetComponentsInChildren<Transform>(true);
+            for (int i = 0; i < children.Length; i++)
+            {
+                Transform child = children[i];
+                if (child != null && child.gameObject.name == objectName)
+                    return child;
+            }
+
+            return null;
         }
 
         private void WarnMissingOnce(ref bool warned, string message)
