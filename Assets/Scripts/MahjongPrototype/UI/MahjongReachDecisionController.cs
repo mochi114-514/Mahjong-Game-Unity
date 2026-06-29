@@ -18,13 +18,11 @@ namespace MahjongPrototype.UI
         private void Awake()
         {
             CacheReferences();
-            SetVisible(false);
         }
 
         private void OnEnable()
         {
             CacheReferences();
-            SetVisible(false);
         }
 
         public void Configure(GameObject root)
