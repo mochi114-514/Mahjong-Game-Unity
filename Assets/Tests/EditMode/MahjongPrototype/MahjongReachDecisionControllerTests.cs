@@ -2,6 +2,7 @@ using System;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.TestTools;
 using UnityEngine.UI;
 
 namespace MahjongPrototype.Tests
@@ -22,9 +23,36 @@ namespace MahjongPrototype.Tests
             "MahjongPrototype.Domain.Tile, Assembly-CSharp";
 
         [Test]
-        public void SetVisibleTrue_OnInactiveReachDecisionArea_RemainsVisibleAfterOnEnable()
+        public void SetVisible_WithAssignedRoot_TogglesActiveEvenWhenNameDiffers()
         {
-            GameObject reachDecisionArea = new GameObject("ReachDecisionArea");
+            GameObject controllerObject = new GameObject("ReachDecisionControllerHost");
+            GameObject reachDecisionRoot = new GameObject("RenamedReachPrompt");
+            reachDecisionRoot.SetActive(false);
+            try
+            {
+                Component controller = controllerObject.AddComponent(
+                    Type.GetType(ControllerTypeName, true));
+                SetPrivateField(controller, "reachDecisionRoot", reachDecisionRoot);
+
+                Invoke(controller, "SetVisible", true);
+
+                Assert.That(reachDecisionRoot.activeSelf, Is.True);
+
+                Invoke(controller, "SetVisible", false);
+
+                Assert.That(reachDecisionRoot.activeSelf, Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(reachDecisionRoot);
+                UnityEngine.Object.DestroyImmediate(controllerObject);
+            }
+        }
+
+        [Test]
+        public void SetVisibleTrue_OnInactiveAssignedRoot_RemainsVisibleAfterEnable()
+        {
+            GameObject reachDecisionArea = new GameObject("RenamedReachDecisionArea");
             GameObject reachButtonObject = new GameObject("ReachButton");
             GameObject declineButtonObject = new GameObject("DeclineReachButton");
             reachButtonObject.transform.SetParent(reachDecisionArea.transform);
@@ -39,14 +67,9 @@ namespace MahjongPrototype.Tests
             {
                 Component controller = reachDecisionArea.AddComponent(
                     Type.GetType(ControllerTypeName, true));
+                SetPrivateField(controller, "reachDecisionRoot", reachDecisionArea);
 
                 Invoke(controller, "SetVisible", true);
-
-                Assert.That(reachDecisionArea.activeSelf, Is.True);
-                Assert.That(reachButton.interactable, Is.True);
-                Assert.That(declineButton.interactable, Is.True);
-
-                Invoke(controller, "OnEnable");
 
                 Assert.That(reachDecisionArea.activeSelf, Is.True);
                 Assert.That(reachButton.interactable, Is.True);
@@ -59,11 +82,35 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
+        public void SetVisible_WithoutAssignedRoot_WarnsAndDoesNotUseReachDecisionAreaName()
+        {
+            GameObject reachDecisionArea = new GameObject("ReachDecisionArea");
+            try
+            {
+                Component controller = reachDecisionArea.AddComponent(
+                    Type.GetType(ControllerTypeName, true));
+
+                LogAssert.Expect(
+                    LogType.Warning,
+                    "MahjongReachDecisionController: ReachDecisionRoot is not assigned.");
+
+                Invoke(controller, "SetVisible", false);
+
+                Assert.That(reachDecisionArea.activeSelf, Is.True);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(reachDecisionArea);
+            }
+        }
+
+        [Test]
         public void UiManagerRefreshReachDecision_ShowsSelfPendingReachDecisionArea()
         {
             GameObject gameObject = new GameObject("ReachDecisionUiManagerTest");
             GameObject uiObject = new GameObject("MahjongUiManager");
-            GameObject reachDecisionArea = new GameObject("ReachDecisionArea");
+            GameObject reachDecisionArea = new GameObject("RenamedReachDecisionArea");
+            uiObject.SetActive(false);
             try
             {
                 object gameFlow = CreateConfiguredGameFlow(gameObject);
@@ -74,6 +121,7 @@ namespace MahjongPrototype.Tests
                 reachDecisionArea.SetActive(false);
                 Component reachDecisionController = reachDecisionArea.AddComponent(
                     Type.GetType(ControllerTypeName, true));
+                SetPrivateField(reachDecisionController, "reachDecisionRoot", reachDecisionArea);
                 Component uiManager = uiObject.AddComponent(
                     Type.GetType(MahjongPrototypeUiManagerTypeName, true));
                 SetPrivateField(uiManager, "gameFlow", gameFlow);
@@ -87,6 +135,63 @@ namespace MahjongPrototype.Tests
             finally
             {
                 UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
+        public void UiManagerEnsureReachDecisionController_DoesNotAutoAddByReachDecisionAreaName()
+        {
+            GameObject uiObject = new GameObject("MahjongUiManagerAutoAddGuardTest");
+            GameObject reachDecisionArea = new GameObject("ReachDecisionArea");
+            uiObject.SetActive(false);
+            reachDecisionArea.transform.SetParent(uiObject.transform);
+            try
+            {
+                Component uiManager = uiObject.AddComponent(
+                    Type.GetType(MahjongPrototypeUiManagerTypeName, true));
+
+                LogAssert.Expect(
+                    LogType.Warning,
+                    "MahjongPrototypeUiManager: MahjongReachDecisionController is not assigned. Assign it in the Inspector.");
+
+                Invoke(uiManager, "EnsureReachDecisionController");
+
+                Assert.That(
+                    reachDecisionArea.GetComponent(Type.GetType(ControllerTypeName, true)),
+                    Is.Null);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(uiObject);
+            }
+        }
+
+        [Test]
+        public void UiManagerEnsureReachDecisionController_DoesNotAutoFindChildController()
+        {
+            GameObject uiObject = new GameObject("MahjongUiManagerAutoFindGuardTest");
+            GameObject reachDecisionArea = new GameObject("RenamedReachDecisionArea");
+            uiObject.SetActive(false);
+            reachDecisionArea.transform.SetParent(uiObject.transform);
+            try
+            {
+                Component childController = reachDecisionArea.AddComponent(
+                    Type.GetType(ControllerTypeName, true));
+                SetPrivateField(childController, "reachDecisionRoot", reachDecisionArea);
+                Component uiManager = uiObject.AddComponent(
+                    Type.GetType(MahjongPrototypeUiManagerTypeName, true));
+
+                LogAssert.Expect(
+                    LogType.Warning,
+                    "MahjongPrototypeUiManager: MahjongReachDecisionController is not assigned. Assign it in the Inspector.");
+
+                Invoke(uiManager, "EnsureReachDecisionController");
+
+                Assert.That(GetPrivateField(uiManager, "reachDecisionController"), Is.Null);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(uiObject);
             }
         }
 
@@ -164,6 +269,15 @@ namespace MahjongPrototype.Tests
                 BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
             Assert.That(property, Is.Not.Null);
             return property.GetValue(target);
+        }
+
+        private static object GetPrivateField(object target, string fieldName)
+        {
+            FieldInfo field = target.GetType().GetField(
+                fieldName,
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.That(field, Is.Not.Null);
+            return field.GetValue(target);
         }
 
         private static void SetPrivateField(object target, string fieldName, object value)

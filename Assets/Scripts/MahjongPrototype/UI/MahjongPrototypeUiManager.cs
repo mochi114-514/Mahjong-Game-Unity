@@ -141,9 +141,6 @@ namespace MahjongPrototype.UI
             if (commandRouter == null)
                 commandRouter = GetComponentInChildren<MahjongUiCommandRouter>(true);
 
-            if (reachDecisionController == null)
-                reachDecisionController = GetComponentInChildren<MahjongReachDecisionController>(true);
-
             if (logPreviewController == null)
                 logPreviewController = GetComponentInChildren<MahjongLogPreviewController>(true);
         }
@@ -287,24 +284,12 @@ namespace MahjongPrototype.UI
 
         private void EnsureReachDecisionController()
         {
-            if (reachDecisionController == null)
-                reachDecisionController = GetComponentInChildren<MahjongReachDecisionController>(true);
-
             if (reachDecisionController != null)
                 return;
 
-            Transform reachDecisionRoot = FindChildByName(transform, "ReachDecisionArea");
-            if (reachDecisionRoot != null)
-            {
-                reachDecisionController =
-                    reachDecisionRoot.gameObject.AddComponent<MahjongReachDecisionController>();
-                reachDecisionController.Configure(reachDecisionRoot.gameObject);
-                return;
-            }
-
             WarnMissingOnce(
                 ref warnedMissingReachDecisionController,
-                "MahjongReachDecisionController is not assigned. Add it to ReachDecisionArea.");
+                "MahjongReachDecisionController is not assigned. Assign it in the Inspector.");
         }
 
         private void HandleRoundStarted(int _, int __)
@@ -658,22 +643,6 @@ namespace MahjongPrototype.UI
 
             if (logPreviewController != null)
                 logPreviewController.Refresh();
-        }
-
-        private static Transform FindChildByName(Transform root, string objectName)
-        {
-            if (root == null)
-                return null;
-
-            Transform[] children = root.GetComponentsInChildren<Transform>(true);
-            for (int i = 0; i < children.Length; i++)
-            {
-                Transform child = children[i];
-                if (child != null && child.gameObject.name == objectName)
-                    return child;
-            }
-
-            return null;
         }
 
         private void WarnMissingOnce(ref bool warned, string message)
