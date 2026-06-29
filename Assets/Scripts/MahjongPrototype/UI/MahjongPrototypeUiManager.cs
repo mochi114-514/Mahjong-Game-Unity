@@ -577,6 +577,9 @@ namespace MahjongPrototype.UI
                 !state.IsReachDiscardSelectionPending ||
                 state.ReachDecisionSeat != state.SelfSeat)
             {
+                if (playerArea3DPresenter != null && state != null)
+                    playerArea3DPresenter.ClearSelfTileDimmed(state);
+
                 return;
             }
 
@@ -597,8 +600,10 @@ namespace MahjongPrototype.UI
 
             if (playerArea3DPresenter != null)
             {
-                playerArea3DPresenter.SetSelfHandTileInteractableByIndices(state, handIndices);
-                playerArea3DPresenter.SetSelfDrawnTileInteractable(state, drawnTileInteractable);
+                playerArea3DPresenter.SetSelfReachCandidateInteractable(
+                    state,
+                    handIndices,
+                    drawnTileInteractable);
             }
         }
 

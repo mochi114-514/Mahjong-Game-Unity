@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
@@ -15,7 +16,7 @@ namespace MahjongPrototype.Tests
             "MahjongPrototype.UI3D.Mahjong3DTileView, Assembly-CSharp";
 
         [Test]
-        public void SetTileInteractableByIndices_OnlyEnablesMatchingTiles()
+        public void SetTileInteractableByIndices_OnlyEnablesMatchingTilesWithoutDimming()
         {
             GameObject root = new GameObject("Hand3DViewReachCandidatesTest");
             GameObject prefab = new GameObject("Tile3DPrefab");
@@ -32,13 +33,88 @@ namespace MahjongPrototype.Tests
                     true,
                     true);
 
-                Invoke(view, "SetTileInteractableByIndices", new System.Collections.Generic.List<int> { 2 });
+                Invoke(view, "SetTileInteractableByIndices", new List<int> { 2 });
 
                 Component[] tileViews = root.GetComponentsInChildren(Type.GetType(Mahjong3DTileViewTypeName, true));
                 Assert.That(tileViews.Length, Is.EqualTo(3));
                 Assert.That(GetProperty(tileViews[0], "Interactable"), Is.False);
                 Assert.That(GetProperty(tileViews[1], "Interactable"), Is.False);
                 Assert.That(GetProperty(tileViews[2], "Interactable"), Is.True);
+                Assert.That(GetProperty(tileViews[0], "IsDimmed"), Is.False);
+                Assert.That(GetProperty(tileViews[1], "IsDimmed"), Is.False);
+                Assert.That(GetProperty(tileViews[2], "IsDimmed"), Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(prefab);
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void SetReachCandidateInteractableByIndices_DimsOnlyNonCandidates()
+        {
+            GameObject root = new GameObject("Hand3DViewReachCandidateDimmedTest");
+            GameObject prefab = new GameObject("Tile3DPrefab");
+            try
+            {
+                object view = root.AddComponent(Type.GetType(Mahjong3DHandViewTypeName, true));
+                object tilePrefab = prefab.AddComponent(Type.GetType(Mahjong3DTileViewTypeName, true));
+                SetPrivateField(view, "tilePrefab", tilePrefab);
+
+                Invoke(
+                    view,
+                    "RenderHand",
+                    CreateTileList(CreateTile("1m"), CreateTile("2m"), CreateTile("3m")),
+                    true,
+                    true);
+
+                Invoke(view, "SetReachCandidateInteractableByIndices", new List<int> { 1 });
+
+                Component[] tileViews = root.GetComponentsInChildren(Type.GetType(Mahjong3DTileViewTypeName, true));
+                Assert.That(tileViews.Length, Is.EqualTo(3));
+                Assert.That(GetProperty(tileViews[0], "Interactable"), Is.False);
+                Assert.That(GetProperty(tileViews[1], "Interactable"), Is.True);
+                Assert.That(GetProperty(tileViews[2], "Interactable"), Is.False);
+                Assert.That(GetProperty(tileViews[0], "IsDimmed"), Is.True);
+                Assert.That(GetProperty(tileViews[1], "IsDimmed"), Is.False);
+                Assert.That(GetProperty(tileViews[2], "IsDimmed"), Is.True);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(prefab);
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void SetTilesInteractable_ClearsReachCandidateDimming()
+        {
+            GameObject root = new GameObject("Hand3DViewClearDimmedTest");
+            GameObject prefab = new GameObject("Tile3DPrefab");
+            try
+            {
+                object view = root.AddComponent(Type.GetType(Mahjong3DHandViewTypeName, true));
+                object tilePrefab = prefab.AddComponent(Type.GetType(Mahjong3DTileViewTypeName, true));
+                SetPrivateField(view, "tilePrefab", tilePrefab);
+
+                Invoke(
+                    view,
+                    "RenderHand",
+                    CreateTileList(CreateTile("1m"), CreateTile("2m"), CreateTile("3m")),
+                    true,
+                    true);
+
+                Invoke(view, "SetReachCandidateInteractableByIndices", new List<int> { 1 });
+                Invoke(view, "SetTilesInteractable", false);
+
+                Component[] tileViews = root.GetComponentsInChildren(Type.GetType(Mahjong3DTileViewTypeName, true));
+                Assert.That(tileViews.Length, Is.EqualTo(3));
+                for (int i = 0; i < tileViews.Length; i++)
+                {
+                    Assert.That(GetProperty(tileViews[i], "Interactable"), Is.False);
+                    Assert.That(GetProperty(tileViews[i], "IsDimmed"), Is.False);
+                }
             }
             finally
             {

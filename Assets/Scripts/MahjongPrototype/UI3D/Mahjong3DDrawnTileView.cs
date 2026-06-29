@@ -53,6 +53,7 @@ namespace MahjongPrototype.UI3D
             if (activeTile != null)
             {
                 activeTile.Clicked -= HandleTileClicked;
+                activeTile.SetDimmed(false);
                 DestroyTile(activeTile);
             }
 
@@ -65,6 +66,25 @@ namespace MahjongPrototype.UI3D
 
             if (activeTile != null)
                 activeTile.SetInteractable(tileInteractable);
+
+            SetDimmed(false);
+        }
+
+        public void SetReachCandidateInteractable(bool selectable)
+        {
+            tileInteractable = faceUp && selectable;
+
+            if (activeTile == null)
+                return;
+
+            activeTile.SetInteractable(tileInteractable);
+            activeTile.SetDimmed(!selectable);
+        }
+
+        public void SetDimmed(bool dimmed)
+        {
+            if (activeTile != null)
+                activeTile.SetDimmed(dimmed);
         }
 
         private void HandleTileClicked(int _)

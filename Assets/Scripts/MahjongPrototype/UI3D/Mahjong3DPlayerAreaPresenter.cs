@@ -284,6 +284,34 @@ namespace MahjongPrototype.UI3D
                 controller.SetDrawnTileInteractable(interactable);
         }
 
+        public void SetSelfReachCandidateInteractable(
+            MahjongGameState state,
+            IReadOnlyCollection<int> handIndices,
+            bool drawnTileSelectable)
+        {
+            if (state == null)
+                return;
+
+            ViewSlot selfViewSlot = SeatToViewSlotResolver.Resolve(state.SelfSeat, state.SelfSeat);
+            Mahjong3DPlayerUiController controller = GetPlayerUiController(selfViewSlot);
+            if (controller == null)
+                return;
+
+            controller.SetReachCandidateHandTileInteractableByIndices(handIndices);
+            controller.SetReachCandidateDrawnTileInteractable(drawnTileSelectable);
+        }
+
+        public void ClearSelfTileDimmed(MahjongGameState state)
+        {
+            if (state == null)
+                return;
+
+            ViewSlot selfViewSlot = SeatToViewSlotResolver.Resolve(state.SelfSeat, state.SelfSeat);
+            Mahjong3DPlayerUiController controller = GetPlayerUiController(selfViewSlot);
+            if (controller != null)
+                controller.ClearDimmedTiles();
+        }
+
         public Mahjong3DPlayerUiController GetPlayerUiController(ViewSlot viewSlot)
         {
             CachePlayerUiControllerReferences();

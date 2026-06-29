@@ -73,8 +73,11 @@ namespace MahjongPrototype.UI3D
             for (int i = 0; i < activeTiles.Count; i++)
             {
                 Mahjong3DTileView tile = activeTiles[i];
-                if (tile != null)
-                    tile.SetInteractable(interactable);
+                if (tile == null)
+                    continue;
+
+                tile.SetInteractable(interactable);
+                tile.SetDimmed(false);
             }
         }
 
@@ -83,8 +86,35 @@ namespace MahjongPrototype.UI3D
             for (int i = 0; i < activeTiles.Count; i++)
             {
                 Mahjong3DTileView tile = activeTiles[i];
+                if (tile == null)
+                    continue;
+
+                tile.SetInteractable(ContainsIndex(handIndices, i));
+                tile.SetDimmed(false);
+            }
+        }
+
+        public void SetReachCandidateInteractableByIndices(IReadOnlyCollection<int> handIndices)
+        {
+            for (int i = 0; i < activeTiles.Count; i++)
+            {
+                Mahjong3DTileView tile = activeTiles[i];
+                if (tile == null)
+                    continue;
+
+                bool selectable = ContainsIndex(handIndices, i);
+                tile.SetInteractable(selectable);
+                tile.SetDimmed(!selectable);
+            }
+        }
+
+        public void ClearDimmed()
+        {
+            for (int i = 0; i < activeTiles.Count; i++)
+            {
+                Mahjong3DTileView tile = activeTiles[i];
                 if (tile != null)
-                    tile.SetInteractable(ContainsIndex(handIndices, i));
+                    tile.SetDimmed(false);
             }
         }
 
@@ -96,6 +126,7 @@ namespace MahjongPrototype.UI3D
                 if (tile != null)
                 {
                     tile.Clicked -= HandleTileClicked;
+                    tile.SetDimmed(false);
                     DestroyTile(tile);
                 }
             }

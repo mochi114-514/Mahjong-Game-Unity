@@ -100,6 +100,17 @@ namespace MahjongPrototype.UI3D
             handView.SetTileInteractableByIndices(handIndices);
         }
 
+        public void SetReachCandidateHandTileInteractableByIndices(IReadOnlyCollection<int> handIndices)
+        {
+            if (handView == null)
+            {
+                WarnMissingOnce(ref warnedMissingHandView, "3D hand view is not assigned.");
+                return;
+            }
+
+            handView.SetReachCandidateInteractableByIndices(handIndices);
+        }
+
         public void RenderDrawnTile(Tile? drawnTile, bool faceUp, bool interactable)
         {
             if (drawnTileView == null)
@@ -128,6 +139,26 @@ namespace MahjongPrototype.UI3D
             }
 
             drawnTileView.SetTileInteractable(interactable);
+        }
+
+        public void SetReachCandidateDrawnTileInteractable(bool selectable)
+        {
+            if (drawnTileView == null)
+            {
+                WarnMissingOnce(ref warnedMissingDrawnTileView, "3D drawn tile view is not assigned.");
+                return;
+            }
+
+            drawnTileView.SetReachCandidateInteractable(selectable);
+        }
+
+        public void ClearDimmedTiles()
+        {
+            if (handView != null)
+                handView.ClearDimmed();
+
+            if (drawnTileView != null)
+                drawnTileView.SetDimmed(false);
         }
 
         public void RenderDiscardRiver(IReadOnlyList<DiscardRecord> discards, SeatId dataSeat)
