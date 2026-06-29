@@ -2,6 +2,7 @@ using System;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.TestTools;
 
 namespace MahjongPrototype.Tests
 {
@@ -15,16 +16,14 @@ namespace MahjongPrototype.Tests
             "MahjongPrototype.Domain.WinType, Assembly-CSharp";
 
         [Test]
-        public void SetWinDecision_ChangesWinButtonLabelAndClearsItWhenHidden()
+        public void SetWinDecision_WithAssignedReferences_ChangesLabelAndVisibilityWhenNamesDiffer()
         {
             GameObject controllerObject = new GameObject("WinDecisionControllerTest");
             controllerObject.SetActive(false);
-            GameObject root = new GameObject("WinDecisionRoot");
+            GameObject root = new GameObject("RenamedWinDecisionRoot");
             root.transform.SetParent(controllerObject.transform);
-            GameObject winButton = new GameObject("WinButton");
-            winButton.transform.SetParent(root.transform);
-            GameObject labelObject = new GameObject("Text (TMP)");
-            labelObject.transform.SetParent(winButton.transform);
+            GameObject labelObject = new GameObject("RenamedWinLabel");
+            labelObject.transform.SetParent(root.transform);
 
             try
             {
@@ -55,6 +54,76 @@ namespace MahjongPrototype.Tests
                 Invoke(controller, "SetWinDecision", false, null);
                 Assert.That(GetProperty(label, "text"), Is.EqualTo("和了"));
                 Assert.That(root.activeSelf, Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(controllerObject);
+            }
+        }
+
+        [Test]
+        public void SetWinDecision_WithoutLabel_WarnsAndDoesNotAutoFindWinButtonChild()
+        {
+            GameObject controllerObject = new GameObject("WinDecisionMissingLabelTest");
+            controllerObject.SetActive(false);
+            GameObject root = new GameObject("WinDecisionRoot");
+            root.transform.SetParent(controllerObject.transform);
+            GameObject winButton = new GameObject("WinButton");
+            winButton.transform.SetParent(root.transform);
+            GameObject labelObject = new GameObject("Text (TMP)");
+            labelObject.transform.SetParent(winButton.transform);
+
+            try
+            {
+                Component label = labelObject.AddComponent(
+                    Type.GetType(TextMeshProUguiTypeName, true));
+                Component controller = controllerObject.AddComponent(
+                    Type.GetType(ControllerTypeName, true));
+                SetPrivateField(controller, "winDecisionRoot", root);
+                controllerObject.SetActive(true);
+
+                LogAssert.Expect(
+                    LogType.Warning,
+                    "MahjongWinDecisionController: WinButtonLabel is not assigned.");
+
+                Invoke(
+                    controller,
+                    "SetWinDecision",
+                    true,
+                    Enum.Parse(Type.GetType(WinTypeName, true), "Tsumo"));
+
+                Assert.That(GetProperty(label, "text"), Is.Not.EqualTo("ツモ"));
+                Assert.That(root.activeSelf, Is.True);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(controllerObject);
+            }
+        }
+
+        [Test]
+        public void SetVisibleTrue_DoesNotGetHiddenByEnable()
+        {
+            GameObject controllerObject = new GameObject("WinDecisionEnableVisibilityTest");
+            controllerObject.SetActive(false);
+            GameObject root = new GameObject("RenamedWinDecisionRoot");
+            root.transform.SetParent(controllerObject.transform);
+            GameObject labelObject = new GameObject("RenamedWinLabel");
+            labelObject.transform.SetParent(root.transform);
+
+            try
+            {
+                Component label = labelObject.AddComponent(
+                    Type.GetType(TextMeshProUguiTypeName, true));
+                Component controller = controllerObject.AddComponent(
+                    Type.GetType(ControllerTypeName, true));
+                SetPrivateField(controller, "winDecisionRoot", root);
+                SetPrivateField(controller, "winButtonLabel", label);
+
+                Invoke(controller, "SetVisible", true);
+                controllerObject.SetActive(true);
+
+                Assert.That(root.activeSelf, Is.True);
             }
             finally
             {

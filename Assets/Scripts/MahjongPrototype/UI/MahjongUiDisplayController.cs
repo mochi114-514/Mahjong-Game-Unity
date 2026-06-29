@@ -21,56 +21,17 @@ namespace MahjongPrototype.UI
 
         private bool warnedMissingStatusText;
 
-        private void Reset()
-        {
-            CacheReferences();
-        }
-
-        private void Awake()
-        {
-            CacheReferences();
-        }
-
         public void Refresh(MahjongGameState state)
         {
             if (state == null)
                 return;
 
-            CacheReferences();
             WarnMissingStaticReferences();
 
             SetText(currentTurnText, $"CurrentTurn: {state.CurrentTurn}");
             SetText(turnIndexText, $"Turn: {state.TurnIndex}");
             SetText(wallCountText, $"Wall: {state.Wall.Count}");
             SetText(activeSkillText, BuildActiveSkillText(state));
-        }
-
-        private void CacheReferences()
-        {
-            if (currentTurnText == null)
-                currentTurnText = FindTextByName("CurrentTurnText");
-
-            if (turnIndexText == null)
-                turnIndexText = FindTextByName("TurnIndexText");
-
-            if (wallCountText == null)
-                wallCountText = FindTextByName("WallCountText");
-
-            if (activeSkillText == null)
-                activeSkillText = FindTextByName("ActiveSkillText");
-        }
-
-        private TMP_Text FindTextByName(string objectName)
-        {
-            TMP_Text[] texts = GetComponentsInChildren<TMP_Text>(true);
-            for (int i = 0; i < texts.Length; i++)
-            {
-                TMP_Text text = texts[i];
-                if (text != null && text.gameObject.name == objectName)
-                    return text;
-            }
-
-            return null;
         }
 
         private static void SetText(TMP_Text text, string value)

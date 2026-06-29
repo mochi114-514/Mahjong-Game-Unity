@@ -47,55 +47,14 @@ namespace MahjongPrototype.UI
         public event Action ReachRequested;
         public event Action DeclineReachRequested;
 
-        private void Reset()
-        {
-            CacheReferences();
-        }
-
-        private void Awake()
-        {
-            CacheReferences();
-        }
-
         private void OnEnable()
         {
-            CacheReferences();
             RegisterButtonListeners();
         }
 
         private void OnDisable()
         {
             UnregisterButtonListeners();
-        }
-
-        private void CacheReferences()
-        {
-            if (drawButton == null)
-                drawButton = FindButtonByName("DrawButton");
-
-            if (forceDrawSkillButton == null)
-                forceDrawSkillButton = FindButtonByName("ForceDrawSkillButton");
-
-            if (autoSortToggle == null)
-                autoSortToggle = FindComponentByName<Toggle>("AutoSortToggle");
-
-            if (retryButton == null)
-                retryButton = FindButtonByName("RetryButton");
-
-            if (winButton == null)
-                winButton = FindButtonByName("WinButton");
-
-            if (declineWinButton == null)
-                declineWinButton = FindButtonByName("DeclineWinButton");
-
-            if (reachButton == null)
-                reachButton = FindButtonByName("ReachButton");
-
-            if (declineReachButton == null)
-                declineReachButton = FindButtonByName("DeclineReachButton");
-
-            if (targetTileInput == null)
-                targetTileInput = FindComponentByName<TMP_InputField>("TargetTileInput");
         }
 
         private void RegisterButtonListeners()
@@ -258,8 +217,6 @@ namespace MahjongPrototype.UI
 
         public void SetAutoSortWithoutNotify(bool enabled)
         {
-            CacheReferences();
-
             if (autoSortToggle == null)
             {
                 WarnMissingOnce(ref warnedMissingAutoSortToggle, "AutoSortToggle is not assigned.");
@@ -271,8 +228,6 @@ namespace MahjongPrototype.UI
 
         public void SetGameplayInputInteractable(bool interactable)
         {
-            CacheReferences();
-
             if (drawButton != null)
                 drawButton.interactable = interactable;
 
@@ -281,24 +236,6 @@ namespace MahjongPrototype.UI
 
             if (targetTileInput != null)
                 targetTileInput.interactable = interactable;
-        }
-
-        private Button FindButtonByName(string objectName)
-        {
-            return FindComponentByName<Button>(objectName);
-        }
-
-        private T FindComponentByName<T>(string objectName) where T : Component
-        {
-            T[] components = GetComponentsInChildren<T>(true);
-            for (int i = 0; i < components.Length; i++)
-            {
-                T component = components[i];
-                if (component != null && component.gameObject.name == objectName)
-                    return component;
-            }
-
-            return null;
         }
 
         private void WarnMissingOnce(ref bool warned, string message)
