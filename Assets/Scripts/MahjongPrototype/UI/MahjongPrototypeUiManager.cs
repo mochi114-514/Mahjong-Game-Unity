@@ -27,6 +27,10 @@ namespace MahjongPrototype.UI
         [Tooltip("Optional presenter for experimental 3D player area views.")]
         [SerializeField] private Mahjong3DPlayerAreaPresenter playerArea3DPresenter;
 
+        [Header("3D Table Center UI")]
+        [Tooltip("Optional presenter for the world-space table center wind labels.")]
+        [SerializeField] private MahjongTableCenterWindPresenter tableCenterWindPresenter;
+
         [Header("Input")]
         [Tooltip("Controller for draw, skill, retry, and win decision input.")]
         [SerializeField] private MahjongUiInputController inputController;
@@ -100,9 +104,13 @@ namespace MahjongPrototype.UI
         public void Refresh(MahjongGameState state)
         {
             if (state == null)
+            {
+                RefreshTableCenterWind(null);
                 return;
+            }
 
             RefreshDisplay(state);
+            RefreshTableCenterWind(state);
             RefreshPlayerArea3D(state);
             RefreshWinDecision(state);
             RefreshReachDecision(state);
@@ -134,6 +142,9 @@ namespace MahjongPrototype.UI
 
             if (playerArea3DPresenter == null)
                 playerArea3DPresenter = GetComponentInChildren<Mahjong3DPlayerAreaPresenter>(true);
+
+            if (tableCenterWindPresenter == null)
+                tableCenterWindPresenter = GetComponentInChildren<MahjongTableCenterWindPresenter>(true);
 
             if (inputController == null)
                 inputController = GetComponentInChildren<MahjongUiInputController>(true);
@@ -448,6 +459,12 @@ namespace MahjongPrototype.UI
                 return;
 
             playerArea3DPresenter.Refresh(state, CanUseSelfGameplayInput(state));
+        }
+
+        private void RefreshTableCenterWind(MahjongGameState state)
+        {
+            if (tableCenterWindPresenter != null)
+                tableCenterWindPresenter.Refresh(state);
         }
 
         private void RefreshPlayerHand3DForSeat(MahjongGameState state, SeatId seat)
