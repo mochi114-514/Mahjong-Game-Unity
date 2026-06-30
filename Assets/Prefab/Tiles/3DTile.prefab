@@ -56,7 +56,7 @@ MonoBehaviour:
   - _Color
   - _MainColor
   - _TintColor
-  debugDimVisual: 1
+  debugDimVisual: 0
 --- !u!65 &2181783063218979649
 BoxCollider:
   m_ObjectHideFlags: 0
