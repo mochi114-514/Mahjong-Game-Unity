@@ -555,9 +555,16 @@ namespace MahjongPrototype.UI
         private void RefreshInteractionState(MahjongGameState state)
         {
             bool canUseGameplayInput = CanUseSelfGameplayInput(state);
+            bool isDeclaredReachWaitingForDraw =
+                state != null &&
+                state.IsSelfTurn &&
+                !state.IsInteractionLocked &&
+                state.GetPlayerSeat(state.SelfSeat).IsReachDeclared &&
+                !state.GetPlayerSeat(state.SelfSeat).HasDrawnTile;
             bool canUseControlPanelInput =
                 canUseGameplayInput &&
-                (state == null || !state.IsReachDiscardSelectionPending);
+                (state == null || !state.IsReachDiscardSelectionPending) &&
+                !isDeclaredReachWaitingForDraw;
 
             if (inputController != null)
                 inputController.SetGameplayInputInteractable(canUseControlPanelInput);

@@ -243,6 +243,144 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
+        public void ReachDeclared_TurnStartAutoDrawsAndAutoDiscardsThenAdvancesTurn()
+        {
+            GameObject gameObject = new GameObject("ReachTurnStartAutoDiscardTest");
+            try
+            {
+                object gameFlow = CreateConfiguredGameFlow(gameObject, 2);
+                object gameState = DrawReachableHand(gameFlow);
+                SetSeatParticipantType(gameState, "West", "LocalHuman");
+                Invoke(gameFlow, "RequestDeclareReach");
+                Invoke(gameFlow, "RequestDiscard", 12);
+                int discardCountBeforeWestTurnEnds = GetListCount(GetProperty(gameState, "Discards"));
+                int westTurnIndex = (int)GetProperty(gameState, "TurnIndex");
+
+                Assert.That(GetProperty(gameState, "CurrentTurn").ToString(), Is.EqualTo("West"));
+
+                Invoke(gameFlow, "RequestForceDrawSkillForSeat", ParseSeat("East"), "9m");
+                DrawAndDiscardDrawnTileForSeat(gameFlow, "West", "C");
+
+                object eastPlayerSeat = GetPlayerSeat(gameState, "East");
+                object lastDiscard = GetLastListItem(GetProperty(gameState, "Discards"));
+                Assert.That(GetProperty(eastPlayerSeat, "HasDrawnTile"), Is.False);
+                Assert.That(GetListCount(GetProperty(gameState, "Discards")), Is.EqualTo(discardCountBeforeWestTurnEnds + 2));
+                Assert.That(GetProperty(lastDiscard, "ActorSeat").ToString(), Is.EqualTo("East"));
+                Assert.That(GetProperty(lastDiscard, "Source").ToString(), Is.EqualTo("DrawnTile"));
+                Assert.That(GetProperty(lastDiscard, "Tile").ToString(), Is.EqualTo("9m"));
+                Assert.That(GetProperty(gameState, "CurrentTurn").ToString(), Is.EqualTo("West"));
+                Assert.That((int)GetProperty(gameState, "TurnIndex"), Is.GreaterThan(westTurnIndex));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
+        public void ReachDeclared_TurnStartAutoDrawWinningTile_ShowsTsumoDecisionAndDoesNotDiscard()
+        {
+            GameObject gameObject = new GameObject("ReachTurnStartTsumoDecisionTest");
+            try
+            {
+                object gameFlow = CreateConfiguredGameFlow(gameObject, 2);
+                object gameState = DrawReachableHand(gameFlow);
+                SetSeatParticipantType(gameState, "West", "LocalHuman");
+                Invoke(gameFlow, "RequestDeclareReach");
+                Invoke(gameFlow, "RequestDiscard", 12);
+                int discardCountBeforeWestTurnEnds = GetListCount(GetProperty(gameState, "Discards"));
+
+                Invoke(gameFlow, "RequestForceDrawSkillForSeat", ParseSeat("East"), "6m");
+                DrawAndDiscardDrawnTileForSeat(gameFlow, "West", "C");
+
+                object eastPlayerSeat = GetPlayerSeat(gameState, "East");
+                Assert.That(GetProperty(gameState, "IsWinDecisionPending"), Is.True);
+                Assert.That(GetProperty(gameState, "WinDecisionType").ToString(), Is.EqualTo("Tsumo"));
+                Assert.That(GetProperty(eastPlayerSeat, "HasDrawnTile"), Is.True);
+                Assert.That(GetProperty(eastPlayerSeat, "DrawnTile").ToString(), Is.EqualTo("6m"));
+                Assert.That(GetListCount(GetProperty(gameState, "Discards")), Is.EqualTo(discardCountBeforeWestTurnEnds + 1));
+                Assert.That(GetProperty(gameState, "CurrentTurn").ToString(), Is.EqualTo("East"));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
+        public void ReachDeclared_TurnStartAutoDiscardAllowsRonDecision()
+        {
+            GameObject gameObject = new GameObject("ReachTurnStartAutoDiscardRonTest");
+            try
+            {
+                object gameFlow = CreateConfiguredGameFlow(gameObject, 2);
+                object gameState = DrawReachableHand(gameFlow);
+                SetSeatParticipantType(gameState, "West", "LocalHuman");
+                AddHandTiles(
+                    GetPlayerSeat(gameState, "West"),
+                    "1m", "2m", "3m",
+                    "1p", "2p", "3p",
+                    "1s", "2s", "3s",
+                    "E", "E", "E",
+                    "9m");
+                Invoke(gameFlow, "RequestDeclareReach");
+                Invoke(gameFlow, "RequestDiscard", 12);
+                int eastTurnIndexBeforeAutoDiscard = (int)GetProperty(gameState, "TurnIndex") + 1;
+
+                Invoke(gameFlow, "RequestForceDrawSkillForSeat", ParseSeat("East"), "9m");
+                DrawAndDiscardDrawnTileForSeat(gameFlow, "West", "C");
+
+                object lastDiscard = GetLastListItem(GetProperty(gameState, "Discards"));
+                Assert.That(GetProperty(lastDiscard, "ActorSeat").ToString(), Is.EqualTo("East"));
+                Assert.That(GetProperty(lastDiscard, "Source").ToString(), Is.EqualTo("DrawnTile"));
+                Assert.That(GetProperty(lastDiscard, "Tile").ToString(), Is.EqualTo("9m"));
+                Assert.That(GetProperty(gameState, "IsWinDecisionPending"), Is.True);
+                Assert.That(GetProperty(gameState, "WinDecisionSeat").ToString(), Is.EqualTo("West"));
+                Assert.That(GetProperty(gameState, "WinDecisionType").ToString(), Is.EqualTo("Ron"));
+                Assert.That(GetProperty(gameState, "WinSourceSeat").ToString(), Is.EqualTo("East"));
+                Assert.That(GetProperty(gameState, "CurrentTurn").ToString(), Is.EqualTo("East"));
+                Assert.That(GetProperty(gameState, "TurnIndex"), Is.EqualTo(eastTurnIndexBeforeAutoDiscard));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
+        public void ReachDeclared_DeclineTsumoDecision_AutoDiscardsDrawnTile()
+        {
+            GameObject gameObject = new GameObject("ReachDeclineTsumoAutoDiscardTest");
+            try
+            {
+                object gameFlow = CreateConfiguredGameFlow(gameObject, 2);
+                object gameState = DrawReachableHand(gameFlow);
+                SetSeatParticipantType(gameState, "West", "LocalHuman");
+                Invoke(gameFlow, "RequestDeclareReach");
+                Invoke(gameFlow, "RequestDiscard", 12);
+                Invoke(gameFlow, "RequestForceDrawSkillForSeat", ParseSeat("East"), "6m");
+                DrawAndDiscardDrawnTileForSeat(gameFlow, "West", "C");
+                int discardCountBeforeDecline = GetListCount(GetProperty(gameState, "Discards"));
+
+                Invoke(gameFlow, "RequestDeclineWin");
+
+                object eastPlayerSeat = GetPlayerSeat(gameState, "East");
+                object lastDiscard = GetLastListItem(GetProperty(gameState, "Discards"));
+                Assert.That(GetProperty(gameState, "IsWinDecisionPending"), Is.False);
+                Assert.That(GetProperty(eastPlayerSeat, "HasDrawnTile"), Is.False);
+                Assert.That(GetListCount(GetProperty(gameState, "Discards")), Is.EqualTo(discardCountBeforeDecline + 1));
+                Assert.That(GetProperty(lastDiscard, "ActorSeat").ToString(), Is.EqualTo("East"));
+                Assert.That(GetProperty(lastDiscard, "Source").ToString(), Is.EqualTo("DrawnTile"));
+                Assert.That(GetProperty(lastDiscard, "Tile").ToString(), Is.EqualTo("6m"));
+                Assert.That(GetProperty(gameState, "CurrentTurn").ToString(), Is.EqualTo("West"));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
         public void ReachDeclared_DrawNonWinningTile_AutoDiscardsDrawnTile()
         {
             GameObject gameObject = new GameObject("ReachAutoDiscardTest");
@@ -403,9 +541,15 @@ namespace MahjongPrototype.Tests
 
         private static object CreateConfiguredGameFlow(GameObject gameObject)
         {
+            return CreateConfiguredGameFlow(gameObject, 1);
+        }
+
+        private static object CreateConfiguredGameFlow(GameObject gameObject, int participantCount)
+        {
             gameObject.AddComponent(Type.GetType(MahjongEventNotifierTypeName, true));
             object gameFlow = gameObject.AddComponent(Type.GetType(MahjongGameFlowTypeName, true));
             SetPrivateField(gameFlow, "logWarnings", false);
+            SetPrivateField(gameFlow, "participantCount", participantCount);
             SetPrivateField(gameFlow, "initialHandTileCount", 0);
             SetPrivateField(gameFlow, "autoStart", false);
             SetPrivateField(gameFlow, "useFixedRandomSeed", true);
@@ -458,6 +602,23 @@ namespace MahjongPrototype.Tests
             Invoke(gameState, "SetParticipantType", seat, ParseParticipantType("LocalHuman"));
         }
 
+        private static void SetSeatParticipantType(object gameState, string seatName, string participantTypeName)
+        {
+            Invoke(
+                gameState,
+                "SetParticipantType",
+                ParseSeat(seatName),
+                ParseParticipantType(participantTypeName));
+        }
+
+        private static void DrawAndDiscardDrawnTileForSeat(object gameFlow, string seatName, string tileCode)
+        {
+            object seat = ParseSeat(seatName);
+            Invoke(gameFlow, "RequestForceDrawSkillForSeat", seat, tileCode);
+            Assert.That(Invoke(gameFlow, "TryRequestDrawForSeat", seat), Is.True);
+            Assert.That(Invoke(gameFlow, "TryRequestDiscardDrawnTileForSeat", seat), Is.True);
+        }
+
         private static int GetListCount(object list)
         {
             return (int)GetProperty(list, "Count");
@@ -468,6 +629,11 @@ namespace MahjongPrototype.Tests
             PropertyInfo itemProperty = list.GetType().GetProperty("Item");
             Assert.That(itemProperty, Is.Not.Null);
             return itemProperty.GetValue(list, new object[] { index });
+        }
+
+        private static object GetLastListItem(object list)
+        {
+            return GetListItem(list, GetListCount(list) - 1);
         }
 
         private static object Invoke(object target, string methodName, params object[] args)

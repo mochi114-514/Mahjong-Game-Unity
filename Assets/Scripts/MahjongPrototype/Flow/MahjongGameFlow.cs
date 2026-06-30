@@ -540,6 +540,12 @@ namespace MahjongPrototype
             NotifyWinDeclined(seat, turnIndex);
             NotifyWinDeclinedDetailed(seat, winType, turnIndex);
 
+            if (winType == WinType.Tsumo && ShouldAutoDiscardDrawnTileAfterReach(seat))
+            {
+                TryAutoDiscardDrawnTileAfterReach(seat);
+                return;
+            }
+
             if (winType == WinType.Ron && !gameState.IsRoundEnded)
                 AdvanceTurn();
         }
@@ -683,9 +689,33 @@ namespace MahjongPrototype
                 $"phase={gameState.TurnPhase}; hasDrawnTile={gameState.GetPlayerSeat(seat).HasDrawnTile}",
                 seat: seat,
                 turnIndex: turnIndex);
+
             ResolveReservedSkillBeforeDraw(seat);
+
+            if (!IsStillCurrentTurn(seat, turnIndex))
+                return;
+
+            if (TryAutoDrawForDeclaredReachTurn(seat, turnIndex))
+                return;
+
+            if (!IsStillCurrentTurn(seat, turnIndex))
+                return;
+
             TryAutoDrawAtTurnStart(seat, turnIndex);
+
+            if (!IsStillCurrentTurn(seat, turnIndex))
+                return;
+
             cpuTurnController?.TryStartCpuTurn(this, gameState, seat, turnIndex);
+        }
+
+        private bool IsStillCurrentTurn(SeatId seat, int turnIndex)
+        {
+            return gameState != null &&
+                !gameState.IsRoundEnded &&
+                !gameState.IsWinDecisionPending &&
+                gameState.CurrentTurn == seat &&
+                gameState.TurnIndex == turnIndex;
         }
 
         private void ResolveReservedSkillBeforeDraw(SeatId seat)
@@ -711,6 +741,37 @@ namespace MahjongPrototype
                         "Unsupported skill reservation.");
                     break;
             }
+        }
+
+        private bool TryAutoDrawForDeclaredReachTurn(SeatId seat, int turnIndex)
+        {
+            if (gameState == null ||
+                gameState.IsRoundEnded ||
+                gameState.IsWinDecisionPending ||
+                gameState.IsReachDecisionPending ||
+                gameState.IsReachDiscardSelectionPending ||
+                gameState.CurrentTurn != seat ||
+                gameState.TurnIndex != turnIndex)
+            {
+                return false;
+            }
+
+            PlayerSeat playerSeat = gameState.GetPlayerSeat(seat);
+            if (playerSeat == null ||
+                !playerSeat.IsReachDeclared ||
+                playerSeat.HasDrawnTile)
+            {
+                return false;
+            }
+
+            NotifyTurnDebug(
+                "ReachAutoDrawStarted",
+                $"phase={gameState.TurnPhase}",
+                seat: seat,
+                turnIndex: turnIndex);
+
+            TryDrawForSeat(seat, "ReachAutoDrawCompleted", "ReachAutoDrawSkipped", false);
+            return true;
         }
 
         private void TryAutoDrawAtTurnStart(SeatId seat, int turnIndex)
