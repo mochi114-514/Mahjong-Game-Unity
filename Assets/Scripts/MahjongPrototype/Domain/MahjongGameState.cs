@@ -272,6 +272,16 @@ namespace MahjongPrototype.Domain
             IsReachDiscardSelectionPending = true;
         }
 
+        public bool CancelReachDiscardSelection()
+        {
+            if (!IsReachDiscardSelectionPending || reachDiscardCandidates.Count <= 0)
+                return false;
+
+            IsReachDecisionPending = true;
+            IsReachDiscardSelectionPending = false;
+            return true;
+        }
+
         public void ClearReachDecision()
         {
             IsReachDecisionPending = false;

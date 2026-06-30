@@ -33,6 +33,7 @@ namespace MahjongPrototype.Tests
                 int declineWinCount = 0;
                 int reachCount = 0;
                 int declineReachCount = 0;
+                int cancelReachCount = 0;
                 AddEventHandler(controller, "DrawRequested", new Action(() => drawCount++));
                 AddEventHandler(controller, "ForceDrawSkillRequested", new Action<string>(value => skillTarget = value));
                 AddEventHandler(controller, "AutoSortChanged", new Action<bool>(value => autoSortValue = value));
@@ -41,6 +42,7 @@ namespace MahjongPrototype.Tests
                 AddEventHandler(controller, "DeclineWinRequested", new Action(() => declineWinCount++));
                 AddEventHandler(controller, "ReachRequested", new Action(() => reachCount++));
                 AddEventHandler(controller, "DeclineReachRequested", new Action(() => declineReachCount++));
+                AddEventHandler(controller, "CancelReachRequested", new Action(() => cancelReachCount++));
 
                 SetProperty(controls.TargetTileInput, "text", "5m");
                 root.SetActive(true);
@@ -52,6 +54,7 @@ namespace MahjongPrototype.Tests
                 controls.DeclineWinButton.onClick.Invoke();
                 controls.ReachButton.onClick.Invoke();
                 controls.DeclineReachButton.onClick.Invoke();
+                controls.CancelReachButton.onClick.Invoke();
 
                 Assert.That(drawCount, Is.EqualTo(1));
                 Assert.That(skillTarget, Is.EqualTo("5m"));
@@ -61,6 +64,7 @@ namespace MahjongPrototype.Tests
                 Assert.That(declineWinCount, Is.EqualTo(1));
                 Assert.That(reachCount, Is.EqualTo(1));
                 Assert.That(declineReachCount, Is.EqualTo(1));
+                Assert.That(cancelReachCount, Is.EqualTo(1));
             }
             finally
             {
@@ -151,6 +155,7 @@ namespace MahjongPrototype.Tests
                 Controls controls = CreateControls(root.transform);
                 AssignControls(controller, controls);
                 controls.RetryButton.interactable = true;
+                controls.CancelReachButton.interactable = true;
 
                 Invoke(controller, "SetGameplayInputInteractable", false);
 
@@ -158,6 +163,7 @@ namespace MahjongPrototype.Tests
                 Assert.That(controls.ForceDrawSkillButton.interactable, Is.False);
                 Assert.That(GetProperty(controls.TargetTileInput, "interactable"), Is.False);
                 Assert.That(controls.RetryButton.interactable, Is.True);
+                Assert.That(controls.CancelReachButton.interactable, Is.True);
             }
             finally
             {
@@ -201,6 +207,7 @@ namespace MahjongPrototype.Tests
                 DeclineWinButton = CreateButton(parent, "RenamedDeclineWin"),
                 ReachButton = CreateButton(parent, "RenamedReach"),
                 DeclineReachButton = CreateButton(parent, "RenamedDeclineReach"),
+                CancelReachButton = CreateButton(parent, "RenamedCancelReach"),
                 TargetTileInput = CreateInput(parent, "RenamedTargetTile")
             };
         }
@@ -236,6 +243,7 @@ namespace MahjongPrototype.Tests
             SetPrivateField(controller, "declineWinButton", controls.DeclineWinButton);
             SetPrivateField(controller, "reachButton", controls.ReachButton);
             SetPrivateField(controller, "declineReachButton", controls.DeclineReachButton);
+            SetPrivateField(controller, "cancelReachButton", controls.CancelReachButton);
             SetPrivateField(controller, "targetTileInput", controls.TargetTileInput);
         }
 
@@ -292,6 +300,7 @@ namespace MahjongPrototype.Tests
             public Button DeclineWinButton;
             public Button ReachButton;
             public Button DeclineReachButton;
+            public Button CancelReachButton;
             public Component TargetTileInput;
         }
     }

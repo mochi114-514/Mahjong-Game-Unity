@@ -169,6 +169,7 @@ namespace MahjongPrototype.UI
             eventNotifier.WinDeclined += HandleWinDeclined;
             eventNotifier.ReachDecisionStarted += HandleReachDecisionStarted;
             eventNotifier.ReachDiscardSelectionStarted += HandleReachDiscardSelectionStarted;
+            eventNotifier.ReachDiscardSelectionCanceled += HandleReachDiscardSelectionCanceled;
             eventNotifier.ReachDeclared += HandleReachDeclared;
             eventNotifier.ReachDeclined += HandleReachDeclined;
             eventNotifier.HandAutoSorted += HandleHandAutoSorted;
@@ -194,6 +195,7 @@ namespace MahjongPrototype.UI
             eventNotifier.WinDeclined -= HandleWinDeclined;
             eventNotifier.ReachDecisionStarted -= HandleReachDecisionStarted;
             eventNotifier.ReachDiscardSelectionStarted -= HandleReachDiscardSelectionStarted;
+            eventNotifier.ReachDiscardSelectionCanceled -= HandleReachDiscardSelectionCanceled;
             eventNotifier.ReachDeclared -= HandleReachDeclared;
             eventNotifier.ReachDeclined -= HandleReachDeclined;
             eventNotifier.HandAutoSorted -= HandleHandAutoSorted;
@@ -390,6 +392,13 @@ namespace MahjongPrototype.UI
             RefreshInteractionUi();
         }
 
+        private void HandleReachDiscardSelectionCanceled(SeatId _, int __)
+        {
+            RefreshGlobalStatus();
+            RefreshReachDecisionUi();
+            RefreshInteractionUi();
+        }
+
         private void HandleReachDeclared(SeatId _, int __)
         {
             RefreshGlobalStatus();
@@ -528,7 +537,11 @@ namespace MahjongPrototype.UI
                     state != null &&
                     state.IsReachDecisionPending &&
                     state.ReachDecisionSeat == state.SelfSeat;
-                reachDecisionController.SetVisible(showSelfReachDecision);
+                bool showSelfReachCancel =
+                    state != null &&
+                    state.IsReachDiscardSelectionPending &&
+                    state.ReachDecisionSeat == state.SelfSeat;
+                reachDecisionController.SetReachUiVisible(showSelfReachDecision, showSelfReachCancel);
             }
         }
 

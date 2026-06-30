@@ -87,6 +87,41 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
+        public void RequestCancelReachDiscardSelection_ReturnsToReachDecisionAndKeepsCandidates()
+        {
+            GameObject gameObject = new GameObject("ReachCancelDiscardSelectionTest");
+            try
+            {
+                object gameFlow = CreateConfiguredGameFlow(gameObject);
+                object gameState = DrawReachableHand(gameFlow);
+                Invoke(gameFlow, "RequestDeclareReach");
+                int candidateCountBefore = GetListCount(GetProperty(gameState, "ReachDiscardCandidates"));
+                int discardCountBefore = GetListCount(GetProperty(gameState, "Discards"));
+
+                Invoke(gameFlow, "RequestCancelReachDiscardSelection");
+
+                object playerSeat = GetPlayerSeat(gameState, "East");
+                Assert.That(GetProperty(gameState, "IsReachDecisionPending"), Is.True);
+                Assert.That(GetProperty(gameState, "IsReachDiscardSelectionPending"), Is.False);
+                Assert.That(GetProperty(gameState, "TurnPhase").ToString(), Is.EqualTo("ReachDecision"));
+                Assert.That(
+                    GetListCount(GetProperty(gameState, "ReachDiscardCandidates")),
+                    Is.EqualTo(candidateCountBefore));
+                Assert.That(GetProperty(playerSeat, "IsReachDeclared"), Is.False);
+                Assert.That(GetListCount(GetProperty(gameState, "Discards")), Is.EqualTo(discardCountBefore));
+
+                Invoke(gameFlow, "RequestDeclareReach");
+
+                Assert.That(GetProperty(gameState, "IsReachDecisionPending"), Is.False);
+                Assert.That(GetProperty(gameState, "IsReachDiscardSelectionPending"), Is.True);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
         public void RequestDeclineReach_ClearsReachDecision()
         {
             GameObject gameObject = new GameObject("ReachDeclineRequestTest");

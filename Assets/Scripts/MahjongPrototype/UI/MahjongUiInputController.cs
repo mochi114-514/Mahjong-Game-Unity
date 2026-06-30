@@ -24,6 +24,7 @@ namespace MahjongPrototype.UI
         [Header("Reach Decision")]
         [SerializeField] private Button reachButton;
         [SerializeField] private Button declineReachButton;
+        [SerializeField] private Button cancelReachButton;
         [Tooltip("指定牌ツモの対象を入力するTMP_InputFieldです。1m-9m, 1p-9p, 1s-9s, E/S/W/N/P/F/C を受け付けます。")]
         [SerializeField] private TMP_InputField targetTileInput;
 
@@ -37,6 +38,7 @@ namespace MahjongPrototype.UI
         private bool warnedMissingDeclineWinButton;
         private bool warnedMissingReachButton;
         private bool warnedMissingDeclineReachButton;
+        private bool warnedMissingCancelReachButton;
 
         public event Action DrawRequested;
         public event Action<string> ForceDrawSkillRequested;
@@ -46,6 +48,7 @@ namespace MahjongPrototype.UI
         public event Action DeclineWinRequested;
         public event Action ReachRequested;
         public event Action DeclineReachRequested;
+        public event Action CancelReachRequested;
 
         private void OnEnable()
         {
@@ -134,6 +137,15 @@ namespace MahjongPrototype.UI
                 WarnMissingOnce(ref warnedMissingDeclineReachButton, "DeclineReachButton is not assigned.");
             }
 
+            if (cancelReachButton != null)
+            {
+                cancelReachButton.onClick.AddListener(HandleCancelReachClicked);
+            }
+            else
+            {
+                WarnMissingOnce(ref warnedMissingCancelReachButton, "CancelReachButton is not assigned.");
+            }
+
             isSubscribed = true;
         }
 
@@ -165,6 +177,9 @@ namespace MahjongPrototype.UI
 
             if (declineReachButton != null)
                 declineReachButton.onClick.RemoveListener(HandleDeclineReachClicked);
+
+            if (cancelReachButton != null)
+                cancelReachButton.onClick.RemoveListener(HandleCancelReachClicked);
 
             isSubscribed = false;
         }
@@ -213,6 +228,11 @@ namespace MahjongPrototype.UI
         private void HandleDeclineReachClicked()
         {
             DeclineReachRequested?.Invoke();
+        }
+
+        private void HandleCancelReachClicked()
+        {
+            CancelReachRequested?.Invoke();
         }
 
         public void SetAutoSortWithoutNotify(bool enabled)

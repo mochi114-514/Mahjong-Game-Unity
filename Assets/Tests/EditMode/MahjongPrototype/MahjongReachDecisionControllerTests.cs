@@ -82,6 +82,90 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
+        public void SetReachUiVisible_ShowsDecisionAndHidesCancel()
+        {
+            GameObject controllerObject = new GameObject("ReachDecisionControllerHost");
+            GameObject reachDecisionRoot = new GameObject("ReachDecisionRoot");
+            GameObject reachCancelRoot = new GameObject("ReachCancelRoot");
+            reachDecisionRoot.SetActive(false);
+            reachCancelRoot.SetActive(true);
+            try
+            {
+                Component controller = controllerObject.AddComponent(
+                    Type.GetType(ControllerTypeName, true));
+                SetPrivateField(controller, "reachDecisionRoot", reachDecisionRoot);
+                SetPrivateField(controller, "reachCancelRoot", reachCancelRoot);
+
+                Invoke(controller, "SetReachUiVisible", true, false);
+
+                Assert.That(reachDecisionRoot.activeSelf, Is.True);
+                Assert.That(reachCancelRoot.activeSelf, Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(reachCancelRoot);
+                UnityEngine.Object.DestroyImmediate(reachDecisionRoot);
+                UnityEngine.Object.DestroyImmediate(controllerObject);
+            }
+        }
+
+        [Test]
+        public void SetReachUiVisible_HidesDecisionAndShowsCancel()
+        {
+            GameObject controllerObject = new GameObject("ReachDecisionControllerHost");
+            GameObject reachDecisionRoot = new GameObject("ReachDecisionRoot");
+            GameObject reachCancelRoot = new GameObject("ReachCancelRoot");
+            reachDecisionRoot.SetActive(true);
+            reachCancelRoot.SetActive(false);
+            try
+            {
+                Component controller = controllerObject.AddComponent(
+                    Type.GetType(ControllerTypeName, true));
+                SetPrivateField(controller, "reachDecisionRoot", reachDecisionRoot);
+                SetPrivateField(controller, "reachCancelRoot", reachCancelRoot);
+
+                Invoke(controller, "SetReachUiVisible", false, true);
+
+                Assert.That(reachDecisionRoot.activeSelf, Is.False);
+                Assert.That(reachCancelRoot.activeSelf, Is.True);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(reachCancelRoot);
+                UnityEngine.Object.DestroyImmediate(reachDecisionRoot);
+                UnityEngine.Object.DestroyImmediate(controllerObject);
+            }
+        }
+
+        [Test]
+        public void SetVisible_StillHidesCancelForBackwardCompatibility()
+        {
+            GameObject controllerObject = new GameObject("ReachDecisionControllerHost");
+            GameObject reachDecisionRoot = new GameObject("ReachDecisionRoot");
+            GameObject reachCancelRoot = new GameObject("ReachCancelRoot");
+            reachDecisionRoot.SetActive(false);
+            reachCancelRoot.SetActive(true);
+            try
+            {
+                Component controller = controllerObject.AddComponent(
+                    Type.GetType(ControllerTypeName, true));
+                SetPrivateField(controller, "reachDecisionRoot", reachDecisionRoot);
+                SetPrivateField(controller, "reachCancelRoot", reachCancelRoot);
+
+                Invoke(controller, "SetVisible", true);
+
+                Assert.That(reachDecisionRoot.activeSelf, Is.True);
+                Assert.That(reachCancelRoot.activeSelf, Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(reachCancelRoot);
+                UnityEngine.Object.DestroyImmediate(reachDecisionRoot);
+                UnityEngine.Object.DestroyImmediate(controllerObject);
+            }
+        }
+
+        [Test]
         public void SetVisible_WithoutAssignedRoot_WarnsAndDoesNotUseReachDecisionAreaName()
         {
             GameObject reachDecisionArea = new GameObject("ReachDecisionArea");

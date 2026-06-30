@@ -573,6 +573,42 @@ namespace MahjongPrototype
             NotifyReachDiscardSelectionStarted(seat, turnIndex);
         }
 
+        public void RequestCancelReachDiscardSelection()
+        {
+            if (!CanUseGameState())
+                return;
+
+            if (!gameState.IsReachDiscardSelectionPending)
+            {
+                Warn("No reach discard selection is pending.");
+                NotifyTurnBlocked("ReachBlocked", "ReachDiscardSelectionMissing");
+                return;
+            }
+
+            if (gameState.ReachDecisionSeat != gameState.SelfSeat)
+            {
+                Warn("Only the self player can cancel reach discard selection from the current UI.");
+                NotifyTurnBlocked("ReachBlocked", "NotSelfReachDecision");
+                return;
+            }
+
+            SeatId seat = gameState.ReachDecisionSeat;
+            int turnIndex = gameState.ReachDecisionTurnIndex;
+            if (!gameState.CancelReachDiscardSelection())
+            {
+                Warn("Reach discard selection could not be canceled.");
+                NotifyTurnBlocked("ReachBlocked", "ReachCandidatesMissing");
+                return;
+            }
+
+            NotifyTurnDebug(
+                "ReachDiscardSelectionCanceled",
+                $"phase={gameState.TurnPhase}; candidates={gameState.ReachDiscardCandidates.Count}",
+                seat: seat,
+                turnIndex: turnIndex);
+            NotifyReachDiscardSelectionCanceled(seat, turnIndex);
+        }
+
         public void RequestDeclineReach()
         {
             if (!CanUseGameState())
@@ -1133,6 +1169,11 @@ namespace MahjongPrototype
         private void NotifyReachDiscardSelectionStarted(SeatId seat, int turnIndex)
         {
             eventNotifier?.NotifyReachDiscardSelectionStarted(seat, turnIndex);
+        }
+
+        private void NotifyReachDiscardSelectionCanceled(SeatId seat, int turnIndex)
+        {
+            eventNotifier?.NotifyReachDiscardSelectionCanceled(seat, turnIndex);
         }
 
         private void NotifyReachDeclared(SeatId seat, int turnIndex)

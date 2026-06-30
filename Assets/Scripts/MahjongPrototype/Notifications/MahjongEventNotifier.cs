@@ -25,6 +25,7 @@ namespace MahjongPrototype.Notifications
         public event Action<SeatId, int> WinDeclined;
         public event Action<SeatId, int> ReachDecisionStarted;
         public event Action<SeatId, int> ReachDiscardSelectionStarted;
+        public event Action<SeatId, int> ReachDiscardSelectionCanceled;
         public event Action<SeatId, int> ReachDeclared;
         public event Action<SeatId, int> ReachDeclined;
         public event Action<SeatId, int> HandAutoSorted;
@@ -135,6 +136,12 @@ namespace MahjongPrototype.Notifications
         public void NotifyReachDiscardSelectionStarted(SeatId seat, int turnIndex)
         {
             ReachDiscardSelectionStarted?.Invoke(seat, turnIndex);
+            NotifyAny();
+        }
+
+        public void NotifyReachDiscardSelectionCanceled(SeatId seat, int turnIndex)
+        {
+            ReachDiscardSelectionCanceled?.Invoke(seat, turnIndex);
             NotifyAny();
         }
 
