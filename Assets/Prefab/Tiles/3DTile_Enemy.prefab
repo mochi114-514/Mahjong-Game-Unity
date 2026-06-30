@@ -50,6 +50,8 @@ MonoBehaviour:
   tileFaceCatalog: {fileID: 11400000, guid: 67bd77193bd7b4244ab364b23c14e1eb, type: 2}
   dimTargetRoot: {fileID: 8500600554509927304}
   dimTargetRenderers: []
+  dimVisualMode: 1
+  dimmedOverrideMaterial: {fileID: 2100000, guid: 9b933e43ceb647c3a33b6b81c510686a, type: 2}
   dimmedTint: {r: 0.25, g: 0.25, b: 0.25, a: 1}
   tintPropertyNames:
   - _BaseColor

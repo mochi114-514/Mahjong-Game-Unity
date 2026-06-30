@@ -14,18 +14,164 @@ namespace MahjongPrototype.Tests
         private static readonly Color ExpectedDimmedTint = new Color(0.25f, 0.25f, 0.25f, 1f);
 
         [Test]
-        public void SetDimmed_WithDimTargetRoot_AppliesPropertyBlockToChildRenderer()
+        public void OverrideMaterialMode_SetDimmedTrue_ReplacesSharedMaterials()
+        {
+            GameObject tileObject = new GameObject("Tile3DViewOverrideMaterialTest");
+            GameObject dimRoot = new GameObject("TilePrefab");
+            GameObject rendererObject = new GameObject("TileBody");
+            Material originalMaterial = CreateTestMaterial("OriginalTileMaterial");
+            Material dimmedMaterial = CreateTestMaterial("DimmedTileMaterial");
+            try
+            {
+                Renderer renderer = PrepareRenderer(tileObject, dimRoot, rendererObject);
+                renderer.sharedMaterials = new[] { originalMaterial };
+                object tileView = CreateTileView(tileObject, dimRoot.transform);
+                SetPrivateField(tileView, "dimmedOverrideMaterial", dimmedMaterial);
+
+                Invoke(tileView, "SetDimmed", true);
+
+                Material[] materials = renderer.sharedMaterials;
+                Assert.That(GetProperty(tileView, "IsDimmed"), Is.True);
+                Assert.That(materials.Length, Is.EqualTo(1));
+                Assert.That(materials[0], Is.SameAs(dimmedMaterial));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(originalMaterial);
+                UnityEngine.Object.DestroyImmediate(dimmedMaterial);
+                UnityEngine.Object.DestroyImmediate(tileObject);
+            }
+        }
+
+        [Test]
+        public void OverrideMaterialMode_SetDimmedFalse_RestoresSharedMaterials()
+        {
+            GameObject tileObject = new GameObject("Tile3DViewRestoreMaterialTest");
+            GameObject dimRoot = new GameObject("TilePrefab");
+            GameObject rendererObject = new GameObject("TileBody");
+            Material originalMaterial = CreateTestMaterial("OriginalTileMaterial");
+            Material dimmedMaterial = CreateTestMaterial("DimmedTileMaterial");
+            try
+            {
+                Renderer renderer = PrepareRenderer(tileObject, dimRoot, rendererObject);
+                renderer.sharedMaterials = new[] { originalMaterial };
+                object tileView = CreateTileView(tileObject, dimRoot.transform);
+                SetPrivateField(tileView, "dimmedOverrideMaterial", dimmedMaterial);
+
+                Invoke(tileView, "SetDimmed", true);
+                Invoke(tileView, "SetDimmed", false);
+
+                Material[] materials = renderer.sharedMaterials;
+                Assert.That(GetProperty(tileView, "IsDimmed"), Is.False);
+                Assert.That(materials.Length, Is.EqualTo(1));
+                Assert.That(materials[0], Is.SameAs(originalMaterial));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(originalMaterial);
+                UnityEngine.Object.DestroyImmediate(dimmedMaterial);
+                UnityEngine.Object.DestroyImmediate(tileObject);
+            }
+        }
+
+        [Test]
+        public void OverrideMaterialMode_ReplacesEveryMaterialSlot()
+        {
+            GameObject tileObject = new GameObject("Tile3DViewMultiMaterialTest");
+            GameObject dimRoot = new GameObject("TilePrefab");
+            GameObject rendererObject = new GameObject("TileBody");
+            Material originalA = CreateTestMaterial("OriginalTileMaterialA");
+            Material originalB = CreateTestMaterial("OriginalTileMaterialB");
+            Material dimmedMaterial = CreateTestMaterial("DimmedTileMaterial");
+            try
+            {
+                Renderer renderer = PrepareRenderer(tileObject, dimRoot, rendererObject);
+                renderer.sharedMaterials = new[] { originalA, originalB };
+                object tileView = CreateTileView(tileObject, dimRoot.transform);
+                SetPrivateField(tileView, "dimmedOverrideMaterial", dimmedMaterial);
+
+                Invoke(tileView, "SetDimmed", true);
+
+                Material[] materials = renderer.sharedMaterials;
+                Assert.That(materials.Length, Is.EqualTo(2));
+                Assert.That(materials[0], Is.SameAs(dimmedMaterial));
+                Assert.That(materials[1], Is.SameAs(dimmedMaterial));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(originalA);
+                UnityEngine.Object.DestroyImmediate(originalB);
+                UnityEngine.Object.DestroyImmediate(dimmedMaterial);
+                UnityEngine.Object.DestroyImmediate(tileObject);
+            }
+        }
+
+        [Test]
+        public void Initialize_ClearsDimmedStateAndRestoresSharedMaterials()
+        {
+            GameObject tileObject = new GameObject("Tile3DViewInitializeRestoresMaterialTest");
+            GameObject dimRoot = new GameObject("TilePrefab");
+            GameObject rendererObject = new GameObject("TileBody");
+            Material originalMaterial = CreateTestMaterial("OriginalTileMaterial");
+            Material dimmedMaterial = CreateTestMaterial("DimmedTileMaterial");
+            try
+            {
+                Renderer renderer = PrepareRenderer(tileObject, dimRoot, rendererObject);
+                renderer.sharedMaterials = new[] { originalMaterial };
+                object tileView = CreateTileView(tileObject, dimRoot.transform);
+                SetPrivateField(tileView, "dimmedOverrideMaterial", dimmedMaterial);
+
+                Invoke(tileView, "SetDimmed", true);
+                Invoke(tileView, "Initialize", 3);
+
+                Material[] materials = renderer.sharedMaterials;
+                Assert.That(GetProperty(tileView, "IsDimmed"), Is.False);
+                Assert.That(materials.Length, Is.EqualTo(1));
+                Assert.That(materials[0], Is.SameAs(originalMaterial));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(originalMaterial);
+                UnityEngine.Object.DestroyImmediate(dimmedMaterial);
+                UnityEngine.Object.DestroyImmediate(tileObject);
+            }
+        }
+
+        [Test]
+        public void OverrideMaterialMode_WithoutOverrideMaterial_Warns()
+        {
+            GameObject tileObject = new GameObject("Tile3DViewMissingOverrideMaterialTest");
+            GameObject dimRoot = new GameObject("TilePrefab");
+            GameObject rendererObject = new GameObject("TileBody");
+            try
+            {
+                PrepareRenderer(tileObject, dimRoot, rendererObject);
+                object tileView = CreateTileView(tileObject, dimRoot.transform);
+                LogAssert.Expect(
+                    LogType.Warning,
+                    "Mahjong3DTileView: Dimmed override material is not assigned.");
+
+                Invoke(tileView, "SetDimmed", true);
+
+                Assert.That(GetProperty(tileView, "IsDimmed"), Is.True);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(tileObject);
+            }
+        }
+
+        [Test]
+        public void MaterialPropertyBlockTintMode_SetDimmedTrue_AppliesPropertyBlockToChildRenderer()
         {
             GameObject tileObject = new GameObject("Tile3DViewRootDimmedTest");
             GameObject dimRoot = new GameObject("TilePrefab");
             GameObject rendererObject = new GameObject("TileBody");
             try
             {
-                dimRoot.transform.SetParent(tileObject.transform);
-                rendererObject.transform.SetParent(dimRoot.transform);
-                Renderer renderer = rendererObject.AddComponent<MeshRenderer>();
-                object tileView = tileObject.AddComponent(Type.GetType(Mahjong3DTileViewTypeName, true));
-                SetPrivateField(tileView, "dimTargetRoot", dimRoot.transform);
+                Renderer renderer = PrepareRenderer(tileObject, dimRoot, rendererObject);
+                object tileView = CreateTileView(tileObject, dimRoot.transform);
+                SetDimVisualMode(tileView, "MaterialPropertyBlockTint");
 
                 Invoke(tileView, "SetDimmed", true);
 
@@ -41,18 +187,16 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void SetDimmedFalse_ClearsPropertyBlock()
+        public void MaterialPropertyBlockTintMode_SetDimmedFalse_ClearsPropertyBlock()
         {
             GameObject tileObject = new GameObject("Tile3DViewClearPropertyBlockTest");
             GameObject dimRoot = new GameObject("TilePrefab");
             GameObject rendererObject = new GameObject("TileBody");
             try
             {
-                dimRoot.transform.SetParent(tileObject.transform);
-                rendererObject.transform.SetParent(dimRoot.transform);
-                Renderer renderer = rendererObject.AddComponent<MeshRenderer>();
-                object tileView = tileObject.AddComponent(Type.GetType(Mahjong3DTileViewTypeName, true));
-                SetPrivateField(tileView, "dimTargetRoot", dimRoot.transform);
+                Renderer renderer = PrepareRenderer(tileObject, dimRoot, rendererObject);
+                object tileView = CreateTileView(tileObject, dimRoot.transform);
+                SetDimVisualMode(tileView, "MaterialPropertyBlockTint");
 
                 Invoke(tileView, "SetDimmed", true);
                 Invoke(tileView, "SetDimmed", false);
@@ -68,34 +212,7 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void Initialize_ClearsDimmedStateAndPropertyBlock()
-        {
-            GameObject tileObject = new GameObject("Tile3DViewInitializeClearsDimmedTest");
-            GameObject dimRoot = new GameObject("TilePrefab");
-            GameObject rendererObject = new GameObject("TileBody");
-            try
-            {
-                dimRoot.transform.SetParent(tileObject.transform);
-                rendererObject.transform.SetParent(dimRoot.transform);
-                Renderer renderer = rendererObject.AddComponent<MeshRenderer>();
-                object tileView = tileObject.AddComponent(Type.GetType(Mahjong3DTileViewTypeName, true));
-                SetPrivateField(tileView, "dimTargetRoot", dimRoot.transform);
-
-                Invoke(tileView, "SetDimmed", true);
-                Invoke(tileView, "Initialize", 3);
-
-                MaterialPropertyBlock propertyBlock = GetPropertyBlock(renderer);
-                Assert.That(GetProperty(tileView, "IsDimmed"), Is.False);
-                Assert.That(propertyBlock.isEmpty, Is.True);
-            }
-            finally
-            {
-                UnityEngine.Object.DestroyImmediate(tileObject);
-            }
-        }
-
-        [Test]
-        public void SetDimmed_UsesExplicitRenderersBeforeDimTargetRoot()
+        public void MaterialPropertyBlockTintMode_UsesExplicitRenderersBeforeDimTargetRoot()
         {
             GameObject tileObject = new GameObject("Tile3DViewExplicitRendererPriorityTest");
             GameObject dimRoot = new GameObject("TilePrefab");
@@ -103,13 +220,11 @@ namespace MahjongPrototype.Tests
             GameObject explicitRendererObject = new GameObject("FrontFace");
             try
             {
-                dimRoot.transform.SetParent(tileObject.transform);
-                rootRendererObject.transform.SetParent(dimRoot.transform);
+                Renderer rootRenderer = PrepareRenderer(tileObject, dimRoot, rootRendererObject);
                 explicitRendererObject.transform.SetParent(tileObject.transform);
-                Renderer rootRenderer = rootRendererObject.AddComponent<MeshRenderer>();
                 Renderer explicitRenderer = explicitRendererObject.AddComponent<MeshRenderer>();
-                object tileView = tileObject.AddComponent(Type.GetType(Mahjong3DTileViewTypeName, true));
-                SetPrivateField(tileView, "dimTargetRoot", dimRoot.transform);
+                object tileView = CreateTileView(tileObject, dimRoot.transform);
+                SetDimVisualMode(tileView, "MaterialPropertyBlockTint");
                 SetPrivateField(tileView, "dimTargetRenderers", new[] { explicitRenderer });
 
                 Invoke(tileView, "SetDimmed", true);
@@ -145,6 +260,38 @@ namespace MahjongPrototype.Tests
             {
                 UnityEngine.Object.DestroyImmediate(tileObject);
             }
+        }
+
+        private static Renderer PrepareRenderer(
+            GameObject tileObject,
+            GameObject dimRoot,
+            GameObject rendererObject)
+        {
+            dimRoot.transform.SetParent(tileObject.transform);
+            rendererObject.transform.SetParent(dimRoot.transform);
+            return rendererObject.AddComponent<MeshRenderer>();
+        }
+
+        private static object CreateTileView(GameObject tileObject, Transform dimRoot)
+        {
+            object tileView = tileObject.AddComponent(Type.GetType(Mahjong3DTileViewTypeName, true));
+            SetPrivateField(tileView, "dimTargetRoot", dimRoot);
+            return tileView;
+        }
+
+        private static Material CreateTestMaterial(string materialName)
+        {
+            Shader shader =
+                Shader.Find("Universal Render Pipeline/Lit") ??
+                Shader.Find("Standard") ??
+                Shader.Find("Sprites/Default");
+            Assert.That(shader, Is.Not.Null);
+
+            Material material = new Material(shader)
+            {
+                name = materialName
+            };
+            return material;
         }
 
         private static MaterialPropertyBlock GetPropertyBlock(Renderer renderer)
@@ -183,6 +330,15 @@ namespace MahjongPrototype.Tests
                 BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
             Assert.That(property, Is.Not.Null);
             return property.GetValue(target);
+        }
+
+        private static void SetDimVisualMode(object target, string modeName)
+        {
+            FieldInfo field = target.GetType().GetField(
+                "dimVisualMode",
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.That(field, Is.Not.Null);
+            field.SetValue(target, Enum.Parse(field.FieldType, modeName));
         }
 
         private static void SetPrivateField(object target, string fieldName, object value)

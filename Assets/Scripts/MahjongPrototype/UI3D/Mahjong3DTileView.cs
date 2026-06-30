@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using MahjongPrototype.Domain;
 using UnityEngine;
 
@@ -9,6 +10,12 @@ namespace MahjongPrototype.UI3D
     [AddComponentMenu("Mahjong Prototype/UI3D/Mahjong 3D Tile View")]
     public sealed class Mahjong3DTileView : MonoBehaviour
     {
+        private enum DimVisualMode
+        {
+            MaterialPropertyBlockTint = 0,
+            OverrideMaterial = 1
+        }
+
         [Header("3D Face Mesh")]
         [SerializeField] private MeshFilter frontFaceMeshFilter;
         [SerializeField] private Mahjong3DTileFaceCatalog tileFaceCatalog;
@@ -16,6 +23,8 @@ namespace MahjongPrototype.UI3D
         [Header("Dim Visual")]
         [SerializeField] private Transform dimTargetRoot;
         [SerializeField] private Renderer[] dimTargetRenderers;
+        [SerializeField] private DimVisualMode dimVisualMode = DimVisualMode.OverrideMaterial;
+        [SerializeField] private Material dimmedOverrideMaterial;
         [SerializeField] private Color dimmedTint = new Color(0.25f, 0.25f, 0.25f, 1f);
         [SerializeField]
         private string[] tintPropertyNames =
@@ -38,12 +47,18 @@ namespace MahjongPrototype.UI3D
         private bool warnedMissingFrontFaceMeshFilter;
         private bool warnedMissingTileFaceCatalog;
         private bool warnedMissingDimTarget;
+        private bool warnedMissingDimmedOverrideMaterial;
         private MaterialPropertyBlock visualPropertyBlock;
         private Renderer[] resolvedDimTargetRenderers;
+        private readonly Dictionary<Renderer, Material[]> originalSharedMaterialsByRenderer =
+            new Dictionary<Renderer, Material[]>();
 
         private void OnValidate()
         {
             resolvedDimTargetRenderers = null;
+
+            if (Application.isPlaying && IsDimmed)
+                ApplyDimmedVisual();
         }
 
         public void Initialize(int handIndex)
@@ -105,17 +120,78 @@ namespace MahjongPrototype.UI3D
                     "Dim target root/renderers are not assigned or no Renderer was found under DimTargetRoot.");
             }
 
+            if (!IsDimmed)
+            {
+                ClearPropertyBlockDim(targets);
+                ClearOverrideMaterialDim();
+                return;
+            }
+
+            if (targets.Length == 0)
+                return;
+
+            switch (dimVisualMode)
+            {
+                case DimVisualMode.OverrideMaterial:
+                    ClearPropertyBlockDim(targets);
+                    ApplyOverrideMaterialDim(targets);
+                    break;
+                case DimVisualMode.MaterialPropertyBlockTint:
+                    ClearOverrideMaterialDim();
+                    ApplyPropertyBlockDim(targets);
+                    break;
+            }
+        }
+
+        private void ApplyOverrideMaterialDim(Renderer[] targets)
+        {
+            if (dimmedOverrideMaterial == null)
+            {
+                WarnMissingOnce(
+                    ref warnedMissingDimmedOverrideMaterial,
+                    "Dimmed override material is not assigned.");
+                return;
+            }
+
             for (int i = 0; i < targets.Length; i++)
             {
                 Renderer target = targets[i];
                 if (target == null)
                     continue;
 
-                if (!IsDimmed)
-                {
-                    target.SetPropertyBlock(null);
+                if (!originalSharedMaterialsByRenderer.ContainsKey(target))
+                    originalSharedMaterialsByRenderer[target] = target.sharedMaterials;
+
+                Material[] currentMaterials = target.sharedMaterials;
+                int materialCount = currentMaterials != null && currentMaterials.Length > 0
+                    ? currentMaterials.Length
+                    : 1;
+                Material[] overrideMaterials = new Material[materialCount];
+                for (int materialIndex = 0; materialIndex < overrideMaterials.Length; materialIndex++)
+                    overrideMaterials[materialIndex] = dimmedOverrideMaterial;
+
+                target.sharedMaterials = overrideMaterials;
+            }
+        }
+
+        private void ClearOverrideMaterialDim()
+        {
+            foreach (KeyValuePair<Renderer, Material[]> pair in originalSharedMaterialsByRenderer)
+            {
+                if (pair.Key != null)
+                    pair.Key.sharedMaterials = pair.Value;
+            }
+
+            originalSharedMaterialsByRenderer.Clear();
+        }
+
+        private void ApplyPropertyBlockDim(Renderer[] targets)
+        {
+            for (int i = 0; i < targets.Length; i++)
+            {
+                Renderer target = targets[i];
+                if (target == null)
                     continue;
-                }
 
                 if (visualPropertyBlock == null)
                     visualPropertyBlock = new MaterialPropertyBlock();
@@ -123,6 +199,19 @@ namespace MahjongPrototype.UI3D
                 target.GetPropertyBlock(visualPropertyBlock);
                 ApplyTintProperties(visualPropertyBlock);
                 target.SetPropertyBlock(visualPropertyBlock);
+            }
+        }
+
+        private static void ClearPropertyBlockDim(Renderer[] targets)
+        {
+            if (targets == null)
+                return;
+
+            for (int i = 0; i < targets.Length; i++)
+            {
+                Renderer target = targets[i];
+                if (target != null)
+                    target.SetPropertyBlock(null);
             }
         }
 
@@ -217,6 +306,53 @@ namespace MahjongPrototype.UI3D
                 return;
 
             frontFaceMeshFilter.sharedMesh = mesh;
+        }
+
+        [ContextMenu("Debug Force Dim On")]
+        private void DebugForceDimOn()
+        {
+            SetDimmed(true, true);
+        }
+
+        [ContextMenu("Debug Force Dim Off")]
+        private void DebugForceDimOff()
+        {
+            SetDimmed(false, true);
+        }
+
+        [ContextMenu("Debug Force Apply Dim Visual")]
+        private void DebugForceApplyDimVisual()
+        {
+            ApplyDimmedVisual();
+        }
+
+        [ContextMenu("Debug Force Material Color Red")]
+        private void DebugForceMaterialColorRed()
+        {
+            Renderer[] targets = ResolveDimTargetRenderers();
+            for (int i = 0; i < targets.Length; i++)
+            {
+                Renderer target = targets[i];
+                if (target == null)
+                    continue;
+
+                Material[] materials = target.materials;
+                for (int materialIndex = 0; materialIndex < materials.Length; materialIndex++)
+                {
+                    Material material = materials[materialIndex];
+                    if (material == null)
+                        continue;
+
+                    if (material.HasProperty("_BaseColor"))
+                        material.SetColor("_BaseColor", Color.red);
+                    if (material.HasProperty("_Color"))
+                        material.SetColor("_Color", Color.red);
+                    if (material.HasProperty("_MainColor"))
+                        material.SetColor("_MainColor", Color.red);
+                    if (material.HasProperty("_TintColor"))
+                        material.SetColor("_TintColor", Color.red);
+                }
+            }
         }
 
         private void WarnMissingOnce(ref bool warned, string message)
