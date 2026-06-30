@@ -48,6 +48,15 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI3D.Mahjong3DTileView
   frontFaceMeshFilter: {fileID: 1816617622261473812}
   tileFaceCatalog: {fileID: 11400000, guid: 67bd77193bd7b4244ab364b23c14e1eb, type: 2}
+  dimTargetRoot: {fileID: 8500600554509927304}
+  dimTargetRenderers: []
+  dimmedTint: {r: 0.25, g: 0.25, b: 0.25, a: 1}
+  tintPropertyNames:
+  - _BaseColor
+  - _Color
+  - _MainColor
+  - _TintColor
+  debugDimVisual: 0
 --- !u!65 &5069704365234766766
 BoxCollider:
   m_ObjectHideFlags: 0

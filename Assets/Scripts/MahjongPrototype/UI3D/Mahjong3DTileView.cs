@@ -13,10 +13,19 @@ namespace MahjongPrototype.UI3D
         [SerializeField] private MeshFilter frontFaceMeshFilter;
         [SerializeField] private Mahjong3DTileFaceCatalog tileFaceCatalog;
 
-        [Header("Visual State")]
-        [SerializeField] private Renderer[] visualRenderers;
-        [SerializeField] private Color dimmedTint = new Color(0.32f, 0.32f, 0.32f, 1f);
-        [SerializeField] private string[] tintPropertyNames = { "_BaseColor", "_Color" };
+        [Header("Dim Visual")]
+        [SerializeField] private Transform dimTargetRoot;
+        [SerializeField] private Renderer[] dimTargetRenderers;
+        [SerializeField] private Color dimmedTint = new Color(0.25f, 0.25f, 0.25f, 1f);
+        [SerializeField]
+        private string[] tintPropertyNames =
+        {
+            "_BaseColor",
+            "_Color",
+            "_MainColor",
+            "_TintColor"
+        };
+        [SerializeField] private bool debugDimVisual;
 
         public event Action<int> Clicked;
 
@@ -28,7 +37,14 @@ namespace MahjongPrototype.UI3D
 
         private bool warnedMissingFrontFaceMeshFilter;
         private bool warnedMissingTileFaceCatalog;
+        private bool warnedMissingDimTarget;
         private MaterialPropertyBlock visualPropertyBlock;
+        private Renderer[] resolvedDimTargetRenderers;
+
+        private void OnValidate()
+        {
+            resolvedDimTargetRenderers = null;
+        }
 
         public void Initialize(int handIndex)
         {
@@ -36,7 +52,7 @@ namespace MahjongPrototype.UI3D
             Tile = null;
             FaceUp = true;
             Interactable = false;
-            SetDimmed(false);
+            SetDimmed(false, true);
         }
 
         public void Initialize(int handIndex, Tile tile, bool faceUp, bool interactable)
@@ -45,7 +61,7 @@ namespace MahjongPrototype.UI3D
             Tile = tile;
             FaceUp = faceUp;
             Interactable = faceUp && interactable;
-            SetDimmed(false);
+            SetDimmed(false, true);
 
             ApplyFrontFaceMesh(tile);
         }
@@ -65,7 +81,12 @@ namespace MahjongPrototype.UI3D
 
         public void SetDimmed(bool dimmed)
         {
-            if (IsDimmed == dimmed)
+            SetDimmed(dimmed, false);
+        }
+
+        private void SetDimmed(bool dimmed, bool forceApply)
+        {
+            if (!forceApply && IsDimmed == dimmed)
                 return;
 
             IsDimmed = dimmed;
@@ -74,14 +95,19 @@ namespace MahjongPrototype.UI3D
 
         private void ApplyDimmedVisual()
         {
-            CacheVisualRenderers();
+            Renderer[] targets = ResolveDimTargetRenderers();
+            LogDimVisualDebug(targets);
 
-            if (visualRenderers == null)
-                return;
-
-            for (int i = 0; i < visualRenderers.Length; i++)
+            if (IsDimmed && targets.Length == 0)
             {
-                Renderer target = visualRenderers[i];
+                WarnMissingOnce(
+                    ref warnedMissingDimTarget,
+                    "Dim target root/renderers are not assigned or no Renderer was found under DimTargetRoot.");
+            }
+
+            for (int i = 0; i < targets.Length; i++)
+            {
+                Renderer target = targets[i];
                 if (target == null)
                     continue;
 
@@ -100,6 +126,64 @@ namespace MahjongPrototype.UI3D
             }
         }
 
+        private Renderer[] ResolveDimTargetRenderers()
+        {
+            if (dimTargetRenderers != null && dimTargetRenderers.Length > 0)
+                return dimTargetRenderers;
+
+            if (resolvedDimTargetRenderers != null && resolvedDimTargetRenderers.Length > 0)
+                return resolvedDimTargetRenderers;
+
+            if (dimTargetRoot == null)
+                return Array.Empty<Renderer>();
+
+            resolvedDimTargetRenderers = dimTargetRoot.GetComponentsInChildren<Renderer>(true);
+            return resolvedDimTargetRenderers;
+        }
+
+        private void LogDimVisualDebug(Renderer[] targets)
+        {
+            if (!debugDimVisual)
+                return;
+
+            string rootName = dimTargetRoot != null ? dimTargetRoot.name : "(null)";
+            int count = targets != null ? targets.Length : 0;
+
+            Debug.Log(
+                $"{nameof(Mahjong3DTileView)}: IsDimmed={IsDimmed}, DimTargetRoot={rootName}, RendererCount={count}",
+                this);
+
+            if (targets == null)
+                return;
+
+            for (int i = 0; i < targets.Length; i++)
+            {
+                Renderer target = targets[i];
+                if (target == null)
+                {
+                    Debug.Log($"{nameof(Mahjong3DTileView)}: Renderer[{i}] is null.", this);
+                    continue;
+                }
+
+                Material material = target.sharedMaterial;
+                if (material == null)
+                {
+                    Debug.Log($"{nameof(Mahjong3DTileView)}: Renderer[{i}]={target.name}, Material=null", this);
+                    continue;
+                }
+
+                string shaderName = material.shader != null ? material.shader.name : "(null)";
+                Debug.Log(
+                    $"{nameof(Mahjong3DTileView)}: Renderer[{i}]={target.name}, " +
+                    $"Material={material.name}, Shader={shaderName}, " +
+                    $"Has _BaseColor={material.HasProperty("_BaseColor")}, " +
+                    $"Has _Color={material.HasProperty("_Color")}, " +
+                    $"Has _MainColor={material.HasProperty("_MainColor")}, " +
+                    $"Has _TintColor={material.HasProperty("_TintColor")}",
+                    this);
+            }
+        }
+
         private void ApplyTintProperties(MaterialPropertyBlock propertyBlock)
         {
             if (propertyBlock == null || tintPropertyNames == null)
@@ -113,14 +197,6 @@ namespace MahjongPrototype.UI3D
 
                 propertyBlock.SetColor(propertyName, dimmedTint);
             }
-        }
-
-        private void CacheVisualRenderers()
-        {
-            if (visualRenderers != null && visualRenderers.Length > 0)
-                return;
-
-            visualRenderers = GetComponentsInChildren<Renderer>(true);
         }
 
         private void ApplyFrontFaceMesh(Tile tile)
