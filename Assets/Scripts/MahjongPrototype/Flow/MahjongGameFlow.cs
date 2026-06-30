@@ -1,3 +1,4 @@
+using System.Collections;
 using MahjongPrototype.Domain;
 using MahjongPrototype.Notifications;
 using MahjongPrototype.Services;
@@ -30,6 +31,9 @@ namespace MahjongPrototype
         [SerializeField] private bool useFixedRandomSeed = false;
         [SerializeField] private int fixedRandomSeed = 12345;
 
+        [Header("Turn Automation")]
+        [SerializeField, Min(0f)] private float autoDiscardDrawnTileDelaySeconds = 0.75f;
+
         [Header("Scene References")]
         [SerializeField] private MahjongEventNotifier eventNotifier;
         [SerializeField] private CpuTurnController cpuTurnController;
@@ -50,6 +54,8 @@ namespace MahjongPrototype
 
         private MahjongGameState gameState;
         private bool warnedMissingNotifier;
+        private Coroutine pendingAutoDiscardDrawnTileCoroutine;
+        private int autoDiscardDrawnTileOperationVersion;
 
         private readonly struct TurnAutomationPolicy
         {
@@ -97,11 +103,17 @@ namespace MahjongPrototype
                 StartNewRound();
         }
 
+        private void OnDisable()
+        {
+            CancelPendingAutoDiscardDrawnTile();
+        }
+
 #if UNITY_EDITOR
         private void OnValidate()
         {
             NormalizeParticipantCount();
             initialHandTileCount = Mathf.Max(1, initialHandTileCount);
+            autoDiscardDrawnTileDelaySeconds = Mathf.Max(0f, autoDiscardDrawnTileDelaySeconds);
         }
 #endif
 
@@ -112,6 +124,7 @@ namespace MahjongPrototype
             EnsureCpuTurnController();
             NormalizeParticipantCount();
             cpuTurnController?.CancelPendingTurn();
+            CancelPendingAutoDiscardDrawnTile();
 
             ClearWinDecision();
             skillReservationService.Clear();
@@ -884,6 +897,23 @@ namespace MahjongPrototype
             if (!ShouldAutoDiscardDrawnTileAfterDraw(seat))
                 return false;
 
+            CancelPendingAutoDiscardDrawnTile();
+
+            if (autoDiscardDrawnTileDelaySeconds <= 0f)
+                return TryAutoDiscardDrawnTileAfterDrawImmediate(seat);
+
+            int operationVersion = autoDiscardDrawnTileOperationVersion;
+            int turnIndex = gameState.TurnIndex;
+            pendingAutoDiscardDrawnTileCoroutine = StartCoroutine(
+                RunAutoDiscardDrawnTileAfterDraw(seat, turnIndex, operationVersion));
+            return true;
+        }
+
+        private bool TryAutoDiscardDrawnTileAfterDrawImmediate(SeatId seat)
+        {
+            if (!ShouldAutoDiscardDrawnTileAfterDraw(seat))
+                return false;
+
             PlayerSeat playerSeat = gameState.GetPlayerSeat(seat);
             Tile? drawnTile = playerSeat != null ? playerSeat.DrawnTile : null;
             NotifyTurnDebug(
@@ -894,6 +924,41 @@ namespace MahjongPrototype
                 turnIndex: gameState.TurnIndex);
 
             return TryRequestDiscardDrawnTileForSeatInternal(seat, false);
+        }
+
+        private IEnumerator RunAutoDiscardDrawnTileAfterDraw(
+            SeatId seat,
+            int turnIndex,
+            int operationVersion)
+        {
+            if (autoDiscardDrawnTileDelaySeconds > 0f)
+                yield return new WaitForSeconds(autoDiscardDrawnTileDelaySeconds);
+            else
+                yield return null;
+
+            if (operationVersion != autoDiscardDrawnTileOperationVersion)
+                yield break;
+
+            if (!CanEvaluateTurnAutomation(seat, turnIndex) ||
+                !ShouldAutoDiscardDrawnTileAfterDraw(seat))
+            {
+                pendingAutoDiscardDrawnTileCoroutine = null;
+                yield break;
+            }
+
+            pendingAutoDiscardDrawnTileCoroutine = null;
+            TryAutoDiscardDrawnTileAfterDrawImmediate(seat);
+        }
+
+        private void CancelPendingAutoDiscardDrawnTile()
+        {
+            autoDiscardDrawnTileOperationVersion++;
+
+            if (pendingAutoDiscardDrawnTileCoroutine == null)
+                return;
+
+            StopCoroutine(pendingAutoDiscardDrawnTileCoroutine);
+            pendingAutoDiscardDrawnTileCoroutine = null;
         }
 
         private void TryBeginReachDecisionAfterDraw(SeatId seat)
@@ -1094,6 +1159,7 @@ namespace MahjongPrototype
 
         private void EndRound(string reason)
         {
+            CancelPendingAutoDiscardDrawnTile();
             gameState.ClearWinDecision();
             gameState.ClearReachDecision();
             gameState.IsRoundEnded = true;

@@ -3,6 +3,7 @@ using System.Collections;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.TestTools;
 
 namespace MahjongPrototype.Tests
 {
@@ -377,6 +378,45 @@ namespace MahjongPrototype.Tests
             }
         }
 
+        [UnityTest]
+        public IEnumerator ReachDeclared_AutoDiscardDelay_HoldsDrawnTileBeforeDiscard()
+        {
+            GameObject gameObject = new GameObject("ReachAutoDiscardDelayTest");
+            try
+            {
+                object gameFlow = CreateConfiguredGameFlow(gameObject, 2);
+                SetPrivateField(gameFlow, "autoDiscardDrawnTileDelaySeconds", 0.05f);
+                object gameState = DrawReachableHand(gameFlow);
+                SetSeatParticipantType(gameState, "West", "LocalHuman");
+                Invoke(gameFlow, "RequestDeclareReach");
+                Invoke(gameFlow, "RequestDiscard", 12);
+                int discardCountBeforeWestTurnEnds = GetListCount(GetProperty(gameState, "Discards"));
+
+                Invoke(gameFlow, "RequestForceDrawSkillForSeat", ParseSeat("East"), "9m");
+                DrawAndDiscardDrawnTileForSeat(gameFlow, "West", "C");
+
+                object eastPlayerSeat = GetPlayerSeat(gameState, "East");
+                Assert.That(GetProperty(gameState, "CurrentTurn").ToString(), Is.EqualTo("East"));
+                Assert.That(GetProperty(eastPlayerSeat, "HasDrawnTile"), Is.True);
+                Assert.That(GetProperty(eastPlayerSeat, "DrawnTile").ToString(), Is.EqualTo("9m"));
+                Assert.That(GetListCount(GetProperty(gameState, "Discards")), Is.EqualTo(discardCountBeforeWestTurnEnds + 1));
+
+                yield return new WaitForSeconds(0.08f);
+                yield return null;
+
+                object lastDiscard = GetLastListItem(GetProperty(gameState, "Discards"));
+                Assert.That(GetProperty(eastPlayerSeat, "HasDrawnTile"), Is.False);
+                Assert.That(GetListCount(GetProperty(gameState, "Discards")), Is.EqualTo(discardCountBeforeWestTurnEnds + 2));
+                Assert.That(GetProperty(lastDiscard, "ActorSeat").ToString(), Is.EqualTo("East"));
+                Assert.That(GetProperty(lastDiscard, "Source").ToString(), Is.EqualTo("DrawnTile"));
+                Assert.That(GetProperty(lastDiscard, "Tile").ToString(), Is.EqualTo("9m"));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
         [Test]
         public void ReachDeclared_DrawWinningTile_StopsAtTsumoDecision()
         {
@@ -660,6 +700,7 @@ namespace MahjongPrototype.Tests
             SetPrivateField(gameFlow, "useFixedRandomSeed", true);
             SetPrivateField(gameFlow, "fixedRandomSeed", 12345);
             SetPrivateField(gameFlow, "enableAutoDraw", enableAutoDraw);
+            SetPrivateField(gameFlow, "autoDiscardDrawnTileDelaySeconds", 0f);
             SetPrivateField(gameFlow, "randomizeSelfSeat", false);
             SetPrivateField(gameFlow, "fixedSelfSeat", ParseSeat("East"));
             return gameFlow;
