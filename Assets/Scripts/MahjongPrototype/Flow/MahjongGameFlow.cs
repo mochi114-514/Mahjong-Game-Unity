@@ -51,6 +51,26 @@ namespace MahjongPrototype
         private MahjongGameState gameState;
         private bool warnedMissingNotifier;
 
+        private readonly struct TurnAutomationPolicy
+        {
+            public TurnAutomationPolicy(
+                bool isCpu,
+                bool autoDrawAtTurnStart,
+                bool autoDiscardDrawnTileAfterDraw,
+                bool useCpuController)
+            {
+                IsCpu = isCpu;
+                AutoDrawAtTurnStart = autoDrawAtTurnStart;
+                AutoDiscardDrawnTileAfterDraw = autoDiscardDrawnTileAfterDraw;
+                UseCpuController = useCpuController;
+            }
+
+            public bool IsCpu { get; }
+            public bool AutoDrawAtTurnStart { get; }
+            public bool AutoDiscardDrawnTileAfterDraw { get; }
+            public bool UseCpuController { get; }
+        }
+
         public MahjongGameState CurrentState => gameState;
         public MahjongEventNotifier EventNotifier => eventNotifier;
         public SeatId ViewerSeat => viewerSeat;
@@ -208,17 +228,7 @@ namespace MahjongPrototype
                 turnIndex: gameState.TurnIndex);
             NotifySkillResolutionEvents(result);
             NotifyTileDrawn(result);
-            CheckWinPrototype();
-            if (gameState.IsWinDecisionPending)
-                return true;
-
-            if (ShouldAutoDiscardDrawnTileAfterReach(seat))
-            {
-                TryAutoDiscardDrawnTileAfterReach(seat);
-                return true;
-            }
-
-            TryBeginReachDecisionAfterDraw(seat);
+            ResolveAfterDraw(seat);
 
             return true;
         }
@@ -540,9 +550,9 @@ namespace MahjongPrototype
             NotifyWinDeclined(seat, turnIndex);
             NotifyWinDeclinedDetailed(seat, winType, turnIndex);
 
-            if (winType == WinType.Tsumo && ShouldAutoDiscardDrawnTileAfterReach(seat))
+            if (winType == WinType.Tsumo && ShouldAutoDiscardDrawnTileAfterDraw(seat))
             {
-                TryAutoDiscardDrawnTileAfterReach(seat);
+                TryAutoDiscardDrawnTileAfterDraw(seat);
                 return;
             }
 
@@ -695,18 +705,14 @@ namespace MahjongPrototype
             if (!IsStillCurrentTurn(seat, turnIndex))
                 return;
 
-            if (TryAutoDrawForDeclaredReachTurn(seat, turnIndex))
-                return;
-
-            if (!IsStillCurrentTurn(seat, turnIndex))
-                return;
-
             TryAutoDrawAtTurnStart(seat, turnIndex);
 
-            if (!IsStillCurrentTurn(seat, turnIndex))
+            if (!CanEvaluateTurnAutomation(seat, turnIndex))
                 return;
 
-            cpuTurnController?.TryStartCpuTurn(this, gameState, seat, turnIndex);
+            TurnAutomationPolicy policy = BuildTurnAutomationPolicy(seat);
+            if (policy.UseCpuController)
+                cpuTurnController?.TryStartCpuTurn(this, gameState, seat, turnIndex);
         }
 
         private bool IsStillCurrentTurn(SeatId seat, int turnIndex)
@@ -716,6 +722,33 @@ namespace MahjongPrototype
                 !gameState.IsWinDecisionPending &&
                 gameState.CurrentTurn == seat &&
                 gameState.TurnIndex == turnIndex;
+        }
+
+        private bool CanEvaluateTurnAutomation(SeatId seat, int turnIndex)
+        {
+            return IsStillCurrentTurn(seat, turnIndex) &&
+                !gameState.IsReachDecisionPending &&
+                !gameState.IsReachDiscardSelectionPending;
+        }
+
+        private TurnAutomationPolicy BuildTurnAutomationPolicy(SeatId seat)
+        {
+            if (gameState == null)
+                return new TurnAutomationPolicy(false, false, false, false);
+
+            SeatSlot slot = gameState.GetSeatSlot(seat);
+            PlayerSeat playerSeat = gameState.GetPlayerSeat(seat);
+            bool isCpu = slot.HasPlayer && slot.ParticipantType == ParticipantType.Cpu;
+            bool isReachDeclared = playerSeat != null && playerSeat.IsReachDeclared;
+            bool autoDrawAtTurnStart = enableAutoDraw || isReachDeclared;
+            bool autoDiscardDrawnTileAfterDraw = isReachDeclared;
+            bool useCpuController = isCpu;
+
+            return new TurnAutomationPolicy(
+                isCpu,
+                autoDrawAtTurnStart,
+                autoDiscardDrawnTileAfterDraw,
+                useCpuController);
         }
 
         private void ResolveReservedSkillBeforeDraw(SeatId seat)
@@ -743,49 +776,36 @@ namespace MahjongPrototype
             }
         }
 
-        private bool TryAutoDrawForDeclaredReachTurn(SeatId seat, int turnIndex)
+        private bool TryAutoDrawAtTurnStart(SeatId seat, int turnIndex)
         {
-            if (gameState == null ||
-                gameState.IsRoundEnded ||
-                gameState.IsWinDecisionPending ||
-                gameState.IsReachDecisionPending ||
-                gameState.IsReachDiscardSelectionPending ||
-                gameState.CurrentTurn != seat ||
-                gameState.TurnIndex != turnIndex)
-            {
+            if (!CanEvaluateTurnAutomation(seat, turnIndex))
                 return false;
-            }
+
+            TurnAutomationPolicy policy = BuildTurnAutomationPolicy(seat);
+            if (!policy.AutoDrawAtTurnStart)
+                return false;
 
             PlayerSeat playerSeat = gameState.GetPlayerSeat(seat);
-            if (playerSeat == null ||
-                !playerSeat.IsReachDeclared ||
-                playerSeat.HasDrawnTile)
-            {
+            if (playerSeat == null || playerSeat.HasDrawnTile)
                 return false;
-            }
 
+            string startedEventName = playerSeat.IsReachDeclared
+                ? "ReachAutoDrawStarted"
+                : "AutoDrawStarted";
+            string completedEventName = playerSeat.IsReachDeclared
+                ? "ReachAutoDrawCompleted"
+                : "AutoDrawCompleted";
+            string blockedEventName = playerSeat.IsReachDeclared
+                ? "ReachAutoDrawSkipped"
+                : "AutoDrawSkipped";
             NotifyTurnDebug(
-                "ReachAutoDrawStarted",
-                $"phase={gameState.TurnPhase}",
+                startedEventName,
+                $"phase={gameState.TurnPhase}; hasDrawnTile={playerSeat.HasDrawnTile}",
                 seat: seat,
                 turnIndex: turnIndex);
 
-            TryDrawForSeat(seat, "ReachAutoDrawCompleted", "ReachAutoDrawSkipped", false);
+            TryDrawForSeat(seat, completedEventName, blockedEventName, false);
             return true;
-        }
-
-        private void TryAutoDrawAtTurnStart(SeatId seat, int turnIndex)
-        {
-            if (!enableAutoDraw)
-                return;
-
-            NotifyTurnDebug(
-                "AutoDrawStarted",
-                $"phase={gameState.TurnPhase}; hasDrawnTile={gameState.GetPlayerSeat(seat).HasDrawnTile}",
-                seat: seat,
-                turnIndex: turnIndex);
-
-            TryDrawForSeat(seat, "AutoDrawCompleted", "AutoDrawSkipped", false);
         }
 
         private void CheckWinPrototype()
@@ -822,36 +842,58 @@ namespace MahjongPrototype
                 isWin);
         }
 
-        private bool ShouldAutoDiscardDrawnTileAfterReach(SeatId seat)
+        private void ResolveAfterDraw(SeatId seat)
         {
-            if (gameState == null || gameState.IsRoundEnded)
-                return false;
+            CheckWinPrototype();
 
-            if (gameState.CurrentTurn != seat || gameState.TurnPhase != TurnPhase.WaitingForDiscard)
-                return false;
+            if (gameState.IsWinDecisionPending)
+                return;
 
-            if (gameState.IsWinDecisionPending || gameState.IsReachDecisionPending || gameState.IsReachDiscardSelectionPending)
-                return false;
+            if (ShouldAutoDiscardDrawnTileAfterDraw(seat))
+            {
+                TryAutoDiscardDrawnTileAfterDraw(seat);
+                return;
+            }
 
-            PlayerSeat playerSeat = gameState.GetPlayerSeat(seat);
-            return playerSeat != null && playerSeat.IsReachDeclared && playerSeat.HasDrawnTile;
+            TryBeginReachDecisionAfterDraw(seat);
         }
 
-        private void TryAutoDiscardDrawnTileAfterReach(SeatId seat)
+        private bool ShouldAutoDiscardDrawnTileAfterDraw(SeatId seat)
         {
-            if (!ShouldAutoDiscardDrawnTileAfterReach(seat))
-                return;
+            if (gameState == null ||
+                gameState.IsRoundEnded ||
+                gameState.IsWinDecisionPending ||
+                gameState.IsReachDecisionPending ||
+                gameState.IsReachDiscardSelectionPending ||
+                gameState.CurrentTurn != seat ||
+                gameState.TurnPhase != TurnPhase.WaitingForDiscard)
+            {
+                return false;
+            }
+
+            PlayerSeat playerSeat = gameState.GetPlayerSeat(seat);
+            if (playerSeat == null || !playerSeat.HasDrawnTile)
+                return false;
+
+            TurnAutomationPolicy policy = BuildTurnAutomationPolicy(seat);
+            return policy.AutoDiscardDrawnTileAfterDraw;
+        }
+
+        private bool TryAutoDiscardDrawnTileAfterDraw(SeatId seat)
+        {
+            if (!ShouldAutoDiscardDrawnTileAfterDraw(seat))
+                return false;
 
             PlayerSeat playerSeat = gameState.GetPlayerSeat(seat);
             Tile? drawnTile = playerSeat != null ? playerSeat.DrawnTile : null;
             NotifyTurnDebug(
-                "ReachAutoDiscardStarted",
+                "AutoDiscardDrawnTileStarted",
                 $"seat={seat}; tile={drawnTile}",
                 seat: seat,
                 tile: drawnTile,
                 turnIndex: gameState.TurnIndex);
 
-            TryRequestDiscardDrawnTileForSeatInternal(seat, false);
+            return TryRequestDiscardDrawnTileForSeatInternal(seat, false);
         }
 
         private void TryBeginReachDecisionAfterDraw(SeatId seat)

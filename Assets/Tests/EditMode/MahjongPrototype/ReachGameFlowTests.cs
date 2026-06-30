@@ -243,7 +243,107 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void ReachDeclared_TurnStartAutoDrawsAndAutoDiscardsThenAdvancesTurn()
+        public void ReachDeclared_StartTurn_UsesCommonAutoDrawPolicy()
+        {
+            GameObject gameObject = new GameObject("ReachCommonAutoDrawPolicyTest");
+            try
+            {
+                object gameFlow = CreateConfiguredGameFlow(gameObject, 2);
+                object gameState = DrawReachableHand(gameFlow);
+                SetSeatParticipantType(gameState, "West", "LocalHuman");
+                Invoke(gameFlow, "RequestDeclareReach");
+                Invoke(gameFlow, "RequestDiscard", 12);
+
+                object policy = Invoke(gameFlow, "BuildTurnAutomationPolicy", ParseSeat("East"));
+                Assert.That(GetProperty(policy, "IsCpu"), Is.False);
+                Assert.That(GetProperty(policy, "AutoDrawAtTurnStart"), Is.True);
+                Assert.That(GetProperty(policy, "AutoDiscardDrawnTileAfterDraw"), Is.True);
+                Assert.That(GetProperty(policy, "UseCpuController"), Is.False);
+
+                Invoke(gameFlow, "RequestForceDrawSkillForSeat", ParseSeat("East"), "9m");
+                DrawAndDiscardDrawnTileForSeat(gameFlow, "West", "C");
+
+                object lastDiscard = GetLastListItem(GetProperty(gameState, "Discards"));
+                Assert.That(GetProperty(lastDiscard, "ActorSeat").ToString(), Is.EqualTo("East"));
+                Assert.That(GetProperty(lastDiscard, "Source").ToString(), Is.EqualTo("DrawnTile"));
+                Assert.That(GetProperty(lastDiscard, "Tile").ToString(), Is.EqualTo("9m"));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
+        public void NormalLocalHuman_EnableAutoDrawFalse_DoesNotAutoDraw()
+        {
+            GameObject gameObject = new GameObject("NormalLocalHumanManualDrawWaitTest");
+            try
+            {
+                object gameFlow = CreateConfiguredGameFlow(gameObject, 1, false);
+                Invoke(gameFlow, "StartNewRound");
+                object gameState = GetProperty(gameFlow, "CurrentState");
+                object playerSeat = GetPlayerSeat(gameState, "East");
+
+                Assert.That(GetProperty(gameState, "CurrentTurn").ToString(), Is.EqualTo("East"));
+                Assert.That(GetProperty(playerSeat, "IsReachDeclared"), Is.False);
+                Assert.That(GetProperty(playerSeat, "HasDrawnTile"), Is.False);
+                Assert.That(GetProperty(gameState, "TurnPhase").ToString(), Is.EqualTo("WaitingForDraw"));
+                Assert.That(GetListCount(GetProperty(gameState, "Discards")), Is.EqualTo(0));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
+        public void NormalLocalHuman_EnableAutoDrawTrue_AutoDrawsButDoesNotAutoDiscard()
+        {
+            GameObject gameObject = new GameObject("NormalLocalHumanAutoDrawOnlyTest");
+            try
+            {
+                object gameFlow = CreateConfiguredGameFlow(gameObject, 1, true);
+                Invoke(gameFlow, "StartNewRound");
+                object gameState = GetProperty(gameFlow, "CurrentState");
+                object playerSeat = GetPlayerSeat(gameState, "East");
+
+                Assert.That(GetProperty(gameState, "CurrentTurn").ToString(), Is.EqualTo("East"));
+                Assert.That(GetProperty(playerSeat, "IsReachDeclared"), Is.False);
+                Assert.That(GetProperty(playerSeat, "HasDrawnTile"), Is.True);
+                Assert.That(GetProperty(gameState, "TurnPhase").ToString(), Is.EqualTo("WaitingForDiscard"));
+                Assert.That(GetListCount(GetProperty(gameState, "Discards")), Is.EqualTo(0));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
+        public void CpuSeat_TurnAutomationPolicy_UsesCpuController()
+        {
+            GameObject gameObject = new GameObject("CpuAutomationPolicyTest");
+            try
+            {
+                object gameFlow = CreateConfiguredGameFlow(gameObject, 2, false);
+                Invoke(gameFlow, "StartNewRound");
+
+                object policy = Invoke(gameFlow, "BuildTurnAutomationPolicy", ParseSeat("West"));
+
+                Assert.That(GetProperty(policy, "IsCpu"), Is.True);
+                Assert.That(GetProperty(policy, "AutoDrawAtTurnStart"), Is.False);
+                Assert.That(GetProperty(policy, "AutoDiscardDrawnTileAfterDraw"), Is.False);
+                Assert.That(GetProperty(policy, "UseCpuController"), Is.True);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
+        public void ReachDeclared_AutoDrawsAndAutoDiscards()
         {
             GameObject gameObject = new GameObject("ReachTurnStartAutoDiscardTest");
             try
@@ -278,7 +378,7 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void ReachDeclared_TurnStartAutoDrawWinningTile_ShowsTsumoDecisionAndDoesNotDiscard()
+        public void ReachDeclared_DrawWinningTile_StopsAtTsumoDecision()
         {
             GameObject gameObject = new GameObject("ReachTurnStartTsumoDecisionTest");
             try
@@ -348,7 +448,7 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void ReachDeclared_DeclineTsumoDecision_AutoDiscardsDrawnTile()
+        public void ReachDeclared_DeclineTsumoWin_UsesAutoDiscardPolicy()
         {
             GameObject gameObject = new GameObject("ReachDeclineTsumoAutoDiscardTest");
             try
@@ -492,8 +592,8 @@ namespace MahjongPrototype.Tests
                 Invoke(gameFlow, "RequestDeclareReach");
                 int discardCountBefore = GetListCount(GetProperty(gameState, "Discards"));
 
-                object shouldAutoDiscard = Invoke(gameFlow, "ShouldAutoDiscardDrawnTileAfterReach", ParseSeat("East"));
-                Invoke(gameFlow, "TryAutoDiscardDrawnTileAfterReach", ParseSeat("East"));
+                object shouldAutoDiscard = Invoke(gameFlow, "ShouldAutoDiscardDrawnTileAfterDraw", ParseSeat("East"));
+                Invoke(gameFlow, "TryAutoDiscardDrawnTileAfterDraw", ParseSeat("East"));
 
                 Assert.That(shouldAutoDiscard, Is.False);
                 Assert.That(GetProperty(gameState, "IsReachDiscardSelectionPending"), Is.True);
@@ -541,10 +641,15 @@ namespace MahjongPrototype.Tests
 
         private static object CreateConfiguredGameFlow(GameObject gameObject)
         {
-            return CreateConfiguredGameFlow(gameObject, 1);
+            return CreateConfiguredGameFlow(gameObject, 1, false);
         }
 
         private static object CreateConfiguredGameFlow(GameObject gameObject, int participantCount)
+        {
+            return CreateConfiguredGameFlow(gameObject, participantCount, false);
+        }
+
+        private static object CreateConfiguredGameFlow(GameObject gameObject, int participantCount, bool enableAutoDraw)
         {
             gameObject.AddComponent(Type.GetType(MahjongEventNotifierTypeName, true));
             object gameFlow = gameObject.AddComponent(Type.GetType(MahjongGameFlowTypeName, true));
@@ -554,7 +659,7 @@ namespace MahjongPrototype.Tests
             SetPrivateField(gameFlow, "autoStart", false);
             SetPrivateField(gameFlow, "useFixedRandomSeed", true);
             SetPrivateField(gameFlow, "fixedRandomSeed", 12345);
-            SetPrivateField(gameFlow, "enableAutoDraw", false);
+            SetPrivateField(gameFlow, "enableAutoDraw", enableAutoDraw);
             SetPrivateField(gameFlow, "randomizeSelfSeat", false);
             SetPrivateField(gameFlow, "fixedSelfSeat", ParseSeat("East"));
             return gameFlow;
