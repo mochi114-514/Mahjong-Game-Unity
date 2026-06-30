@@ -52,7 +52,7 @@ MonoBehaviour:
   dimTargetRenderers: []
   dimVisualMode: 1
   dimmedOverrideMaterial: {fileID: 2100000, guid: 9b933e43ceb647c3a33b6b81c510686a, type: 2}
-  dimmedTint: {r: 0.25, g: 0.25, b: 0.25, a: 1}
+  dimmedTint: {r: 1, g: 0, b: 0, a: 0.54509807}
   tintPropertyNames:
   - _BaseColor
   - _Color
