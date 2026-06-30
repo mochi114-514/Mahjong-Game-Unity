@@ -209,8 +209,16 @@ namespace MahjongPrototype
             NotifySkillResolutionEvents(result);
             NotifyTileDrawn(result);
             CheckWinPrototype();
-            if (!gameState.IsWinDecisionPending)
-                TryBeginReachDecisionAfterDraw(seat);
+            if (gameState.IsWinDecisionPending)
+                return true;
+
+            if (ShouldAutoDiscardDrawnTileAfterReach(seat))
+            {
+                TryAutoDiscardDrawnTileAfterReach(seat);
+                return true;
+            }
+
+            TryBeginReachDecisionAfterDraw(seat);
 
             return true;
         }
@@ -751,6 +759,38 @@ namespace MahjongPrototype
                 null,
                 gameState.TurnIndex,
                 isWin);
+        }
+
+        private bool ShouldAutoDiscardDrawnTileAfterReach(SeatId seat)
+        {
+            if (gameState == null || gameState.IsRoundEnded)
+                return false;
+
+            if (gameState.CurrentTurn != seat || gameState.TurnPhase != TurnPhase.WaitingForDiscard)
+                return false;
+
+            if (gameState.IsWinDecisionPending || gameState.IsReachDecisionPending || gameState.IsReachDiscardSelectionPending)
+                return false;
+
+            PlayerSeat playerSeat = gameState.GetPlayerSeat(seat);
+            return playerSeat != null && playerSeat.IsReachDeclared && playerSeat.HasDrawnTile;
+        }
+
+        private void TryAutoDiscardDrawnTileAfterReach(SeatId seat)
+        {
+            if (!ShouldAutoDiscardDrawnTileAfterReach(seat))
+                return;
+
+            PlayerSeat playerSeat = gameState.GetPlayerSeat(seat);
+            Tile? drawnTile = playerSeat != null ? playerSeat.DrawnTile : null;
+            NotifyTurnDebug(
+                "ReachAutoDiscardStarted",
+                $"seat={seat}; tile={drawnTile}",
+                seat: seat,
+                tile: drawnTile,
+                turnIndex: gameState.TurnIndex);
+
+            TryRequestDiscardDrawnTileForSeatInternal(seat, false);
         }
 
         private void TryBeginReachDecisionAfterDraw(SeatId seat)

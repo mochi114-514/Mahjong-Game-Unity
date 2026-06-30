@@ -630,7 +630,7 @@ namespace MahjongPrototype.UI
                 return;
 
             int[] noHandIndices = new int[0];
-            bool drawnTileInteractable = canUseGameplayInput && selfPlayerSeat.HasDrawnTile;
+            bool drawnTileInteractable = false;
 
             if (playerArea3DPresenter != null)
             {
