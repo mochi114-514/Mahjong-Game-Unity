@@ -19,6 +19,12 @@ namespace MahjongPrototype.Tests
         private const string MahjongGameFlowTypeName = "MahjongPrototype.MahjongGameFlow, Assembly-CSharp";
         private const string PlayerIdTypeName = "MahjongPrototype.Domain.PlayerId, Assembly-CSharp";
         private const string ParticipantTypeName = "MahjongPrototype.Domain.ParticipantType, Assembly-CSharp";
+        private const string HanValueTypeName = "MahjongPrototype.Domain.HanValue, Assembly-CSharp";
+        private const string YakuKindTypeName = "MahjongPrototype.Domain.YakuKind, Assembly-CSharp";
+        private const string YakuDefinitionTypeName =
+            "MahjongPrototype.Definitions.YakuDefinition, Assembly-CSharp";
+        private const string YakuDefinitionCatalogTypeName =
+            "MahjongPrototype.Definitions.YakuDefinitionCatalog, Assembly-CSharp";
 
         [Test]
         public void WinDecisionState_BeginsAndClearsInGameState()
@@ -102,6 +108,7 @@ namespace MahjongPrototype.Tests
                 Assert.That(GetProperty(gameState, "WinDecisionType").ToString(), Is.EqualTo("Tsumo"));
                 Assert.That(GetProperty(gameState, "WinningTile"), Is.EqualTo(CreateTile("C")));
                 Assert.That(GetProperty(gameState, "WinSourceSeat"), Is.Null);
+                Assert.That(GetProperty(gameState, "PendingWinDeclarationEvaluation"), Is.Not.Null);
                 Assert.That(GetProperty(gameFlow, "IsWinDecisionPending"), Is.True);
             }
             finally
@@ -912,6 +919,7 @@ namespace MahjongPrototype.Tests
                     "1s", "2s", "3s",
                     "E", "E", "E",
                     "C");
+                Invoke(selfPlayerSeat, "DeclareReach", 1);
                 Invoke(cpuPlayerSeat, "SetDrawnTile", CreateTile("C"));
                 SetProperty(gameState, "CurrentTurn", cpuSeat);
                 int turnIndexBeforeDiscard = (int)GetProperty(gameState, "TurnIndex");
@@ -996,6 +1004,7 @@ namespace MahjongPrototype.Tests
                     "1s", "2s", "3s",
                     "E", "E", "E",
                     "C");
+                Invoke(selfPlayerSeat, "DeclareReach", 1);
                 Invoke(cpuPlayerSeat, "SetDrawnTile", CreateTile("C"));
                 SetProperty(gameState, "CurrentTurn", cpuSeat);
                 Invoke(gameFlow, "TryRequestDiscardDrawnTileForSeat", cpuSeat);
@@ -1283,6 +1292,13 @@ namespace MahjongPrototype.Tests
             SetPrivateField(gameFlow, "enableAutoDraw", enableAutoDraw);
             SetPrivateField(gameFlow, "randomizeSelfSeat", false);
             SetPrivateField(gameFlow, "fixedSelfSeat", ParseSeat("East"));
+            SetPrivateField(
+                gameFlow,
+                "yakuDefinitionCatalog",
+                CreateYakuCatalog(
+                    CreateYakuDefinition("MenzenTsumo", "One", "None"),
+                    CreateYakuDefinition("Reach", "One", "None"),
+                    CreateYakuDefinition("Tanyao", "One", "One")));
             return gameFlow;
         }
 
@@ -1327,6 +1343,50 @@ namespace MahjongPrototype.Tests
             ConstructorInfo constructor = tileType.GetConstructor(new[] { typeof(string) });
             Assert.That(constructor, Is.Not.Null);
             return constructor.Invoke(new object[] { code });
+        }
+
+        private static object CreateYakuCatalog(params object[] definitions)
+        {
+            Type catalogType = Type.GetType(YakuDefinitionCatalogTypeName, true);
+            object catalog = ScriptableObject.CreateInstance(catalogType);
+            Type listType = typeof(List<>).MakeGenericType(Type.GetType(YakuDefinitionTypeName, true));
+            IList list = (IList)Activator.CreateInstance(listType);
+
+            for (int i = 0; i < definitions.Length; i++)
+                list.Add(definitions[i]);
+
+            SetPrivateField(catalog, "definitions", list);
+            return catalog;
+        }
+
+        private static object CreateYakuDefinition(
+            string yakuKindName,
+            string closedHanName,
+            string openHanName)
+        {
+            Type definitionType = Type.GetType(YakuDefinitionTypeName, true);
+            Type yakuKindType = Type.GetType(YakuKindTypeName, true);
+            Type hanValueType = Type.GetType(HanValueTypeName, true);
+            ConstructorInfo constructor = definitionType.GetConstructor(new[]
+            {
+                yakuKindType,
+                typeof(string),
+                hanValueType,
+                hanValueType,
+                typeof(bool),
+                typeof(bool)
+            });
+            Assert.That(constructor, Is.Not.Null);
+
+            return constructor.Invoke(new[]
+            {
+                Enum.Parse(yakuKindType, yakuKindName),
+                yakuKindName,
+                Enum.Parse(hanValueType, closedHanName),
+                Enum.Parse(hanValueType, openHanName),
+                false,
+                true
+            });
         }
 
         private static object GetCurrentPlayerSeat(object gameState)

@@ -1,4 +1,5 @@
 using System.Collections;
+using MahjongPrototype.Definitions;
 using MahjongPrototype.Domain;
 using MahjongPrototype.Notifications;
 using MahjongPrototype.Services;
@@ -44,6 +45,9 @@ namespace MahjongPrototype
         [Header("Warnings")]
         [SerializeField] private bool logWarnings = true;
 
+        [Header("Yaku Definitions")]
+        [SerializeField] private YakuDefinitionCatalog yakuDefinitionCatalog;
+
         [Header("Hand Sort")]
         [SerializeField] private bool autoSortEnabled;
 
@@ -55,6 +59,9 @@ namespace MahjongPrototype
         private readonly SkillSystem skillSystem = new SkillSystem();
         private readonly SkillReservationService skillReservationService = new SkillReservationService();
 
+        private HandEvaluator handEvaluator;
+        private WinDeclarationEvaluator winDeclarationEvaluator;
+        private YakuDefinitionCatalog initializedYakuDefinitionCatalog;
         private MahjongGameState gameState;
         private WindProgress currentWindProgress = WindProgress.East1;
         private bool warnedMissingNotifier;
@@ -98,6 +105,7 @@ namespace MahjongPrototype
         {
             CacheReferences();
             EnsureCpuTurnController();
+            InitializeEvaluators();
             NormalizeParticipantCount();
         }
 
@@ -149,6 +157,7 @@ namespace MahjongPrototype
             currentWindProgress = windProgress;
             CacheReferences();
             EnsureCpuTurnController();
+            InitializeEvaluators();
             NormalizeParticipantCount();
             cpuTurnController?.CancelPendingTurn();
             CancelPendingAutoDiscardDrawnTile();
@@ -849,36 +858,44 @@ namespace MahjongPrototype
 
         private void CheckWinPrototype()
         {
-            // PROTOTYPE: Check only a standard closed-hand self-draw shape.
+            // PROTOTYPE: Check only a closed-hand self-draw declaration candidate.
+            InitializeEvaluators();
             SeatId candidateSeat = gameState.CurrentTurn;
             PlayerSeat playerSeat = gameState.GetPlayerSeat(candidateSeat);
             Tile? winningTile = playerSeat.DrawnTile;
-            bool isWin =
-                winningTile.HasValue &&
-                winChecker.CanWinWithTile(playerSeat.Hand.GetTiles(), winningTile.Value);
+            WinDeclarationEvaluationResult evaluationResult =
+                winningTile.HasValue
+                    ? winDeclarationEvaluator.EvaluateWithTile(CreateWinDeclarationContext(
+                        playerSeat,
+                        WinType.Tsumo,
+                        winningTile.Value,
+                        null))
+                    : WinDeclarationEvaluationResult.NotWinningShape(WinCheckResult.NotWin);
+            bool canDeclareWin = evaluationResult.CanDeclareWin;
 
-            if (isWin)
+            if (canDeclareWin)
             {
                 SetWinDecisionPendingDetailed(
                     candidateSeat,
                     WinType.Tsumo,
                     winningTile.Value,
                     null,
-                    gameState.TurnIndex);
+                    gameState.TurnIndex,
+                    evaluationResult);
             }
             else
             {
                 ClearWinDecision();
             }
 
-            eventNotifier?.NotifyWinChecked(candidateSeat, gameState.TurnIndex, isWin);
+            eventNotifier?.NotifyWinChecked(candidateSeat, gameState.TurnIndex, canDeclareWin);
             NotifyWinCheckedDetailed(
                 candidateSeat,
                 WinType.Tsumo,
                 winningTile,
                 null,
                 gameState.TurnIndex,
-                isWin);
+                canDeclareWin);
         }
 
         private void ResolveAfterDraw(SeatId seat)
@@ -1031,6 +1048,7 @@ namespace MahjongPrototype
 
         private bool TryBeginRonDecision(DiscardRecord discard)
         {
+            InitializeEvaluators();
             // PROTOTYPE: Only locally-operated seats can answer the current single win decision.
             // CPU/RemoteHuman ron decisions will be introduced with a reaction window.
             for (int i = 0; i < gameState.SeatSlots.Count; i++)
@@ -1047,30 +1065,35 @@ namespace MahjongPrototype
                     continue;
 
                 PlayerSeat candidatePlayerSeat = gameState.GetPlayerSeat(candidateSeat);
-                bool isWin = winChecker.CanWinWithTile(
-                    candidatePlayerSeat.Hand.GetTiles(),
-                    discard.Tile);
+                WinDeclarationEvaluationResult evaluationResult =
+                    winDeclarationEvaluator.EvaluateWithTile(CreateWinDeclarationContext(
+                        candidatePlayerSeat,
+                        WinType.Ron,
+                        discard.Tile,
+                        discard.ActorSeat));
+                bool canDeclareWin = evaluationResult.CanDeclareWin;
 
-                if (isWin)
+                if (canDeclareWin)
                 {
                     SetWinDecisionPendingDetailed(
                         candidateSeat,
                         WinType.Ron,
                         discard.Tile,
                         discard.ActorSeat,
-                        discard.TurnIndex);
+                        discard.TurnIndex,
+                        evaluationResult);
                 }
 
-                eventNotifier?.NotifyWinChecked(candidateSeat, discard.TurnIndex, isWin);
+                eventNotifier?.NotifyWinChecked(candidateSeat, discard.TurnIndex, canDeclareWin);
                 NotifyWinCheckedDetailed(
                     candidateSeat,
                     WinType.Ron,
                     discard.Tile,
                     discard.ActorSeat,
                     discard.TurnIndex,
-                    isWin);
+                    canDeclareWin);
 
-                if (!isWin)
+                if (!canDeclareWin)
                     continue;
 
                 return true;
@@ -1135,6 +1158,25 @@ namespace MahjongPrototype
                 turnIndex: turnIndex);
         }
 
+        private WinDeclarationEvaluationContext CreateWinDeclarationContext(
+            PlayerSeat playerSeat,
+            WinType winType,
+            Tile winningTile,
+            SeatId? sourceSeat)
+        {
+            SeatId winnerSeat = playerSeat.SeatId;
+            return new WinDeclarationEvaluationContext(
+                playerSeat.Hand.GetTiles(),
+                winningTile,
+                winType,
+                winnerSeat,
+                sourceSeat,
+                gameState.WindProgress.RoundWind,
+                winnerSeat,
+                playerSeat.IsReachDeclared,
+                true);
+        }
+
         private void SetWinDecisionPending(bool isPending, SeatId seat, int turnIndex)
         {
             if (gameState == null)
@@ -1159,7 +1201,8 @@ namespace MahjongPrototype
             WinType winType,
             Tile winningTile,
             SeatId? sourceSeat,
-            int turnIndex)
+            int turnIndex,
+            WinDeclarationEvaluationResult evaluationResult)
         {
             if (gameState == null)
                 return;
@@ -1169,7 +1212,8 @@ namespace MahjongPrototype
                 winType,
                 winningTile,
                 sourceSeat,
-                turnIndex);
+                turnIndex,
+                evaluationResult);
             NotifyTurnDebug(
                 "WinDecision",
                 $"phase={gameState.TurnPhase}; winType={winType}; sourceSeat={sourceSeat}",
@@ -1235,6 +1279,19 @@ namespace MahjongPrototype
 
             if (cpuTurnController == null)
                 cpuTurnController = GetComponent<CpuTurnController>();
+        }
+
+        private void InitializeEvaluators()
+        {
+            if (winDeclarationEvaluator != null &&
+                initializedYakuDefinitionCatalog == yakuDefinitionCatalog)
+            {
+                return;
+            }
+
+            handEvaluator = new HandEvaluator(yakuDefinitionCatalog);
+            winDeclarationEvaluator = new WinDeclarationEvaluator(winChecker, handEvaluator);
+            initializedYakuDefinitionCatalog = yakuDefinitionCatalog;
         }
 
         private void EnsureCpuTurnController()

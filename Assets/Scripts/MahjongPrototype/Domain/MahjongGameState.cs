@@ -57,6 +57,7 @@ namespace MahjongPrototype.Domain
         public Tile? WinningTile { get; private set; }
         public SeatId? WinSourceSeat { get; private set; }
         public int WinDecisionTurnIndex { get; private set; }
+        public WinDeclarationEvaluationResult PendingWinDeclarationEvaluation { get; private set; }
         public bool IsReachDecisionPending { get; private set; }
         public bool IsReachDiscardSelectionPending { get; private set; }
         public SeatId ReachDecisionSeat { get; private set; }
@@ -223,6 +224,23 @@ namespace MahjongPrototype.Domain
             SeatId? sourceSeat,
             int turnIndex)
         {
+            BeginWinDecisionDetailed(
+                seat,
+                winType,
+                winningTile,
+                sourceSeat,
+                turnIndex,
+                null);
+        }
+
+        public void BeginWinDecisionDetailed(
+            SeatId seat,
+            WinType winType,
+            Tile? winningTile,
+            SeatId? sourceSeat,
+            int turnIndex,
+            WinDeclarationEvaluationResult evaluationResult)
+        {
             ClearReachDecision();
             IsWinDecisionPending = true;
             WinDecisionSeat = seat;
@@ -230,6 +248,7 @@ namespace MahjongPrototype.Domain
             WinningTile = winningTile;
             WinSourceSeat = sourceSeat;
             WinDecisionTurnIndex = turnIndex;
+            PendingWinDeclarationEvaluation = evaluationResult;
         }
 
         public void ClearWinDecision()
@@ -240,6 +259,7 @@ namespace MahjongPrototype.Domain
             WinningTile = null;
             WinSourceSeat = null;
             WinDecisionTurnIndex = 0;
+            PendingWinDeclarationEvaluation = null;
         }
 
         public void BeginReachDecision(
