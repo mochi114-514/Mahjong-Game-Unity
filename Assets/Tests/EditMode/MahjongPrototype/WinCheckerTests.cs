@@ -38,6 +38,119 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
+        public void CheckWinWithTile_ReturnsStandardForStandardHand()
+        {
+            Array handTiles = CreateTileArray(
+                "1m 2m 3m 1p 2p 3p 1s 2s 3s E E E C");
+            object winningTile = CreateTile("C");
+
+            object result = CheckWinWithTile(handTiles, winningTile);
+
+            AssertWinCheckResult(result, true, "Standard");
+            Assert.That(CanWinWithTile(handTiles, winningTile), Is.True);
+        }
+
+        [Test]
+        public void CheckWinWithTile_ReturnsSevenPairsForSevenPairs()
+        {
+            Array handTiles = CreateTileArray(
+                "1m 1m 2m 2m 3p 3p 4p 4p 5s 5s E E C");
+            object winningTile = CreateTile("C");
+
+            object result = CheckWinWithTile(handTiles, winningTile);
+
+            AssertWinCheckResult(result, true, "SevenPairs");
+            Assert.That(CanWinWithTile(handTiles, winningTile), Is.True);
+        }
+
+        [Test]
+        public void CheckWinWithTile_ReturnsThirteenOrphansForThirteenWait()
+        {
+            Array handTiles = CreateTileArray(
+                "1m 9m 1p 9p 1s 9s E S W N P F C");
+            object winningTile = CreateTile("E");
+
+            object result = CheckWinWithTile(handTiles, winningTile);
+
+            AssertWinCheckResult(result, true, "ThirteenOrphans");
+            Assert.That(CanWinWithTile(handTiles, winningTile), Is.True);
+        }
+
+        [Test]
+        public void CheckWinWithTile_ReturnsThirteenOrphansForSingleWait()
+        {
+            Array handTiles = CreateTileArray(
+                "1m 9m 1p 9p 1s 9s E E S W N P F");
+            object winningTile = CreateTile("C");
+
+            object result = CheckWinWithTile(handTiles, winningTile);
+
+            AssertWinCheckResult(result, true, "ThirteenOrphans");
+            Assert.That(CanWinWithTile(handTiles, winningTile), Is.True);
+        }
+
+        [Test]
+        public void CheckCompletedHand_ReturnsNoneForNonWinningHand()
+        {
+            Array tiles = CreateTileArray(
+                "1m 2m 3m 4m 5m 6m 2p 3p 4p 6s 7s 8s E S");
+
+            object result = CheckCompletedHand(tiles);
+
+            AssertWinCheckResult(result, false, "None");
+        }
+
+        [Test]
+        public void CheckWinWithTile_ReturnsNoneWhenFiveCopies()
+        {
+            Array handTiles = CreateTileArray(
+                "1m 1m 1m 1m 2m 3m 4m 5m 6m 7m 8m 9m E");
+            object winningTile = CreateTile("1m");
+
+            object result = CheckWinWithTile(handTiles, winningTile);
+
+            AssertWinCheckResult(result, false, "None");
+            Assert.That(CanWinWithTile(handTiles, winningTile), Is.False);
+        }
+
+        [Test]
+        public void CanWinStandardHand_ReturnsFalseForSevenPairs()
+        {
+            Array tiles = CreateTileArray(
+                "1m 1m 2m 2m 3p 3p 4p 4p 5s 5s E E C C");
+
+            Assert.That(CanWinStandardHand(tiles), Is.False);
+            AssertWinCheckResult(CheckCompletedHand(tiles), true, "SevenPairs");
+        }
+
+        [Test]
+        public void CanWinStandardHand_ReturnsFalseForThirteenOrphans()
+        {
+            Array tiles = CreateTileArray(
+                "1m 9m 1p 9p 1s 9s E E S W N P F C");
+
+            Assert.That(CanWinStandardHand(tiles), Is.False);
+            AssertWinCheckResult(CheckCompletedHand(tiles), true, "ThirteenOrphans");
+        }
+
+        [Test]
+        public void CheckCompletedHand_ReturnsNoneFor13Tiles()
+        {
+            Array tiles = CreateTileArray("1m 2m 3m 4m 5m 6m 2p 3p 4p 6s 7s 8s E");
+
+            AssertWinCheckResult(CheckCompletedHand(tiles), false, "None");
+        }
+
+        [Test]
+        public void CheckCompletedHand_ReturnsNoneFor15Tiles()
+        {
+            Array tiles = CreateTileArray(
+                "1m 2m 3m 4m 5m 6m 2p 3p 4p 6s 7s 8s E S W");
+
+            AssertWinCheckResult(CheckCompletedHand(tiles), false, "None");
+        }
+
+        [Test]
         public void CanWinStandardHand_ReturnsFalseWhenHandContainsInvalidTile()
         {
             Type tileType = GetTileType();
@@ -70,6 +183,32 @@ namespace MahjongPrototype.Tests
             Assert.That(method, Is.Not.Null);
 
             return (bool)method.Invoke(checker, new[] { handTiles, winningTile });
+        }
+
+        private static object CheckWinWithTile(Array handTiles, object winningTile)
+        {
+            Type checkerType = Type.GetType(WinCheckerTypeName, true);
+            object checker = Activator.CreateInstance(checkerType);
+            MethodInfo method = checkerType.GetMethod("CheckWinWithTile");
+            Assert.That(method, Is.Not.Null);
+
+            return method.Invoke(checker, new[] { handTiles, winningTile });
+        }
+
+        private static object CheckCompletedHand(Array tiles)
+        {
+            Type checkerType = Type.GetType(WinCheckerTypeName, true);
+            object checker = Activator.CreateInstance(checkerType);
+            MethodInfo method = checkerType.GetMethod("CheckCompletedHand");
+            Assert.That(method, Is.Not.Null);
+
+            return method.Invoke(checker, new object[] { tiles });
+        }
+
+        private static void AssertWinCheckResult(object result, bool expectedCanWin, string expectedShape)
+        {
+            Assert.That(GetProperty(result, "CanWin"), Is.EqualTo(expectedCanWin));
+            Assert.That(GetProperty(result, "Shape").ToString(), Is.EqualTo(expectedShape));
         }
 
         private static Array CreateTileArray(string handText)
@@ -112,6 +251,15 @@ namespace MahjongPrototype.Tests
         private static Type GetTileType()
         {
             return Type.GetType(TileTypeName, true);
+        }
+
+        private static object GetProperty(object target, string propertyName)
+        {
+            PropertyInfo property = target.GetType().GetProperty(
+                propertyName,
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.That(property, Is.Not.Null);
+            return property.GetValue(target);
         }
     }
 }

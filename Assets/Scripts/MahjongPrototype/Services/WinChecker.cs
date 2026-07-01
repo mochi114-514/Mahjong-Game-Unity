@@ -9,26 +9,65 @@ namespace MahjongPrototype.Services
         private const int WinningHandTileCount = 14;
         private const int FirstHonorTileIndex = 27;
         private const int RanksPerSuit = 9;
+        private static readonly int[] ThirteenOrphansTypeIndices =
+        {
+            0, 8,
+            9, 17,
+            18, 26,
+            27, 28, 29, 30, 31, 32, 33
+        };
 
         public bool CanWinWithTile(IReadOnlyList<Tile> handTiles, Tile winningTile)
         {
+            return CheckWinWithTile(handTiles, winningTile).CanWin;
+        }
+
+        public WinCheckResult CheckWinWithTile(IReadOnlyList<Tile> handTiles, Tile winningTile)
+        {
             if (handTiles == null || !winningTile.IsValid)
-                return false;
+                return WinCheckResult.NotWin;
 
             List<Tile> completedTiles = new List<Tile>(handTiles.Count + 1);
             for (int i = 0; i < handTiles.Count; i++)
                 completedTiles.Add(handTiles[i]);
 
             completedTiles.Add(winningTile);
-            return CanWinStandardHand(completedTiles);
+            return CheckCompletedHand(completedTiles);
+        }
+
+        public WinCheckResult CheckCompletedHand(IReadOnlyList<Tile> tiles)
+        {
+            if (!TryBuildTileCounts(tiles, out int[] counts))
+                return WinCheckResult.NotWin;
+
+            int[] standardCounts = (int[])counts.Clone();
+            if (CanWinStandardHandFromCounts(standardCounts))
+                return WinCheckResult.Win(WinningHandShape.Standard);
+
+            if (CanWinSevenPairsFromCounts(counts))
+                return WinCheckResult.Win(WinningHandShape.SevenPairs);
+
+            if (CanWinThirteenOrphansFromCounts(counts))
+                return WinCheckResult.Win(WinningHandShape.ThirteenOrphans);
+
+            return WinCheckResult.NotWin;
         }
 
         public bool CanWinStandardHand(IReadOnlyList<Tile> tiles)
         {
+            if (!TryBuildTileCounts(tiles, out int[] counts))
+                return false;
+
+            return CanWinStandardHandFromCounts(counts);
+        }
+
+        private static bool TryBuildTileCounts(IReadOnlyList<Tile> tiles, out int[] counts)
+        {
+            counts = new int[TileTypeCount];
+
             if (tiles == null || tiles.Count != WinningHandTileCount)
                 return false;
 
-            int[] counts = new int[TileTypeCount];
             for (int i = 0; i < tiles.Count; i++)
             {
                 Tile tile = tiles[i];
@@ -41,6 +80,11 @@ namespace MahjongPrototype.Services
                     return false;
             }
 
+            return true;
+        }
+
+        private static bool CanWinStandardHandFromCounts(int[] counts)
+        {
             for (int pairIndex = 0; pairIndex < TileTypeCount; pairIndex++)
             {
                 if (counts[pairIndex] < 2)
@@ -51,6 +95,70 @@ namespace MahjongPrototype.Services
                     return true;
 
                 counts[pairIndex] += 2;
+            }
+
+            return false;
+        }
+
+        private static bool CanWinSevenPairsFromCounts(int[] counts)
+        {
+            int pairCount = 0;
+
+            for (int i = 0; i < counts.Length; i++)
+            {
+                if (counts[i] == 0)
+                    continue;
+
+                if (counts[i] != 2)
+                    return false;
+
+                pairCount++;
+            }
+
+            return pairCount == 7;
+        }
+
+        private static bool CanWinThirteenOrphansFromCounts(int[] counts)
+        {
+            int pairCount = 0;
+
+            for (int i = 0; i < counts.Length; i++)
+            {
+                bool isRequired = IsThirteenOrphansTypeIndex(i);
+                int count = counts[i];
+
+                if (!isRequired)
+                {
+                    if (count != 0)
+                        return false;
+
+                    continue;
+                }
+
+                if (count <= 0)
+                    return false;
+
+                if (count == 2)
+                {
+                    pairCount++;
+                    continue;
+                }
+
+                if (count == 1)
+                    continue;
+
+                return false;
+            }
+
+            return pairCount == 1;
+        }
+
+        private static bool IsThirteenOrphansTypeIndex(int typeIndex)
+        {
+            for (int i = 0; i < ThirteenOrphansTypeIndices.Length; i++)
+            {
+                if (ThirteenOrphansTypeIndices[i] == typeIndex)
+                    return true;
             }
 
             return false;
