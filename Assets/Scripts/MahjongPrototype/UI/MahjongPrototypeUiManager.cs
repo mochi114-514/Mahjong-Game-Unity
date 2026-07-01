@@ -28,8 +28,8 @@ namespace MahjongPrototype.UI
         [SerializeField] private Mahjong3DPlayerAreaPresenter playerArea3DPresenter;
 
         [Header("3D Table Center UI")]
-        [Tooltip("Optional presenter for the world-space table center wind labels.")]
-        [SerializeField] private MahjongTableCenterWindPresenter tableCenterWindPresenter;
+        [Tooltip("Optional controller for the world-space table center UI.")]
+        [SerializeField] private MahjongTableCenterUiController tableCenterUiController;
 
         [Header("Input")]
         [Tooltip("Controller for draw, skill, retry, and win decision input.")]
@@ -105,12 +105,12 @@ namespace MahjongPrototype.UI
         {
             if (state == null)
             {
-                RefreshTableCenterWind(null);
+                RefreshTableCenterUi(null);
                 return;
             }
 
             RefreshDisplay(state);
-            RefreshTableCenterWind(state);
+            RefreshTableCenterUi(state);
             RefreshPlayerArea3D(state);
             RefreshWinDecision(state);
             RefreshReachDecision(state);
@@ -143,8 +143,8 @@ namespace MahjongPrototype.UI
             if (playerArea3DPresenter == null)
                 playerArea3DPresenter = GetComponentInChildren<Mahjong3DPlayerAreaPresenter>(true);
 
-            if (tableCenterWindPresenter == null)
-                tableCenterWindPresenter = GetComponentInChildren<MahjongTableCenterWindPresenter>(true);
+            if (tableCenterUiController == null)
+                tableCenterUiController = GetComponentInChildren<MahjongTableCenterUiController>(true);
 
             if (inputController == null)
                 inputController = GetComponentInChildren<MahjongUiInputController>(true);
@@ -461,10 +461,10 @@ namespace MahjongPrototype.UI
             playerArea3DPresenter.Refresh(state, CanUseSelfGameplayInput(state));
         }
 
-        private void RefreshTableCenterWind(MahjongGameState state)
+        private void RefreshTableCenterUi(MahjongGameState state)
         {
-            if (tableCenterWindPresenter != null)
-                tableCenterWindPresenter.Refresh(state);
+            if (tableCenterUiController != null)
+                tableCenterUiController.Refresh(state);
         }
 
         private void RefreshPlayerHand3DForSeat(MahjongGameState state, SeatId seat)

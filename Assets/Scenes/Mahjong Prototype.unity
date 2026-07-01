@@ -199,7 +199,7 @@ MonoBehaviour:
   eventNotifier: {fileID: 1264733449}
   displayController: {fileID: 45752831}
   playerArea3DPresenter: {fileID: 1893660903}
-  tableCenterWindPresenter: {fileID: 579311590}
+  tableCenterUiController: {fileID: 579311590}
   inputController: {fileID: 45752830}
   commandRouter: {fileID: 6100000003}
   winDecisionController: {fileID: 6100000001}
@@ -1669,6 +1669,7 @@ GameObject:
   - component: {fileID: 579311587}
   - component: {fileID: 579311586}
   - component: {fileID: 579311590}
+  - component: {fileID: 579311591}
   m_Layer: 5
   m_Name: CenterUI Canvas
   m_TagString: Untagged
@@ -1704,7 +1705,20 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8b21f7df1d9e4e948a9e63713f9de4c2, type: 3}
   m_Name:
-  m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI3D.MahjongTableCenterWindPresenter
+  m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI3D.MahjongTableCenterUiController
+  textPresenter: {fileID: 579311591}
+--- !u!114 &579311591
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 579311585}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 91c4c08ba3c7479aa36ad51844c53b42, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI3D.MahjongTableCenterTextPresenter
   selfBottomWindText: {fileID: 1383134369}
   nextLeftWindText: {fileID: 1289116285}
   acrossTopWindText: {fileID: 1985692894}

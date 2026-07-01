@@ -6,8 +6,8 @@ using UnityEngine;
 namespace MahjongPrototype.UI3D
 {
     [DisallowMultipleComponent]
-    [AddComponentMenu("Mahjong Prototype/UI3D/Mahjong Table Center Wind Presenter")]
-    public sealed class MahjongTableCenterWindPresenter : MonoBehaviour
+    [AddComponentMenu("Mahjong Prototype/UI3D/Mahjong Table Center Text Presenter")]
+    public sealed class MahjongTableCenterTextPresenter : MonoBehaviour
     {
         [Header("Wind Texts")]
         [SerializeField] private TMP_Text selfBottomWindText;
@@ -107,7 +107,7 @@ namespace MahjongPrototype.UI3D
                 return;
 
             warned = true;
-            Debug.LogWarning($"{nameof(MahjongTableCenterWindPresenter)}: {message}", this);
+            Debug.LogWarning($"{nameof(MahjongTableCenterTextPresenter)}: {message}", this);
         }
     }
 }
