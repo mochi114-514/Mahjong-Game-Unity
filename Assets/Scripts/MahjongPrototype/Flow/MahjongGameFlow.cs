@@ -13,6 +13,7 @@ namespace MahjongPrototype
     public sealed class MahjongGameFlow : MonoBehaviour
     {
         private const string RoundEndReasonWallEmpty = "WallEmpty";
+        private const string RoundEndReasonWin = "Win";
 
         [Header("Prototype Players")]
         [SerializeField, Range(1, 4)] private int participantCount = 1;
@@ -559,16 +560,14 @@ namespace MahjongPrototype
             SeatId seat = gameState.WinDecisionSeat;
             WinType? winType = gameState.WinDecisionType;
             int turnIndex = gameState.WinDecisionTurnIndex;
-            ClearWinDecision();
-            gameState.IsRoundEnded = true;
-            NotifyTurnDebug(
-                "RoundEnded",
-                $"phase={gameState.TurnPhase}; reason=WinDeclared",
-                seat: seat,
-                turnIndex: turnIndex);
 
-            NotifyWinDeclared(seat, turnIndex);
-            NotifyWinDeclaredDetailed(seat, winType, turnIndex);
+            EndRound(
+                RoundEndReasonWin,
+                () =>
+                {
+                    NotifyWinDeclared(seat, turnIndex);
+                    NotifyWinDeclaredDetailed(seat, winType, turnIndex);
+                });
         }
 
         public void RequestDeclineWin()
@@ -1186,6 +1185,11 @@ namespace MahjongPrototype
 
         private void EndRound(string reason)
         {
+            EndRound(reason, null);
+        }
+
+        private void EndRound(string reason, System.Action afterRoundMarkedEnded)
+        {
             CancelPendingAutoDiscardDrawnTile();
             gameState.ClearWinDecision();
             gameState.ClearReachDecision();
@@ -1195,10 +1199,23 @@ namespace MahjongPrototype
                 $"phase={gameState.TurnPhase}; reason={reason}; windProgress={gameState.WindProgress}",
                 seat: gameState.CurrentTurn,
                 turnIndex: gameState.TurnIndex);
+            afterRoundMarkedEnded?.Invoke();
             eventNotifier?.NotifyRoundEnded(reason);
 
-            if (reason == RoundEndReasonWallEmpty)
+            if (ShouldStartNextRoundAfterRoundEnd(reason))
                 StartNextRound();
+        }
+
+        private static bool ShouldStartNextRoundAfterRoundEnd(string reason)
+        {
+            switch (reason)
+            {
+                case RoundEndReasonWallEmpty:
+                case RoundEndReasonWin:
+                    return true;
+                default:
+                    return false;
+            }
         }
 
         private void NotifySkillResolutionEvents(DrawResult result)

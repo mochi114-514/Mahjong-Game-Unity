@@ -139,7 +139,7 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void RequestDeclareWin_ClearsDecisionAndEndsRound()
+        public void RequestDeclareWin_ClearsDecisionAndStartsNextRound()
         {
             GameObject gameObject = new GameObject("MahjongGameFlowDeclareWinDecisionTest");
             try
@@ -157,8 +157,12 @@ namespace MahjongPrototype.Tests
                 Invoke(gameFlow, "RequestDeclareWin");
 
                 Assert.That(GetProperty(gameState, "IsWinDecisionPending"), Is.False);
-                Assert.That(GetProperty(gameState, "IsRoundEnded"), Is.True);
-                Assert.That(GetProperty(gameState, "IsInteractionLocked"), Is.True);
+                object nextState = GetProperty(gameFlow, "CurrentState");
+                object windProgress = GetProperty(nextState, "WindProgress");
+                Assert.That(GetProperty(windProgress, "RoundWind").ToString(), Is.EqualTo("East"));
+                Assert.That(GetProperty(windProgress, "HandNumber"), Is.EqualTo(2));
+                Assert.That(GetProperty(nextState, "IsRoundEnded"), Is.False);
+                Assert.That(GetProperty(nextState, "IsInteractionLocked"), Is.False);
             }
             finally
             {

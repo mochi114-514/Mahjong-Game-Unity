@@ -19,6 +19,8 @@ namespace MahjongPrototype.Tests
             "MahjongPrototype.MahjongGameFlow, Assembly-CSharp";
         private const string SeatIdTypeName =
             "MahjongPrototype.Domain.SeatId, Assembly-CSharp";
+        private const string WinTypeTypeName =
+            "MahjongPrototype.Domain.WinType, Assembly-CSharp";
         private const string TableCenterTextPresenterTypeName =
             "MahjongPrototype.UI3D.MahjongTableCenterTextPresenter, Assembly-CSharp";
         private const string TextMeshProUguiTypeName =
@@ -167,6 +169,99 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
+        public void MahjongGameFlow_TsumoWinStartsNextRound()
+        {
+            GameObject gameObject = new GameObject("WindProgressTsumoWinNextRoundTest");
+            try
+            {
+                object gameFlow = AddConfiguredGameFlow(gameObject);
+                Invoke(gameFlow, "StartNewRound");
+                object state = GetProperty(gameFlow, "CurrentState");
+                BeginWinDecisionDetailed(state, "East", "Tsumo", null);
+
+                Invoke(gameFlow, "RequestDeclareWin");
+
+                object nextState = GetProperty(gameFlow, "CurrentState");
+                AssertWindProgress(GetProperty(nextState, "WindProgress"), "East", 2);
+                Assert.That(GetProperty(nextState, "IsRoundEnded"), Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
+        public void MahjongGameFlow_RonWinStartsNextRound()
+        {
+            GameObject gameObject = new GameObject("WindProgressRonWinNextRoundTest");
+            try
+            {
+                object gameFlow = AddConfiguredGameFlow(gameObject);
+                Invoke(gameFlow, "StartNewRound");
+                object state = GetProperty(gameFlow, "CurrentState");
+                BeginWinDecisionDetailed(state, "East", "Ron", "South");
+
+                Invoke(gameFlow, "RequestDeclareWin");
+
+                object nextState = GetProperty(gameFlow, "CurrentState");
+                AssertWindProgress(GetProperty(nextState, "WindProgress"), "East", 2);
+                Assert.That(GetProperty(nextState, "IsRoundEnded"), Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
+        public void MahjongGameFlow_WinAfterSouthFourStaysRoundEnded()
+        {
+            GameObject gameObject = new GameObject("WindProgressSouthFourWinEndTest");
+            try
+            {
+                object gameFlow = AddConfiguredGameFlow(gameObject);
+                object south4 = CreateWindProgress("South", 4);
+                Invoke(gameFlow, "StartRound", south4, false);
+                object state = GetProperty(gameFlow, "CurrentState");
+                BeginWinDecisionDetailed(state, "East", "Tsumo", null);
+
+                Invoke(gameFlow, "RequestDeclareWin");
+
+                object currentState = GetProperty(gameFlow, "CurrentState");
+                AssertWindProgress(GetProperty(currentState, "WindProgress"), "South", 4);
+                Assert.That(GetProperty(currentState, "IsRoundEnded"), Is.True);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
+        public void MahjongGameFlow_DeclineWinDoesNotStartNextRound()
+        {
+            GameObject gameObject = new GameObject("WindProgressDeclineWinNoNextRoundTest");
+            try
+            {
+                object gameFlow = AddConfiguredGameFlow(gameObject);
+                Invoke(gameFlow, "StartNewRound");
+                object state = GetProperty(gameFlow, "CurrentState");
+                BeginWinDecisionDetailed(state, "East", "Tsumo", null);
+
+                Invoke(gameFlow, "RequestDeclineWin");
+
+                object currentState = GetProperty(gameFlow, "CurrentState");
+                AssertWindProgress(GetProperty(currentState, "WindProgress"), "East", 1);
+                Assert.That(GetProperty(currentState, "IsRoundEnded"), Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
         public void TableCenterTextPresenter_RefreshShowsWindProgress()
         {
             GameObject root = new GameObject("WindProgressPresenterTest");
@@ -233,6 +328,23 @@ namespace MahjongPrototype.Tests
             return result;
         }
 
+        private static void BeginWinDecisionDetailed(
+            object state,
+            string seatName,
+            string winTypeName,
+            string sourceSeatName)
+        {
+            object sourceSeat = sourceSeatName == null ? null : ParseSeat(sourceSeatName);
+            Invoke(
+                state,
+                "BeginWinDecisionDetailed",
+                ParseSeat(seatName),
+                ParseWinType(winTypeName),
+                null,
+                sourceSeat,
+                GetProperty(state, "TurnIndex"));
+        }
+
         private static object CreateGameState()
         {
             Type gameStateType = Type.GetType(MahjongGameStateTypeName, true);
@@ -266,6 +378,16 @@ namespace MahjongPrototype.Tests
             SetPrivateField(gameFlow, "fixedSelfSeat", Enum.Parse(Type.GetType(SeatIdTypeName, true), "East"));
             SetPrivateField(gameFlow, "logWarnings", false);
             return gameFlow;
+        }
+
+        private static object ParseSeat(string seatName)
+        {
+            return Enum.Parse(Type.GetType(SeatIdTypeName, true), seatName);
+        }
+
+        private static object ParseWinType(string winTypeName)
+        {
+            return Enum.Parse(Type.GetType(WinTypeTypeName, true), winTypeName);
         }
 
         private static Component AssignAllTextReferences(Transform parent, Component presenter)
