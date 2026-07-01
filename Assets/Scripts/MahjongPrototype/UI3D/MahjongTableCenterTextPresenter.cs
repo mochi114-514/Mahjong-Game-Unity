@@ -15,7 +15,12 @@ namespace MahjongPrototype.UI3D
         [SerializeField] private TMP_Text acrossTopWindText;
         [SerializeField] private TMP_Text previousRightWindText;
 
+        [Header("Wall Text")]
+        [Tooltip("Displays the remaining wall tile count.")]
+        [SerializeField] private TMP_Text wallPointText;
+
         private bool warnedMissingWindTextReferences;
+        private bool warnedMissingWallPointText;
 
         public void Refresh(MahjongGameState state)
         {
@@ -26,11 +31,13 @@ namespace MahjongPrototype.UI3D
             }
 
             WarnMissingWindTextReferences();
+            WarnMissingWallPointText();
             Clear();
             SetWindTextForSeat(state, SeatId.East);
             SetWindTextForSeat(state, SeatId.South);
             SetWindTextForSeat(state, SeatId.West);
             SetWindTextForSeat(state, SeatId.North);
+            SetWallPointText(state);
         }
 
         public void Clear()
@@ -39,12 +46,24 @@ namespace MahjongPrototype.UI3D
             SetText(nextLeftWindText, "-");
             SetText(acrossTopWindText, "-");
             SetText(previousRightWindText, "-");
+            SetText(wallPointText, "-");
         }
 
         private void SetWindTextForSeat(MahjongGameState state, SeatId seat)
         {
             ViewSlot viewSlot = SeatToViewSlotResolver.Resolve(state.SelfSeat, seat);
             SetText(GetWindText(viewSlot), ToJapaneseWind(seat));
+        }
+
+        private void SetWallPointText(MahjongGameState state)
+        {
+            if (state == null)
+            {
+                SetText(wallPointText, "-");
+                return;
+            }
+
+            SetText(wallPointText, state.Wall.Count.ToString());
         }
 
         private TMP_Text GetWindText(ViewSlot viewSlot)
@@ -99,6 +118,16 @@ namespace MahjongPrototype.UI3D
             WarnMissingOnce(
                 ref warnedMissingWindTextReferences,
                 "One or more center wind TMP_Text references are not assigned.");
+        }
+
+        private void WarnMissingWallPointText()
+        {
+            if (wallPointText != null)
+                return;
+
+            WarnMissingOnce(
+                ref warnedMissingWallPointText,
+                "WallPoint TMP_Text reference is not assigned.");
         }
 
         private void WarnMissingOnce(ref bool warned, string message)

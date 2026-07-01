@@ -449,8 +449,11 @@ namespace MahjongPrototype.UI
         private void RefreshGlobalStatus()
         {
             MahjongGameState state = gameFlow != null ? gameFlow.CurrentState : null;
-            if (state != null)
-                RefreshDisplay(state);
+            if (state == null)
+                return;
+
+            RefreshDisplay(state);
+            RefreshTableCenterUi(state);
         }
 
         private void RefreshPlayerArea3D(MahjongGameState state)

@@ -1723,6 +1723,7 @@ MonoBehaviour:
   nextLeftWindText: {fileID: 1289116285}
   acrossTopWindText: {fileID: 1985692894}
   previousRightWindText: {fileID: 1210381813}
+  wallPointText: {fileID: 800514829}
 --- !u!114 &579311587
 MonoBehaviour:
   m_ObjectHideFlags: 0
