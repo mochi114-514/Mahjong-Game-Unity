@@ -1724,6 +1724,7 @@ MonoBehaviour:
   acrossTopWindText: {fileID: 1985692894}
   previousRightWindText: {fileID: 1210381813}
   wallPointText: {fileID: 800514829}
+  windProgressText: {fileID: 2033423523}
 --- !u!114 &579311587
 MonoBehaviour:
   m_ObjectHideFlags: 0

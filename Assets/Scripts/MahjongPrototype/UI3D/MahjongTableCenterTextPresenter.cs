@@ -19,8 +19,13 @@ namespace MahjongPrototype.UI3D
         [Tooltip("Displays the remaining wall tile count.")]
         [SerializeField] private TMP_Text wallPointText;
 
+        [Header("Round Text")]
+        [Tooltip("Displays the current wind progress, for example 東一局.")]
+        [SerializeField] private TMP_Text windProgressText;
+
         private bool warnedMissingWindTextReferences;
         private bool warnedMissingWallPointText;
+        private bool warnedMissingWindProgressText;
 
         public void Refresh(MahjongGameState state)
         {
@@ -32,11 +37,13 @@ namespace MahjongPrototype.UI3D
 
             WarnMissingWindTextReferences();
             WarnMissingWallPointText();
+            WarnMissingWindProgressText();
             Clear();
             SetWindTextForSeat(state, SeatId.East);
             SetWindTextForSeat(state, SeatId.South);
             SetWindTextForSeat(state, SeatId.West);
             SetWindTextForSeat(state, SeatId.North);
+            SetWindProgressText(state);
             SetWallPointText(state);
         }
 
@@ -47,6 +54,7 @@ namespace MahjongPrototype.UI3D
             SetText(acrossTopWindText, "-");
             SetText(previousRightWindText, "-");
             SetText(wallPointText, "-");
+            SetText(windProgressText, "-");
         }
 
         private void SetWindTextForSeat(MahjongGameState state, SeatId seat)
@@ -64,6 +72,17 @@ namespace MahjongPrototype.UI3D
             }
 
             SetText(wallPointText, state.Wall.Count.ToString());
+        }
+
+        private void SetWindProgressText(MahjongGameState state)
+        {
+            if (state == null)
+            {
+                SetText(windProgressText, "-");
+                return;
+            }
+
+            SetText(windProgressText, FormatWindProgress(state.WindProgress));
         }
 
         private TMP_Text GetWindText(ViewSlot viewSlot)
@@ -105,6 +124,41 @@ namespace MahjongPrototype.UI3D
             }
         }
 
+        private static string FormatWindProgress(WindProgress progress)
+        {
+            return $"{ToJapaneseRoundWind(progress.RoundWind)}{ToJapaneseHandNumber(progress.HandNumber)}局";
+        }
+
+        private static string ToJapaneseRoundWind(RoundWind roundWind)
+        {
+            switch (roundWind)
+            {
+                case RoundWind.East:
+                    return "東";
+                case RoundWind.South:
+                    return "南";
+                default:
+                    return "-";
+            }
+        }
+
+        private static string ToJapaneseHandNumber(int handNumber)
+        {
+            switch (handNumber)
+            {
+                case 1:
+                    return "一";
+                case 2:
+                    return "二";
+                case 3:
+                    return "三";
+                case 4:
+                    return "四";
+                default:
+                    return handNumber.ToString();
+            }
+        }
+
         private void WarnMissingWindTextReferences()
         {
             if (selfBottomWindText != null &&
@@ -128,6 +182,16 @@ namespace MahjongPrototype.UI3D
             WarnMissingOnce(
                 ref warnedMissingWallPointText,
                 "WallPoint TMP_Text reference is not assigned.");
+        }
+
+        private void WarnMissingWindProgressText()
+        {
+            if (windProgressText != null)
+                return;
+
+            WarnMissingOnce(
+                ref warnedMissingWindProgressText,
+                "Center wind progress TMP_Text reference is not assigned.");
         }
 
         private void WarnMissingOnce(ref bool warned, string message)

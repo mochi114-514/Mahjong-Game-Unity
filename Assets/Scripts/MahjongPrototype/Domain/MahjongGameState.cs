@@ -25,8 +25,14 @@ namespace MahjongPrototype.Domain
             new List<ReachDiscardCandidate>();
 
         public MahjongGameState(Wall wall)
+            : this(wall, WindProgress.East1)
+        {
+        }
+
+        public MahjongGameState(Wall wall, WindProgress windProgress)
         {
             Wall = wall ?? throw new ArgumentNullException(nameof(wall));
+            WindProgress = windProgress;
 
             InitializeSeatSlots();
             SetSelfSeat(SeatId.East);
@@ -35,6 +41,7 @@ namespace MahjongPrototype.Domain
         }
 
         public Wall Wall { get; }
+        public WindProgress WindProgress { get; }
         public PlayerId SelfPlayerId { get; } = PlayerId.Player1;
         public SeatId SelfSeat => GetSelfSeatSlot().Wind;
         public SeatId SelfWind => SelfSeat;

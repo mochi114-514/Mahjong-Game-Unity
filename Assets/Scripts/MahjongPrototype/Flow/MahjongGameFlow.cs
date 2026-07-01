@@ -12,6 +12,8 @@ namespace MahjongPrototype
     [AddComponentMenu("Mahjong Prototype/Mahjong Game Flow")]
     public sealed class MahjongGameFlow : MonoBehaviour
     {
+        private const string RoundEndReasonWallEmpty = "WallEmpty";
+
         [Header("Prototype Players")]
         [SerializeField, Range(1, 4)] private int participantCount = 1;
 
@@ -53,6 +55,7 @@ namespace MahjongPrototype
         private readonly SkillReservationService skillReservationService = new SkillReservationService();
 
         private MahjongGameState gameState;
+        private WindProgress currentWindProgress = WindProgress.East1;
         private bool warnedMissingNotifier;
         private Coroutine pendingAutoDiscardDrawnTileCoroutine;
         private int autoDiscardDrawnTileOperationVersion;
@@ -120,6 +123,29 @@ namespace MahjongPrototype
         [ContextMenu("Prototype/Start New Round")]
         public void StartNewRound()
         {
+            currentWindProgress = WindProgress.East1;
+            StartRound(currentWindProgress, true);
+        }
+
+        private void StartNextRound()
+        {
+            if (!currentWindProgress.TryGetNext(out WindProgress next))
+            {
+                NotifyTurnDebug(
+                    "GameEnded",
+                    $"windProgress={currentWindProgress}",
+                    seat: gameState != null ? gameState.CurrentTurn : (SeatId?)null,
+                    turnIndex: gameState != null ? gameState.TurnIndex : (int?)null);
+                return;
+            }
+
+            currentWindProgress = next;
+            StartRound(currentWindProgress, false);
+        }
+
+        private void StartRound(WindProgress windProgress, bool notifyRunStarted)
+        {
+            currentWindProgress = windProgress;
             CacheReferences();
             EnsureCpuTurnController();
             NormalizeParticipantCount();
@@ -128,10 +154,11 @@ namespace MahjongPrototype
 
             ClearWinDecision();
             skillReservationService.Clear();
-            NotifyRunStarted();
+            if (notifyRunStarted)
+                NotifyRunStarted();
 
             int? seed = useFixedRandomSeed ? fixedRandomSeed : (int?)null;
-            gameState = new MahjongGameState(Wall.CreateStandardShuffled(seed));
+            gameState = new MahjongGameState(Wall.CreateStandardShuffled(seed), windProgress);
             SeatId selfSeat = ResolveSelfSeat();
             AssignParticipantsToSeats(selfSeat);
             gameState.RebuildActiveTurnSeatsFromSeatSlots();
@@ -228,7 +255,7 @@ namespace MahjongPrototype
             if (!result.Success)
             {
                 NotifySkillResolutionEvents(result);
-                EndRound("WallEmpty");
+                EndRound(RoundEndReasonWallEmpty);
                 return false;
             }
 
@@ -1165,10 +1192,13 @@ namespace MahjongPrototype
             gameState.IsRoundEnded = true;
             NotifyTurnDebug(
                 "RoundEnded",
-                $"phase={gameState.TurnPhase}; reason={reason}",
+                $"phase={gameState.TurnPhase}; reason={reason}; windProgress={gameState.WindProgress}",
                 seat: gameState.CurrentTurn,
                 turnIndex: gameState.TurnIndex);
             eventNotifier?.NotifyRoundEnded(reason);
+
+            if (reason == RoundEndReasonWallEmpty)
+                StartNextRound();
         }
 
         private void NotifySkillResolutionEvents(DrawResult result)
