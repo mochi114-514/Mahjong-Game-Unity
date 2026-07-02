@@ -62,8 +62,8 @@ namespace MahjongPrototype.Tests
         public void CheckReach_ReturnsNotReadyForNonReadyHand()
         {
             object result = CheckReach(
-                "1m 9m 1p 9p 1s 9s E S W N P F C",
-                "5m");
+                "1m 4m 7m 2p 5p 8p 3s 6s 9s E S W N",
+                "P");
 
             Assert.That(GetProperty(result, "CanReach"), Is.False);
             Assert.That(GetCandidateCount(result), Is.EqualTo(0));

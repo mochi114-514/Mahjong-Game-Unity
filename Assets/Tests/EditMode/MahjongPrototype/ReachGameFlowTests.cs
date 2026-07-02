@@ -3,7 +3,6 @@ using System.Collections;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
-using UnityEngine.TestTools;
 
 namespace MahjongPrototype.Tests
 {
@@ -181,8 +180,9 @@ namespace MahjongPrototype.Tests
             GameObject gameObject = new GameObject("ReachCandidateHandDiscardTest");
             try
             {
-                object gameFlow = CreateConfiguredGameFlow(gameObject);
+                object gameFlow = CreateConfiguredGameFlow(gameObject, 2);
                 object gameState = DrawReachableHand(gameFlow);
+                SetSeatParticipantType(gameState, "West", "LocalHuman");
                 Invoke(gameFlow, "RequestDeclareReach");
 
                 Invoke(gameFlow, "RequestDiscard", 12);
@@ -230,12 +230,15 @@ namespace MahjongPrototype.Tests
             GameObject gameObject = new GameObject("ReachHandLockTest");
             try
             {
-                object gameFlow = CreateConfiguredGameFlow(gameObject);
+                object gameFlow = CreateConfiguredGameFlow(gameObject, 2);
+                SetPrivateField(gameFlow, "autoDiscardDrawnTileDelaySeconds", 0.05f);
                 object gameState = DrawReachableHand(gameFlow);
+                SetSeatParticipantType(gameState, "West", "LocalHuman");
                 Invoke(gameFlow, "RequestDeclareReach");
-                Invoke(gameFlow, "RequestDiscard", 12);
+                Invoke(gameFlow, "RequestDiscardDrawnTile");
+                Invoke(gameFlow, "RequestForceDrawSkillForSeat", ParseSeat("East"), "9m");
+                DrawAndDiscardDrawnTileForSeat(gameFlow, "West", "C");
                 object playerSeat = GetPlayerSeat(gameState, "East");
-                Invoke(playerSeat, "SetDrawnTile", CreateTile("7m"));
                 int discardCountBefore = GetListCount(GetProperty(gameState, "Discards"));
 
                 Invoke(gameFlow, "RequestDiscard", 0);
@@ -384,8 +387,8 @@ namespace MahjongPrototype.Tests
             }
         }
 
-        [UnityTest]
-        public IEnumerator ReachDeclared_AutoDiscardDelay_HoldsDrawnTileBeforeDiscard()
+        [Test]
+        public void ReachDeclared_AutoDiscardDelay_HoldsDrawnTileBeforeDiscard()
         {
             GameObject gameObject = new GameObject("ReachAutoDiscardDelayTest");
             try
@@ -407,8 +410,24 @@ namespace MahjongPrototype.Tests
                 Assert.That(GetProperty(eastPlayerSeat, "DrawnTile").ToString(), Is.EqualTo("9m"));
                 Assert.That(GetListCount(GetProperty(gameState, "Discards")), Is.EqualTo(discardCountBeforeWestTurnEnds + 1));
 
-                yield return new WaitForSeconds(0.08f);
-                yield return null;
+                IEnumerator routine = (IEnumerator)InvokeWithSignature(
+                    gameFlow,
+                    "RunAutoDiscardDrawnTileAfterDraw",
+                    new[]
+                    {
+                        Type.GetType(SeatIdTypeName, true),
+                        typeof(int),
+                        typeof(int)
+                    },
+                    ParseSeat("East"),
+                    GetProperty(gameState, "TurnIndex"),
+                    GetPrivateField(gameFlow, "autoDiscardDrawnTileOperationVersion"));
+                Assert.That(routine.MoveNext(), Is.True);
+                Assert.That(routine.Current, Is.TypeOf<WaitForSeconds>());
+                Assert.That(GetProperty(eastPlayerSeat, "HasDrawnTile"), Is.True);
+                Assert.That(GetListCount(GetProperty(gameState, "Discards")), Is.EqualTo(discardCountBeforeWestTurnEnds + 1));
+
+                Assert.That(routine.MoveNext(), Is.False);
 
                 object lastDiscard = GetLastListItem(GetProperty(gameState, "Discards"));
                 Assert.That(GetProperty(eastPlayerSeat, "HasDrawnTile"), Is.False);
@@ -470,7 +489,7 @@ namespace MahjongPrototype.Tests
                     "6s", "7s", "8s",
                     "5m");
                 Invoke(gameFlow, "RequestDeclareReach");
-                Invoke(gameFlow, "RequestDiscard", 12);
+                Invoke(gameFlow, "RequestDiscard", 9);
                 int eastTurnIndexBeforeAutoDiscard = (int)GetProperty(gameState, "TurnIndex") + 1;
 
                 Invoke(gameFlow, "RequestForceDrawSkillForSeat", ParseSeat("East"), "5m");
@@ -532,24 +551,27 @@ namespace MahjongPrototype.Tests
             GameObject gameObject = new GameObject("ReachAutoDiscardTest");
             try
             {
-                object gameFlow = CreateConfiguredGameFlow(gameObject);
-                object gameState = DrawReachableHandAndDeclareReach(gameFlow);
+                object gameFlow = CreateConfiguredGameFlow(gameObject, 2);
+                object gameState = DrawReachableHand(gameFlow);
+                SetSeatParticipantType(gameState, "West", "LocalHuman");
+                Invoke(gameFlow, "RequestDeclareReach");
+                Invoke(gameFlow, "RequestDiscardDrawnTile");
                 object playerSeat = GetPlayerSeat(gameState, "East");
-                int discardCountBefore = GetListCount(GetProperty(gameState, "Discards"));
-                int turnIndexBefore = (int)GetProperty(gameState, "TurnIndex");
+                int discardCountBeforeWestTurnEnds = GetListCount(GetProperty(gameState, "Discards"));
+                int westTurnIndex = (int)GetProperty(gameState, "TurnIndex");
 
-                Invoke(gameFlow, "RequestForceDrawSkill", "9m");
-                Invoke(gameFlow, "RequestDraw");
+                Invoke(gameFlow, "RequestForceDrawSkillForSeat", ParseSeat("East"), "9m");
+                DrawAndDiscardDrawnTileForSeat(gameFlow, "West", "C");
 
-                object lastDiscard = GetListItem(GetProperty(gameState, "Discards"), discardCountBefore);
+                object lastDiscard = GetLastListItem(GetProperty(gameState, "Discards"));
                 Assert.That(GetProperty(playerSeat, "IsReachDeclared"), Is.True);
                 Assert.That(GetProperty(playerSeat, "HasDrawnTile"), Is.False);
-                Assert.That(GetListCount(GetProperty(gameState, "Discards")), Is.EqualTo(discardCountBefore + 1));
+                Assert.That(GetListCount(GetProperty(gameState, "Discards")), Is.EqualTo(discardCountBeforeWestTurnEnds + 2));
                 Assert.That(GetProperty(lastDiscard, "Source").ToString(), Is.EqualTo("DrawnTile"));
                 Assert.That(GetProperty(lastDiscard, "Tile").ToString(), Is.EqualTo("9m"));
                 Assert.That(GetProperty(gameState, "IsWinDecisionPending"), Is.False);
-                Assert.That(GetProperty(gameState, "CurrentTurn").ToString(), Is.EqualTo("East"));
-                Assert.That((int)GetProperty(gameState, "TurnIndex"), Is.GreaterThan(turnIndexBefore));
+                Assert.That(GetProperty(gameState, "CurrentTurn").ToString(), Is.EqualTo("West"));
+                Assert.That((int)GetProperty(gameState, "TurnIndex"), Is.GreaterThan(westTurnIndex));
             }
             finally
             {
@@ -591,9 +613,9 @@ namespace MahjongPrototype.Tests
             GameObject gameObject = new GameObject("ReachAutoDiscardRonTest");
             try
             {
-                object gameFlow = CreateConfiguredGameFlow(gameObject);
+                object gameFlow = CreateConfiguredGameFlow(gameObject, 2);
                 object gameState = DrawReachableHand(gameFlow);
-                AddLocalHumanSeat(gameState, "Player2", "West");
+                SetSeatParticipantType(gameState, "West", "LocalHuman");
                 AddHandTiles(
                     GetPlayerSeat(gameState, "West"),
                     "2m", "3m", "4m",
@@ -603,14 +625,15 @@ namespace MahjongPrototype.Tests
                     "5m");
 
                 Invoke(gameFlow, "RequestDeclareReach");
-                Invoke(gameFlow, "RequestDiscard", 12);
-                int discardCountBefore = GetListCount(GetProperty(gameState, "Discards"));
-                int turnIndexBefore = (int)GetProperty(gameState, "TurnIndex");
+                Invoke(gameFlow, "RequestDiscard", 9);
+                int discardCountBeforeWestTurnEnds = GetListCount(GetProperty(gameState, "Discards"));
+                int eastTurnIndexBeforeAutoDiscard = (int)GetProperty(gameState, "TurnIndex") + 1;
 
-                Invoke(gameFlow, "RequestForceDrawSkill", "5m");
-                Invoke(gameFlow, "RequestDraw");
+                Invoke(gameFlow, "RequestForceDrawSkillForSeat", ParseSeat("East"), "5m");
+                DrawAndDiscardDrawnTileForSeat(gameFlow, "West", "C");
 
-                object lastDiscard = GetListItem(GetProperty(gameState, "Discards"), discardCountBefore);
+                object lastDiscard = GetLastListItem(GetProperty(gameState, "Discards"));
+                Assert.That(GetListCount(GetProperty(gameState, "Discards")), Is.EqualTo(discardCountBeforeWestTurnEnds + 2));
                 Assert.That(GetProperty(lastDiscard, "Source").ToString(), Is.EqualTo("DrawnTile"));
                 Assert.That(GetProperty(lastDiscard, "Tile").ToString(), Is.EqualTo("5m"));
                 Assert.That(GetProperty(gameState, "IsWinDecisionPending"), Is.True);
@@ -618,7 +641,7 @@ namespace MahjongPrototype.Tests
                 Assert.That(GetProperty(gameState, "WinDecisionType").ToString(), Is.EqualTo("Ron"));
                 Assert.That(GetProperty(gameState, "WinSourceSeat").ToString(), Is.EqualTo("East"));
                 Assert.That(GetProperty(gameState, "CurrentTurn").ToString(), Is.EqualTo("East"));
-                Assert.That(GetProperty(gameState, "TurnIndex"), Is.EqualTo(turnIndexBefore));
+                Assert.That(GetProperty(gameState, "TurnIndex"), Is.EqualTo(eastTurnIndexBeforeAutoDiscard));
             }
             finally
             {
@@ -849,6 +872,22 @@ namespace MahjongPrototype.Tests
             return method.Invoke(target, args);
         }
 
+        private static object InvokeWithSignature(
+            object target,
+            string methodName,
+            Type[] parameterTypes,
+            params object[] args)
+        {
+            MethodInfo method = target.GetType().GetMethod(
+                methodName,
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
+                binder: null,
+                types: parameterTypes,
+                modifiers: null);
+            Assert.That(method, Is.Not.Null);
+            return method.Invoke(target, args);
+        }
+
         private static object GetProperty(object target, string propertyName)
         {
             PropertyInfo property = target.GetType().GetProperty(
@@ -856,6 +895,15 @@ namespace MahjongPrototype.Tests
                 BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
             Assert.That(property, Is.Not.Null);
             return property.GetValue(target);
+        }
+
+        private static object GetPrivateField(object target, string fieldName)
+        {
+            FieldInfo field = target.GetType().GetField(
+                fieldName,
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.That(field, Is.Not.Null);
+            return field.GetValue(target);
         }
 
         private static void SetPrivateField(object target, string fieldName, object value)
