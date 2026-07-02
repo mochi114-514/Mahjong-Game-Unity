@@ -61,6 +61,7 @@ namespace MahjongPrototype
 
         private HandEvaluator handEvaluator;
         private WinDeclarationEvaluator winDeclarationEvaluator;
+        private NoYakuTenpaiEvaluator noYakuTenpaiEvaluator;
         private YakuDefinitionCatalog initializedYakuDefinitionCatalog;
         private MahjongGameState gameState;
         private WindProgress currentWindProgress = WindProgress.East1;
@@ -94,6 +95,33 @@ namespace MahjongPrototype
         public bool IsWinDecisionPending => gameState != null && gameState.IsWinDecisionPending;
         public bool IsAutoSortEnabled => autoSortEnabled;
         public bool IsInteractionLocked => gameState != null && gameState.IsInteractionLocked;
+
+        public NoYakuTenpaiEvaluationResult EvaluateSelfNoYakuTenpai()
+        {
+            InitializeEvaluators();
+
+            if (gameState == null ||
+                yakuDefinitionCatalog == null ||
+                noYakuTenpaiEvaluator == null)
+            {
+                return NoYakuTenpaiEvaluationResult.NotEvaluated;
+            }
+
+            if (gameState.IsRoundEnded)
+                return NoYakuTenpaiEvaluationResult.NotTenpai;
+
+            PlayerSeat selfPlayerSeat = gameState.GetPlayerSeat(gameState.SelfSeat);
+            if (selfPlayerSeat.Hand.Count != 13 || selfPlayerSeat.HasDrawnTile)
+                return NoYakuTenpaiEvaluationResult.NotTenpai;
+
+            return noYakuTenpaiEvaluator.Evaluate(
+                selfPlayerSeat.Hand.GetTiles(),
+                gameState.SelfSeat,
+                gameState.WindProgress.RoundWind,
+                gameState.SelfSeat,
+                selfPlayerSeat.IsReachDeclared,
+                true);
+        }
 
         private void Reset()
         {
@@ -1291,6 +1319,9 @@ namespace MahjongPrototype
 
             handEvaluator = new HandEvaluator(yakuDefinitionCatalog);
             winDeclarationEvaluator = new WinDeclarationEvaluator(winChecker, handEvaluator);
+            noYakuTenpaiEvaluator = yakuDefinitionCatalog != null
+                ? new NoYakuTenpaiEvaluator(winDeclarationEvaluator)
+                : null;
             initializedYakuDefinitionCatalog = yakuDefinitionCatalog;
         }
 

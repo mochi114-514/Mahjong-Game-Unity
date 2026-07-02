@@ -49,6 +49,9 @@ namespace MahjongPrototype.UI
         [Tooltip("Controller for the on-screen recent log preview.")]
         [SerializeField] private MahjongLogPreviewController logPreviewController;
 
+        [Header("Zero Han Tenpai")]
+        [SerializeField] private MahjongZeroHanTenpaiController zeroHanTenpaiController;
+
         private bool warnedMissingFlow;
         private bool warnedMissingEventNotifier;
         private bool warnedMissingDisplayController;
@@ -57,6 +60,7 @@ namespace MahjongPrototype.UI
         private bool warnedMissingWinDecisionController;
         private bool warnedMissingReachDecisionController;
         private bool warnedMissingLogPreviewController;
+        private bool warnedMissingZeroHanTenpaiController;
 
         private void Reset()
         {
@@ -78,6 +82,7 @@ namespace MahjongPrototype.UI
             EnsureWinDecisionController();
             EnsureReachDecisionController();
             EnsureLogPreviewController();
+            EnsureZeroHanTenpaiController();
             SubscribeNotifications();
             RefreshFromFlow();
         }
@@ -92,6 +97,7 @@ namespace MahjongPrototype.UI
             EnsureWinDecisionController();
             EnsureReachDecisionController();
             EnsureLogPreviewController();
+            EnsureZeroHanTenpaiController();
             RefreshFromFlow();
             RefreshLogPreview();
         }
@@ -103,9 +109,15 @@ namespace MahjongPrototype.UI
 
         public void Refresh(MahjongGameState state)
         {
+            Refresh(state, true);
+        }
+
+        private void Refresh(MahjongGameState state, bool refreshZeroHanTenpai)
+        {
             if (state == null)
             {
                 RefreshTableCenterUi(null);
+                ClearZeroHanTenpaiUi();
                 return;
             }
 
@@ -116,9 +128,16 @@ namespace MahjongPrototype.UI
             RefreshReachDecision(state);
             RefreshInteractionState(state);
             RefreshLogPreview();
+            if (refreshZeroHanTenpai)
+                RefreshZeroHanTenpaiUi();
         }
 
         public void RefreshFromFlow()
+        {
+            RefreshFromFlow(true);
+        }
+
+        private void RefreshFromFlow(bool refreshZeroHanTenpai)
         {
             if (gameFlow == null)
             {
@@ -126,7 +145,7 @@ namespace MahjongPrototype.UI
                 return;
             }
 
-            Refresh(gameFlow.CurrentState);
+            Refresh(gameFlow.CurrentState, refreshZeroHanTenpai);
         }
 
         private void CacheReferences()
@@ -154,6 +173,9 @@ namespace MahjongPrototype.UI
 
             if (logPreviewController == null)
                 logPreviewController = GetComponentInChildren<MahjongLogPreviewController>(true);
+
+            if (zeroHanTenpaiController == null)
+                zeroHanTenpaiController = GetComponentInChildren<MahjongZeroHanTenpaiController>(true);
         }
 
         private void SubscribeNotifications()
@@ -307,7 +329,8 @@ namespace MahjongPrototype.UI
 
         private void HandleRoundStarted(int _, int __)
         {
-            RefreshFromFlow();
+            RefreshFromFlow(false);
+            ClearZeroHanTenpaiUi();
         }
 
         private void HandleRoundSetupCompleted()
@@ -333,6 +356,8 @@ namespace MahjongPrototype.UI
             RefreshGlobalStatus();
             RefreshReachDecisionUi();
             RefreshInteractionUi();
+            if (IsSelfSeat(result.Seat))
+                ClearZeroHanTenpaiUi();
         }
 
         private void HandleTileDiscarded(DiscardRecord record)
@@ -343,6 +368,8 @@ namespace MahjongPrototype.UI
             RefreshGlobalStatus();
             RefreshReachDecisionUi();
             RefreshInteractionUi();
+            if (IsSelfSeat(record.ActorSeat))
+                RefreshZeroHanTenpaiUi();
         }
 
         private void HandleSkillActivated(SeatId _, ActiveSkillEffect __)
@@ -435,6 +462,7 @@ namespace MahjongPrototype.UI
             RefreshWinDecisionUi();
             RefreshReachDecisionUi();
             RefreshInteractionUi();
+            ClearZeroHanTenpaiUi();
         }
 
         private void RefreshDisplay(MahjongGameState state)
@@ -611,6 +639,12 @@ namespace MahjongPrototype.UI
                 !state.IsInteractionLocked;
         }
 
+        private bool IsSelfSeat(SeatId seat)
+        {
+            MahjongGameState state = gameFlow != null ? gameFlow.CurrentState : null;
+            return state != null && state.IsSelfSeat(seat);
+        }
+
         private void ApplyReachDiscardCandidateInteractable(MahjongGameState state)
         {
             if (state == null ||
@@ -688,6 +722,48 @@ namespace MahjongPrototype.UI
 
             if (logPreviewController != null)
                 logPreviewController.Refresh();
+        }
+
+        private void EnsureZeroHanTenpaiController()
+        {
+            if (zeroHanTenpaiController == null)
+            {
+                zeroHanTenpaiController = GetComponentInChildren<MahjongZeroHanTenpaiController>(true);
+            }
+
+            if (zeroHanTenpaiController != null)
+                return;
+
+            WarnMissingOnce(
+                ref warnedMissingZeroHanTenpaiController,
+                "MahjongZeroHanTenpaiController is not assigned. Assign it in the Inspector.");
+        }
+
+        private void RefreshZeroHanTenpaiUi()
+        {
+            if (zeroHanTenpaiController == null)
+                EnsureZeroHanTenpaiController();
+
+            if (zeroHanTenpaiController == null)
+                return;
+
+            if (gameFlow == null)
+            {
+                zeroHanTenpaiController.Clear();
+                return;
+            }
+
+            NoYakuTenpaiEvaluationResult result = gameFlow.EvaluateSelfNoYakuTenpai();
+            zeroHanTenpaiController.SetVisible(result.ShouldShowZeroHanTenpai);
+        }
+
+        private void ClearZeroHanTenpaiUi()
+        {
+            if (zeroHanTenpaiController == null)
+                EnsureZeroHanTenpaiController();
+
+            if (zeroHanTenpaiController != null)
+                zeroHanTenpaiController.Clear();
         }
 
         private void WarnMissingOnce(ref bool warned, string message)
