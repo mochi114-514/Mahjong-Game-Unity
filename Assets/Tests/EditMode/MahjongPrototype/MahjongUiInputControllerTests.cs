@@ -19,9 +19,10 @@ namespace MahjongPrototype.Tests
         {
             GameObject root = new GameObject("InputControllerHost");
             root.SetActive(false);
+            Component controller = null;
             try
             {
-                Component controller = root.AddComponent(Type.GetType(ControllerTypeName, true));
+                controller = root.AddComponent(Type.GetType(ControllerTypeName, true));
                 Controls controls = CreateControls(root.transform);
                 AssignControls(controller, controls);
 
@@ -45,7 +46,7 @@ namespace MahjongPrototype.Tests
                 AddEventHandler(controller, "CancelReachRequested", new Action(() => cancelReachCount++));
 
                 SetProperty(controls.TargetTileInput, "text", "5m");
-                root.SetActive(true);
+                Invoke(controller, "OnEnable");
                 controls.DrawButton.onClick.Invoke();
                 controls.ForceDrawSkillButton.onClick.Invoke();
                 controls.AutoSortToggle.onValueChanged.Invoke(true);
@@ -68,6 +69,9 @@ namespace MahjongPrototype.Tests
             }
             finally
             {
+                if (controller != null)
+                    Invoke(controller, "OnDisable");
+
                 UnityEngine.Object.DestroyImmediate(root);
             }
         }
@@ -77,9 +81,10 @@ namespace MahjongPrototype.Tests
         {
             GameObject root = new GameObject("InputControllerNoDrawTest");
             root.SetActive(false);
+            Component controller = null;
             try
             {
-                Component controller = root.AddComponent(Type.GetType(ControllerTypeName, true));
+                controller = root.AddComponent(Type.GetType(ControllerTypeName, true));
                 Controls controls = CreateControls(root.transform);
                 Button childNamedDrawButton = CreateButton(root.transform, "DrawButton");
                 AssignControls(controller, controls);
@@ -89,13 +94,16 @@ namespace MahjongPrototype.Tests
 
                 LogAssert.Expect(LogType.Warning, "MahjongUiInputController: DrawButton is not assigned.");
 
-                root.SetActive(true);
+                Invoke(controller, "OnEnable");
                 childNamedDrawButton.onClick.Invoke();
 
                 Assert.That(drawCount, Is.EqualTo(0));
             }
             finally
             {
+                if (controller != null)
+                    Invoke(controller, "OnDisable");
+
                 UnityEngine.Object.DestroyImmediate(root);
             }
         }
@@ -105,19 +113,23 @@ namespace MahjongPrototype.Tests
         {
             GameObject root = new GameObject("InputControllerNoReachTest");
             root.SetActive(false);
+            Component controller = null;
             try
             {
-                Component controller = root.AddComponent(Type.GetType(ControllerTypeName, true));
+                controller = root.AddComponent(Type.GetType(ControllerTypeName, true));
                 Controls controls = CreateControls(root.transform);
                 AssignControls(controller, controls);
                 SetPrivateField(controller, "reachButton", null);
 
                 LogAssert.Expect(LogType.Warning, "MahjongUiInputController: ReachButton is not assigned.");
 
-                root.SetActive(true);
+                Invoke(controller, "OnEnable");
             }
             finally
             {
+                if (controller != null)
+                    Invoke(controller, "OnDisable");
+
                 UnityEngine.Object.DestroyImmediate(root);
             }
         }
@@ -127,19 +139,23 @@ namespace MahjongPrototype.Tests
         {
             GameObject root = new GameObject("InputControllerNoAutoSortTest");
             root.SetActive(false);
+            Component controller = null;
             try
             {
-                Component controller = root.AddComponent(Type.GetType(ControllerTypeName, true));
+                controller = root.AddComponent(Type.GetType(ControllerTypeName, true));
                 Controls controls = CreateControls(root.transform);
                 AssignControls(controller, controls);
                 SetPrivateField(controller, "autoSortToggle", null);
 
                 LogAssert.Expect(LogType.Warning, "MahjongUiInputController: AutoSortToggle is not assigned.");
 
-                root.SetActive(true);
+                Invoke(controller, "OnEnable");
             }
             finally
             {
+                if (controller != null)
+                    Invoke(controller, "OnDisable");
+
                 UnityEngine.Object.DestroyImmediate(root);
             }
         }
