@@ -12,4 +12,46 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0f1e2d3c4b5a69788796a5b4c3d2e1f0, type: 3}
   m_Name: YakuDefinitionCatalog
   m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.Definitions.YakuDefinitionCatalog
-  definitions: []
+  definitions:
+  - kind: 1
+    displayName: "\u9580\u524D\u6E05\u81EA\u6478\u548C"
+    closedHan: 1
+    openHan: 0
+    isYakuman: 0
+    isEnabled: 1
+  - kind: 2
+    displayName: "\u30EA\u30FC\u30C1"
+    closedHan: 1
+    openHan: 0
+    isYakuman: 0
+    isEnabled: 1
+  - kind: 3
+    displayName: "\u4E00\u767A"
+    closedHan: 1
+    openHan: 0
+    isYakuman: 0
+    isEnabled: 1
+  - kind: 4
+    displayName: "\u65AD\u4E48\u4E5D"
+    closedHan: 1
+    openHan: 1
+    isYakuman: 0
+    isEnabled: 1
+  - kind: 5
+    displayName: "\u5E73\u548C"
+    closedHan: 1
+    openHan: 0
+    isYakuman: 0
+    isEnabled: 1
+  - kind: 6
+    displayName: "\u4E00\u76C3\u53E3"
+    closedHan: 1
+    openHan: 0
+    isYakuman: 0
+    isEnabled: 1
+  - kind: 300
+    displayName: "\u56FD\u58EB\u7121\u53CC"
+    closedHan: 6
+    openHan: 0
+    isYakuman: 1
+    isEnabled: 0
