@@ -17,6 +17,7 @@ namespace MahjongPrototype.Tests
         private const string TurnOrderServiceTypeName = "MahjongPrototype.Services.TurnOrderService, Assembly-CSharp";
         private const string PlayerTurnManagerTypeName = "MahjongPrototype.Services.PlayerTurnManager, Assembly-CSharp";
         private const string MahjongGameFlowTypeName = "MahjongPrototype.MahjongGameFlow, Assembly-CSharp";
+        private const string CpuTurnControllerTypeName = "MahjongPrototype.CpuTurnController, Assembly-CSharp";
         private const string PlayerIdTypeName = "MahjongPrototype.Domain.PlayerId, Assembly-CSharp";
         private const string ParticipantTypeName = "MahjongPrototype.Domain.ParticipantType, Assembly-CSharp";
         private const string HanValueTypeName = "MahjongPrototype.Domain.HanValue, Assembly-CSharp";
@@ -1517,8 +1518,22 @@ namespace MahjongPrototype.Tests
 
         private static void SetCpuDiscardDelay(object gameFlow, float delaySeconds)
         {
+            Assert.That(gameFlow, Is.InstanceOf<Component>());
+            Component gameFlowComponent = (Component)gameFlow;
+            Type cpuTurnControllerType = Type.GetType(CpuTurnControllerTypeName, true);
             object cpuTurnController = GetPrivateField(gameFlow, "cpuTurnController");
-            Assert.That(cpuTurnController, Is.Not.Null);
+
+            if (cpuTurnController == null)
+            {
+                cpuTurnController = gameFlowComponent.gameObject.GetComponent(cpuTurnControllerType);
+                if (cpuTurnController == null)
+                    cpuTurnController = gameFlowComponent.gameObject.AddComponent(cpuTurnControllerType);
+
+                SetPrivateField(gameFlow, "cpuTurnController", cpuTurnController);
+            }
+
+            Component[] controllers = gameFlowComponent.gameObject.GetComponents(cpuTurnControllerType);
+            Assert.That(controllers.Length, Is.EqualTo(1));
             SetPrivateField(cpuTurnController, "cpuDiscardDelaySeconds", delaySeconds);
         }
 

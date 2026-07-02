@@ -17,6 +17,8 @@ namespace MahjongPrototype.Tests
             "MahjongPrototype.Domain.MahjongGameState, Assembly-CSharp";
         private const string MahjongGameFlowTypeName =
             "MahjongPrototype.MahjongGameFlow, Assembly-CSharp";
+        private const string TileTypeName =
+            "MahjongPrototype.Domain.Tile, Assembly-CSharp";
         private const string SeatIdTypeName =
             "MahjongPrototype.Domain.SeatId, Assembly-CSharp";
         private const string WinTypeTypeName =
@@ -334,15 +336,37 @@ namespace MahjongPrototype.Tests
             string winTypeName,
             string sourceSeatName)
         {
-            object sourceSeat = sourceSeatName == null ? null : ParseSeat(sourceSeatName);
-            Invoke(
-                state,
+            Type seatIdType = Type.GetType(SeatIdTypeName, true);
+            Type winTypeType = Type.GetType(WinTypeTypeName, true);
+            Type tileType = Type.GetType(TileTypeName, true);
+            Type nullableTileType = typeof(Nullable<>).MakeGenericType(tileType);
+            Type nullableSeatIdType = typeof(Nullable<>).MakeGenericType(seatIdType);
+            MethodInfo method = state.GetType().GetMethod(
                 "BeginWinDecisionDetailed",
-                ParseSeat(seatName),
-                ParseWinType(winTypeName),
-                null,
-                sourceSeat,
-                GetProperty(state, "TurnIndex"));
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
+                binder: null,
+                types: new[]
+                {
+                    seatIdType,
+                    winTypeType,
+                    nullableTileType,
+                    nullableSeatIdType,
+                    typeof(int)
+                },
+                modifiers: null);
+            Assert.That(method, Is.Not.Null);
+
+            object sourceSeat = sourceSeatName == null ? null : ParseSeat(sourceSeatName);
+            method.Invoke(
+                state,
+                new[]
+                {
+                    ParseSeat(seatName),
+                    ParseWinType(winTypeName),
+                    null,
+                    sourceSeat,
+                    GetProperty(state, "TurnIndex")
+                });
         }
 
         private static object CreateGameState()
