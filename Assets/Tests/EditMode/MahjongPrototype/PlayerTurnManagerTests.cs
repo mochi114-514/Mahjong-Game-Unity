@@ -1283,7 +1283,6 @@ namespace MahjongPrototype.Tests
         private static object AddConfiguredGameFlow(GameObject gameObject, bool enableAutoDraw)
         {
             object gameFlow = gameObject.AddComponent(GetMahjongGameFlowType());
-            SetPrivateField(gameFlow, "enableDevLog", false);
             SetPrivateField(gameFlow, "logWarnings", false);
             SetPrivateField(gameFlow, "initialHandTileCount", 1);
             SetPrivateField(gameFlow, "autoStart", false);

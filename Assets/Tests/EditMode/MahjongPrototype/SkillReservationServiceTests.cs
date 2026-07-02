@@ -159,7 +159,6 @@ namespace MahjongPrototype.Tests
         private static object AddConfiguredGameFlow(GameObject gameObject, bool enableAutoDraw, int participantCount)
         {
             object gameFlow = gameObject.AddComponent(Type.GetType(MahjongGameFlowTypeName, true));
-            SetPrivateField(gameFlow, "enableDevLog", false);
             SetPrivateField(gameFlow, "logWarnings", false);
             SetPrivateField(gameFlow, "initialHandTileCount", 1);
             SetPrivateField(gameFlow, "useFixedRandomSeed", true);

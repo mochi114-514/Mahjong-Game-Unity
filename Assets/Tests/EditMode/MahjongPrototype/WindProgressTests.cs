@@ -134,7 +134,7 @@ namespace MahjongPrototype.Tests
                 object gameFlow = AddConfiguredGameFlow(gameObject);
                 Invoke(gameFlow, "StartNewRound");
 
-                Invoke(gameFlow, "EndRound", "WallEmpty");
+                InvokeEndRound(gameFlow, "WallEmpty");
 
                 object state = GetProperty(gameFlow, "CurrentState");
                 AssertWindProgress(GetProperty(state, "WindProgress"), "East", 2);
@@ -156,7 +156,7 @@ namespace MahjongPrototype.Tests
                 object south4 = CreateWindProgress("South", 4);
                 Invoke(gameFlow, "StartRound", south4, false);
 
-                Invoke(gameFlow, "EndRound", "WallEmpty");
+                InvokeEndRound(gameFlow, "WallEmpty");
 
                 object state = GetProperty(gameFlow, "CurrentState");
                 AssertWindProgress(GetProperty(state, "WindProgress"), "South", 4);
@@ -440,6 +440,18 @@ namespace MahjongPrototype.Tests
                 BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
             Assert.That(method, Is.Not.Null);
             return method.Invoke(target, args);
+        }
+
+        private static object InvokeEndRound(object target, string reason)
+        {
+            MethodInfo method = target.GetType().GetMethod(
+                "EndRound",
+                BindingFlags.NonPublic | BindingFlags.Instance,
+                binder: null,
+                types: new[] { typeof(string) },
+                modifiers: null);
+            Assert.That(method, Is.Not.Null);
+            return method.Invoke(target, new object[] { reason });
         }
 
         private static object GetProperty(object target, string propertyName)

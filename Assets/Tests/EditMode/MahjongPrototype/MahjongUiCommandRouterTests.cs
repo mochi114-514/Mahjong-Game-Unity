@@ -112,7 +112,6 @@ namespace MahjongPrototype.Tests
         {
             gameObject.AddComponent(Type.GetType(MahjongEventNotifierTypeName, true));
             object gameFlow = gameObject.AddComponent(Type.GetType(MahjongGameFlowTypeName, true));
-            SetPrivateField(gameFlow, "enableDevLog", false);
             SetPrivateField(gameFlow, "logWarnings", false);
             SetPrivateField(gameFlow, "initialHandTileCount", 1);
             SetPrivateField(gameFlow, "autoStart", false);
