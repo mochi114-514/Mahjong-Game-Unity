@@ -178,7 +178,8 @@ namespace MahjongPrototype.Tests
                 MaterialPropertyBlock propertyBlock = GetPropertyBlock(renderer);
                 Assert.That(GetProperty(tileView, "IsDimmed"), Is.True);
                 Assert.That(propertyBlock.isEmpty, Is.False);
-                Assert.That(propertyBlock.GetColor(BaseColorPropertyName), Is.EqualTo(ExpectedDimmedTint));
+                Color actualTint = propertyBlock.GetColor(BaseColorPropertyName);
+                AssertColorApproximately(actualTint, ExpectedDimmedTint);
             }
             finally
             {
@@ -233,7 +234,8 @@ namespace MahjongPrototype.Tests
                 MaterialPropertyBlock explicitPropertyBlock = GetPropertyBlock(explicitRenderer);
                 Assert.That(rootPropertyBlock.isEmpty, Is.True);
                 Assert.That(explicitPropertyBlock.isEmpty, Is.False);
-                Assert.That(explicitPropertyBlock.GetColor(BaseColorPropertyName), Is.EqualTo(ExpectedDimmedTint));
+                Color actualTint = explicitPropertyBlock.GetColor(BaseColorPropertyName);
+                AssertColorApproximately(actualTint, ExpectedDimmedTint);
             }
             finally
             {
@@ -299,6 +301,29 @@ namespace MahjongPrototype.Tests
             MaterialPropertyBlock propertyBlock = new MaterialPropertyBlock();
             renderer.GetPropertyBlock(propertyBlock);
             return propertyBlock;
+        }
+
+        private static void AssertColorApproximately(
+            Color actual,
+            Color expected,
+            float tolerance = 0.0001f)
+        {
+            Assert.That(
+                actual.r,
+                Is.EqualTo(expected.r).Within(tolerance),
+                "Red component differs.");
+            Assert.That(
+                actual.g,
+                Is.EqualTo(expected.g).Within(tolerance),
+                "Green component differs.");
+            Assert.That(
+                actual.b,
+                Is.EqualTo(expected.b).Within(tolerance),
+                "Blue component differs.");
+            Assert.That(
+                actual.a,
+                Is.EqualTo(expected.a).Within(tolerance),
+                "Alpha component differs.");
         }
 
         private static object Invoke(object target, string methodName, params object[] args)
