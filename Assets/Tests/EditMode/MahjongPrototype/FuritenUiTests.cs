@@ -3,6 +3,7 @@ using System.Collections;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.TestTools;
 
 namespace MahjongPrototype.Tests
 {
@@ -25,7 +26,7 @@ namespace MahjongPrototype.Tests
         private const string YakuDefinitionCatalogTypeName =
             "MahjongPrototype.Definitions.YakuDefinitionCatalog, Assembly-CSharp";
         private const string MahjongGameStateTypeName =
-            "MahjongPrototype.MahjongGameState, Assembly-CSharp";
+            "MahjongPrototype.Domain.MahjongGameState, Assembly-CSharp";
         private const string MahjongGameFlowTypeName =
             "MahjongPrototype.MahjongGameFlow, Assembly-CSharp";
         private const string MahjongEventNotifierTypeName =
@@ -240,8 +241,8 @@ namespace MahjongPrototype.Tests
             }
         }
 
-        [Test]
-        public void OnEnable_SynchronizesCurrentFuritenState()
+        [UnityTest]
+        public IEnumerator OnEnable_SynchronizesCurrentFuritenState()
         {
             UiHarness harness = CreateHarness(1);
             try
@@ -251,6 +252,7 @@ namespace MahjongPrototype.Tests
                 harness.UiObject.SetActive(false);
 
                 harness.UiObject.SetActive(true);
+                yield return null;
 
                 Assert.That(harness.FuritenTextObject.activeSelf, Is.True);
             }
