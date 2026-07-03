@@ -4,17 +4,17 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
 {
     internal sealed class NoYakuTenpaiEvaluatorTestDriver : IDisposable
     {
-        private readonly WinEvaluationTestSupport support;
+        private readonly WinFeatureTestSupport support;
         private bool disposed;
 
-        private NoYakuTenpaiEvaluatorTestDriver(WinEvaluationTestSupport support)
+        private NoYakuTenpaiEvaluatorTestDriver(WinFeatureTestSupport support)
         {
             this.support = support;
         }
 
         public static NoYakuTenpaiEvaluatorTestDriver Create()
         {
-            return new NoYakuTenpaiEvaluatorTestDriver(WinEvaluationTestSupport.Create());
+            return new NoYakuTenpaiEvaluatorTestDriver(WinFeatureTestSupport.Create());
         }
 
         public object CreateCatalog(params object[] definitions)

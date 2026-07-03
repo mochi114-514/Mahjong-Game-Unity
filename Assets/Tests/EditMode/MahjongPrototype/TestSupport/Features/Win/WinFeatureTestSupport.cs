@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace MahjongPrototype.Tests.TestSupport.Features.Win
 {
-    internal sealed class WinEvaluationTestSupport : IDisposable
+    internal sealed class WinFeatureTestSupport : IDisposable
     {
         private const string WinCheckerTypeName =
             "MahjongPrototype.Services.WinChecker, Assembly-CSharp";
@@ -22,7 +22,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
         private readonly List<UnityEngine.Object> ownedCatalogs = new List<UnityEngine.Object>();
         private bool disposed;
 
-        private WinEvaluationTestSupport(
+        private WinFeatureTestSupport(
             ReflectionTestAccess reflection,
             CollectionTestAccess collections,
             MahjongTestTypes types,
@@ -39,13 +39,13 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
         public MahjongTestTypes Types { get; }
         public MahjongTestDataFactory DataFactory { get; }
 
-        public static WinEvaluationTestSupport Create()
+        public static WinFeatureTestSupport Create()
         {
             ReflectionTestAccess reflection = new ReflectionTestAccess();
             CollectionTestAccess collections = new CollectionTestAccess(reflection);
             MahjongTestTypes types = new MahjongTestTypes(reflection);
             MahjongTestDataFactory dataFactory = new MahjongTestDataFactory(reflection, types);
-            return new WinEvaluationTestSupport(reflection, collections, types, dataFactory);
+            return new WinFeatureTestSupport(reflection, collections, types, dataFactory);
         }
 
         public object CreateTiles(string handText)
