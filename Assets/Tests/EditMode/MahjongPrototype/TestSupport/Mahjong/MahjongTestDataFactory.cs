@@ -32,6 +32,16 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
             return Enum.Parse(types.PlayerId, playerId);
         }
 
+        public object ParseRoundWind(string roundWindName)
+        {
+            return Enum.Parse(types.RoundWind, roundWindName);
+        }
+
+        public object ParseWinType(string winTypeName)
+        {
+            return Enum.Parse(types.WinType, winTypeName);
+        }
+
         public object CreateTile(string tileCode)
         {
             return reflection.CreateInstance(types.Tile, tileCode);
@@ -75,11 +85,27 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
             return reflection.InvokeStatic(types.Wall, "CreateStandardShuffled", fixedSeed);
         }
 
+        public object CreateWindProgress(string roundWindName, int handNumber)
+        {
+            return reflection.CreateInstance(
+                types.WindProgress,
+                ParseRoundWind(roundWindName),
+                handNumber);
+        }
+
         public object CreateGameState(params string[] seatNames)
         {
             object gameState = reflection.CreateInstance(types.MahjongGameState, CreateWall(12345));
             AssignPlayersToSeats(gameState, seatNames);
             return gameState;
+        }
+
+        public object CreateGameStateWithWindProgress(object windProgress)
+        {
+            return reflection.CreateInstance(
+                types.MahjongGameState,
+                CreateWall(12345),
+                windProgress);
         }
 
         public void AssignPlayersToSeats(object gameState, string[] seatNames)

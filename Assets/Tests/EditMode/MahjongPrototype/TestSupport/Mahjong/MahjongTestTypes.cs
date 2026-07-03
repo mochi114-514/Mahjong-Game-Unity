@@ -12,6 +12,9 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
         private const string ParticipantTypeName = "MahjongPrototype.Domain.ParticipantType, Assembly-CSharp";
         private const string DiscardRecordTypeName = "MahjongPrototype.Domain.DiscardRecord, Assembly-CSharp";
         private const string PlayerIdTypeName = "MahjongPrototype.Domain.PlayerId, Assembly-CSharp";
+        private const string RoundWindTypeName = "MahjongPrototype.Domain.RoundWind, Assembly-CSharp";
+        private const string WindProgressTypeName = "MahjongPrototype.Domain.WindProgress, Assembly-CSharp";
+        private const string WinTypeTypeName = "MahjongPrototype.Domain.WinType, Assembly-CSharp";
         private const string WallTypeName = "MahjongPrototype.Domain.Wall, Assembly-CSharp";
         private const string MahjongGameStateTypeName =
             "MahjongPrototype.Domain.MahjongGameState, Assembly-CSharp";
@@ -39,6 +42,9 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
         public Type ParticipantType => reflection.RequireType(ParticipantTypeName);
         public Type DiscardRecord => reflection.RequireType(DiscardRecordTypeName);
         public Type PlayerId => reflection.RequireType(PlayerIdTypeName);
+        public Type RoundWind => reflection.RequireType(RoundWindTypeName);
+        public Type WindProgress => reflection.RequireType(WindProgressTypeName);
+        public Type WinType => reflection.RequireType(WinTypeTypeName);
         public Type Wall => reflection.RequireType(WallTypeName);
         public Type MahjongGameState => reflection.RequireType(MahjongGameStateTypeName);
         public Type MahjongGameFlow => reflection.RequireType(MahjongGameFlowTypeName);

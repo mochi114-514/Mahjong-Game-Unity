@@ -56,6 +56,18 @@ namespace MahjongPrototype.Tests.TestSupport.Core
             return method.Invoke(null, args);
         }
 
+        public object GetStaticProperty(Type type, string propertyName)
+        {
+            Assert.That(type, Is.Not.Null, $"Cannot read static property {propertyName} from a null type.");
+
+            PropertyInfo property = type.GetProperty(propertyName, StaticMemberFlags);
+            Assert.That(
+                property,
+                Is.Not.Null,
+                $"Static property not found: {type.FullName}.{propertyName}");
+            return property.GetValue(null);
+        }
+
         public object InvokeWithSignature(
             object target,
             string methodName,
