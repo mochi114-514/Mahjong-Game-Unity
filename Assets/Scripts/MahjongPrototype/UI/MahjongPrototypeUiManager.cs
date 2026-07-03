@@ -52,6 +52,9 @@ namespace MahjongPrototype.UI
         [Header("Zero Han Tenpai")]
         [SerializeField] private MahjongZeroHanTenpaiController zeroHanTenpaiController;
 
+        [Header("Furiten")]
+        [SerializeField] private MahjongFuritenController furitenController;
+
         private bool warnedMissingFlow;
         private bool warnedMissingEventNotifier;
         private bool warnedMissingDisplayController;
@@ -61,6 +64,7 @@ namespace MahjongPrototype.UI
         private bool warnedMissingReachDecisionController;
         private bool warnedMissingLogPreviewController;
         private bool warnedMissingZeroHanTenpaiController;
+        private bool warnedMissingFuritenController;
 
         private void Reset()
         {
@@ -83,6 +87,7 @@ namespace MahjongPrototype.UI
             EnsureReachDecisionController();
             EnsureLogPreviewController();
             EnsureZeroHanTenpaiController();
+            EnsureFuritenController();
             SubscribeNotifications();
             RefreshFromFlow();
         }
@@ -98,6 +103,7 @@ namespace MahjongPrototype.UI
             EnsureReachDecisionController();
             EnsureLogPreviewController();
             EnsureZeroHanTenpaiController();
+            EnsureFuritenController();
             RefreshFromFlow();
             RefreshLogPreview();
         }
@@ -112,12 +118,13 @@ namespace MahjongPrototype.UI
             Refresh(state, true);
         }
 
-        private void Refresh(MahjongGameState state, bool refreshZeroHanTenpai)
+        private void Refresh(MahjongGameState state, bool refreshTenpaiIndicators)
         {
             if (state == null)
             {
                 RefreshTableCenterUi(null);
                 ClearZeroHanTenpaiUi();
+                ClearFuritenUi();
                 return;
             }
 
@@ -128,8 +135,11 @@ namespace MahjongPrototype.UI
             RefreshReachDecision(state);
             RefreshInteractionState(state);
             RefreshLogPreview();
-            if (refreshZeroHanTenpai)
+            if (refreshTenpaiIndicators)
+            {
                 RefreshZeroHanTenpaiUi();
+                RefreshFuritenUi();
+            }
         }
 
         public void RefreshFromFlow()
@@ -137,15 +147,17 @@ namespace MahjongPrototype.UI
             RefreshFromFlow(true);
         }
 
-        private void RefreshFromFlow(bool refreshZeroHanTenpai)
+        private void RefreshFromFlow(bool refreshTenpaiIndicators)
         {
             if (gameFlow == null)
             {
                 WarnMissingOnce(ref warnedMissingFlow, "MahjongGameFlow is not assigned.");
+                ClearZeroHanTenpaiUi();
+                ClearFuritenUi();
                 return;
             }
 
-            Refresh(gameFlow.CurrentState, refreshZeroHanTenpai);
+            Refresh(gameFlow.CurrentState, refreshTenpaiIndicators);
         }
 
         private void CacheReferences()
@@ -176,6 +188,9 @@ namespace MahjongPrototype.UI
 
             if (zeroHanTenpaiController == null)
                 zeroHanTenpaiController = GetComponentInChildren<MahjongZeroHanTenpaiController>(true);
+
+            if (furitenController == null)
+                furitenController = GetComponentInChildren<MahjongFuritenController>(true);
         }
 
         private void SubscribeNotifications()
@@ -331,6 +346,7 @@ namespace MahjongPrototype.UI
         {
             RefreshFromFlow(false);
             ClearZeroHanTenpaiUi();
+            ClearFuritenUi();
         }
 
         private void HandleRoundSetupCompleted()
@@ -357,7 +373,10 @@ namespace MahjongPrototype.UI
             RefreshReachDecisionUi();
             RefreshInteractionUi();
             if (IsSelfSeat(result.Seat))
+            {
                 ClearZeroHanTenpaiUi();
+                ClearFuritenUi();
+            }
         }
 
         private void HandleTileDiscarded(DiscardRecord record)
@@ -369,7 +388,10 @@ namespace MahjongPrototype.UI
             RefreshReachDecisionUi();
             RefreshInteractionUi();
             if (IsSelfSeat(record.ActorSeat))
+            {
                 RefreshZeroHanTenpaiUi();
+                RefreshFuritenUi();
+            }
         }
 
         private void HandleSkillActivated(SeatId _, ActiveSkillEffect __)
@@ -463,6 +485,7 @@ namespace MahjongPrototype.UI
             RefreshReachDecisionUi();
             RefreshInteractionUi();
             ClearZeroHanTenpaiUi();
+            ClearFuritenUi();
         }
 
         private void RefreshDisplay(MahjongGameState state)
@@ -739,6 +762,21 @@ namespace MahjongPrototype.UI
                 "MahjongZeroHanTenpaiController is not assigned. Assign it in the Inspector.");
         }
 
+        private void EnsureFuritenController()
+        {
+            if (furitenController == null)
+            {
+                furitenController = GetComponentInChildren<MahjongFuritenController>(true);
+            }
+
+            if (furitenController != null)
+                return;
+
+            WarnMissingOnce(
+                ref warnedMissingFuritenController,
+                "MahjongFuritenController is not assigned. Assign it in the Inspector.");
+        }
+
         private void RefreshZeroHanTenpaiUi()
         {
             if (zeroHanTenpaiController == null)
@@ -757,6 +795,34 @@ namespace MahjongPrototype.UI
             zeroHanTenpaiController.SetVisible(result.ShouldShowZeroHanTenpai);
         }
 
+        private void RefreshFuritenUi()
+        {
+            if (furitenController == null)
+                EnsureFuritenController();
+
+            if (furitenController == null)
+                return;
+
+            MahjongGameState state = gameFlow != null ? gameFlow.CurrentState : null;
+            if (gameFlow == null ||
+                state == null ||
+                state.IsRoundEnded)
+            {
+                furitenController.Clear();
+                return;
+            }
+
+            FuritenEvaluationResultSet resultSet = gameFlow.EvaluateAllFuriten();
+            bool shouldShow =
+                resultSet != null &&
+                resultSet.TryGet(
+                    state.SelfSeat,
+                    out FuritenSeatEvaluationResult result) &&
+                result.IsEvaluated &&
+                result.IsFuriten;
+            furitenController.SetVisible(shouldShow);
+        }
+
         private void ClearZeroHanTenpaiUi()
         {
             if (zeroHanTenpaiController == null)
@@ -764,6 +830,15 @@ namespace MahjongPrototype.UI
 
             if (zeroHanTenpaiController != null)
                 zeroHanTenpaiController.Clear();
+        }
+
+        private void ClearFuritenUi()
+        {
+            if (furitenController == null)
+                EnsureFuritenController();
+
+            if (furitenController != null)
+                furitenController.Clear();
         }
 
         private void WarnMissingOnce(ref bool warned, string message)
