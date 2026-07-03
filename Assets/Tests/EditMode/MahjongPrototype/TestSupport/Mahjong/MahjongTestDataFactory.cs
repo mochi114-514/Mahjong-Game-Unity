@@ -51,6 +51,25 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
             return tiles;
         }
 
+        public object CreateHand(params string[] tileCodes)
+        {
+            object hand = reflection.CreateInstance(types.Hand);
+            for (int i = 0; i < tileCodes.Length; i++)
+                reflection.Invoke(hand, "Add", CreateTile(tileCodes[i]));
+
+            return hand;
+        }
+
+        public object CreatePlayerSeat(string seatName)
+        {
+            return reflection.CreateInstance(types.PlayerSeat, ParseSeat(seatName));
+        }
+
+        public object GetHand(object playerSeat)
+        {
+            return reflection.GetProperty(playerSeat, "Hand");
+        }
+
         public object CreateWall(int fixedSeed)
         {
             return reflection.InvokeStatic(types.Wall, "CreateStandardShuffled", fixedSeed);

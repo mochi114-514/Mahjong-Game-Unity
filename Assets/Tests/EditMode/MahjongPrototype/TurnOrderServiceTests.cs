@@ -1,21 +1,18 @@
-using System;
-using System.Collections;
-using System.Reflection;
+using MahjongPrototype.Tests.TestSupport.Features.Turn;
 using NUnit.Framework;
 
 namespace MahjongPrototype.Tests
 {
     public sealed class TurnOrderServiceTests
     {
-        private const string SeatIdTypeName = "MahjongPrototype.Domain.SeatId, Assembly-CSharp";
-        private const string TurnOrderServiceTypeName = "MahjongPrototype.Services.TurnOrderService, Assembly-CSharp";
-
         [Test]
         public void GetNextSeat_ReturnsSameSeat_WhenOnlyOneSeatIsActive()
         {
-            object result = GetNextSeat(CreateSeatList("East"), "East");
+            TurnOrderServiceTestDriver driver = TurnOrderServiceTestDriver.Create();
 
-            Assert.That(result.ToString(), Is.EqualTo("East"));
+            string result = driver.GetNextSeat("East", "East");
+
+            Assert.That(result, Is.EqualTo("East"));
         }
 
         [TestCase("East", "South")]
@@ -26,66 +23,41 @@ namespace MahjongPrototype.Tests
             string currentTurn,
             string expectedSeat)
         {
-            object result = GetNextSeat(CreateSeatList("East", "South", "West", "North"), currentTurn);
+            TurnOrderServiceTestDriver driver = TurnOrderServiceTestDriver.Create();
 
-            Assert.That(result.ToString(), Is.EqualTo(expectedSeat));
+            string result = driver.GetNextSeat(currentTurn, "East", "South", "West", "North");
+
+            Assert.That(result, Is.EqualTo(expectedSeat));
         }
 
         [Test]
         public void GetNextSeat_ReturnsFirstActiveSeat_WhenCurrentTurnIsNotActive()
         {
-            object result = GetNextSeat(CreateSeatList("East", "South"), "West");
+            TurnOrderServiceTestDriver driver = TurnOrderServiceTestDriver.Create();
 
-            Assert.That(result.ToString(), Is.EqualTo("East"));
+            string result = driver.GetNextSeat("West", "East", "South");
+
+            Assert.That(result, Is.EqualTo("East"));
         }
 
         [Test]
         public void GetNextSeat_ReturnsEast_WhenActiveSeatsIsEmpty()
         {
-            object result = GetNextSeat(CreateSeatList(), "East");
+            TurnOrderServiceTestDriver driver = TurnOrderServiceTestDriver.Create();
 
-            Assert.That(result.ToString(), Is.EqualTo("East"));
+            string result = driver.GetNextSeat("East");
+
+            Assert.That(result, Is.EqualTo("East"));
         }
 
         [Test]
         public void GetNextSeat_ReturnsEast_WhenActiveSeatsIsNull()
         {
-            object result = GetNextSeat(null, "East");
+            TurnOrderServiceTestDriver driver = TurnOrderServiceTestDriver.Create();
 
-            Assert.That(result.ToString(), Is.EqualTo("East"));
-        }
+            string result = driver.GetNextSeatWithNullActiveSeats("East");
 
-        private static object GetNextSeat(object activeSeats, string currentTurnName)
-        {
-            Type serviceType = Type.GetType(TurnOrderServiceTypeName, true);
-            object service = Activator.CreateInstance(serviceType);
-            MethodInfo method = serviceType.GetMethod("GetNextSeat");
-            Assert.That(method, Is.Not.Null);
-
-            return method.Invoke(service, new[] { activeSeats, ParseSeat(currentTurnName) });
-        }
-
-        private static IList CreateSeatList(params string[] seatNames)
-        {
-            Type seatIdType = GetSeatIdType();
-            Type listType = typeof(System.Collections.Generic.List<>).MakeGenericType(seatIdType);
-            IList list = (IList)Activator.CreateInstance(listType);
-
-            for (int i = 0; i < seatNames.Length; i++)
-                list.Add(ParseSeat(seatNames[i]));
-
-            return list;
-        }
-
-        private static object ParseSeat(string seatName)
-        {
-            return Enum.Parse(GetSeatIdType(), seatName);
-        }
-
-        private static Type GetSeatIdType()
-        {
-            return Type.GetType(SeatIdTypeName, true);
+            Assert.That(result, Is.EqualTo("East"));
         }
     }
-
 }

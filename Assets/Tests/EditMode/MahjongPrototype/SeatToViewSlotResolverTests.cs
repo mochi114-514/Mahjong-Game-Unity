@@ -1,14 +1,10 @@
-using System;
-using System.Reflection;
+using MahjongPrototype.Tests.TestSupport.Features.ViewSlot;
 using NUnit.Framework;
 
 namespace MahjongPrototype.Tests
 {
     public sealed class SeatToViewSlotResolverTests
     {
-        private const string SeatIdTypeName = "MahjongPrototype.Domain.SeatId, Assembly-CSharp";
-        private const string ResolverTypeName = "MahjongPrototype.UI.SeatToViewSlotResolver, Assembly-CSharp";
-
         [TestCase("East", "East", "SelfBottom")]
         [TestCase("East", "South", "NextLeft")]
         [TestCase("East", "West", "AcrossTop")]
@@ -27,24 +23,11 @@ namespace MahjongPrototype.Tests
         [TestCase("North", "West", "PreviousRight")]
         public void Resolve_ReturnsRelativeViewSlot(string selfSeat, string targetSeat, string expectedViewSlot)
         {
-            object resolved = InvokeResolve(ParseSeat(selfSeat), ParseSeat(targetSeat));
+            SeatToViewSlotResolverTestDriver driver = SeatToViewSlotResolverTestDriver.Create();
 
-            Assert.That(resolved.ToString(), Is.EqualTo(expectedViewSlot));
-        }
+            string resolved = driver.Resolve(selfSeat, targetSeat);
 
-        private static object ParseSeat(string seatName)
-        {
-            return Enum.Parse(Type.GetType(SeatIdTypeName, true), seatName);
-        }
-
-        private static object InvokeResolve(object selfSeat, object targetSeat)
-        {
-            Type resolverType = Type.GetType(ResolverTypeName, true);
-            MethodInfo method = resolverType.GetMethod(
-                "Resolve",
-                BindingFlags.Public | BindingFlags.Static);
-            Assert.That(method, Is.Not.Null);
-            return method.Invoke(null, new[] { selfSeat, targetSeat });
+            Assert.That(resolved, Is.EqualTo(expectedViewSlot));
         }
     }
 }

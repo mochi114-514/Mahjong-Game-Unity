@@ -7,6 +7,8 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
     {
         private const string SeatIdTypeName = "MahjongPrototype.Domain.SeatId, Assembly-CSharp";
         private const string TileTypeName = "MahjongPrototype.Domain.Tile, Assembly-CSharp";
+        private const string HandTypeName = "MahjongPrototype.Domain.Hand, Assembly-CSharp";
+        private const string PlayerSeatTypeName = "MahjongPrototype.Domain.PlayerSeat, Assembly-CSharp";
         private const string ParticipantTypeName = "MahjongPrototype.Domain.ParticipantType, Assembly-CSharp";
         private const string DiscardRecordTypeName = "MahjongPrototype.Domain.DiscardRecord, Assembly-CSharp";
         private const string PlayerIdTypeName = "MahjongPrototype.Domain.PlayerId, Assembly-CSharp";
@@ -32,6 +34,8 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
 
         public Type SeatId => reflection.RequireType(SeatIdTypeName);
         public Type Tile => reflection.RequireType(TileTypeName);
+        public Type Hand => reflection.RequireType(HandTypeName);
+        public Type PlayerSeat => reflection.RequireType(PlayerSeatTypeName);
         public Type ParticipantType => reflection.RequireType(ParticipantTypeName);
         public Type DiscardRecord => reflection.RequireType(DiscardRecordTypeName);
         public Type PlayerId => reflection.RequireType(PlayerIdTypeName);
