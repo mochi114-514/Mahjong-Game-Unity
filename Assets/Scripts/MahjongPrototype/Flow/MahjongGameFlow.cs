@@ -62,6 +62,7 @@ namespace MahjongPrototype
         private HandEvaluator handEvaluator;
         private WinDeclarationEvaluator winDeclarationEvaluator;
         private NoYakuTenpaiEvaluator noYakuTenpaiEvaluator;
+        private FuritenEvaluator furitenEvaluator;
         private YakuDefinitionCatalog initializedYakuDefinitionCatalog;
         private MahjongGameState gameState;
         private WindProgress currentWindProgress = WindProgress.East1;
@@ -95,6 +96,12 @@ namespace MahjongPrototype
         public bool IsWinDecisionPending => gameState != null && gameState.IsWinDecisionPending;
         public bool IsAutoSortEnabled => autoSortEnabled;
         public bool IsInteractionLocked => gameState != null && gameState.IsInteractionLocked;
+
+        public FuritenEvaluationResultSet EvaluateAllFuriten()
+        {
+            InitializeEvaluators();
+            return furitenEvaluator.EvaluateAll(gameState);
+        }
 
         public NoYakuTenpaiEvaluationResult EvaluateSelfNoYakuTenpai()
         {
@@ -1077,6 +1084,9 @@ namespace MahjongPrototype
         private bool TryBeginRonDecision(DiscardRecord discard)
         {
             InitializeEvaluators();
+            FuritenEvaluationResultSet furitenResults =
+                furitenEvaluator.EvaluateAll(gameState);
+
             // PROTOTYPE: Only locally-operated seats can answer the current single win decision.
             // CPU/RemoteHuman ron decisions will be introduced with a reaction window.
             for (int i = 0; i < gameState.SeatSlots.Count; i++)
@@ -1099,7 +1109,13 @@ namespace MahjongPrototype
                         WinType.Ron,
                         discard.Tile,
                         discard.ActorSeat));
-                bool canDeclareWin = evaluationResult.CanDeclareWin;
+                bool passesFuritenCheck =
+                    furitenResults.TryGet(
+                        candidateSeat,
+                        out FuritenSeatEvaluationResult furitenResult) &&
+                    furitenResult.IsEvaluated &&
+                    !furitenResult.IsFuriten;
+                bool canDeclareWin = evaluationResult.CanDeclareWin && passesFuritenCheck;
 
                 if (canDeclareWin)
                 {
@@ -1311,6 +1327,9 @@ namespace MahjongPrototype
 
         private void InitializeEvaluators()
         {
+            if (furitenEvaluator == null)
+                furitenEvaluator = new FuritenEvaluator(winChecker);
+
             if (winDeclarationEvaluator != null &&
                 initializedYakuDefinitionCatalog == yakuDefinitionCatalog)
             {
