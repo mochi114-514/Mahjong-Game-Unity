@@ -1,19 +1,17 @@
-using System;
-using System.Reflection;
+using MahjongPrototype.Tests.TestSupport.Features.Win;
 using NUnit.Framework;
 
 namespace MahjongPrototype.Tests
 {
     public sealed class WinCheckerTests
     {
-        private const string TileTypeName = "MahjongPrototype.Domain.Tile, Assembly-CSharp";
-        private const string WinCheckerTypeName = "MahjongPrototype.Services.WinChecker, Assembly-CSharp";
-
         [TestCase("1m 2m 3m 2p 3p 4p 7s 8s 9s E E E 5m 5m")]
         [TestCase("1m 1m 1m 2m 2m 2m 3p 4p 5p C C C 9s 9s")]
         public void CanWinStandardHand_ReturnsTrueForStandardHand(string handText)
         {
-            Assert.That(CanWinStandardHand(handText), Is.True);
+            WinCheckerTestDriver driver = WinCheckerTestDriver.Create();
+
+            Assert.That(driver.CanWinStandardHand(handText), Is.True);
         }
 
         [TestCase("1m 2m 3m 2p 3p 4p 7s 8s 9s E E E 5m")]
@@ -24,242 +22,183 @@ namespace MahjongPrototype.Tests
         [TestCase("1m 2m 3m 4m 5m 6m 2p 3p 4p E E E 5m 7p")]
         public void CanWinStandardHand_ReturnsFalseForNonWinningHand(string handText)
         {
-            Assert.That(CanWinStandardHand(handText), Is.False);
+            WinCheckerTestDriver driver = WinCheckerTestDriver.Create();
+
+            Assert.That(driver.CanWinStandardHand(handText), Is.False);
         }
 
         [Test]
         public void CanWinWithTile_CompletesStandardHand()
         {
-            Array handTiles = CreateTileArray(
-                "1m 2m 3m 1p 2p 3p 1s 2s 3s E E E C");
-            object winningTile = CreateTile("C");
+            WinCheckerTestDriver driver = WinCheckerTestDriver.Create();
 
-            Assert.That(CanWinWithTile(handTiles, winningTile), Is.True);
+            Assert.That(
+                driver.CanWinWithTile(
+                    "1m 2m 3m 1p 2p 3p 1s 2s 3s E E E C",
+                    "C"),
+                Is.True);
         }
 
         [Test]
         public void CheckWinWithTile_ReturnsStandardForStandardHand()
         {
-            Array handTiles = CreateTileArray(
-                "1m 2m 3m 1p 2p 3p 1s 2s 3s E E E C");
-            object winningTile = CreateTile("C");
+            WinCheckerTestDriver driver = WinCheckerTestDriver.Create();
 
-            object result = CheckWinWithTile(handTiles, winningTile);
+            object result = driver.CheckWinWithTile(
+                "1m 2m 3m 1p 2p 3p 1s 2s 3s E E E C",
+                "C");
 
-            AssertWinCheckResult(result, true, "Standard");
-            Assert.That(CanWinWithTile(handTiles, winningTile), Is.True);
+            AssertWinCheckResult(driver, result, true, "Standard");
+            Assert.That(
+                driver.CanWinWithTile(
+                    "1m 2m 3m 1p 2p 3p 1s 2s 3s E E E C",
+                    "C"),
+                Is.True);
         }
 
         [Test]
         public void CheckWinWithTile_ReturnsSevenPairsForSevenPairs()
         {
-            Array handTiles = CreateTileArray(
-                "1m 1m 2m 2m 3p 3p 4p 4p 5s 5s E E C");
-            object winningTile = CreateTile("C");
+            WinCheckerTestDriver driver = WinCheckerTestDriver.Create();
 
-            object result = CheckWinWithTile(handTiles, winningTile);
+            object result = driver.CheckWinWithTile(
+                "1m 1m 2m 2m 3p 3p 4p 4p 5s 5s E E C",
+                "C");
 
-            AssertWinCheckResult(result, true, "SevenPairs");
-            Assert.That(CanWinWithTile(handTiles, winningTile), Is.True);
+            AssertWinCheckResult(driver, result, true, "SevenPairs");
+            Assert.That(
+                driver.CanWinWithTile(
+                    "1m 1m 2m 2m 3p 3p 4p 4p 5s 5s E E C",
+                    "C"),
+                Is.True);
         }
 
         [Test]
         public void CheckWinWithTile_ReturnsThirteenOrphansForThirteenWait()
         {
-            Array handTiles = CreateTileArray(
-                "1m 9m 1p 9p 1s 9s E S W N P F C");
-            object winningTile = CreateTile("E");
+            WinCheckerTestDriver driver = WinCheckerTestDriver.Create();
 
-            object result = CheckWinWithTile(handTiles, winningTile);
+            object result = driver.CheckWinWithTile(
+                "1m 9m 1p 9p 1s 9s E S W N P F C",
+                "E");
 
-            AssertWinCheckResult(result, true, "ThirteenOrphans");
-            Assert.That(CanWinWithTile(handTiles, winningTile), Is.True);
+            AssertWinCheckResult(driver, result, true, "ThirteenOrphans");
+            Assert.That(
+                driver.CanWinWithTile(
+                    "1m 9m 1p 9p 1s 9s E S W N P F C",
+                    "E"),
+                Is.True);
         }
 
         [Test]
         public void CheckWinWithTile_ReturnsThirteenOrphansForSingleWait()
         {
-            Array handTiles = CreateTileArray(
-                "1m 9m 1p 9p 1s 9s E E S W N P F");
-            object winningTile = CreateTile("C");
+            WinCheckerTestDriver driver = WinCheckerTestDriver.Create();
 
-            object result = CheckWinWithTile(handTiles, winningTile);
+            object result = driver.CheckWinWithTile(
+                "1m 9m 1p 9p 1s 9s E E S W N P F",
+                "C");
 
-            AssertWinCheckResult(result, true, "ThirteenOrphans");
-            Assert.That(CanWinWithTile(handTiles, winningTile), Is.True);
+            AssertWinCheckResult(driver, result, true, "ThirteenOrphans");
+            Assert.That(
+                driver.CanWinWithTile(
+                    "1m 9m 1p 9p 1s 9s E E S W N P F",
+                    "C"),
+                Is.True);
         }
 
         [Test]
         public void CheckCompletedHand_ReturnsNoneForNonWinningHand()
         {
-            Array tiles = CreateTileArray(
+            WinCheckerTestDriver driver = WinCheckerTestDriver.Create();
+
+            object result = driver.CheckCompletedHand(
                 "1m 2m 3m 4m 5m 6m 2p 3p 4p 6s 7s 8s E S");
 
-            object result = CheckCompletedHand(tiles);
-
-            AssertWinCheckResult(result, false, "None");
+            AssertWinCheckResult(driver, result, false, "None");
         }
 
         [Test]
         public void CheckWinWithTile_ReturnsNoneWhenFiveCopies()
         {
-            Array handTiles = CreateTileArray(
-                "1m 1m 1m 1m 2m 3m 4m 5m 6m 7m 8m 9m E");
-            object winningTile = CreateTile("1m");
+            WinCheckerTestDriver driver = WinCheckerTestDriver.Create();
 
-            object result = CheckWinWithTile(handTiles, winningTile);
+            object result = driver.CheckWinWithTile(
+                "1m 1m 1m 1m 2m 3m 4m 5m 6m 7m 8m 9m E",
+                "1m");
 
-            AssertWinCheckResult(result, false, "None");
-            Assert.That(CanWinWithTile(handTiles, winningTile), Is.False);
+            AssertWinCheckResult(driver, result, false, "None");
+            Assert.That(
+                driver.CanWinWithTile(
+                    "1m 1m 1m 1m 2m 3m 4m 5m 6m 7m 8m 9m E",
+                    "1m"),
+                Is.False);
         }
 
         [Test]
         public void CanWinStandardHand_ReturnsFalseForSevenPairs()
         {
-            Array tiles = CreateTileArray(
+            WinCheckerTestDriver driver = WinCheckerTestDriver.Create();
+            object tiles = driver.CreateTiles(
                 "1m 1m 2m 2m 3p 3p 4p 4p 5s 5s E E C C");
 
-            Assert.That(CanWinStandardHand(tiles), Is.False);
-            AssertWinCheckResult(CheckCompletedHand(tiles), true, "SevenPairs");
+            Assert.That(driver.CanWinStandardHand(tiles), Is.False);
+            AssertWinCheckResult(driver, driver.CheckCompletedHand(tiles), true, "SevenPairs");
         }
 
         [Test]
         public void CanWinStandardHand_ReturnsFalseForThirteenOrphans()
         {
-            Array tiles = CreateTileArray(
+            WinCheckerTestDriver driver = WinCheckerTestDriver.Create();
+            object tiles = driver.CreateTiles(
                 "1m 9m 1p 9p 1s 9s E E S W N P F C");
 
-            Assert.That(CanWinStandardHand(tiles), Is.False);
-            AssertWinCheckResult(CheckCompletedHand(tiles), true, "ThirteenOrphans");
+            Assert.That(driver.CanWinStandardHand(tiles), Is.False);
+            AssertWinCheckResult(driver, driver.CheckCompletedHand(tiles), true, "ThirteenOrphans");
         }
 
         [Test]
         public void CheckCompletedHand_ReturnsNoneFor13Tiles()
         {
-            Array tiles = CreateTileArray("1m 2m 3m 4m 5m 6m 2p 3p 4p 6s 7s 8s E");
+            WinCheckerTestDriver driver = WinCheckerTestDriver.Create();
 
-            AssertWinCheckResult(CheckCompletedHand(tiles), false, "None");
+            object result = driver.CheckCompletedHand(
+                "1m 2m 3m 4m 5m 6m 2p 3p 4p 6s 7s 8s E");
+
+            AssertWinCheckResult(driver, result, false, "None");
         }
 
         [Test]
         public void CheckCompletedHand_ReturnsNoneFor15Tiles()
         {
-            Array tiles = CreateTileArray(
+            WinCheckerTestDriver driver = WinCheckerTestDriver.Create();
+
+            object result = driver.CheckCompletedHand(
                 "1m 2m 3m 4m 5m 6m 2p 3p 4p 6s 7s 8s E S W");
 
-            AssertWinCheckResult(CheckCompletedHand(tiles), false, "None");
+            AssertWinCheckResult(driver, result, false, "None");
         }
 
         [Test]
         public void CanWinStandardHand_ReturnsFalseWhenHandContainsInvalidTile()
         {
-            Type tileType = GetTileType();
-            Array tiles = CreateTileArray("1m 2m 3m 2p 3p 4p 7s 8s 9s E E E 5m", 14);
+            WinCheckerTestDriver driver = WinCheckerTestDriver.Create();
+            object tiles = driver.CreateTiles(
+                "1m 2m 3m 2p 3p 4p 7s 8s 9s E E E 5m",
+                14);
 
-            Assert.That(tiles.GetValue(13), Is.EqualTo(Activator.CreateInstance(tileType)));
-            Assert.That(CanWinStandardHand(tiles), Is.False);
+            Assert.That(driver.TileAt(tiles, 13), Is.EqualTo(driver.CreateInvalidTile()));
+            Assert.That(driver.CanWinStandardHand(tiles), Is.False);
         }
 
-        private static bool CanWinStandardHand(string handText)
+        private static void AssertWinCheckResult(
+            WinCheckerTestDriver driver,
+            object result,
+            bool expectedCanWin,
+            string expectedShape)
         {
-            return CanWinStandardHand(CreateTileArray(handText));
-        }
-
-        private static bool CanWinStandardHand(Array tiles)
-        {
-            Type checkerType = Type.GetType(WinCheckerTypeName, true);
-            object checker = Activator.CreateInstance(checkerType);
-            MethodInfo method = checkerType.GetMethod("CanWinStandardHand");
-            Assert.That(method, Is.Not.Null);
-
-            return (bool)method.Invoke(checker, new object[] { tiles });
-        }
-
-        private static bool CanWinWithTile(Array handTiles, object winningTile)
-        {
-            Type checkerType = Type.GetType(WinCheckerTypeName, true);
-            object checker = Activator.CreateInstance(checkerType);
-            MethodInfo method = checkerType.GetMethod("CanWinWithTile");
-            Assert.That(method, Is.Not.Null);
-
-            return (bool)method.Invoke(checker, new[] { handTiles, winningTile });
-        }
-
-        private static object CheckWinWithTile(Array handTiles, object winningTile)
-        {
-            Type checkerType = Type.GetType(WinCheckerTypeName, true);
-            object checker = Activator.CreateInstance(checkerType);
-            MethodInfo method = checkerType.GetMethod("CheckWinWithTile");
-            Assert.That(method, Is.Not.Null);
-
-            return method.Invoke(checker, new[] { handTiles, winningTile });
-        }
-
-        private static object CheckCompletedHand(Array tiles)
-        {
-            Type checkerType = Type.GetType(WinCheckerTypeName, true);
-            object checker = Activator.CreateInstance(checkerType);
-            MethodInfo method = checkerType.GetMethod("CheckCompletedHand");
-            Assert.That(method, Is.Not.Null);
-
-            return method.Invoke(checker, new object[] { tiles });
-        }
-
-        private static void AssertWinCheckResult(object result, bool expectedCanWin, string expectedShape)
-        {
-            Assert.That(GetProperty(result, "CanWin"), Is.EqualTo(expectedCanWin));
-            Assert.That(GetProperty(result, "Shape").ToString(), Is.EqualTo(expectedShape));
-        }
-
-        private static Array CreateTileArray(string handText)
-        {
-            string[] codes = SplitCodes(handText);
-            return CreateTileArray(codes, codes.Length);
-        }
-
-        private static Array CreateTileArray(string handText, int length)
-        {
-            return CreateTileArray(SplitCodes(handText), length);
-        }
-
-        private static Array CreateTileArray(string[] codes, int length)
-        {
-            Type tileType = GetTileType();
-            Array tiles = Array.CreateInstance(tileType, length);
-            ConstructorInfo constructor = tileType.GetConstructor(new[] { typeof(string) });
-            Assert.That(constructor, Is.Not.Null);
-
-            for (int i = 0; i < codes.Length; i++)
-                tiles.SetValue(constructor.Invoke(new object[] { codes[i] }), i);
-
-            return tiles;
-        }
-
-        private static object CreateTile(string code)
-        {
-            Type tileType = GetTileType();
-            ConstructorInfo constructor = tileType.GetConstructor(new[] { typeof(string) });
-            Assert.That(constructor, Is.Not.Null);
-            return constructor.Invoke(new object[] { code });
-        }
-
-        private static string[] SplitCodes(string handText)
-        {
-            return handText.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-        }
-
-        private static Type GetTileType()
-        {
-            return Type.GetType(TileTypeName, true);
-        }
-
-        private static object GetProperty(object target, string propertyName)
-        {
-            PropertyInfo property = target.GetType().GetProperty(
-                propertyName,
-                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-            Assert.That(property, Is.Not.Null);
-            return property.GetValue(target);
+            Assert.That(driver.ResultCanWin(result), Is.EqualTo(expectedCanWin));
+            Assert.That(driver.ResultShapeName(result), Is.EqualTo(expectedShape));
         }
     }
 }
