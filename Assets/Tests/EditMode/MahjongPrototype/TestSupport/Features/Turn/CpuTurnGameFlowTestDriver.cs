@@ -1,0 +1,108 @@
+using System;
+using System.Collections.Generic;
+
+namespace MahjongPrototype.Tests.TestSupport.Features.Turn
+{
+    internal sealed class CpuTurnGameFlowTestDriver : IDisposable
+    {
+        private readonly TurnGameFlowTestSupport support;
+        private readonly List<string> eventOrder = new List<string>();
+        private object cpuDiscardRecord;
+        private bool disposed;
+
+        private CpuTurnGameFlowTestDriver(TurnGameFlowTestSupport support)
+        {
+            this.support = support;
+        }
+
+        public static CpuTurnGameFlowTestDriver Create()
+        {
+            CpuTurnGameFlowTestDriver driver = new CpuTurnGameFlowTestDriver(
+                TurnGameFlowTestSupport.Create(
+                    "CpuTurnGameFlowTest",
+                    participantCount: 2,
+                    initialHandTileCount: 1,
+                    enableAutoDraw: true,
+                    addEventNotifier: true));
+            driver.support.SetCpuDiscardDelay(0f);
+            return driver;
+        }
+
+        public void StartNewRound() => support.StartNewRound();
+        public void RequestSelfDiscardDrawnTile() => support.RequestDiscardDrawnTile();
+        public void RetryPrototype() => support.RetryPrototype();
+        public void SetRoundEnded(bool value) => support.SetRoundEnded(value);
+
+        public void SetPlayer2ParticipantType(string participantTypeName)
+        {
+            support.SetParticipantTypeForPlayerId("Player2", participantTypeName);
+        }
+
+        public void BeginWinDecisionForPlayer2()
+        {
+            support.Reflection.Invoke(
+                support.CurrentState,
+                "BeginWinDecision",
+                support.DataFactory.ParseSeat(Player2SeatName),
+                support.TurnIndex);
+        }
+
+        public void SubscribeCpuTurnEventTrace()
+        {
+            eventOrder.Clear();
+            cpuDiscardRecord = null;
+
+            support.AddSingleArgumentEventHandler(
+                "TileDrawn",
+                drawResult =>
+                {
+                    if (support.Reflection.GetProperty(drawResult, "Seat").ToString() == Player2SeatName &&
+                        support.Reflection.GetProperty(drawResult, "Purpose").ToString() == "TurnDraw")
+                    {
+                        eventOrder.Add("CpuTileDrawn");
+                    }
+                });
+            support.AddSingleArgumentEventHandler(
+                "TileDiscarded",
+                discardRecord =>
+                {
+                    if (support.Reflection.GetProperty(discardRecord, "ActorSeat").ToString() == Player2SeatName)
+                    {
+                        cpuDiscardRecord = discardRecord;
+                        eventOrder.Add("CpuTileDiscarded");
+                    }
+                });
+            support.AddTwoArgumentEventHandler(
+                "TurnStarted",
+                (seat, _) =>
+                {
+                    if (seat.ToString() == SelfSeatName && eventOrder.Contains("CpuTileDiscarded"))
+                        eventOrder.Add("NextTurnStarted");
+                });
+        }
+
+        public int EventIndex(string eventName) => eventOrder.IndexOf(eventName);
+
+        public object CurrentStateToken => support.StateToken;
+        public string SelfSeatName => support.SelfSeatName;
+        public string Player2SeatName => support.SeatByPlayerId("Player2");
+        public string CurrentTurnName => support.CurrentTurnName;
+        public int TurnIndex => support.TurnIndex;
+        public bool Player2HasDrawnTile => support.HasDrawnTileForPlayerId("Player2");
+        public int DiscardCount => support.DiscardCount;
+        public bool HasCpuDiscardRecord => cpuDiscardRecord != null;
+        public string CpuDiscardActorSeatName =>
+            support.Reflection.GetProperty(cpuDiscardRecord, "ActorSeat").ToString();
+        public string CpuDiscardSourceName =>
+            support.Reflection.GetProperty(cpuDiscardRecord, "Source").ToString();
+
+        public void Dispose()
+        {
+            if (disposed)
+                return;
+
+            disposed = true;
+            support.Dispose();
+        }
+    }
+}
