@@ -189,6 +189,16 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Furiten
             session.Reflection.Invoke(uiManager, "HandleTileDiscarded", discardRecord);
         }
 
+        public void HandleWinChecked(string seatName, int turnIndex, bool canWin)
+        {
+            session.Reflection.Invoke(
+                uiManager,
+                "HandleWinChecked",
+                session.DataFactory.ParseSeat(seatName),
+                turnIndex,
+                canWin);
+        }
+
         public void HandleWinDeclined(string seatName, int turnIndex)
         {
             session.Reflection.Invoke(

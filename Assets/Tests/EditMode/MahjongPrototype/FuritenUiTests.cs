@@ -177,6 +177,55 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
+        public void HandleWinChecked_SelfTemporaryFuriten_ReevaluatesAndShowsFuritenText()
+        {
+            using (FuritenUiTestDriver driver = FuritenUiTestDriver.Create(1))
+            {
+                driver.StartRound();
+                driver.AddHandTiles("East", NoYakuSingleWait);
+                driver.MarkTemporaryFuriten("East");
+
+                driver.HandleWinChecked("East", 1, false);
+
+                Assert.That(driver.FuritenTextVisible, Is.True);
+                Assert.That(driver.FuritenText, Is.EqualTo("フリテン"));
+            }
+        }
+
+        [Test]
+        public void HandleWinChecked_OtherSeatTemporaryFuriten_DoesNotShowSelfUi()
+        {
+            using (FuritenUiTestDriver driver = FuritenUiTestDriver.Create(2))
+            {
+                driver.StartRound();
+                driver.AddHandTiles("East", NoYakuSingleWait);
+                driver.AddHandTiles("West", NoYakuSingleWait);
+                driver.MarkTemporaryFuriten("West");
+
+                driver.HandleWinChecked("West", 1, false);
+
+                Assert.That(driver.FuritenTextVisible, Is.False);
+            }
+        }
+
+        [Test]
+        public void HandleTileDrawn_SelfDraw_ClearsTemporaryFuritenText()
+        {
+            using (FuritenUiTestDriver driver = FuritenUiTestDriver.Create(1))
+            {
+                driver.StartRound();
+                driver.AddHandTiles("East", NoYakuSingleWait);
+                driver.MarkTemporaryFuriten("East");
+                driver.RefreshFuritenUi();
+                driver.SetDrawnTile("East", "9m");
+
+                driver.HandleTileDrawn("East", "9m", "TurnDraw");
+
+                Assert.That(driver.FuritenTextVisible, Is.False);
+            }
+        }
+
+        [Test]
         public void RoundStartedAndRoundEnded_ClearFuritenText()
         {
             using (FuritenUiTestDriver driver = FuritenUiTestDriver.Create(1))

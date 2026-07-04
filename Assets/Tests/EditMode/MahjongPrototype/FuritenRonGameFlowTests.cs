@@ -331,6 +331,172 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
+        public void RonDecision_NoYakuWinningShape_MarksTemporaryFuritenWithoutDecision()
+        {
+            using (FuritenRonTestDriver driver = FuritenRonTestDriver.Create(2))
+            {
+                StartNoYakuWinningShapeDiscardFromWest(driver);
+
+                Assert.That(driver.IsWinDecisionPending, Is.False);
+                Assert.That(driver.IsSeatTemporaryFuriten("East"), Is.True);
+                Assert.That(driver.IsSeatReachPassFuriten("East"), Is.False);
+                Assert.That(driver.CurrentTurn, Is.EqualTo("East"));
+                Assert.That(driver.TurnIndex, Is.EqualTo(2));
+            }
+        }
+
+        [Test]
+        public void RonDecision_NoYakuTemporaryFuriten_BlocksLaterYakuRonDecision()
+        {
+            using (FuritenRonTestDriver driver = FuritenRonTestDriver.Create(2))
+            {
+                StartNoYakuWinningShapeDiscardFromWest(driver, true);
+                driver.DeclareReach("East", driver.TurnIndex);
+                driver.SetCurrentTurn("West");
+                driver.SetDrawnTile("West", "P");
+
+                bool discarded = driver.DiscardDrawnTile("West");
+
+                Assert.That(discarded, Is.True);
+                Assert.That(driver.IsWinDecisionPending, Is.False);
+                Assert.That(driver.IsSeatTemporaryFuriten("East"), Is.True);
+            }
+        }
+
+        [Test]
+        public void TurnStart_NoYakuTemporaryFuriten_DoesNotClearBeforeDraw()
+        {
+            using (FuritenRonTestDriver driver = FuritenRonTestDriver.Create(2))
+            {
+                StartNoYakuWinningShapeDiscardFromWest(driver);
+
+                Assert.That(driver.CurrentTurn, Is.EqualTo("East"));
+                Assert.That(driver.IsSeatTemporaryFuriten("East"), Is.True);
+            }
+        }
+
+        [Test]
+        public void Draw_NoYakuTemporaryFuriten_ClearsOnOwnSuccessfulDraw()
+        {
+            using (FuritenRonTestDriver driver = FuritenRonTestDriver.Create(2))
+            {
+                StartNoYakuWinningShapeDiscardFromWest(driver);
+                driver.SetCurrentTurn("East");
+
+                bool drew = driver.DrawTileForSeat("East", "9m");
+
+                Assert.That(drew, Is.True);
+                Assert.That(driver.IsSeatTemporaryFuriten("East"), Is.False);
+            }
+        }
+
+        [Test]
+        public void RonDecision_NoYakuTemporaryFuritenClearedByDraw_CanRonAgain()
+        {
+            using (FuritenRonTestDriver driver = FuritenRonTestDriver.Create(2))
+            {
+                StartNoYakuWinningShapeDiscardFromWest(driver, true);
+                driver.SetCurrentTurn("East");
+                Assert.That(driver.DrawTileForSeat("East", "9m"), Is.True);
+                driver.RequestDeclineReach();
+                Assert.That(driver.DiscardDrawnTile("East"), Is.True);
+                driver.DeclareReach("East", driver.TurnIndex);
+                driver.SetCurrentTurn("West");
+                driver.SetDrawnTile("West", "P");
+
+                bool discarded = driver.DiscardDrawnTile("West");
+
+                Assert.That(discarded, Is.True);
+                Assert.That(driver.IsWinDecisionPending, Is.True);
+                Assert.That(driver.WinDecisionType, Is.EqualTo("Ron"));
+                Assert.That(driver.WinDecisionSeat, Is.EqualTo("East"));
+            }
+        }
+
+        [Test]
+        public void Draw_OtherSeatDoesNotClearNoYakuTemporaryFuriten()
+        {
+            using (FuritenRonTestDriver driver = FuritenRonTestDriver.Create(2))
+            {
+                StartNoYakuWinningShapeDiscardFromWest(driver, true);
+                driver.SetCurrentTurn("West");
+
+                bool drew = driver.DrawTileForSeat("West", "9m");
+
+                Assert.That(drew, Is.True);
+                Assert.That(driver.IsSeatTemporaryFuriten("East"), Is.True);
+            }
+        }
+
+        [Test]
+        public void RonDecision_NonWinningShape_DoesNotMarkTemporaryFuriten()
+        {
+            using (FuritenRonTestDriver driver = FuritenRonTestDriver.Create(2))
+            {
+                driver.StartRound();
+                driver.SetHand("East", FuritenTestHands.NoYakuSingleWait());
+                driver.SetDrawnTile("West", "9m");
+                driver.SetCurrentTurn("West");
+
+                bool discarded = driver.DiscardDrawnTile("West");
+
+                Assert.That(discarded, Is.True);
+                Assert.That(driver.IsWinDecisionPending, Is.False);
+                Assert.That(driver.IsSeatTemporaryFuriten("East"), Is.False);
+            }
+        }
+
+        [Test]
+        public void RonDecision_YakuWinningDiscard_DoesNotMarkTemporaryBeforeDecline()
+        {
+            using (FuritenRonTestDriver driver = FuritenRonTestDriver.Create(2))
+            {
+                driver.StartRound();
+                driver.SetHand("East", FuritenTestHands.SimpleFiveManWait());
+                driver.SetDrawnTile("West", "5m");
+                driver.SetCurrentTurn("West");
+
+                bool discarded = driver.DiscardDrawnTile("West");
+
+                Assert.That(discarded, Is.True);
+                Assert.That(driver.IsWinDecisionPending, Is.True);
+                Assert.That(driver.IsSeatTemporaryFuriten("East"), Is.False);
+            }
+        }
+
+        [Test]
+        public void TsumoDecision_NoYakuTemporaryFuriten_DoesNotBlockTsumo()
+        {
+            using (FuritenRonTestDriver driver = FuritenRonTestDriver.Create(2))
+            {
+                StartNoYakuWinningShapeDiscardFromWest(driver);
+                driver.SetCurrentTurn("East");
+
+                bool drew = driver.DrawTileForSeat("East", "P");
+
+                Assert.That(drew, Is.True);
+                Assert.That(driver.IsSeatTemporaryFuriten("East"), Is.False);
+                Assert.That(driver.IsWinDecisionPending, Is.True);
+                Assert.That(driver.WinDecisionType, Is.EqualTo("Tsumo"));
+                Assert.That(driver.WinDecisionSeat, Is.EqualTo("East"));
+            }
+        }
+
+        [Test]
+        public void StartRound_NoYakuTemporaryFuriten_DoesNotCarryToNewRound()
+        {
+            using (FuritenRonTestDriver driver = FuritenRonTestDriver.Create(2))
+            {
+                StartNoYakuWinningShapeDiscardFromWest(driver);
+                Assert.That(driver.IsSeatTemporaryFuriten("East"), Is.True);
+
+                driver.StartRound();
+
+                Assert.That(driver.IsSeatTemporaryFuriten("East"), Is.False);
+            }
+        }
+
+        [Test]
         public void TsumoDecision_OwnDiscardFuriten_DoesNotBlockTsumo()
         {
             using (FuritenRonTestDriver driver = FuritenRonTestDriver.Create(1))
@@ -363,6 +529,21 @@ namespace MahjongPrototype.Tests
                 Assert.That(driver.TryGetSeatResult(resultSet, "South", out _), Is.False);
                 Assert.That(driver.GameStateSnapshot(), Is.EqualTo(before));
             }
+        }
+
+        private static void StartNoYakuWinningShapeDiscardFromWest(
+            FuritenRonTestDriver driver,
+            bool makeWestLocalHuman = false)
+        {
+            driver.StartRound();
+            if (makeWestLocalHuman)
+                driver.SetSeatParticipantType("West", "LocalHuman");
+
+            driver.SetHand("East", FuritenTestHands.NoYakuSingleWait());
+            driver.SetDrawnTile("West", "P");
+            driver.SetCurrentTurn("West");
+
+            Assert.That(driver.DiscardDrawnTile("West"), Is.True);
         }
 
         private static void StartRonDecisionFromWest(

@@ -1111,6 +1111,9 @@ namespace MahjongPrototype
                         WinType.Ron,
                         discard.Tile,
                         discard.ActorSeat));
+                if (IsNoYakuWinningShape(evaluationResult, candidatePlayerSeat))
+                    candidatePlayerSeat.MarkTemporaryFuriten();
+
                 bool passesFuritenCheck =
                     furitenResults.TryGet(
                         candidateSeat,
@@ -1146,6 +1149,17 @@ namespace MahjongPrototype
             }
 
             return false;
+        }
+
+        private static bool IsNoYakuWinningShape(
+            WinDeclarationEvaluationResult evaluationResult,
+            PlayerSeat playerSeat)
+        {
+            return evaluationResult != null &&
+                evaluationResult.IsWinningShape &&
+                !evaluationResult.HasYaku &&
+                playerSeat != null &&
+                !playerSeat.IsReachDeclared;
         }
 
         private void MarkDeclinedRonFuriten(SeatId seat, WinType? winType)

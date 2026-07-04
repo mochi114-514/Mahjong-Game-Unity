@@ -414,12 +414,15 @@ namespace MahjongPrototype.UI
             RefreshGlobalStatus();
         }
 
-        private void HandleWinChecked(SeatId _, int __, bool ___)
+        private void HandleWinChecked(SeatId seat, int _, bool __)
         {
             RefreshGlobalStatus();
             RefreshWinDecisionUi();
             RefreshReachDecisionUi();
             RefreshInteractionUi();
+
+            if (IsSelfSeat(seat))
+                RefreshFuritenUi();
         }
 
         private void HandleWinDeclared(SeatId _, int __)

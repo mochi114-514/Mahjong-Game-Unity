@@ -52,6 +52,15 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Furiten
             "5m"
         };
 
+        private static readonly string[] NoYakuSingleWaitTiles =
+        {
+            "1m", "2m", "3m",
+            "4m", "5m", "6m",
+            "7p", "8p", "9p",
+            "1s", "2s", "3s",
+            "P"
+        };
+
         private static readonly string[] RonMultiWaitTiles =
         {
             "2p", "3p", "4p",
@@ -89,6 +98,11 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Furiten
         public static string[] SimpleFiveManWait()
         {
             return Copy(SimpleFiveManWaitTiles);
+        }
+
+        public static string[] NoYakuSingleWait()
+        {
+            return Copy(NoYakuSingleWaitTiles);
         }
 
         public static string[] RonMultiWait()
