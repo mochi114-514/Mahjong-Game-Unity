@@ -20,17 +20,23 @@ namespace MahjongPrototype.Services
             if (context == null || !context.WinningTile.IsValid)
                 return WinDeclarationEvaluationResult.NotWinningShape(WinCheckResult.NotWin);
 
-            WinCheckResult winCheckResult = winChecker.CheckWinWithTile(
+            WinningHandAnalysisResult analysis = winChecker.AnalyzeWithTileDetailed(
                 context.HandTiles,
                 context.WinningTile);
+            WinCheckResult winCheckResult = WinChecker.ToWinCheckResult(analysis);
             if (!winCheckResult.CanWin)
-                return WinDeclarationEvaluationResult.NotWinningShape(winCheckResult);
+            {
+                return WinDeclarationEvaluationResult.NotWinningShape(
+                    winCheckResult,
+                    analysis);
+            }
 
             HandEvaluationContext handContext = new HandEvaluationContext(
                 context.HandTiles,
                 context.WinningTile,
                 context.WinType,
                 winCheckResult.Shape,
+                analysis,
                 context.WinnerSeat,
                 context.SourceSeat,
                 context.RoundWind,
@@ -38,7 +44,10 @@ namespace MahjongPrototype.Services
                 context.IsReachDeclared,
                 context.IsClosed);
             HandEvaluationResult handEvaluationResult = handEvaluator.Evaluate(handContext);
-            return new WinDeclarationEvaluationResult(winCheckResult, handEvaluationResult);
+            return new WinDeclarationEvaluationResult(
+                winCheckResult,
+                handEvaluationResult,
+                analysis);
         }
     }
 }

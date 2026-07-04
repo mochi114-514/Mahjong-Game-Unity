@@ -4,6 +4,15 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
 {
     internal sealed class WinDeclarationEvaluatorTestDriver : IDisposable
     {
+        private const string HandEvaluationContextTypeName =
+            "MahjongPrototype.Domain.HandEvaluationContext, Assembly-CSharp";
+        private const string HandEvaluationResultTypeName =
+            "MahjongPrototype.Domain.HandEvaluationResult, Assembly-CSharp";
+        private const string WinDeclarationEvaluationResultTypeName =
+            "MahjongPrototype.Domain.WinDeclarationEvaluationResult, Assembly-CSharp";
+        private const string WinningHandShapeTypeName =
+            "MahjongPrototype.Domain.WinningHandShape, Assembly-CSharp";
+
         private readonly WinFeatureTestSupport support;
         private bool disposed;
 
@@ -97,6 +106,103 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
             return support.ContainsYaku(HandEvaluationResult(result), yakuKindName);
         }
 
+        public object WinningHandAnalysis(object result)
+        {
+            return support.Reflection.GetProperty(result, "WinningHandAnalysis");
+        }
+
+        public bool AnalysisCanWin(object result)
+        {
+            return (bool)support.Reflection.GetProperty(WinningHandAnalysis(result), "CanWin");
+        }
+
+        public int AnalysisStandardDecompositionCount(object result)
+        {
+            return support.Collections.Count(
+                support.Reflection.GetProperty(
+                    WinningHandAnalysis(result),
+                    "StandardDecompositions"));
+        }
+
+        public int AnalysisStandardWinningInterpretationCount(object result)
+        {
+            return support.Collections.Count(
+                support.Reflection.GetProperty(
+                    WinningHandAnalysis(result),
+                    "StandardWinningInterpretations"));
+        }
+
+        public bool AnalysisHasWaitType(object result, string waitTypeName)
+        {
+            object interpretations = support.Reflection.GetProperty(
+                WinningHandAnalysis(result),
+                "StandardWinningInterpretations");
+            int count = support.Collections.Count(interpretations);
+
+            for (int i = 0; i < count; i++)
+            {
+                object interpretation = support.Collections.Item(interpretations, i);
+                if (support.Reflection.GetProperty(interpretation, "WaitType").ToString() == waitTypeName)
+                    return true;
+            }
+
+            return false;
+        }
+
+        public bool AnalysisSevenPairsIsWin(object result)
+        {
+            object analysis = support.Reflection.GetProperty(
+                WinningHandAnalysis(result),
+                "SevenPairsAnalysis");
+            return (bool)support.Reflection.GetProperty(analysis, "IsWin");
+        }
+
+        public bool AnalysisThirteenOrphansIsWin(object result)
+        {
+            object analysis = support.Reflection.GetProperty(
+                WinningHandAnalysis(result),
+                "ThirteenOrphansAnalysis");
+            return (bool)support.Reflection.GetProperty(analysis, "IsWin");
+        }
+
+        public object CreateLegacyHandEvaluationContext()
+        {
+            return support.Reflection.CreateInstance(
+                support.Reflection.RequireType(HandEvaluationContextTypeName),
+                support.CreateTiles("1m 2m 3m 1p 2p 3p 1s 2s 3s E E E C"),
+                support.DataFactory.CreateTile("C"),
+                support.DataFactory.ParseWinType("Ron"),
+                ParseWinningHandShape("Standard"),
+                support.DataFactory.ParseSeat("East"),
+                null,
+                support.DataFactory.ParseRoundWind("East"),
+                support.DataFactory.ParseSeat("East"),
+                false,
+                true);
+        }
+
+        public object CreateLegacyWinDeclarationEvaluationResult()
+        {
+            object winChecker = support.CreateWinChecker();
+            object winCheckResult = support.Reflection.Invoke(
+                winChecker,
+                "CheckCompletedHand",
+                support.CreateTiles("1m 2m 3m 1p 2p 3p 1s 2s 3s E E E C C"));
+            object handEvaluationResult = support.Reflection.GetStaticProperty(
+                support.Reflection.RequireType(HandEvaluationResultTypeName),
+                "Empty");
+
+            return support.Reflection.CreateInstance(
+                support.Reflection.RequireType(WinDeclarationEvaluationResultTypeName),
+                winCheckResult,
+                handEvaluationResult);
+        }
+
+        public object CreateWinDeclarationEvaluatorWithEmptyCatalog()
+        {
+            return support.CreateWinDeclarationEvaluator(support.CreateYakuCatalog());
+        }
+
         public void Dispose()
         {
             if (disposed)
@@ -109,6 +215,13 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
         private object HandEvaluationResult(object result)
         {
             return support.Reflection.GetProperty(result, "HandEvaluationResult");
+        }
+
+        private object ParseWinningHandShape(string shapeName)
+        {
+            return Enum.Parse(
+                support.Reflection.RequireType(WinningHandShapeTypeName),
+                shapeName);
         }
     }
 }

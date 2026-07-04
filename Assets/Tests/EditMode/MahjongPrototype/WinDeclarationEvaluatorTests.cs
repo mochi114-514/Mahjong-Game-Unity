@@ -56,6 +56,66 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
+        public void EvaluateWithTile_KeepsDetailedStandardAnalysisInResult()
+        {
+            using (WinDeclarationEvaluatorTestDriver driver =
+                WinDeclarationEvaluatorTestDriver.Create())
+            {
+                object result = driver.EvaluateWithTile(
+                    driver.CreateCatalog(),
+                    "2m 3m 1p 2p 3p 4p 5p 6p 7s 8s 9s E E",
+                    "4m",
+                    "Ron");
+
+                Assert.That(driver.IsWinningShape(result), Is.True);
+                Assert.That(driver.HasYaku(result), Is.False);
+                Assert.That(driver.CanDeclareWin(result), Is.False);
+                Assert.That(driver.AnalysisCanWin(result), Is.True);
+                Assert.That(driver.AnalysisStandardDecompositionCount(result), Is.GreaterThan(0));
+                Assert.That(driver.AnalysisStandardWinningInterpretationCount(result), Is.GreaterThan(0));
+                Assert.That(driver.AnalysisHasWaitType(result, "Ryanmen"), Is.True);
+            }
+        }
+
+        [Test]
+        public void EvaluateWithTile_KeepsTankiWaitAnalysisInResult()
+        {
+            using (WinDeclarationEvaluatorTestDriver driver =
+                WinDeclarationEvaluatorTestDriver.Create())
+            {
+                object result = driver.EvaluateWithTile(
+                    driver.CreateCatalog(),
+                    "1m 2m 3m 4m 5m 6m 1p 2p 3p 7s 8s 9s E",
+                    "E",
+                    "Ron");
+
+                Assert.That(driver.IsWinningShape(result), Is.True);
+                Assert.That(driver.CanDeclareWin(result), Is.False);
+                Assert.That(driver.AnalysisHasWaitType(result, "Tanki"), Is.True);
+            }
+        }
+
+        [Test]
+        public void EvaluateWithTile_KeepsNotWinAnalysisWhenShapeIsMissing()
+        {
+            using (WinDeclarationEvaluatorTestDriver driver =
+                WinDeclarationEvaluatorTestDriver.Create())
+            {
+                object result = driver.EvaluateWithTile(
+                    driver.CreateCatalog(),
+                    "1m 2m 3m 1p 2p 3p 1s 2s 3s E S W C",
+                    "5m",
+                    "Ron");
+
+                Assert.That(driver.IsWinningShape(result), Is.False);
+                Assert.That(driver.CanDeclareWin(result), Is.False);
+                Assert.That(driver.WinningHandAnalysis(result), Is.Not.Null);
+                Assert.That(driver.AnalysisCanWin(result), Is.False);
+                Assert.That(driver.AnalysisStandardWinningInterpretationCount(result), Is.EqualTo(0));
+            }
+        }
+
+        [Test]
         public void EvaluateWithTile_ReturnsTrueForRegisteredTanyao()
         {
             using (WinDeclarationEvaluatorTestDriver driver =
@@ -86,6 +146,8 @@ namespace MahjongPrototype.Tests
 
                 AssertCanDeclareWithTotalHan(driver, result, 2);
                 Assert.That(driver.ContainsYaku(result, "SevenPairs"), Is.True);
+                Assert.That(driver.AnalysisSevenPairsIsWin(result), Is.True);
+                Assert.That(driver.AnalysisStandardWinningInterpretationCount(result), Is.EqualTo(0));
             }
         }
 
@@ -105,6 +167,7 @@ namespace MahjongPrototype.Tests
                 Assert.That(driver.HandEvaluationHasYakuman(result), Is.True);
                 Assert.That(driver.HandEvaluationHasYaku(result), Is.True);
                 Assert.That(driver.ContainsYaku(result, "KokushiMusou"), Is.True);
+                Assert.That(driver.AnalysisThirteenOrphansIsWin(result), Is.True);
             }
         }
 
@@ -140,6 +203,21 @@ namespace MahjongPrototype.Tests
 
                 AssertCanDeclareWithTotalHan(driver, result, 1);
                 Assert.That(driver.ContainsYaku(result, "MenzenTsumo"), Is.True);
+            }
+        }
+
+        [Test]
+        public void ExistingConstructors_RemainCompatible()
+        {
+            using (WinDeclarationEvaluatorTestDriver driver =
+                WinDeclarationEvaluatorTestDriver.Create())
+            {
+                Assert.That(driver.CanWinWithTileShapeOnly(
+                    "1m 2m 3m 1p 2p 3p 1s 2s 3s E E E C",
+                    "C"), Is.True);
+                Assert.That(driver.CreateWinDeclarationEvaluatorWithEmptyCatalog(), Is.Not.Null);
+                Assert.That(driver.CreateLegacyHandEvaluationContext(), Is.Not.Null);
+                Assert.That(driver.CreateLegacyWinDeclarationEvaluationResult(), Is.Not.Null);
             }
         }
 

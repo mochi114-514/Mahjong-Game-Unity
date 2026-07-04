@@ -37,7 +37,14 @@ namespace MahjongPrototype.Services
             return analyzer.AnalyzeCompletedHand(tiles).StandardDecompositions.Count > 0;
         }
 
-        private static WinCheckResult ToWinCheckResult(WinningHandAnalysisResult analysisResult)
+        internal WinningHandAnalysisResult AnalyzeWithTileDetailed(
+            IReadOnlyList<Tile> handTiles,
+            Tile winningTile)
+        {
+            return analyzer.AnalyzeWithTile(handTiles, winningTile);
+        }
+
+        internal static WinCheckResult ToWinCheckResult(WinningHandAnalysisResult analysisResult)
         {
             if (analysisResult == null || !analysisResult.CanWin)
                 return WinCheckResult.NotWin;
