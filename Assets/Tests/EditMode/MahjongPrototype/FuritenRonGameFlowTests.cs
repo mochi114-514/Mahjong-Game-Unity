@@ -351,6 +351,7 @@ namespace MahjongPrototype.Tests
             using (FuritenRonTestDriver driver = FuritenRonTestDriver.Create(2))
             {
                 StartNoYakuWinningShapeDiscardFromWest(driver, true);
+                Assert.That(driver.IsSeatTemporaryFuriten("East"), Is.True);
                 driver.DeclareReach("East", driver.TurnIndex);
                 driver.SetCurrentTurn("West");
                 driver.SetDrawnTile("West", "P");
@@ -359,7 +360,6 @@ namespace MahjongPrototype.Tests
 
                 Assert.That(discarded, Is.True);
                 Assert.That(driver.IsWinDecisionPending, Is.False);
-                Assert.That(driver.IsSeatTemporaryFuriten("East"), Is.True);
             }
         }
 
