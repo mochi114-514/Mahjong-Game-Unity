@@ -1,5 +1,6 @@
 using System.Collections;
 using MahjongPrototype.Definitions;
+using MahjongPrototype.Diagnostics;
 using MahjongPrototype.Domain;
 using MahjongPrototype.Notifications;
 using MahjongPrototype.Services;
@@ -138,16 +139,20 @@ namespace MahjongPrototype
 
         private void Awake()
         {
+            FuritenUiLifecycleTrace.LogSnapshot($"GameFlow.Awake.start autoStart={autoStart}", this);
             CacheReferences();
             EnsureCpuTurnController();
             InitializeEvaluators();
             NormalizeParticipantCount();
+            FuritenUiLifecycleTrace.LogSnapshot($"GameFlow.Awake.end autoStart={autoStart}", this);
         }
 
         private void Start()
         {
+            FuritenUiLifecycleTrace.LogSnapshot($"GameFlow.Start.start autoStart={autoStart}", this);
             if (autoStart)
                 StartNewRound();
+            FuritenUiLifecycleTrace.LogSnapshot($"GameFlow.Start.end autoStart={autoStart}", this);
         }
 
         private void OnDisable()
@@ -167,8 +172,10 @@ namespace MahjongPrototype
         [ContextMenu("Prototype/Start New Round")]
         public void StartNewRound()
         {
+            FuritenUiLifecycleTrace.LogSnapshot("GameFlow.StartNewRound.start", this);
             currentWindProgress = WindProgress.East1;
             StartRound(currentWindProgress, true);
+            FuritenUiLifecycleTrace.LogSnapshot("GameFlow.StartNewRound.end", this);
         }
 
         private void StartNextRound()
@@ -189,6 +196,7 @@ namespace MahjongPrototype
 
         private void StartRound(WindProgress windProgress, bool notifyRunStarted)
         {
+            FuritenUiLifecycleTrace.LogSnapshot($"GameFlow.StartRound.start notifyRunStarted={notifyRunStarted}", this);
             currentWindProgress = windProgress;
             CacheReferences();
             EnsureCpuTurnController();
@@ -204,6 +212,7 @@ namespace MahjongPrototype
 
             int? seed = useFixedRandomSeed ? fixedRandomSeed : (int?)null;
             gameState = new MahjongGameState(Wall.CreateStandardShuffled(seed), windProgress);
+            FuritenUiLifecycleTrace.LogSnapshot("GameFlow.StartRound.after-new-state", this);
             SeatId selfSeat = ResolveSelfSeat();
             AssignParticipantsToSeats(selfSeat);
             gameState.RebuildActiveTurnSeatsFromSeatSlots();
@@ -215,6 +224,7 @@ namespace MahjongPrototype
             DealInitialHands();
             NotifyRoundSetupCompleted();
             StartTurn(gameState.CurrentTurn, gameState.TurnIndex);
+            FuritenUiLifecycleTrace.LogSnapshot($"GameFlow.StartRound.end notifyRunStarted={notifyRunStarted}", this);
         }
 
         public void RetryPrototype()

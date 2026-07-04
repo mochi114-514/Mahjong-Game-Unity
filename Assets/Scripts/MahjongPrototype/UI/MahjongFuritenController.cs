@@ -1,4 +1,5 @@
 using TMPro;
+using MahjongPrototype.Diagnostics;
 using UnityEngine;
 
 namespace MahjongPrototype.UI
@@ -21,12 +22,27 @@ namespace MahjongPrototype.UI
 
         private void Awake()
         {
+            FuritenUiLifecycleTrace.LogSetVisible(
+                "FuritenController.Awake.start",
+                this,
+                furitenText != null ? furitenText.gameObject : null,
+                false);
             CacheReferences();
             EnsureTextInitialized();
+            FuritenUiLifecycleTrace.LogSetVisible(
+                "FuritenController.Awake.end",
+                this,
+                furitenText != null ? furitenText.gameObject : null,
+                furitenText != null && furitenText.gameObject.activeSelf);
         }
 
         public void SetVisible(bool visible)
         {
+            FuritenUiLifecycleTrace.LogSetVisible(
+                "FuritenController.SetVisible.start",
+                this,
+                furitenText != null ? furitenText.gameObject : null,
+                visible);
             CacheReferences();
             EnsureTextInitialized();
 
@@ -38,11 +54,26 @@ namespace MahjongPrototype.UI
 
             if (furitenText.gameObject.activeSelf != visible)
                 furitenText.gameObject.SetActive(visible);
+            FuritenUiLifecycleTrace.LogSetVisible(
+                "FuritenController.SetVisible.end",
+                this,
+                furitenText.gameObject,
+                visible);
         }
 
         public void Clear()
         {
+            FuritenUiLifecycleTrace.LogSetVisible(
+                "FuritenController.Clear.start",
+                this,
+                furitenText != null ? furitenText.gameObject : null,
+                false);
             SetVisible(false);
+            FuritenUiLifecycleTrace.LogSetVisible(
+                "FuritenController.Clear.end",
+                this,
+                furitenText != null ? furitenText.gameObject : null,
+                false);
         }
 
         private void CacheReferences()
