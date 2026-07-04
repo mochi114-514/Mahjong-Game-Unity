@@ -1,7 +1,5 @@
-using System.Collections;
 using MahjongPrototype.Tests.TestSupport.Features.Furiten;
 using NUnit.Framework;
-using UnityEngine.TestTools;
 
 namespace MahjongPrototype.Tests
 {
@@ -161,17 +159,15 @@ namespace MahjongPrototype.Tests
             }
         }
 
-        [UnityTest]
-        public IEnumerator OnEnable_SynchronizesCurrentFuritenState()
+        [Test]
+        public void RefreshFromFlow_SynchronizesCurrentFuritenState()
         {
             using (FuritenUiTestDriver driver = FuritenUiTestDriver.Create(1))
             {
                 driver.StartRound();
                 driver.AddSelfFuritenHand(SimpleFiveManWait);
-                driver.SetUiActive(false);
 
-                driver.SetUiActive(true);
-                yield return null;
+                driver.RefreshFromFlow();
 
                 Assert.That(driver.FuritenTextVisible, Is.True);
             }

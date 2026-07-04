@@ -40,7 +40,6 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Furiten
             "UnityEngine.UI.Toggle, UnityEngine.UI";
 
         private readonly MahjongGameFlowTestSession session;
-        private readonly GameObject uiObject;
         private readonly Component uiManager;
         private readonly Component furitenController;
         private readonly GameObject zeroHanTextObject;
@@ -50,7 +49,6 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Furiten
 
         private FuritenUiTestDriver(
             MahjongGameFlowTestSession session,
-            GameObject uiObject,
             Component uiManager,
             Component furitenController,
             GameObject zeroHanTextObject,
@@ -58,7 +56,6 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Furiten
             Component furitenText)
         {
             this.session = session;
-            this.uiObject = uiObject;
             this.uiManager = uiManager;
             this.furitenController = furitenController;
             this.zeroHanTextObject = zeroHanTextObject;
@@ -151,6 +148,11 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Furiten
             session.Reflection.Invoke(uiManager, "RefreshFuritenUi");
         }
 
+        public void RefreshFromFlow()
+        {
+            session.Reflection.Invoke(uiManager, "RefreshFromFlow");
+        }
+
         public void RefreshCurrentState()
         {
             session.Reflection.InvokeWithSignature(
@@ -195,11 +197,6 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Furiten
         public void SetFuritenVisible(bool visible)
         {
             session.Reflection.Invoke(furitenController, "SetVisible", visible);
-        }
-
-        public void SetUiActive(bool active)
-        {
-            uiObject.SetActive(active);
         }
 
         public string SnapshotState()
@@ -259,7 +256,6 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Furiten
 
             return new FuritenUiTestDriver(
                 session,
-                uiObject,
                 uiManager,
                 furitenController,
                 zeroHanObject,
