@@ -6,6 +6,7 @@ namespace MahjongPrototype.Services
     public sealed class WinningHandAnalyzer
     {
         private const int TileTypeCount = 34;
+        private const int BaseHandTileCount = 13;
         private const int WinningHandTileCount = 14;
         private const int FirstHonorTileIndex = 27;
         private const int RanksPerSuit = 9;
@@ -21,7 +22,8 @@ namespace MahjongPrototype.Services
             IReadOnlyList<Tile> handTiles,
             Tile winningTile)
         {
-            if (handTiles == null || !winningTile.IsValid)
+            if (!TryBuildTileCounts(handTiles, BaseHandTileCount, out int[] baseCounts) ||
+                !winningTile.IsValid)
                 return WinningHandAnalysisResult.NotWin;
 
             List<Tile> completedTiles = new List<Tile>(handTiles.Count + 1);
@@ -29,12 +31,26 @@ namespace MahjongPrototype.Services
                 completedTiles.Add(handTiles[i]);
 
             completedTiles.Add(winningTile);
-            return AnalyzeCompletedHand(completedTiles);
+            WinningHandAnalysisResult completedAnalysis = AnalyzeCompletedHand(completedTiles);
+            if (!completedAnalysis.CanWin)
+                return completedAnalysis;
+
+            List<StandardWinningInterpretation> interpretations =
+                AnalyzeStandardWinningInterpretations(
+                    completedAnalysis.StandardDecompositions,
+                    winningTile,
+                    baseCounts);
+
+            return new WinningHandAnalysisResult(
+                completedAnalysis.StandardDecompositions,
+                completedAnalysis.SevenPairsAnalysis,
+                completedAnalysis.ThirteenOrphansAnalysis,
+                interpretations);
         }
 
         public WinningHandAnalysisResult AnalyzeCompletedHand(IReadOnlyList<Tile> tiles)
         {
-            if (!TryBuildTileCounts(tiles, out int[] counts))
+            if (!TryBuildTileCounts(tiles, WinningHandTileCount, out int[] counts))
                 return WinningHandAnalysisResult.NotWin;
 
             List<StandardHandDecomposition> standardDecompositions =
@@ -48,11 +64,14 @@ namespace MahjongPrototype.Services
                 thirteenOrphansAnalysis);
         }
 
-        private static bool TryBuildTileCounts(IReadOnlyList<Tile> tiles, out int[] counts)
+        private static bool TryBuildTileCounts(
+            IReadOnlyList<Tile> tiles,
+            int expectedTileCount,
+            out int[] counts)
         {
             counts = new int[TileTypeCount];
 
-            if (tiles == null || tiles.Count != WinningHandTileCount)
+            if (tiles == null || tiles.Count != expectedTileCount)
                 return false;
 
             for (int i = 0; i < tiles.Count; i++)
@@ -68,6 +87,198 @@ namespace MahjongPrototype.Services
             }
 
             return true;
+        }
+
+        private static List<StandardWinningInterpretation> AnalyzeStandardWinningInterpretations(
+            IReadOnlyList<StandardHandDecomposition> decompositions,
+            Tile winningTile,
+            int[] baseCounts)
+        {
+            List<StandardWinningInterpretation> interpretations =
+                new List<StandardWinningInterpretation>();
+            HashSet<string> seenKeys = new HashSet<string>();
+
+            if (decompositions == null || !winningTile.IsValid)
+                return interpretations;
+
+            for (int i = 0; i < decompositions.Count; i++)
+            {
+                StandardHandDecomposition decomposition = decompositions[i];
+                if (decomposition == null)
+                    continue;
+
+                AddPairWinningInterpretation(
+                    decomposition,
+                    winningTile,
+                    baseCounts,
+                    interpretations,
+                    seenKeys);
+                AddMeldWinningInterpretations(
+                    decomposition,
+                    winningTile,
+                    baseCounts,
+                    interpretations,
+                    seenKeys);
+            }
+
+            return interpretations;
+        }
+
+        private static void AddPairWinningInterpretation(
+            StandardHandDecomposition decomposition,
+            Tile winningTile,
+            int[] baseCounts,
+            List<StandardWinningInterpretation> interpretations,
+            HashSet<string> seenKeys)
+        {
+            if (decomposition.PairTile != winningTile ||
+                !MatchesBaseCountsAfterRemovingWinningTile(decomposition, winningTile, baseCounts))
+            {
+                return;
+            }
+
+            AddStandardWinningInterpretation(
+                decomposition,
+                winningTile,
+                WinningTilePlacement.Pair(),
+                interpretations,
+                seenKeys);
+        }
+
+        private static void AddMeldWinningInterpretations(
+            StandardHandDecomposition decomposition,
+            Tile winningTile,
+            int[] baseCounts,
+            List<StandardWinningInterpretation> interpretations,
+            HashSet<string> seenKeys)
+        {
+            if (!MatchesBaseCountsAfterRemovingWinningTile(decomposition, winningTile, baseCounts))
+                return;
+
+            for (int i = 0; i < decomposition.Melds.Count; i++)
+            {
+                HandMeld meld = decomposition.Melds[i];
+                if (!ContainsTile(meld, winningTile))
+                    continue;
+
+                WaitType waitType = DetermineWaitType(meld, winningTile);
+                if (waitType == WaitType.None)
+                    continue;
+
+                AddStandardWinningInterpretation(
+                    decomposition,
+                    winningTile,
+                    WinningTilePlacement.Meld(i, meld, waitType),
+                    interpretations,
+                    seenKeys);
+            }
+        }
+
+        private static void AddStandardWinningInterpretation(
+            StandardHandDecomposition decomposition,
+            Tile winningTile,
+            WinningTilePlacement placement,
+            List<StandardWinningInterpretation> interpretations,
+            HashSet<string> seenKeys)
+        {
+            string key = BuildWinningInterpretationKey(decomposition, winningTile, placement);
+            if (!seenKeys.Add(key))
+                return;
+
+            interpretations.Add(
+                new StandardWinningInterpretation(
+                    decomposition,
+                    winningTile,
+                    placement));
+        }
+
+        private static bool MatchesBaseCountsAfterRemovingWinningTile(
+            StandardHandDecomposition decomposition,
+            Tile winningTile,
+            int[] baseCounts)
+        {
+            int[] counts = BuildCountsFromDecomposition(decomposition);
+            int winningTypeIndex = winningTile.TypeIndex;
+            if (winningTypeIndex < 0 ||
+                winningTypeIndex >= counts.Length ||
+                counts[winningTypeIndex] <= 0)
+            {
+                return false;
+            }
+
+            counts[winningTypeIndex]--;
+            return CountsEqual(counts, baseCounts);
+        }
+
+        private static int[] BuildCountsFromDecomposition(StandardHandDecomposition decomposition)
+        {
+            int[] counts = new int[TileTypeCount];
+            counts[decomposition.PairTile.TypeIndex] += 2;
+
+            for (int i = 0; i < decomposition.Melds.Count; i++)
+            {
+                HandMeld meld = decomposition.Melds[i];
+                for (int j = 0; j < meld.Tiles.Count; j++)
+                    counts[meld.Tiles[j].TypeIndex]++;
+            }
+
+            return counts;
+        }
+
+        private static bool CountsEqual(int[] left, int[] right)
+        {
+            if (left == null || right == null || left.Length != right.Length)
+                return false;
+
+            for (int i = 0; i < left.Length; i++)
+            {
+                if (left[i] != right[i])
+                    return false;
+            }
+
+            return true;
+        }
+
+        private static bool ContainsTile(HandMeld meld, Tile tile)
+        {
+            if (meld == null)
+                return false;
+
+            for (int i = 0; i < meld.Tiles.Count; i++)
+            {
+                if (meld.Tiles[i] == tile)
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static WaitType DetermineWaitType(HandMeld meld, Tile winningTile)
+        {
+            if (meld.Type == MeldType.Triplet)
+                return WaitType.Shanpon;
+
+            if (meld.Type != MeldType.Sequence ||
+                !winningTile.IsNumberTile ||
+                meld.Tiles.Count != 3 ||
+                meld.Tiles[0].Suit != winningTile.Suit)
+            {
+                return WaitType.None;
+            }
+
+            int startRank = meld.Tiles[0].Rank;
+            int winningRank = winningTile.Rank;
+
+            if (winningRank == startRank + 1)
+                return WaitType.Kanchan;
+
+            if ((startRank == 1 && winningRank == 3) ||
+                (startRank == 7 && winningRank == 7))
+            {
+                return WaitType.Penchan;
+            }
+
+            return WaitType.Ryanmen;
         }
 
         private static List<StandardHandDecomposition> AnalyzeStandardHandDecompositions(
@@ -250,6 +461,33 @@ namespace MahjongPrototype.Services
 
             meldKeys.Sort(System.StringComparer.Ordinal);
             return pairIndex + "|" + string.Join("|", meldKeys.ToArray());
+        }
+
+        private static string BuildDecompositionKey(StandardHandDecomposition decomposition)
+        {
+            return BuildDecompositionKey(
+                decomposition.PairTile.TypeIndex,
+                decomposition.Melds);
+        }
+
+        private static string BuildWinningInterpretationKey(
+            StandardHandDecomposition decomposition,
+            Tile winningTile,
+            WinningTilePlacement placement)
+        {
+            string targetKey = placement.Type == WinningTilePlacementType.Pair
+                ? "P" + decomposition.PairTile.TypeIndex
+                : BuildMeldKey(placement.TargetMeld);
+
+            return BuildDecompositionKey(decomposition) +
+                   "|" +
+                   winningTile.TypeIndex +
+                   "|" +
+                   placement.Type +
+                   "|" +
+                   targetKey +
+                   "|" +
+                   placement.WaitType;
         }
 
         private static string BuildMeldKey(HandMeld meld)

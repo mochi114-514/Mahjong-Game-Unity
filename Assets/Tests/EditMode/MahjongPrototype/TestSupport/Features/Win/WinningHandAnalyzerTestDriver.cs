@@ -79,6 +79,11 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
             return dataFactory.CreateTileArrayFromText(handText);
         }
 
+        public object CreateTile(string tileCode)
+        {
+            return dataFactory.CreateTile(tileCode);
+        }
+
         public object CreateTiles(string handText, int length)
         {
             string[] codes = MahjongTileTextParser.ParseTileCodes(handText);
@@ -109,14 +114,29 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
             return reflection.GetProperty(analysisResult, "StandardDecompositions");
         }
 
+        public object StandardWinningInterpretations(object analysisResult)
+        {
+            return reflection.GetProperty(analysisResult, "StandardWinningInterpretations");
+        }
+
         public int StandardDecompositionCount(object analysisResult)
         {
             return collections.Count(StandardDecompositions(analysisResult));
         }
 
+        public int StandardWinningInterpretationCount(object analysisResult)
+        {
+            return collections.Count(StandardWinningInterpretations(analysisResult));
+        }
+
         public object StandardDecompositionAt(object analysisResult, int index)
         {
             return collections.Item(StandardDecompositions(analysisResult), index);
+        }
+
+        public object StandardWinningInterpretationAt(object analysisResult, int index)
+        {
+            return collections.Item(StandardWinningInterpretations(analysisResult), index);
         }
 
         public object FirstStandardDecomposition(object analysisResult)
@@ -148,6 +168,96 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
 
             keys.Sort(StringComparer.Ordinal);
             return keys.ToArray();
+        }
+
+        public string InterpretationWinningTileCode(object interpretation)
+        {
+            return TileCode(reflection.GetProperty(interpretation, "WinningTile"));
+        }
+
+        public string InterpretationWaitTypeName(object interpretation)
+        {
+            return reflection.GetProperty(interpretation, "WaitType").ToString();
+        }
+
+        public object InterpretationDecomposition(object interpretation)
+        {
+            return reflection.GetProperty(interpretation, "Decomposition");
+        }
+
+        public object InterpretationPlacement(object interpretation)
+        {
+            return reflection.GetProperty(interpretation, "Placement");
+        }
+
+        public string PlacementTypeName(object interpretation)
+        {
+            return reflection.GetProperty(InterpretationPlacement(interpretation), "Type").ToString();
+        }
+
+        public string PlacementWaitTypeName(object interpretation)
+        {
+            return reflection.GetProperty(InterpretationPlacement(interpretation), "WaitType").ToString();
+        }
+
+        public int PlacementTargetMeldIndex(object interpretation)
+        {
+            return (int)reflection.GetProperty(InterpretationPlacement(interpretation), "TargetMeldIndex");
+        }
+
+        public object PlacementTargetMeld(object interpretation)
+        {
+            return reflection.GetProperty(InterpretationPlacement(interpretation), "TargetMeld");
+        }
+
+        public string PlacementTargetMeldTypeName(object interpretation)
+        {
+            object targetMeld = PlacementTargetMeld(interpretation);
+            return targetMeld == null
+                ? string.Empty
+                : reflection.GetProperty(targetMeld, "Type").ToString();
+        }
+
+        public string PlacementTargetMeldKey(object interpretation)
+        {
+            object targetMeld = PlacementTargetMeld(interpretation);
+            return targetMeld == null ? string.Empty : MeldKey(targetMeld);
+        }
+
+        public object PlacementTargetMeldTiles(object interpretation)
+        {
+            return reflection.GetProperty(PlacementTargetMeld(interpretation), "Tiles");
+        }
+
+        public string[] StandardWinningInterpretationKeys(object analysisResult)
+        {
+            object interpretations = StandardWinningInterpretations(analysisResult);
+            List<string> keys = new List<string>();
+            for (int i = 0; i < collections.Count(interpretations); i++)
+                keys.Add(StandardWinningInterpretationKey(collections.Item(interpretations, i)));
+
+            keys.Sort(StringComparer.Ordinal);
+            return keys.ToArray();
+        }
+
+        public string StandardWinningInterpretationKey(object interpretation)
+        {
+            object decomposition = InterpretationDecomposition(interpretation);
+            string targetKey = PlacementTypeName(interpretation) == "Pair"
+                ? "Pair:" + PairTileCode(decomposition)
+                : PlacementTargetMeldKey(interpretation);
+
+            return PairTileCode(decomposition) +
+                   "|" +
+                   string.Join("|", MeldKeys(decomposition)) +
+                   "|" +
+                   InterpretationWinningTileCode(interpretation) +
+                   "|" +
+                   PlacementTypeName(interpretation) +
+                   "|" +
+                   targetKey +
+                   "|" +
+                   InterpretationWaitTypeName(interpretation);
         }
 
         public object SevenPairsAnalysis(object analysisResult)
