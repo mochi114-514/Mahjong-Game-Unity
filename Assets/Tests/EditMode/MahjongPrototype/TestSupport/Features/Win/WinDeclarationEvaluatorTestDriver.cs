@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Reflection;
 
 namespace MahjongPrototype.Tests.TestSupport.Features.Win
 {
@@ -12,6 +14,8 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
             "MahjongPrototype.Domain.WinDeclarationEvaluationResult, Assembly-CSharp";
         private const string WinningHandShapeTypeName =
             "MahjongPrototype.Domain.WinningHandShape, Assembly-CSharp";
+        private const string EvaluatedYakuTypeName =
+            "MahjongPrototype.Domain.EvaluatedYaku, Assembly-CSharp";
 
         private readonly WinFeatureTestSupport support;
         private bool disposed;
@@ -106,6 +110,116 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
             return support.ContainsYaku(HandEvaluationResult(result), yakuKindName);
         }
 
+        public object CandidateResultsCollection(object result)
+        {
+            return support.Reflection.GetProperty(HandEvaluationResult(result), "CandidateResults");
+        }
+
+        public int CandidateResultCount(object result)
+        {
+            return support.Collections.Count(CandidateResultsCollection(result));
+        }
+
+        public object CandidateResultAt(object result, int index)
+        {
+            return support.Collections.Item(CandidateResultsCollection(result), index);
+        }
+
+        public int CountCandidatesOfType(object result, string typeName)
+        {
+            object candidateResults = CandidateResultsCollection(result);
+            int count = support.Collections.Count(candidateResults);
+            int matchingCount = 0;
+
+            for (int i = 0; i < count; i++)
+            {
+                if (CandidateTypeName(support.Collections.Item(candidateResults, i)) == typeName)
+                    matchingCount++;
+            }
+
+            return matchingCount;
+        }
+
+        public string CandidateTypeName(object candidateResult)
+        {
+            return support.Reflection.GetProperty(Candidate(candidateResult), "Type").ToString();
+        }
+
+        public bool CandidateHasStandardInterpretation(object candidateResult)
+        {
+            return support.Reflection.GetProperty(
+                Candidate(candidateResult),
+                "StandardInterpretation") != null;
+        }
+
+        public bool CandidateSevenPairsIsWin(object candidateResult)
+        {
+            object analysis = support.Reflection.GetProperty(
+                Candidate(candidateResult),
+                "SevenPairsAnalysis");
+            return analysis != null && (bool)support.Reflection.GetProperty(analysis, "IsWin");
+        }
+
+        public bool CandidateThirteenOrphansIsWin(object candidateResult)
+        {
+            object analysis = support.Reflection.GetProperty(
+                Candidate(candidateResult),
+                "ThirteenOrphansAnalysis");
+            return analysis != null && (bool)support.Reflection.GetProperty(analysis, "IsWin");
+        }
+
+        public bool CandidateHasYaku(object candidateResult)
+        {
+            return (bool)support.Reflection.GetProperty(candidateResult, "HasYaku");
+        }
+
+        public bool CandidateHasYakuman(object candidateResult)
+        {
+            return (bool)support.Reflection.GetProperty(candidateResult, "HasYakuman");
+        }
+
+        public int CandidateTotalHan(object candidateResult)
+        {
+            return (int)support.Reflection.GetProperty(candidateResult, "TotalHan");
+        }
+
+        public object CandidateYakus(object candidateResult)
+        {
+            return support.Reflection.GetProperty(candidateResult, "Yakus");
+        }
+
+        public int CandidateYakuCount(object candidateResult)
+        {
+            return support.Collections.Count(CandidateYakus(candidateResult));
+        }
+
+        public object CandidateYakuAt(object candidateResult, int index)
+        {
+            return support.Collections.Item(CandidateYakus(candidateResult), index);
+        }
+
+        public bool CandidateContainsYaku(object candidateResult, string yakuKindName)
+        {
+            object yakus = CandidateYakus(candidateResult);
+            int count = support.Collections.Count(yakus);
+
+            for (int i = 0; i < count; i++)
+            {
+                object yaku = support.Collections.Item(yakus, i);
+                if (support.Reflection.GetProperty(yaku, "Kind").ToString() == yakuKindName)
+                    return true;
+            }
+
+            return false;
+        }
+
+        public bool CandidatePropertyCanWrite(object candidateResult, string propertyName)
+        {
+            object candidate = Candidate(candidateResult);
+            PropertyInfo property = candidate.GetType().GetProperty(propertyName);
+            return property != null && property.CanWrite;
+        }
+
         public object WinningHandAnalysis(object result)
         {
             return support.Reflection.GetProperty(result, "WinningHandAnalysis");
@@ -198,6 +312,17 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
                 handEvaluationResult);
         }
 
+        public object CreateLegacyHandEvaluationResult()
+        {
+            Type evaluatedYakuType = support.Reflection.RequireType(EvaluatedYakuTypeName);
+            Type listType = typeof(List<>).MakeGenericType(evaluatedYakuType);
+            object yakus = Activator.CreateInstance(listType);
+
+            return support.Reflection.CreateInstance(
+                support.Reflection.RequireType(HandEvaluationResultTypeName),
+                yakus);
+        }
+
         public object CreateWinDeclarationEvaluatorWithEmptyCatalog()
         {
             return support.CreateWinDeclarationEvaluator(support.CreateYakuCatalog());
@@ -212,9 +337,20 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
             support.Dispose();
         }
 
-        private object HandEvaluationResult(object result)
+        private object Candidate(object candidateResult)
         {
-            return support.Reflection.GetProperty(result, "HandEvaluationResult");
+            return support.Reflection.GetProperty(candidateResult, "Candidate");
+        }
+
+        private static object HandEvaluationResult(object result)
+        {
+            if (result == null)
+                return null;
+
+            PropertyInfo property = result.GetType().GetProperty(
+                "HandEvaluationResult",
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            return property == null ? result : property.GetValue(result);
         }
 
         private object ParseWinningHandShape(string shapeName)
