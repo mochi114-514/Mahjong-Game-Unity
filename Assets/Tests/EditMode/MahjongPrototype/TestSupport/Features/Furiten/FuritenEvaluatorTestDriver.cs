@@ -50,7 +50,9 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Furiten
 
         public void AssignHandText(object gameState, string seatName, string handText)
         {
-            AssignHand(gameState, seatName, SplitCodes(handText));
+            dataFactory.AddHandTilesFromText(
+                dataFactory.GetPlayerSeat(gameState, seatName),
+                handText);
         }
 
         public void AddHandTile(object gameState, string seatName, object tile)
@@ -205,9 +207,5 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Furiten
                 reflection.GetProperty(playerSeat, "ReachDeclaredTurnIndex");
         }
 
-        private static string[] SplitCodes(string handText)
-        {
-            return handText.Split(new[] { ' ' }, System.StringSplitOptions.RemoveEmptyEntries);
-        }
     }
 }

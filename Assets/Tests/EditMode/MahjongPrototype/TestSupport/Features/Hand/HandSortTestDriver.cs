@@ -27,7 +27,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Hand
 
         public object CreateHand(string handText)
         {
-            return dataFactory.CreateHand(SplitCodes(handText));
+            return dataFactory.CreateHandFromText(handText);
         }
 
         public object CreateEmptyHand()
@@ -70,10 +70,5 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Hand
             return (Array)reflection.Invoke(hand, "GetTiles");
         }
 
-        private static string[] SplitCodes(string handText)
-        {
-            return handText.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-        }
     }
 }
-

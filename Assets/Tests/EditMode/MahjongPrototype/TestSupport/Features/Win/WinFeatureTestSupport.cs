@@ -50,7 +50,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
 
         public object CreateTiles(string handText)
         {
-            return DataFactory.CreateTileArray(SplitCodes(handText));
+            return DataFactory.CreateTileArrayFromText(handText);
         }
 
         public object CreateWinChecker()
@@ -178,11 +178,5 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
                 ownedCatalogs.Add(unityObject);
         }
 
-        public static string[] SplitCodes(string handText)
-        {
-            return handText.Split(
-                new[] { ' ' },
-                StringSplitOptions.RemoveEmptyEntries);
-        }
     }
 }

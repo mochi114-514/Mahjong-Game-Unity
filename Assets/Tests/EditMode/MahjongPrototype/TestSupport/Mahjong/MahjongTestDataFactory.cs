@@ -70,6 +70,21 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
             return hand;
         }
 
+        public Array CreateTileArrayFromText(string tileText)
+        {
+            return CreateTileArray(MahjongTileTextParser.ParseTileCodes(tileText));
+        }
+
+        public object CreateHandFromText(string tileText)
+        {
+            return CreateHand(MahjongTileTextParser.ParseTileCodes(tileText));
+        }
+
+        public void AddHandTilesFromText(object playerSeat, string tileText)
+        {
+            AddHandTiles(playerSeat, MahjongTileTextParser.ParseTileCodes(tileText));
+        }
+
         public object CreatePlayerSeat(string seatName)
         {
             return reflection.CreateInstance(types.PlayerSeat, ParseSeat(seatName));

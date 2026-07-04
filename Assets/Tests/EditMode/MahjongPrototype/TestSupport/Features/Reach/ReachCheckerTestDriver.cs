@@ -1,4 +1,3 @@
-using System;
 using MahjongPrototype.Tests.TestSupport.Core;
 using MahjongPrototype.Tests.TestSupport.Mahjong;
 
@@ -46,7 +45,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
             return reflection.Invoke(
                 reachChecker,
                 "CheckReach",
-                CreateTiles(handText),
+                dataFactory.CreateTileArrayFromText(handText),
                 dataFactory.CreateTile(drawnTileCode));
         }
 
@@ -55,7 +54,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
             return reflection.Invoke(
                 reachChecker,
                 "CheckReach",
-                CreateTiles(handText),
+                dataFactory.CreateTileArrayFromText(handText),
                 dataFactory.CreateInvalidTile());
         }
 
@@ -92,19 +91,9 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
             return (int)reflection.GetProperty(candidate, "HandIndex");
         }
 
-        private object CreateTiles(string handText)
-        {
-            return dataFactory.CreateTileArray(SplitCodes(handText));
-        }
-
         private object Candidates(object result)
         {
             return reflection.GetProperty(result, "Candidates");
-        }
-
-        private static string[] SplitCodes(string handText)
-        {
-            return handText.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
         }
     }
 }

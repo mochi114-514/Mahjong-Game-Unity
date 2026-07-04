@@ -76,12 +76,12 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
 
         public object CreateTiles(string handText)
         {
-            return dataFactory.CreateTileArray(WinFeatureTestSupport.SplitCodes(handText));
+            return dataFactory.CreateTileArrayFromText(handText);
         }
 
         public object CreateTiles(string handText, int length)
         {
-            string[] codes = WinFeatureTestSupport.SplitCodes(handText);
+            string[] codes = MahjongTileTextParser.ParseTileCodes(handText);
             Array tiles = Array.CreateInstance(types.Tile, length);
             for (int i = 0; i < codes.Length; i++)
                 tiles.SetValue(dataFactory.CreateTile(codes[i]), i);

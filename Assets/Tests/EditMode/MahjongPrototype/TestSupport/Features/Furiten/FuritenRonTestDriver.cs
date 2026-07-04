@@ -20,10 +20,8 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Furiten
             CollectionTestAccess collections = new CollectionTestAccess(reflection);
             MahjongTestTypes types = new MahjongTestTypes(reflection);
             MahjongTestDataFactory dataFactory = new MahjongTestDataFactory(reflection, types);
-            object catalog = dataFactory.CreateYakuCatalog(
-                dataFactory.CreateYakuDefinition("MenzenTsumo", "One", "None"),
-                dataFactory.CreateYakuDefinition("Reach", "One", "None"),
-                dataFactory.CreateYakuDefinition("Tanyao", "One", "One"));
+            object catalog =
+                MahjongTestCatalogFactory.CreateStandardGameFlowYakuCatalog(dataFactory);
 
             MahjongGameFlowTestOptions options = new MahjongGameFlowTestOptions
             {
