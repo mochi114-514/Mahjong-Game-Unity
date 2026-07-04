@@ -154,6 +154,7 @@ namespace MahjongPrototype.Tests
             using (FuritenRonTestDriver driver = FuritenRonTestDriver.Create(2))
             {
                 StartRonDecisionFromWest(driver, true);
+                driver.SetSeatParticipantType("West", "LocalHuman");
                 driver.RequestDeclineWin();
                 DeclinePendingWinIfAny(driver);
                 driver.SetCurrentTurn("West");
@@ -277,6 +278,7 @@ namespace MahjongPrototype.Tests
             using (FuritenRonTestDriver driver = FuritenRonTestDriver.Create(2))
             {
                 StartRonDecisionFromWest(driver, false);
+                driver.SetSeatParticipantType("West", "LocalHuman");
                 driver.RequestDeclineWin();
                 driver.SetCurrentTurn("East");
                 Assert.That(driver.DrawTileForSeat("East", "9m"), Is.True);
