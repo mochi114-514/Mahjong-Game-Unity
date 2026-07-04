@@ -1,5 +1,6 @@
 using System;
 using MahjongPrototype.Tests.TestSupport.Core;
+using MahjongPrototype.Tests.TestSupport.Unity;
 using UnityEngine;
 using UnityEngine.TestTools;
 using UnityEngine.UI;
@@ -12,6 +13,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
             "MahjongPrototype.UI.MahjongReachDecisionController, Assembly-CSharp";
 
         private readonly ReflectionTestAccess reflection;
+        private readonly UnityObjectTestOwner owner;
         private readonly Type controllerType;
         private readonly GameObject root;
         private GameObject controllerHost;
@@ -24,11 +26,13 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
 
         private MahjongReachDecisionControllerTestDriver(
             ReflectionTestAccess reflection,
+            UnityObjectTestOwner owner,
             Type controllerType)
         {
             this.reflection = reflection;
+            this.owner = owner;
             this.controllerType = controllerType;
-            root = new GameObject("MahjongReachDecisionControllerTestDriver");
+            root = owner.Own(new GameObject("MahjongReachDecisionControllerTestDriver"));
         }
 
         public static MahjongReachDecisionControllerTestDriver Create()
@@ -36,6 +40,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
             ReflectionTestAccess reflection = new ReflectionTestAccess();
             return new MahjongReachDecisionControllerTestDriver(
                 reflection,
+                new UnityObjectTestOwner(),
                 reflection.RequireType(ControllerTypeName));
         }
 
@@ -97,9 +102,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
                 return;
 
             disposed = true;
-
-            if (root != null)
-                UnityEngine.Object.DestroyImmediate(root);
+            owner.Dispose();
         }
 
         private Component Controller

@@ -1,6 +1,7 @@
 using System;
 using MahjongPrototype.Tests.TestSupport.Core;
 using MahjongPrototype.Tests.TestSupport.Mahjong;
+using MahjongPrototype.Tests.TestSupport.Unity;
 using UnityEngine;
 
 namespace MahjongPrototype.Tests.TestSupport.Features.TableCenterText
@@ -14,6 +15,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.TableCenterText
 
         private readonly ReflectionTestAccess reflection;
         private readonly MahjongTestDataFactory dataFactory;
+        private readonly UnityObjectTestOwner owner;
         private readonly GameObject root;
         private readonly Component presenter;
         private readonly Component windProgressText;
@@ -22,12 +24,14 @@ namespace MahjongPrototype.Tests.TestSupport.Features.TableCenterText
         private MahjongTableCenterTextPresenterTestDriver(
             ReflectionTestAccess reflection,
             MahjongTestDataFactory dataFactory,
+            UnityObjectTestOwner owner,
             GameObject root,
             Component presenter,
             Component windProgressText)
         {
             this.reflection = reflection;
             this.dataFactory = dataFactory;
+            this.owner = owner;
             this.root = root;
             this.presenter = presenter;
             this.windProgressText = windProgressText;
@@ -38,7 +42,8 @@ namespace MahjongPrototype.Tests.TestSupport.Features.TableCenterText
             ReflectionTestAccess reflection = new ReflectionTestAccess();
             MahjongTestTypes types = new MahjongTestTypes(reflection);
             MahjongTestDataFactory dataFactory = new MahjongTestDataFactory(reflection, types);
-            GameObject root = new GameObject("MahjongTableCenterTextPresenterTest");
+            UnityObjectTestOwner owner = new UnityObjectTestOwner();
+            GameObject root = owner.Own(new GameObject("MahjongTableCenterTextPresenterTest"));
 
             try
             {
@@ -52,13 +57,14 @@ namespace MahjongPrototype.Tests.TestSupport.Features.TableCenterText
                 return new MahjongTableCenterTextPresenterTestDriver(
                     reflection,
                     dataFactory,
+                    owner,
                     root,
                     presenter,
                     windProgressText);
             }
             catch
             {
-                UnityEngine.Object.DestroyImmediate(root);
+                owner.Dispose();
                 throw;
             }
         }
@@ -84,9 +90,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.TableCenterText
                 return;
 
             disposed = true;
-
-            if (root != null)
-                UnityEngine.Object.DestroyImmediate(root);
+            owner.Dispose();
         }
 
         private static Component AssignAllTextReferences(

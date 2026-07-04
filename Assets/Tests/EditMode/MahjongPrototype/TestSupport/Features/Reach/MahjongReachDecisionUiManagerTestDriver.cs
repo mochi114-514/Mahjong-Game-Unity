@@ -1,5 +1,6 @@
 using System;
 using MahjongPrototype.Tests.TestSupport.Core;
+using MahjongPrototype.Tests.TestSupport.Unity;
 using UnityEngine;
 using UnityEngine.TestTools;
 
@@ -13,6 +14,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
             "MahjongPrototype.UI.MahjongPrototypeUiManager, Assembly-CSharp";
 
         private readonly ReflectionTestAccess reflection;
+        private readonly UnityObjectTestOwner owner;
         private readonly Type controllerType;
         private readonly Type uiManagerType;
         private readonly GameObject root;
@@ -25,14 +27,16 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
 
         private MahjongReachDecisionUiManagerTestDriver(
             ReflectionTestAccess reflection,
+            UnityObjectTestOwner owner,
             Type controllerType,
             Type uiManagerType)
         {
             this.reflection = reflection;
+            this.owner = owner;
             this.controllerType = controllerType;
             this.uiManagerType = uiManagerType;
 
-            root = new GameObject("MahjongReachDecisionUiManagerTestDriver");
+            root = owner.Own(new GameObject("MahjongReachDecisionUiManagerTestDriver"));
             uiObject = new GameObject("MahjongUiManager");
             uiObject.transform.SetParent(root.transform);
             uiObject.SetActive(false);
@@ -44,6 +48,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
             ReflectionTestAccess reflection = new ReflectionTestAccess();
             return new MahjongReachDecisionUiManagerTestDriver(
                 reflection,
+                new UnityObjectTestOwner(),
                 reflection.RequireType(ControllerTypeName),
                 reflection.RequireType(UiManagerTypeName));
         }
@@ -107,9 +112,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
 
             disposed = true;
             flowSupport?.Dispose();
-
-            if (root != null)
-                UnityEngine.Object.DestroyImmediate(root);
+            owner.Dispose();
         }
 
         private void EnsureDecisionArea()

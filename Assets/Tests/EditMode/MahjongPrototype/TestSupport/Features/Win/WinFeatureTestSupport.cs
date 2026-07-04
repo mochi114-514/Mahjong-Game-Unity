@@ -1,8 +1,7 @@
 using System;
-using System.Collections.Generic;
 using MahjongPrototype.Tests.TestSupport.Core;
 using MahjongPrototype.Tests.TestSupport.Mahjong;
-using UnityEngine;
+using MahjongPrototype.Tests.TestSupport.Unity;
 
 namespace MahjongPrototype.Tests.TestSupport.Features.Win
 {
@@ -19,7 +18,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
         private const string WinDeclarationEvaluationContextTypeName =
             "MahjongPrototype.Domain.WinDeclarationEvaluationContext, Assembly-CSharp";
 
-        private readonly List<UnityEngine.Object> ownedCatalogs = new List<UnityEngine.Object>();
+        private readonly UnityObjectTestOwner owner = new UnityObjectTestOwner();
         private bool disposed;
 
         private WinFeatureTestSupport(
@@ -120,7 +119,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
         public object CreateYakuCatalog(params object[] definitions)
         {
             object catalog = DataFactory.CreateYakuCatalog(definitions);
-            RegisterOwnedCatalog(catalog);
+            owner.Register(catalog);
             return catalog;
         }
 
@@ -161,22 +160,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
                 return;
 
             disposed = true;
-
-            for (int i = 0; i < ownedCatalogs.Count; i++)
-            {
-                if (ownedCatalogs[i] != null)
-                    UnityEngine.Object.DestroyImmediate(ownedCatalogs[i]);
-            }
-
-            ownedCatalogs.Clear();
+            owner.Dispose();
         }
-
-        private void RegisterOwnedCatalog(object catalog)
-        {
-            UnityEngine.Object unityObject = catalog as UnityEngine.Object;
-            if (unityObject != null && !ownedCatalogs.Contains(unityObject))
-                ownedCatalogs.Add(unityObject);
-        }
-
     }
 }

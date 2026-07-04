@@ -1,13 +1,13 @@
 using System;
-using System.Collections.Generic;
 using MahjongPrototype.Tests.TestSupport.Core;
+using MahjongPrototype.Tests.TestSupport.Unity;
 using UnityEngine;
 
 namespace MahjongPrototype.Tests.TestSupport.Mahjong
 {
     internal sealed class MahjongGameFlowTestHarness : IDisposable
     {
-        private readonly List<UnityEngine.Object> ownedScriptableObjects = new List<UnityEngine.Object>();
+        private readonly UnityObjectTestOwner owner = new UnityObjectTestOwner();
         private bool disposed;
 
         private MahjongGameFlowTestHarness(
@@ -22,12 +22,20 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
             Types = types;
             DataFactory = dataFactory;
 
-            Root = new GameObject(options.RootName ?? "MahjongGameFlowTestHarness");
-            if (options.AddEventNotifier)
-                EventNotifier = Root.AddComponent(types.MahjongEventNotifier);
+            try
+            {
+                Root = owner.Own(new GameObject(options.RootName ?? "MahjongGameFlowTestHarness"));
+                if (options.AddEventNotifier)
+                    EventNotifier = Root.AddComponent(types.MahjongEventNotifier);
 
-            GameFlow = Root.AddComponent(types.MahjongGameFlow);
-            ApplyOptions(options);
+                GameFlow = Root.AddComponent(types.MahjongGameFlow);
+                ApplyOptions(options);
+            }
+            catch
+            {
+                owner.Dispose();
+                throw;
+            }
         }
 
         public GameObject Root { get; }
@@ -66,9 +74,7 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
 
         public void RegisterOwnedScriptableObject(object scriptableObject)
         {
-            UnityEngine.Object unityObject = scriptableObject as UnityEngine.Object;
-            if (unityObject != null && !ownedScriptableObjects.Contains(unityObject))
-                ownedScriptableObjects.Add(unityObject);
+            owner.Register(scriptableObject);
         }
 
         public void Dispose()
@@ -77,17 +83,7 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
                 return;
 
             disposed = true;
-
-            for (int i = 0; i < ownedScriptableObjects.Count; i++)
-            {
-                if (ownedScriptableObjects[i] != null)
-                    UnityEngine.Object.DestroyImmediate(ownedScriptableObjects[i]);
-            }
-
-            ownedScriptableObjects.Clear();
-
-            if (Root != null)
-                UnityEngine.Object.DestroyImmediate(Root);
+            owner.Dispose();
         }
 
         private void ApplyOptions(MahjongGameFlowTestOptions options)
