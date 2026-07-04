@@ -6,12 +6,12 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Furiten
 {
     internal sealed class FuritenRonTestDriver : IDisposable
     {
-        private readonly MahjongGameFlowTestHarness flow;
+        private readonly MahjongGameFlowTestSession session;
         private bool disposed;
 
-        private FuritenRonTestDriver(MahjongGameFlowTestHarness flow)
+        private FuritenRonTestDriver(MahjongGameFlowTestSession session)
         {
-            this.flow = flow;
+            this.session = session;
         }
 
         public static FuritenRonTestDriver Create(int participantCount)
@@ -40,71 +40,68 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Furiten
                 YakuDefinitionCatalog = catalog
             };
 
-            MahjongGameFlowTestHarness flow = MahjongGameFlowTestHarness.Create(
+            MahjongGameFlowTestSession session = MahjongGameFlowTestSession.Create(
                 options,
                 reflection,
                 collections,
                 types,
                 dataFactory);
-            flow.RegisterOwnedScriptableObject(catalog);
-            return new FuritenRonTestDriver(flow);
+            session.RegisterOwnedScriptableObject(catalog);
+            return new FuritenRonTestDriver(session);
         }
 
-        public object CurrentState => flow.CurrentState;
+        public object CurrentState => session.CurrentState;
 
         public void StartRound()
         {
-            flow.StartRound();
+            Commands.StartNewRound();
         }
 
         public void SetHand(string seatName, params string[] tileCodes)
         {
-            flow.DataFactory.AddHandTiles(flow.GetPlayerSeat(seatName), tileCodes);
+            session.DataFactory.AddHandTiles(Query.GetPlayerSeat(seatName), tileCodes);
         }
 
         public void AddDiscard(string seatName, string tileCode, int turnIndex)
         {
-            flow.DataFactory.AddDiscard(CurrentState, seatName, tileCode, turnIndex);
+            session.DataFactory.AddDiscard(CurrentState, seatName, tileCode, turnIndex);
         }
 
         public void SetDrawnTile(string seatName, string tileCode)
         {
-            flow.DataFactory.SetDrawnTile(CurrentState, seatName, tileCode);
+            session.DataFactory.SetDrawnTile(CurrentState, seatName, tileCode);
         }
 
         public void SetCurrentTurn(string seatName)
         {
-            flow.SetCurrentTurn(seatName);
+            session.DataFactory.SetCurrentTurn(CurrentState, seatName);
         }
 
         public void SetSeatParticipantType(string seatName, string participantTypeName)
         {
-            flow.DataFactory.SetParticipantType(CurrentState, seatName, participantTypeName);
+            session.DataFactory.SetParticipantType(CurrentState, seatName, participantTypeName);
         }
 
         public bool DiscardDrawnTile(string seatName)
         {
-            return (bool)flow.Reflection.Invoke(
-                flow.GameFlow,
-                "TryRequestDiscardDrawnTileForSeat",
-                flow.DataFactory.ParseSeat(seatName));
+            return Commands.TryRequestDiscardDrawnTileForSeat(seatName);
         }
 
         public void DrawSelfTile(string tileCode)
         {
-            flow.Reflection.Invoke(flow.GameFlow, "RequestForceDrawSkill", tileCode);
-            flow.Reflection.Invoke(flow.GameFlow, "RequestDraw");
+            Commands.RequestForceDrawSkill(tileCode);
+            Commands.RequestDraw();
         }
 
         public object EvaluateAllFuriten()
         {
-            return flow.Reflection.Invoke(flow.GameFlow, "EvaluateAllFuriten");
+            return session.Reflection.Invoke(session.GameFlow, "EvaluateAllFuriten");
         }
 
         public bool TryGetSeatResult(object resultSet, string seatName, out object result)
         {
-            object[] args = { flow.DataFactory.ParseSeat(seatName), null };
-            bool found = (bool)flow.Reflection.Invoke(resultSet, "TryGet", args);
+            object[] args = { session.DataFactory.ParseSeat(seatName), null };
+            bool found = (bool)session.Reflection.Invoke(resultSet, "TryGet", args);
             result = args[1];
             return found;
         }
@@ -113,65 +110,44 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Furiten
         {
             object resultSet = EvaluateAllFuriten();
             NUnit.Framework.Assert.That(TryGetSeatResult(resultSet, seatName, out object result), NUnit.Framework.Is.True);
-            return (bool)flow.Reflection.GetProperty(result, "IsDiscardFuriten");
+            return (bool)session.Reflection.GetProperty(result, "IsDiscardFuriten");
         }
 
         public bool IsSeatFuriten(string seatName)
         {
             object resultSet = EvaluateAllFuriten();
             NUnit.Framework.Assert.That(TryGetSeatResult(resultSet, seatName, out object result), NUnit.Framework.Is.True);
-            return (bool)flow.Reflection.GetProperty(result, "IsFuriten");
+            return (bool)session.Reflection.GetProperty(result, "IsFuriten");
         }
 
         public int ResultCount(object resultSet)
         {
-            return (int)flow.Reflection.GetProperty(resultSet, "Count");
+            return (int)session.Reflection.GetProperty(resultSet, "Count");
         }
 
-        public bool IsWinDecisionPending => (bool)flow.Reflection.GetProperty(CurrentState, "IsWinDecisionPending");
+        public bool IsWinDecisionPending => Query.IsWinDecisionPending;
 
-        public string WinDecisionType
-        {
-            get
-            {
-                object value = flow.Reflection.GetProperty(CurrentState, "WinDecisionType");
-                return value == null ? null : value.ToString();
-            }
-        }
+        public string WinDecisionType => Query.WinDecisionTypeNameOrNull;
 
-        public string WinDecisionSeat
-        {
-            get
-            {
-                object value = flow.Reflection.GetProperty(CurrentState, "WinDecisionSeat");
-                return value == null ? null : value.ToString();
-            }
-        }
+        public string WinDecisionSeat => Query.WinDecisionSeatNameOrNull;
 
-        public string WinSourceSeat
-        {
-            get
-            {
-                object value = flow.Reflection.GetProperty(CurrentState, "WinSourceSeat");
-                return value == null ? null : value.ToString();
-            }
-        }
+        public string WinSourceSeat => Query.WinSourceSeatNameOrNull;
 
-        public string CurrentTurn => flow.Reflection.GetProperty(CurrentState, "CurrentTurn").ToString();
+        public string CurrentTurn => Query.CurrentTurnName;
 
-        public int TurnIndex => (int)flow.Reflection.GetProperty(CurrentState, "TurnIndex");
+        public int TurnIndex => Query.TurnIndex;
 
         public string GameStateSnapshot()
         {
             return string.Join(
                 "|",
-                flow.Reflection.GetProperty(CurrentState, "CurrentTurn"),
-                flow.Reflection.GetProperty(CurrentState, "TurnIndex"),
-                flow.Reflection.GetProperty(CurrentState, "IsRoundEnded"),
-                flow.Reflection.GetProperty(CurrentState, "IsWinDecisionPending"),
-                flow.Reflection.GetProperty(CurrentState, "IsReachDecisionPending"),
-                flow.Reflection.GetProperty(CurrentState, "IsReachDiscardSelectionPending"),
-                flow.Collections.Count(flow.Reflection.GetProperty(CurrentState, "Discards")),
+                session.Reflection.GetProperty(CurrentState, "CurrentTurn"),
+                session.Reflection.GetProperty(CurrentState, "TurnIndex"),
+                session.Reflection.GetProperty(CurrentState, "IsRoundEnded"),
+                session.Reflection.GetProperty(CurrentState, "IsWinDecisionPending"),
+                session.Reflection.GetProperty(CurrentState, "IsReachDecisionPending"),
+                session.Reflection.GetProperty(CurrentState, "IsReachDiscardSelectionPending"),
+                session.Collections.Count(session.Reflection.GetProperty(CurrentState, "Discards")),
                 SeatSlotsSnapshot());
         }
 
@@ -181,27 +157,30 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Furiten
                 return;
 
             disposed = true;
-            flow.Dispose();
+            session.Dispose();
         }
 
         private string SeatSlotsSnapshot()
         {
-            object seatSlots = flow.Reflection.GetProperty(CurrentState, "SeatSlots");
-            int count = flow.Collections.Count(seatSlots);
+            object seatSlots = session.Reflection.GetProperty(CurrentState, "SeatSlots");
+            int count = session.Collections.Count(seatSlots);
             string snapshot = count.ToString();
 
             for (int i = 0; i < count; i++)
             {
-                object slot = flow.Collections.Item(seatSlots, i);
-                object playerId = flow.Reflection.GetProperty(slot, "PlayerId");
-                object participantType = flow.Reflection.GetProperty(slot, "ParticipantType");
+                object slot = session.Collections.Item(seatSlots, i);
+                object playerId = session.Reflection.GetProperty(slot, "PlayerId");
+                object participantType = session.Reflection.GetProperty(slot, "ParticipantType");
                 snapshot += "|" +
-                    flow.Reflection.GetProperty(slot, "Wind") + ":" +
+                    session.Reflection.GetProperty(slot, "Wind") + ":" +
                     (playerId == null ? "Empty" : playerId.ToString()) + ":" +
                     (participantType == null ? "None" : participantType.ToString());
             }
 
             return snapshot;
         }
+
+        private MahjongGameStateTestQuery Query => session.Query;
+        private MahjongGameFlowTestCommands Commands => session.Commands;
     }
 }

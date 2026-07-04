@@ -6,12 +6,12 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
 {
     internal sealed class WinDeclarationGameFlowTestDriver : IDisposable
     {
-        private readonly MahjongGameFlowTestHarness flow;
+        private readonly MahjongGameFlowTestSession session;
         private bool disposed;
 
-        private WinDeclarationGameFlowTestDriver(MahjongGameFlowTestHarness flow)
+        private WinDeclarationGameFlowTestDriver(MahjongGameFlowTestSession session)
         {
-            this.flow = flow;
+            this.session = session;
         }
 
         public static WinDeclarationGameFlowTestDriver CreateWithoutYakuCatalog()
@@ -38,40 +38,38 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
                 types,
                 dataFactory);
 
-            driver.flow.RegisterOwnedScriptableObject(catalog);
+            driver.session.RegisterOwnedScriptableObject(catalog);
             return driver;
         }
 
-        public bool IsWinDecisionPending =>
-            (bool)flow.Reflection.GetProperty(flow.CurrentState, "IsWinDecisionPending");
+        public bool IsWinDecisionPending => Query.IsWinDecisionPending;
 
-        public object PendingWinDeclarationEvaluation =>
-            flow.Reflection.GetProperty(flow.CurrentState, "PendingWinDeclarationEvaluation");
+        public object PendingWinDeclarationEvaluation => Query.PendingWinDeclarationEvaluation;
 
         public void DrawStandardClosedTsumoShape()
         {
-            flow.StartRound();
-            flow.DataFactory.AddHandTiles(
-                flow.GetPlayerSeat("East"),
+            Commands.StartNewRound();
+            session.DataFactory.AddHandTiles(
+                Query.GetPlayerSeat("East"),
                 "1m", "2m", "3m",
                 "1p", "2p", "3p",
                 "1s", "2s", "3s",
                 "E", "E", "E",
                 "C");
 
-            flow.Reflection.Invoke(flow.GameFlow, "RequestForceDrawSkill", "C");
-            flow.Reflection.Invoke(flow.GameFlow, "RequestDraw");
+            Commands.RequestForceDrawSkill("C");
+            Commands.RequestDraw();
         }
 
         public bool CanDeclareWin(object evaluation)
         {
-            return (bool)flow.Reflection.GetProperty(evaluation, "CanDeclareWin");
+            return (bool)session.Reflection.GetProperty(evaluation, "CanDeclareWin");
         }
 
         public int TotalHan(object evaluation)
         {
-            object handEvaluation = flow.Reflection.GetProperty(evaluation, "HandEvaluationResult");
-            return (int)flow.Reflection.GetProperty(handEvaluation, "TotalHan");
+            object handEvaluation = session.Reflection.GetProperty(evaluation, "HandEvaluationResult");
+            return (int)session.Reflection.GetProperty(handEvaluation, "TotalHan");
         }
 
         public void Dispose()
@@ -80,7 +78,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
                 return;
 
             disposed = true;
-            flow.Dispose();
+            session.Dispose();
         }
 
         private static WinDeclarationGameFlowTestDriver Create(string rootName, object catalog)
@@ -116,14 +114,16 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
                 YakuDefinitionCatalog = catalog
             };
 
-            MahjongGameFlowTestHarness flow = MahjongGameFlowTestHarness.Create(
+            MahjongGameFlowTestSession session = MahjongGameFlowTestSession.Create(
                 options,
                 reflection,
                 collections,
                 types,
                 dataFactory);
-            return new WinDeclarationGameFlowTestDriver(flow);
+            return new WinDeclarationGameFlowTestDriver(session);
         }
+
+        private MahjongGameStateTestQuery Query => session.Query;
+        private MahjongGameFlowTestCommands Commands => session.Commands;
     }
 }
-

@@ -5,12 +5,12 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Retry
 {
     internal sealed class GameFlowRetryTestDriver : IDisposable
     {
-        private readonly MahjongGameFlowTestHarness flow;
+        private readonly MahjongGameFlowTestSession session;
         private bool disposed;
 
-        private GameFlowRetryTestDriver(MahjongGameFlowTestHarness flow)
+        private GameFlowRetryTestDriver(MahjongGameFlowTestSession session)
         {
-            this.flow = flow;
+            this.session = session;
         }
 
         public static GameFlowRetryTestDriver CreateDiscardResetScenario()
@@ -27,30 +27,29 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Retry
                 FixedSelfSeatName = "East"
             };
 
-            return new GameFlowRetryTestDriver(MahjongGameFlowTestHarness.Create(options));
+            return new GameFlowRetryTestDriver(MahjongGameFlowTestSession.Create(options));
         }
 
-        public int DiscardCount =>
-            flow.Collections.Count(flow.Reflection.GetProperty(flow.CurrentState, "Discards"));
+        public int DiscardCount => Query.DiscardCount;
 
         public void StartRound()
         {
-            flow.StartRound();
+            Commands.StartNewRound();
         }
 
         public void RequestDraw()
         {
-            flow.Reflection.Invoke(flow.GameFlow, "RequestDraw");
+            Commands.RequestDraw();
         }
 
         public void RequestDiscard(int handIndex)
         {
-            flow.Reflection.Invoke(flow.GameFlow, "RequestDiscard", handIndex);
+            Commands.RequestDiscard(handIndex);
         }
 
         public void Retry()
         {
-            flow.Reflection.Invoke(flow.GameFlow, "RetryPrototype");
+            Commands.RetryPrototype();
         }
 
         public void Dispose()
@@ -59,8 +58,10 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Retry
                 return;
 
             disposed = true;
-            flow.Dispose();
+            session.Dispose();
         }
+
+        private MahjongGameStateTestQuery Query => session.Query;
+        private MahjongGameFlowTestCommands Commands => session.Commands;
     }
 }
-

@@ -13,23 +13,23 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Turn
         private const string CpuTurnControllerTypeName =
             "MahjongPrototype.CpuTurnController, Assembly-CSharp";
 
-        private readonly MahjongGameFlowTestHarness flow;
+        private readonly MahjongGameFlowTestSession session;
         private bool disposed;
 
-        private TurnGameFlowTestSupport(MahjongGameFlowTestHarness flow)
+        private TurnGameFlowTestSupport(MahjongGameFlowTestSession session)
         {
-            this.flow = flow;
+            this.session = session;
 
-            if (flow.EventNotifier != null)
-                Reflection.SetPrivateField(GameFlow, "eventNotifier", flow.EventNotifier);
+            if (session.EventNotifier != null)
+                Reflection.SetPrivateField(GameFlow, "eventNotifier", session.EventNotifier);
         }
 
-        public object GameFlow => flow.GameFlow;
-        public object EventNotifier => flow.EventNotifier;
-        public object CurrentState => flow.CurrentState;
-        public ReflectionTestAccess Reflection => flow.Reflection;
-        public CollectionTestAccess Collections => flow.Collections;
-        public MahjongTestDataFactory DataFactory => flow.DataFactory;
+        public object GameFlow => session.GameFlow;
+        public object EventNotifier => session.EventNotifier;
+        public object CurrentState => session.CurrentState;
+        public ReflectionTestAccess Reflection => session.Reflection;
+        public CollectionTestAccess Collections => session.Collections;
+        public MahjongTestDataFactory DataFactory => session.DataFactory;
 
         public static TurnGameFlowTestSupport Create(
             string rootName,
@@ -61,43 +61,46 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Turn
                 YakuDefinitionCatalog = catalog
             };
 
-            MahjongGameFlowTestHarness flow = MahjongGameFlowTestHarness.Create(
+            MahjongGameFlowTestSession session = MahjongGameFlowTestSession.Create(
                 options,
                 reflection,
                 collections,
                 types,
                 dataFactory);
-            flow.RegisterOwnedScriptableObject(catalog);
-            return new TurnGameFlowTestSupport(flow);
+            session.RegisterOwnedScriptableObject(catalog);
+            return new TurnGameFlowTestSupport(session);
         }
 
-        public void StartNewRound() => Reflection.Invoke(GameFlow, "StartNewRound");
-        public void RetryPrototype() => Reflection.Invoke(GameFlow, "RetryPrototype");
-        public void RequestDraw() => Reflection.Invoke(GameFlow, "RequestDraw");
-        public void RequestDiscard(int handIndex) => Reflection.Invoke(GameFlow, "RequestDiscard", handIndex);
-        public void RequestDiscardDrawnTile() => Reflection.Invoke(GameFlow, "RequestDiscardDrawnTile");
-        public void RequestForceDrawSkill(string tileCode) =>
-            Reflection.Invoke(GameFlow, "RequestForceDrawSkill", tileCode);
+        public void StartNewRound() => Commands.StartNewRound();
+        public void RetryPrototype() => Commands.RetryPrototype();
+        public void RequestDraw() => Commands.RequestDraw();
+        public void RequestDiscard(int handIndex) => Commands.RequestDiscard(handIndex);
+        public void RequestDiscardDrawnTile() => Commands.RequestDiscardDrawnTile();
+        public void RequestForceDrawSkill(string tileCode) => Commands.RequestForceDrawSkill(tileCode);
         public void RequestSetAutoSortEnabled(bool enabled) =>
             Reflection.Invoke(GameFlow, "RequestSetAutoSortEnabled", enabled);
-        public void DealInitialHands() => Reflection.Invoke(GameFlow, "DealInitialHands");
-        public void CheckWinPrototype() => Reflection.Invoke(GameFlow, "CheckWinPrototype");
-        public void RequestDeclareWin() => Reflection.Invoke(GameFlow, "RequestDeclareWin");
-        public void RequestDeclineWin() => Reflection.Invoke(GameFlow, "RequestDeclineWin");
+        public void DealInitialHands() => Commands.DealInitialHands();
+        public void CheckWinPrototype() => Commands.CheckWinPrototype();
+        public void RequestDeclareWin() => Commands.RequestDeclareWin();
+        public void RequestDeclineWin() => Commands.RequestDeclineWin();
 
         public void StartCurrentTurnAgain()
         {
-            Reflection.Invoke(GameFlow, "StartTurn", CurrentTurn, TurnIndex);
+            Commands.StartTurn(CurrentTurnName, TurnIndex);
         }
 
         public void BeginWinDecisionForCurrentTurn()
         {
-            Reflection.Invoke(CurrentState, "BeginWinDecision", CurrentTurn, TurnIndex);
+            Reflection.Invoke(
+                CurrentState,
+                "BeginWinDecision",
+                DataFactory.ParseSeat(CurrentTurnName),
+                TurnIndex);
         }
 
         public void SetWinDecisionPendingForCurrentTurn()
         {
-            Reflection.Invoke(GameFlow, "SetWinDecisionPending", true, CurrentTurn, TurnIndex);
+            Commands.SetWinDecisionPending(CurrentTurnName, TurnIndex);
         }
 
         public void SetFixedSelfSeat(string seatName)
@@ -117,7 +120,10 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Turn
 
         public void SetCurrentTurnToPlayerId(string playerIdName)
         {
-            Reflection.SetProperty(CurrentState, "CurrentTurn", SeatByPlayerIdValue(playerIdName));
+            Reflection.SetProperty(
+                CurrentState,
+                "CurrentTurn",
+                DataFactory.ParseSeat(Query.SeatByPlayerIdName(playerIdName)));
         }
 
         public void SetRoundEnded(bool value)
@@ -135,18 +141,18 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Turn
             Reflection.Invoke(
                 CurrentState,
                 "SetParticipantType",
-                SeatByPlayerIdValue(playerIdName),
+                DataFactory.ParseSeat(Query.SeatByPlayerIdName(playerIdName)),
                 DataFactory.ParseParticipantType(participantTypeName));
         }
 
         public void AddHandTiles(string seatName, params string[] tileCodes)
         {
-            DataFactory.AddHandTiles(PlayerSeat(seatName), tileCodes);
+            DataFactory.AddHandTiles(Query.GetPlayerSeat(seatName), tileCodes);
         }
 
         public void AddHandTilesForPlayerId(string playerIdName, params string[] tileCodes)
         {
-            DataFactory.AddHandTiles(PlayerSeatByPlayerId(playerIdName), tileCodes);
+            DataFactory.AddHandTiles(Query.GetPlayerSeatByPlayerId(playerIdName), tileCodes);
         }
 
         public void SetDrawnTile(string seatName, string tileCode)
@@ -157,51 +163,39 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Turn
         public void SetDrawnTileForPlayerId(string playerIdName, string tileCode)
         {
             Reflection.Invoke(
-                PlayerSeatByPlayerId(playerIdName),
+                Query.GetPlayerSeatByPlayerId(playerIdName),
                 "SetDrawnTile",
                 DataFactory.CreateTile(tileCode));
         }
 
         public void ClearCurrentPlayerDrawnTile()
         {
-            Reflection.Invoke(CurrentPlayerSeat, "ClearDrawnTile");
+            Reflection.Invoke(Query.GetPlayerSeat(CurrentTurnName), "ClearDrawnTile");
         }
 
         public void DeclareReach(string seatName, int turnIndex)
         {
-            Reflection.Invoke(PlayerSeat(seatName), "DeclareReach", turnIndex);
+            Reflection.Invoke(Query.GetPlayerSeat(seatName), "DeclareReach", turnIndex);
         }
 
         public bool TryRequestDrawForSeat(string seatName)
         {
-            return (bool)Reflection.Invoke(
-                GameFlow,
-                "TryRequestDrawForSeat",
-                DataFactory.ParseSeat(seatName));
+            return Commands.TryRequestDrawForSeat(seatName);
         }
 
         public bool TryRequestDrawForPlayerId(string playerIdName)
         {
-            return (bool)Reflection.Invoke(
-                GameFlow,
-                "TryRequestDrawForSeat",
-                SeatByPlayerIdValue(playerIdName));
+            return Commands.TryRequestDrawForSeat(Query.SeatByPlayerIdName(playerIdName));
         }
 
         public bool TryRequestDiscardDrawnTileForSeat(string seatName)
         {
-            return (bool)Reflection.Invoke(
-                GameFlow,
-                "TryRequestDiscardDrawnTileForSeat",
-                DataFactory.ParseSeat(seatName));
+            return Commands.TryRequestDiscardDrawnTileForSeat(seatName);
         }
 
         public bool TryRequestDiscardDrawnTileForPlayerId(string playerIdName)
         {
-            return (bool)Reflection.Invoke(
-                GameFlow,
-                "TryRequestDiscardDrawnTileForSeat",
-                SeatByPlayerIdValue(playerIdName));
+            return Commands.TryRequestDiscardDrawnTileForSeat(Query.SeatByPlayerIdName(playerIdName));
         }
 
         public void ApplyAutoSortIfEnabled(string seatName, string reason, bool notify)
@@ -219,7 +213,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Turn
             Reflection.Invoke(
                 GameFlow,
                 "ApplyAutoSortIfEnabled",
-                SeatByPlayerIdValue(playerIdName),
+                DataFactory.ParseSeat(Query.SeatByPlayerIdName(playerIdName)),
                 reason,
                 notify);
         }
@@ -271,179 +265,117 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Turn
                 });
         }
 
-        public string SeatByPlayerId(string playerIdName) =>
-            SeatByPlayerIdValue(playerIdName).ToString();
+        public string SeatByPlayerId(string playerIdName) => Query.SeatByPlayerIdName(playerIdName);
 
-        public string[] OccupiedSeatNames =>
-            SeatNames(Reflection.GetProperty(CurrentState, "OccupiedSeats"));
+        public string[] OccupiedSeatNames => Query.OccupiedSeatNames;
 
-        public string[] ActiveTurnSeatNames =>
-            SeatNames(Reflection.GetProperty(CurrentState, "ActiveTurnSeats"));
+        public string[] ActiveTurnSeatNames => Query.ActiveTurnSeatNames;
 
-        public string[] ActiveSeatNames =>
-            SeatNames(Reflection.GetProperty(CurrentState, "ActiveSeats"));
+        public string[] ActiveSeatNames => Query.ActiveSeatNames;
 
-        public string SelfSeatName =>
-            Reflection.GetProperty(CurrentState, "SelfSeat").ToString();
+        public string SelfSeatName => Query.SelfSeatName;
 
-        public string SelfWindName =>
-            Reflection.GetProperty(CurrentState, "SelfWind").ToString();
+        public string SelfWindName => Query.SelfWindName;
 
-        public string SelfPlayerIdName =>
-            Reflection.GetProperty(CurrentState, "SelfPlayerId").ToString();
+        public string SelfPlayerIdName => Query.SelfPlayerIdName;
 
-        public string CurrentTurnName => CurrentTurn.ToString();
+        public string CurrentTurnName => Query.CurrentTurnName;
 
-        public string CurrentTurnPlayerIdName =>
-            Reflection.GetProperty(CurrentState, "CurrentTurnPlayerId").ToString();
+        public string CurrentTurnPlayerIdName => Query.CurrentTurnPlayerIdName;
 
-        public bool IsSelfTurn =>
-            (bool)Reflection.GetProperty(CurrentState, "IsSelfTurn");
+        public bool IsSelfTurn => Query.IsSelfTurn;
 
-        public int TurnIndex =>
-            (int)Reflection.GetProperty(CurrentState, "TurnIndex");
+        public int TurnIndex => Query.TurnIndex;
 
-        public string TurnPhaseName =>
-            Reflection.GetProperty(CurrentState, "TurnPhase").ToString();
+        public string TurnPhaseName => Query.TurnPhaseName;
 
-        public bool IsRoundEnded =>
-            (bool)Reflection.GetProperty(CurrentState, "IsRoundEnded");
+        public bool IsRoundEnded => Query.IsRoundEnded;
 
-        public bool IsInteractionLocked =>
-            (bool)Reflection.GetProperty(CurrentState, "IsInteractionLocked");
+        public bool IsInteractionLocked => Query.IsInteractionLocked;
 
-        public int WallCount =>
-            (int)Reflection.GetProperty(Reflection.GetProperty(CurrentState, "Wall"), "Count");
+        public int WallCount => Query.WallCount;
 
-        public int DiscardCount =>
-            Collections.Count(Reflection.GetProperty(CurrentState, "Discards"));
+        public int DiscardCount => Query.DiscardCount;
 
-        public int ActiveSkillEffectCount =>
-            Collections.Count(Reflection.GetProperty(CurrentState, "ActiveSkillEffects"));
+        public int ActiveSkillEffectCount => Query.ActiveSkillEffectCount;
 
-        public bool CurrentPlayerHasDrawnTile =>
-            (bool)Reflection.GetProperty(CurrentPlayerSeat, "HasDrawnTile");
+        public bool CurrentPlayerHasDrawnTile => Query.CurrentPlayerHasDrawnTile;
 
-        public string CurrentPlayerDrawnTileCodeOrNull =>
-            NullablePropertyString(CurrentPlayerSeat, "DrawnTile");
+        public string CurrentPlayerDrawnTileCodeOrNull => Query.CurrentPlayerDrawnTileCodeOrNull;
 
-        public bool HasDrawnTile(string seatName) =>
-            (bool)Reflection.GetProperty(PlayerSeat(seatName), "HasDrawnTile");
+        public bool HasDrawnTile(string seatName) => Query.HasDrawnTile(seatName);
 
         public bool HasDrawnTileForPlayerId(string playerIdName) =>
-            (bool)Reflection.GetProperty(PlayerSeatByPlayerId(playerIdName), "HasDrawnTile");
+            Query.HasDrawnTileForPlayerId(playerIdName);
 
         public string DrawnTileCodeOrNullForPlayerId(string playerIdName) =>
-            NullablePropertyString(PlayerSeatByPlayerId(playerIdName), "DrawnTile");
+            Query.DrawnTileCodeOrNullForPlayerId(playerIdName);
 
         public int HandCountForPlayerId(string playerIdName) =>
-            Collections.Count(Reflection.GetProperty(PlayerSeatByPlayerId(playerIdName), "Hand"));
+            Query.HandCountForPlayerId(playerIdName);
 
-        public string HandDisplayString(string seatName)
-        {
-            return (string)Reflection.Invoke(
-                Reflection.GetProperty(PlayerSeat(seatName), "Hand"),
-                "ToDisplayString");
-        }
+        public string HandDisplayString(string seatName) => Query.HandDisplayString(seatName);
 
-        public string HandDisplayStringForPlayerId(string playerIdName)
-        {
-            return (string)Reflection.Invoke(
-                Reflection.GetProperty(PlayerSeatByPlayerId(playerIdName), "Hand"),
-                "ToDisplayString");
-        }
+        public string HandDisplayStringForPlayerId(string playerIdName) =>
+            Query.HandDisplayStringForPlayerId(playerIdName);
 
-        public int SeatSlotCount =>
-            Collections.Count(Reflection.GetProperty(CurrentState, "SeatSlots"));
+        public int SeatSlotCount => Query.SeatSlotCount;
 
-        public string SeatSlotWindAt(int index) =>
-            Reflection.GetProperty(SeatSlotAt(index), "Wind").ToString();
+        public string SeatSlotWindAt(int index) => Query.SeatSlotWindAt(index);
 
         public string SeatSlotPlayerIdNameOrNullAt(int index) =>
-            NullablePropertyString(SeatSlotAt(index), "PlayerId");
+            Query.SeatSlotPlayerIdNameOrNullAt(index);
 
-        public bool SeatSlotHasPlayerAt(int index) =>
-            (bool)Reflection.GetProperty(SeatSlotAt(index), "HasPlayer");
+        public bool SeatSlotHasPlayerAt(int index) => Query.SeatSlotHasPlayerAt(index);
 
-        public bool SeatSlotIsEmptyAt(int index) =>
-            (bool)Reflection.GetProperty(SeatSlotAt(index), "IsEmpty");
+        public bool SeatSlotIsEmptyAt(int index) => Query.SeatSlotIsEmptyAt(index);
 
-        public string SeatSlotStateLabelAt(int index) =>
-            Reflection.GetProperty(SeatSlotAt(index), "StateLabel").ToString();
+        public string SeatSlotStateLabelAt(int index) => Query.SeatSlotStateLabelAt(index);
 
-        public string SelfSeatSlotWindName =>
-            Reflection.GetProperty(Reflection.Invoke(CurrentState, "GetSelfSeatSlot"), "Wind").ToString();
+        public string SelfSeatSlotWindName => Query.SelfSeatSlotWindName;
 
-        public string CurrentTurnSlotWindName =>
-            Reflection.GetProperty(Reflection.GetProperty(CurrentState, "CurrentTurnSlot"), "Wind").ToString();
+        public string CurrentTurnSlotWindName => Query.CurrentTurnSlotWindName;
 
-        public bool IsSelfSeat(string seatName)
-        {
-            return (bool)Reflection.Invoke(CurrentState, "IsSelfSeat", DataFactory.ParseSeat(seatName));
-        }
+        public bool IsSelfSeat(string seatName) => Query.IsSelfSeat(seatName);
 
-        public string ParticipantTypeNameOrNull(string seatName)
-        {
-            return NullablePropertyString(
-                Reflection.Invoke(CurrentState, "GetSeatSlot", DataFactory.ParseSeat(seatName)),
-                "ParticipantType");
-        }
+        public string ParticipantTypeNameOrNull(string seatName) =>
+            Query.ParticipantTypeNameOrNull(seatName);
 
-        public string ParticipantTypeNameOrNullForPlayerId(string playerIdName)
-        {
-            return NullablePropertyString(
-                Reflection.Invoke(CurrentState, "GetSeatSlot", SeatByPlayerIdValue(playerIdName)),
-                "ParticipantType");
-        }
+        public string ParticipantTypeNameOrNullForPlayerId(string playerIdName) =>
+            Query.ParticipantTypeNameOrNullForPlayerId(playerIdName);
 
-        public string ActiveSkillEffectOwnerSeatNameAt(int index)
-        {
-            object effect = Collections.Item(
-                Reflection.GetProperty(CurrentState, "ActiveSkillEffects"),
-                index);
-            return Reflection.GetProperty(effect, "OwnerSeat").ToString();
-        }
+        public string ActiveSkillEffectOwnerSeatNameAt(int index) =>
+            Query.ActiveSkillEffectOwnerSeatNameAt(index);
 
-        public string LastDiscardActorSeatName =>
-            Reflection.GetProperty(LastDiscard, "ActorSeat").ToString();
+        public string LastDiscardActorSeatName => Query.LastDiscardActorSeatName;
 
-        public string LastDiscardTileCode =>
-            Reflection.GetProperty(LastDiscard, "Tile").ToString();
+        public string LastDiscardTileCode => Query.LastDiscardTileCode;
 
-        public string LastDiscardSourceName =>
-            Reflection.GetProperty(LastDiscard, "Source").ToString();
+        public string LastDiscardSourceName => Query.LastDiscardSourceName;
 
-        public bool IsWinDecisionPending =>
-            (bool)Reflection.GetProperty(CurrentState, "IsWinDecisionPending");
+        public bool IsWinDecisionPending => Query.IsWinDecisionPending;
 
-        public string WinDecisionSeatName =>
-            Reflection.GetProperty(CurrentState, "WinDecisionSeat").ToString();
+        public string WinDecisionSeatName => Query.WinDecisionSeatName;
 
-        public string WinDecisionTypeName =>
-            NullablePropertyString(CurrentState, "WinDecisionType");
+        public string WinDecisionTypeName => Query.WinDecisionTypeNameOrNull;
 
-        public string WinSourceSeatNameOrNull =>
-            NullablePropertyString(CurrentState, "WinSourceSeat");
+        public string WinSourceSeatNameOrNull => Query.WinSourceSeatNameOrNull;
 
-        public int WinDecisionTurnIndex =>
-            (int)Reflection.GetProperty(CurrentState, "WinDecisionTurnIndex");
+        public int WinDecisionTurnIndex => Query.WinDecisionTurnIndex;
 
-        public string WinningTileCodeOrNull =>
-            NullablePropertyString(CurrentState, "WinningTile");
+        public string WinningTileCodeOrNull => Query.WinningTileCodeOrNull;
 
         public bool PendingWinDeclarationEvaluationIsNull =>
-            Reflection.GetProperty(CurrentState, "PendingWinDeclarationEvaluation") == null;
+            Query.PendingWinDeclarationEvaluationIsNull;
 
         public bool FlowIsWinDecisionPending =>
             (bool)Reflection.GetProperty(GameFlow, "IsWinDecisionPending");
 
-        public string WindProgressRoundWindName =>
-            Reflection.GetProperty(WindProgress, "RoundWind").ToString();
+        public string WindProgressRoundWindName => Query.WindProgressRoundWindName;
 
-        public int WindProgressHandNumber =>
-            (int)Reflection.GetProperty(WindProgress, "HandNumber");
+        public int WindProgressHandNumber => Query.WindProgressHandNumber;
 
-        public object StateToken => CurrentState;
+        public object StateToken => Query.StateToken;
 
         public void Dispose()
         {
@@ -451,59 +383,11 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Turn
                 return;
 
             disposed = true;
-            flow.Dispose();
+            session.Dispose();
         }
 
-        private object CurrentTurn =>
-            Reflection.GetProperty(CurrentState, "CurrentTurn");
-
-        private object CurrentPlayerSeat =>
-            Reflection.Invoke(CurrentState, "GetPlayerSeat", CurrentTurn);
-
-        private object PlayerSeat(string seatName)
-        {
-            return DataFactory.GetPlayerSeat(CurrentState, seatName);
-        }
-
-        private object PlayerSeatByPlayerId(string playerIdName)
-        {
-            return Reflection.Invoke(CurrentState, "GetPlayerSeat", SeatByPlayerIdValue(playerIdName));
-        }
-
-        private object SeatByPlayerIdValue(string playerIdName)
-        {
-            return Reflection.Invoke(
-                CurrentState,
-                "GetSeatByPlayerId",
-                DataFactory.ParsePlayerId(playerIdName));
-        }
-
-        private object SeatSlotAt(int index)
-        {
-            return Collections.Item(Reflection.GetProperty(CurrentState, "SeatSlots"), index);
-        }
-
-        private object LastDiscard =>
-            Collections.Last(Reflection.GetProperty(CurrentState, "Discards"));
-
-        private object WindProgress =>
-            Reflection.GetProperty(CurrentState, "WindProgress");
-
-        private string[] SeatNames(object seats)
-        {
-            int count = Collections.Count(seats);
-            string[] names = new string[count];
-            for (int i = 0; i < count; i++)
-                names[i] = Collections.Item(seats, i).ToString();
-
-            return names;
-        }
-
-        private string NullablePropertyString(object target, string propertyName)
-        {
-            object value = Reflection.GetProperty(target, propertyName);
-            return value == null ? null : value.ToString();
-        }
+        private MahjongGameStateTestQuery Query => session.Query;
+        private MahjongGameFlowTestCommands Commands => session.Commands;
 
         private void AddEventHandler(
             string eventName,

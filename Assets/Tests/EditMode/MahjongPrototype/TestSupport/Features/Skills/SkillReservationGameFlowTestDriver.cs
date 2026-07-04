@@ -5,12 +5,12 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Skills
 {
     internal sealed class SkillReservationGameFlowTestDriver : IDisposable
     {
-        private readonly MahjongGameFlowTestHarness flow;
+        private readonly MahjongGameFlowTestSession session;
         private bool disposed;
 
-        private SkillReservationGameFlowTestDriver(MahjongGameFlowTestHarness flow)
+        private SkillReservationGameFlowTestDriver(MahjongGameFlowTestSession session)
         {
-            this.flow = flow;
+            this.session = session;
         }
 
         public static SkillReservationGameFlowTestDriver CreateReservationResolutionScenario()
@@ -37,72 +37,61 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Skills
                 participantCount: 1);
         }
 
-        public int ActiveSkillEffectCount =>
-            flow.Collections.Count(flow.Reflection.GetProperty(flow.CurrentState, "ActiveSkillEffects"));
+        public int ActiveSkillEffectCount => Query.ActiveSkillEffectCount;
 
         public void StartRound()
         {
-            flow.StartRound();
+            Commands.StartNewRound();
         }
 
         public void SetCurrentTurn(string seatName)
         {
-            flow.SetCurrentTurn(seatName);
+            session.DataFactory.SetCurrentTurn(session.CurrentState, seatName);
         }
 
         public void RequestForceDrawSkillForSeat(string ownerSeat, string targetTile)
         {
-            flow.Reflection.Invoke(
-                flow.GameFlow,
-                "RequestForceDrawSkillForSeat",
-                flow.DataFactory.ParseSeat(ownerSeat),
-                targetTile);
+            Commands.RequestForceDrawSkillForSeat(ownerSeat, targetTile);
         }
 
         public void RequestForceDrawSkill(string targetTile)
         {
-            flow.Reflection.Invoke(flow.GameFlow, "RequestForceDrawSkill", targetTile);
+            Commands.RequestForceDrawSkill(targetTile);
         }
 
         public void RequestDraw()
         {
-            flow.Reflection.Invoke(flow.GameFlow, "RequestDraw");
+            Commands.RequestDraw();
         }
 
         public void StartTurn(string seatName)
         {
-            flow.Reflection.Invoke(
-                flow.GameFlow,
-                "StartTurn",
-                flow.DataFactory.ParseSeat(seatName),
-                flow.Reflection.GetProperty(flow.CurrentState, "TurnIndex"));
+            Commands.StartTurn(seatName, Query.TurnIndex);
         }
 
         public void ClearDrawnTile(string seatName)
         {
-            flow.Reflection.Invoke(flow.GetPlayerSeat(seatName), "ClearDrawnTile");
+            session.Reflection.Invoke(Query.GetPlayerSeat(seatName), "ClearDrawnTile");
         }
 
         public object ActiveSkillEffectAt(int index)
         {
-            return flow.Collections.Item(
-                flow.Reflection.GetProperty(flow.CurrentState, "ActiveSkillEffects"),
-                index);
+            return Query.ActiveSkillEffectAt(index);
         }
 
         public string EffectOwnerSeat(object effect)
         {
-            return flow.Reflection.GetProperty(effect, "OwnerSeat").ToString();
+            return session.Reflection.GetProperty(effect, "OwnerSeat").ToString();
         }
 
         public string EffectTargetTile(object effect)
         {
-            return flow.Reflection.GetProperty(effect, "TargetTile").ToString();
+            return session.Reflection.GetProperty(effect, "TargetTile").ToString();
         }
 
         public string DrawnTile(string seatName)
         {
-            return flow.Reflection.GetProperty(flow.GetPlayerSeat(seatName), "DrawnTile").ToString();
+            return Query.DrawnTileCode(seatName);
         }
 
         public void Dispose()
@@ -111,7 +100,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Skills
                 return;
 
             disposed = true;
-            flow.Dispose();
+            session.Dispose();
         }
 
         private static SkillReservationGameFlowTestDriver Create(
@@ -132,8 +121,10 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Skills
                 ParticipantCount = participantCount
             };
 
-            return new SkillReservationGameFlowTestDriver(MahjongGameFlowTestHarness.Create(options));
+            return new SkillReservationGameFlowTestDriver(MahjongGameFlowTestSession.Create(options));
         }
+
+        private MahjongGameStateTestQuery Query => session.Query;
+        private MahjongGameFlowTestCommands Commands => session.Commands;
     }
 }
-

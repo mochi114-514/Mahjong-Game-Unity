@@ -64,22 +64,6 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
                 options ?? new MahjongGameFlowTestOptions());
         }
 
-        public object StartRound()
-        {
-            Reflection.Invoke(GameFlow, "StartNewRound");
-            return CurrentState;
-        }
-
-        public object GetPlayerSeat(string seatName)
-        {
-            return DataFactory.GetPlayerSeat(CurrentState, seatName);
-        }
-
-        public void SetCurrentTurn(string seatName)
-        {
-            DataFactory.SetCurrentTurn(CurrentState, seatName);
-        }
-
         public void RegisterOwnedScriptableObject(object scriptableObject)
         {
             UnityEngine.Object unityObject = scriptableObject as UnityEngine.Object;

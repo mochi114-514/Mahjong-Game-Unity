@@ -6,13 +6,13 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
 {
     internal sealed class WinDecisionGameFlowTestDriver : IDisposable
     {
-        private readonly MahjongGameFlowTestHarness flow;
+        private readonly MahjongGameFlowTestSession session;
         private object previousState;
         private bool disposed;
 
-        private WinDecisionGameFlowTestDriver(MahjongGameFlowTestHarness flow)
+        private WinDecisionGameFlowTestDriver(MahjongGameFlowTestSession session)
         {
-            this.flow = flow;
+            this.session = session;
         }
 
         public static WinDecisionGameFlowTestDriver Create(
@@ -41,33 +41,33 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
 
         public void StartNewRound()
         {
-            Reflection.Invoke(GameFlow, "StartNewRound");
+            Commands.StartNewRound();
         }
 
         public void RetryPrototype()
         {
-            Reflection.Invoke(GameFlow, "RetryPrototype");
+            Commands.RetryPrototype();
         }
 
         public void CheckWinPrototype()
         {
-            Reflection.Invoke(GameFlow, "CheckWinPrototype");
+            Commands.CheckWinPrototype();
         }
 
         public void RequestDeclareWin()
         {
-            previousState = flow.CurrentState;
-            Reflection.Invoke(GameFlow, "RequestDeclareWin");
+            previousState = session.CurrentState;
+            Commands.RequestDeclareWin();
         }
 
         public void RequestDeclineWin()
         {
-            Reflection.Invoke(GameFlow, "RequestDeclineWin");
+            Commands.RequestDeclineWin();
         }
 
         public void SetWinDecisionPendingForCurrentTurn()
         {
-            Reflection.Invoke(GameFlow, "SetWinDecisionPending", true, CurrentTurn, TurnIndex);
+            Commands.SetWinDecisionPending(CurrentTurnName, TurnIndex);
         }
 
         public void SetSelfWinningTsumoHand()
@@ -93,7 +93,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
                 "C");
             Reflection.Invoke(SelfPlayerSeat, "DeclareReach", 1);
             Reflection.Invoke(CpuPlayerSeat, "SetDrawnTile", DataFactory.CreateTile("C"));
-            Reflection.SetProperty(flow.CurrentState, "CurrentTurn", CpuSeat);
+            Reflection.SetProperty(session.CurrentState, "CurrentTurn", CpuSeat);
         }
 
         public void SetupSelfCannotRonFromCpuDrawnTile()
@@ -106,57 +106,47 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
                 "E", "E", "E",
                 "P");
             Reflection.Invoke(CpuPlayerSeat, "SetDrawnTile", DataFactory.CreateTile("C"));
-            Reflection.SetProperty(flow.CurrentState, "CurrentTurn", CpuSeat);
+            Reflection.SetProperty(session.CurrentState, "CurrentTurn", CpuSeat);
         }
 
         public bool TryDiscardCpuDrawnTile()
         {
-            return (bool)Reflection.Invoke(GameFlow, "TryRequestDiscardDrawnTileForSeat", CpuSeat);
+            return Commands.TryRequestDiscardDrawnTileForSeat(CpuSeatName);
         }
 
-        public bool IsWinDecisionPending =>
-            (bool)Reflection.GetProperty(flow.CurrentState, "IsWinDecisionPending");
+        public bool IsWinDecisionPending => Query.IsWinDecisionPending;
 
         public bool PreviousStateIsWinDecisionPending =>
             (bool)Reflection.GetProperty(previousState, "IsWinDecisionPending");
 
-        public string WinDecisionSeatName =>
-            Reflection.GetProperty(flow.CurrentState, "WinDecisionSeat").ToString();
+        public string WinDecisionSeatName => Query.WinDecisionSeatName;
 
-        public string WinDecisionTypeName =>
-            NullablePropertyString(flow.CurrentState, "WinDecisionType");
+        public string WinDecisionTypeName => Query.WinDecisionTypeNameOrNull;
 
-        public string WinSourceSeatNameOrNull =>
-            NullablePropertyString(flow.CurrentState, "WinSourceSeat");
+        public string WinSourceSeatNameOrNull => Query.WinSourceSeatNameOrNull;
 
-        public int WinDecisionTurnIndex =>
-            (int)Reflection.GetProperty(flow.CurrentState, "WinDecisionTurnIndex");
+        public int WinDecisionTurnIndex => Query.WinDecisionTurnIndex;
 
-        public string WinningTileCodeOrNull =>
-            NullablePropertyString(flow.CurrentState, "WinningTile");
+        public string WinningTileCodeOrNull => Query.WinningTileCodeOrNull;
 
         public bool PendingWinDeclarationEvaluationIsNull =>
-            Reflection.GetProperty(flow.CurrentState, "PendingWinDeclarationEvaluation") == null;
+            Query.PendingWinDeclarationEvaluationIsNull;
 
         public bool FlowIsWinDecisionPending =>
             (bool)Reflection.GetProperty(GameFlow, "IsWinDecisionPending");
 
-        public bool IsRoundEnded =>
-            (bool)Reflection.GetProperty(flow.CurrentState, "IsRoundEnded");
+        public bool IsRoundEnded => Query.IsRoundEnded;
 
-        public bool IsInteractionLocked =>
-            (bool)Reflection.GetProperty(flow.CurrentState, "IsInteractionLocked");
+        public bool IsInteractionLocked => Query.IsInteractionLocked;
 
-        public string CurrentTurnName => CurrentTurn.ToString();
-        public int TurnIndex => (int)Reflection.GetProperty(flow.CurrentState, "TurnIndex");
-        public string SelfSeatName => SelfSeat.ToString();
-        public string CpuSeatName => CpuSeat.ToString();
+        public string CurrentTurnName => Query.CurrentTurnName;
+        public int TurnIndex => Query.TurnIndex;
+        public string SelfSeatName => Query.SelfSeatName;
+        public string CpuSeatName => Query.SeatByPlayerIdName("Player2");
 
-        public string WindProgressRoundWindName =>
-            Reflection.GetProperty(WindProgress, "RoundWind").ToString();
+        public string WindProgressRoundWindName => Query.WindProgressRoundWindName;
 
-        public int WindProgressHandNumber =>
-            (int)Reflection.GetProperty(WindProgress, "HandNumber");
+        public int WindProgressHandNumber => Query.WindProgressHandNumber;
 
         public void Dispose()
         {
@@ -164,7 +154,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
                 return;
 
             disposed = true;
-            flow.Dispose();
+            session.Dispose();
         }
 
         private static WinDecisionGameFlowTestDriver Create(
@@ -196,48 +186,32 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
                 YakuDefinitionCatalog = catalog
             };
 
-            MahjongGameFlowTestHarness flow = MahjongGameFlowTestHarness.Create(
+            MahjongGameFlowTestSession session = MahjongGameFlowTestSession.Create(
                 options,
                 reflection,
                 collections,
                 types,
                 dataFactory);
-            flow.RegisterOwnedScriptableObject(catalog);
-            return new WinDecisionGameFlowTestDriver(flow);
+            session.RegisterOwnedScriptableObject(catalog);
+            return new WinDecisionGameFlowTestDriver(session);
         }
 
-        private object GameFlow => flow.GameFlow;
-        private ReflectionTestAccess Reflection => flow.Reflection;
-        private MahjongTestDataFactory DataFactory => flow.DataFactory;
-
-        private object CurrentTurn =>
-            Reflection.GetProperty(flow.CurrentState, "CurrentTurn");
+        private object GameFlow => session.GameFlow;
+        private ReflectionTestAccess Reflection => session.Reflection;
+        private MahjongTestDataFactory DataFactory => session.DataFactory;
+        private MahjongGameStateTestQuery Query => session.Query;
+        private MahjongGameFlowTestCommands Commands => session.Commands;
 
         private object CurrentPlayerSeat =>
-            Reflection.Invoke(flow.CurrentState, "GetPlayerSeat", CurrentTurn);
-
-        private object SelfSeat =>
-            Reflection.GetProperty(flow.CurrentState, "SelfSeat");
+            Query.GetPlayerSeat(CurrentTurnName);
 
         private object CpuSeat =>
-            Reflection.Invoke(
-                flow.CurrentState,
-                "GetSeatByPlayerId",
-                DataFactory.ParsePlayerId("Player2"));
+            DataFactory.ParseSeat(CpuSeatName);
 
         private object SelfPlayerSeat =>
-            Reflection.Invoke(flow.CurrentState, "GetPlayerSeat", SelfSeat);
+            Query.GetPlayerSeat(SelfSeatName);
 
         private object CpuPlayerSeat =>
-            Reflection.Invoke(flow.CurrentState, "GetPlayerSeat", CpuSeat);
-
-        private object WindProgress =>
-            Reflection.GetProperty(flow.CurrentState, "WindProgress");
-
-        private string NullablePropertyString(object target, string propertyName)
-        {
-            object value = Reflection.GetProperty(target, propertyName);
-            return value == null ? null : value.ToString();
-        }
+            Query.GetPlayerSeat(CpuSeatName);
     }
 }

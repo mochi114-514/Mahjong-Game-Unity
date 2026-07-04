@@ -8,20 +8,20 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
 {
     internal sealed class ReachGameFlowTestSupport : IDisposable
     {
-        private readonly MahjongGameFlowTestHarness flow;
+        private readonly MahjongGameFlowTestSession session;
         private bool disposed;
 
-        private ReachGameFlowTestSupport(MahjongGameFlowTestHarness flow)
+        private ReachGameFlowTestSupport(MahjongGameFlowTestSession session)
         {
-            this.flow = flow;
+            this.session = session;
         }
 
-        public object GameFlow => flow.GameFlow;
-        public object CurrentState => flow.CurrentState;
-        public ReflectionTestAccess Reflection => flow.Reflection;
-        public CollectionTestAccess Collections => flow.Collections;
-        public MahjongTestTypes Types => flow.Types;
-        public MahjongTestDataFactory DataFactory => flow.DataFactory;
+        public object GameFlow => session.GameFlow;
+        public object CurrentState => session.CurrentState;
+        public ReflectionTestAccess Reflection => session.Reflection;
+        public CollectionTestAccess Collections => session.Collections;
+        public MahjongTestTypes Types => session.Types;
+        public MahjongTestDataFactory DataFactory => session.DataFactory;
 
         public static ReachGameFlowTestSupport Create(
             string rootName,
@@ -52,19 +52,19 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
                 YakuDefinitionCatalog = catalog
             };
 
-            MahjongGameFlowTestHarness flow = MahjongGameFlowTestHarness.Create(
+            MahjongGameFlowTestSession session = MahjongGameFlowTestSession.Create(
                 options,
                 reflection,
                 collections,
                 types,
                 dataFactory);
-            flow.RegisterOwnedScriptableObject(catalog);
-            return new ReachGameFlowTestSupport(flow);
+            session.RegisterOwnedScriptableObject(catalog);
+            return new ReachGameFlowTestSupport(session);
         }
 
         public void StartNewRound()
         {
-            Reflection.Invoke(GameFlow, "StartNewRound");
+            Commands.StartNewRound();
         }
 
         public void DrawReachableHand()
@@ -99,7 +99,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
 
         public void AddHandTiles(string seatName, params string[] tileCodes)
         {
-            DataFactory.AddHandTiles(PlayerSeat(seatName), tileCodes);
+            DataFactory.AddHandTiles(Query.GetPlayerSeat(seatName), tileCodes);
         }
 
         public void SetParticipantType(string seatName, string participantTypeName)
@@ -109,29 +109,24 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
 
         public void ForceDraw(string tileCode)
         {
-            Reflection.Invoke(GameFlow, "RequestForceDrawSkill", tileCode);
+            Commands.RequestForceDrawSkill(tileCode);
         }
 
         public void ForceDrawForSeat(string seatName, string tileCode)
         {
-            Reflection.Invoke(
-                GameFlow,
-                "RequestForceDrawSkillForSeat",
-                DataFactory.ParseSeat(seatName),
-                tileCode);
+            Commands.RequestForceDrawSkillForSeat(seatName, tileCode);
         }
 
         public void RequestDraw()
         {
-            Reflection.Invoke(GameFlow, "RequestDraw");
+            Commands.RequestDraw();
         }
 
         public void DrawAndDiscardForSeat(string seatName, string tileCode)
         {
-            object seat = DataFactory.ParseSeat(seatName);
-            Reflection.Invoke(GameFlow, "RequestForceDrawSkillForSeat", seat, tileCode);
-            Assert.That(Reflection.Invoke(GameFlow, "TryRequestDrawForSeat", seat), Is.True);
-            Assert.That(Reflection.Invoke(GameFlow, "TryRequestDiscardDrawnTileForSeat", seat), Is.True);
+            Commands.RequestForceDrawSkillForSeat(seatName, tileCode);
+            Assert.That(Commands.TryRequestDrawForSeat(seatName), Is.True);
+            Assert.That(Commands.TryRequestDiscardDrawnTileForSeat(seatName), Is.True);
         }
 
         public void RequestDeclareReach()
@@ -151,17 +146,17 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
 
         public void RequestDiscard(int handIndex)
         {
-            Reflection.Invoke(GameFlow, "RequestDiscard", handIndex);
+            Commands.RequestDiscard(handIndex);
         }
 
         public void RequestDiscardDrawnTile()
         {
-            Reflection.Invoke(GameFlow, "RequestDiscardDrawnTile");
+            Commands.RequestDiscardDrawnTile();
         }
 
         public void RequestDeclineWin()
         {
-            Reflection.Invoke(GameFlow, "RequestDeclineWin");
+            Commands.RequestDeclineWin();
         }
 
         public object BuildTurnAutomationPolicy(string seatName)
@@ -195,7 +190,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
                 "RunAutoDiscardDrawnTileAfterDraw",
                 new[] { Types.SeatId, typeof(int), typeof(int) },
                 DataFactory.ParseSeat(seatName),
-                TurnIndex,
+                Query.TurnIndex,
                 Reflection.GetPrivateField(GameFlow, "autoDiscardDrawnTileOperationVersion"));
         }
 
@@ -210,8 +205,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
             return current == null ? null : current.GetType().Name;
         }
 
-        public bool IsWinDecisionPending =>
-            (bool)Reflection.GetProperty(CurrentState, "IsWinDecisionPending");
+        public bool IsWinDecisionPending => Query.IsWinDecisionPending;
 
         public bool IsReachDecisionPending =>
             (bool)Reflection.GetProperty(CurrentState, "IsReachDecisionPending");
@@ -219,73 +213,63 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
         public bool IsReachDiscardSelectionPending =>
             (bool)Reflection.GetProperty(CurrentState, "IsReachDiscardSelectionPending");
 
-        public string TurnPhaseName =>
-            Reflection.GetProperty(CurrentState, "TurnPhase").ToString();
+        public string TurnPhaseName => Query.TurnPhaseName;
 
-        public string CurrentTurnName =>
-            Reflection.GetProperty(CurrentState, "CurrentTurn").ToString();
+        public string CurrentTurnName => Query.CurrentTurnName;
 
-        public int TurnIndex =>
-            (int)Reflection.GetProperty(CurrentState, "TurnIndex");
+        public int TurnIndex => Query.TurnIndex;
 
         public int ReachDiscardCandidateCount =>
             Collections.Count(Reflection.GetProperty(CurrentState, "ReachDiscardCandidates"));
 
-        public int DiscardCount =>
-            Collections.Count(Reflection.GetProperty(CurrentState, "Discards"));
+        public int DiscardCount => Query.DiscardCount;
 
-        public string WinDecisionTypeName =>
-            Reflection.GetProperty(CurrentState, "WinDecisionType").ToString();
+        public string WinDecisionTypeName => Query.WinDecisionTypeName;
 
-        public string WinDecisionSeatName =>
-            Reflection.GetProperty(CurrentState, "WinDecisionSeat").ToString();
+        public string WinDecisionSeatName => Query.WinDecisionSeatName;
 
-        public string WinSourceSeatName =>
-            Reflection.GetProperty(CurrentState, "WinSourceSeat").ToString();
+        public string WinSourceSeatName => Query.WinSourceSeatName;
 
         public bool IsReachDeclared(string seatName)
         {
-            return (bool)Reflection.GetProperty(PlayerSeat(seatName), "IsReachDeclared");
+            return (bool)Reflection.GetProperty(Query.GetPlayerSeat(seatName), "IsReachDeclared");
         }
 
         public int ReachDeclaredTurnIndex(string seatName)
         {
-            return (int)Reflection.GetProperty(PlayerSeat(seatName), "ReachDeclaredTurnIndex");
+            return (int)Reflection.GetProperty(Query.GetPlayerSeat(seatName), "ReachDeclaredTurnIndex");
         }
 
         public bool HasDrawnTile(string seatName)
         {
-            return (bool)Reflection.GetProperty(PlayerSeat(seatName), "HasDrawnTile");
+            return Query.HasDrawnTile(seatName);
         }
 
         public string DrawnTileCode(string seatName)
         {
-            return Reflection.GetProperty(PlayerSeat(seatName), "DrawnTile").ToString();
+            return Query.DrawnTileCode(seatName);
         }
 
         public string DiscardActorSeatNameAt(int index)
         {
-            return Reflection.GetProperty(DiscardAt(index), "ActorSeat").ToString();
+            return Query.DiscardActorSeatNameAt(index);
         }
 
         public string DiscardSourceNameAt(int index)
         {
-            return Reflection.GetProperty(DiscardAt(index), "Source").ToString();
+            return Query.DiscardSourceNameAt(index);
         }
 
         public string DiscardTileCodeAt(int index)
         {
-            return Reflection.GetProperty(DiscardAt(index), "Tile").ToString();
+            return Query.DiscardTileCodeAt(index);
         }
 
-        public string LastDiscardActorSeatName =>
-            Reflection.GetProperty(LastDiscard, "ActorSeat").ToString();
+        public string LastDiscardActorSeatName => Query.LastDiscardActorSeatName;
 
-        public string LastDiscardSourceName =>
-            Reflection.GetProperty(LastDiscard, "Source").ToString();
+        public string LastDiscardSourceName => Query.LastDiscardSourceName;
 
-        public string LastDiscardTileCode =>
-            Reflection.GetProperty(LastDiscard, "Tile").ToString();
+        public string LastDiscardTileCode => Query.LastDiscardTileCode;
 
         public bool PolicyIsCpu(object policy)
         {
@@ -313,20 +297,10 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
                 return;
 
             disposed = true;
-            flow.Dispose();
+            session.Dispose();
         }
 
-        private object PlayerSeat(string seatName)
-        {
-            return DataFactory.GetPlayerSeat(CurrentState, seatName);
-        }
-
-        private object DiscardAt(int index)
-        {
-            return Collections.Item(Reflection.GetProperty(CurrentState, "Discards"), index);
-        }
-
-        private object LastDiscard =>
-            Collections.Last(Reflection.GetProperty(CurrentState, "Discards"));
+        private MahjongGameStateTestQuery Query => session.Query;
+        private MahjongGameFlowTestCommands Commands => session.Commands;
     }
 }

@@ -6,20 +6,20 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Turn
     internal sealed class MahjongGameStateTurnTestDriver
     {
         private readonly ReflectionTestAccess reflection;
-        private readonly CollectionTestAccess collections;
         private readonly MahjongTestDataFactory dataFactory;
         private readonly object gameState;
+        private readonly MahjongGameStateTestQuery query;
 
         private MahjongGameStateTurnTestDriver(
             ReflectionTestAccess reflection,
-            CollectionTestAccess collections,
             MahjongTestDataFactory dataFactory,
-            object gameState)
+            object gameState,
+            MahjongGameStateTestQuery query)
         {
             this.reflection = reflection;
-            this.collections = collections;
             this.dataFactory = dataFactory;
             this.gameState = gameState;
+            this.query = query;
         }
 
         public static MahjongGameStateTurnTestDriver Create(params string[] occupiedSeatNames)
@@ -28,11 +28,16 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Turn
             CollectionTestAccess collections = new CollectionTestAccess(reflection);
             MahjongTestTypes types = new MahjongTestTypes(reflection);
             MahjongTestDataFactory dataFactory = new MahjongTestDataFactory(reflection, types);
+            object gameState = dataFactory.CreateGameState(occupiedSeatNames);
             return new MahjongGameStateTurnTestDriver(
                 reflection,
-                collections,
                 dataFactory,
-                dataFactory.CreateGameState(occupiedSeatNames));
+                gameState,
+                MahjongGameStateTestQuery.ForState(
+                    gameState,
+                    reflection,
+                    collections,
+                    dataFactory));
         }
 
         public void BeginWinDecision(string seatName, int turnIndex)
@@ -83,56 +88,30 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Turn
             reflection.Invoke(gameState, "RebuildActiveTurnSeatsFromSeatSlots");
         }
 
-        public bool IsWinDecisionPending =>
-            (bool)reflection.GetProperty(gameState, "IsWinDecisionPending");
+        public bool IsWinDecisionPending => query.IsWinDecisionPending;
 
-        public string WinDecisionSeatName =>
-            reflection.GetProperty(gameState, "WinDecisionSeat").ToString();
+        public string WinDecisionSeatName => query.WinDecisionSeatName;
 
-        public string WinDecisionTypeName => NullablePropertyString("WinDecisionType");
+        public string WinDecisionTypeName => query.WinDecisionTypeNameOrNull;
 
-        public string WinSourceSeatNameOrNull => NullablePropertyString("WinSourceSeat");
+        public string WinSourceSeatNameOrNull => query.WinSourceSeatNameOrNull;
 
-        public int WinDecisionTurnIndex =>
-            (int)reflection.GetProperty(gameState, "WinDecisionTurnIndex");
+        public int WinDecisionTurnIndex => query.WinDecisionTurnIndex;
 
-        public string WinningTileCodeOrNull => NullablePropertyString("WinningTile");
+        public string WinningTileCodeOrNull => query.WinningTileCodeOrNull;
 
-        public string TurnPhaseName =>
-            reflection.GetProperty(gameState, "TurnPhase").ToString();
+        public string TurnPhaseName => query.TurnPhaseName;
 
-        public bool IsInteractionLocked =>
-            (bool)reflection.GetProperty(gameState, "IsInteractionLocked");
+        public bool IsInteractionLocked => query.IsInteractionLocked;
 
-        public string CurrentTurnName =>
-            reflection.GetProperty(gameState, "CurrentTurn").ToString();
+        public string CurrentTurnName => query.CurrentTurnName;
 
-        public int TurnIndex =>
-            (int)reflection.GetProperty(gameState, "TurnIndex");
+        public int TurnIndex => query.TurnIndex;
 
-        public string CurrentTurnPlayerIdName =>
-            reflection.GetProperty(gameState, "CurrentTurnPlayerId").ToString();
+        public string CurrentTurnPlayerIdName => query.CurrentTurnPlayerIdName;
 
-        public string[] ActiveTurnSeatNames =>
-            SeatNames(reflection.GetProperty(gameState, "ActiveTurnSeats"));
+        public string[] ActiveTurnSeatNames => query.ActiveTurnSeatNames;
 
-        public string[] ActiveSeatNames =>
-            SeatNames(reflection.GetProperty(gameState, "ActiveSeats"));
-
-        private string[] SeatNames(object seats)
-        {
-            int count = collections.Count(seats);
-            string[] names = new string[count];
-            for (int i = 0; i < count; i++)
-                names[i] = collections.Item(seats, i).ToString();
-
-            return names;
-        }
-
-        private string NullablePropertyString(string propertyName)
-        {
-            object value = reflection.GetProperty(gameState, propertyName);
-            return value == null ? null : value.ToString();
-        }
+        public string[] ActiveSeatNames => query.ActiveSeatNames;
     }
 }

@@ -6,12 +6,12 @@ namespace MahjongPrototype.Tests.TestSupport.Features.WindProgress
 {
     internal sealed class WindProgressGameFlowTestDriver : IDisposable
     {
-        private readonly MahjongGameFlowTestHarness flow;
+        private readonly MahjongGameFlowTestSession session;
         private bool disposed;
 
-        private WindProgressGameFlowTestDriver(MahjongGameFlowTestHarness flow)
+        private WindProgressGameFlowTestDriver(MahjongGameFlowTestSession session)
         {
-            this.flow = flow;
+            this.session = session;
         }
 
         public static WindProgressGameFlowTestDriver Create()
@@ -35,7 +35,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.WindProgress
             };
 
             return new WindProgressGameFlowTestDriver(
-                MahjongGameFlowTestHarness.Create(
+                MahjongGameFlowTestSession.Create(
                     options,
                     reflection,
                     collections,
@@ -43,35 +43,32 @@ namespace MahjongPrototype.Tests.TestSupport.Features.WindProgress
                     dataFactory));
         }
 
-        public string CurrentRoundWindName =>
-            flow.Reflection.GetProperty(CurrentWindProgress, "RoundWind").ToString();
+        public string CurrentRoundWindName => Query.WindProgressRoundWindName;
 
-        public int CurrentHandNumber =>
-            (int)flow.Reflection.GetProperty(CurrentWindProgress, "HandNumber");
+        public int CurrentHandNumber => Query.WindProgressHandNumber;
 
-        public bool IsRoundEnded =>
-            (bool)flow.Reflection.GetProperty(flow.CurrentState, "IsRoundEnded");
+        public bool IsRoundEnded => Query.IsRoundEnded;
 
         public void StartNewRound()
         {
-            flow.StartRound();
+            Commands.StartNewRound();
         }
 
         public void StartRound(string roundWindName, int handNumber)
         {
-            object windProgress = flow.DataFactory.CreateWindProgress(roundWindName, handNumber);
-            flow.Reflection.InvokeWithSignature(
-                flow.GameFlow,
+            object windProgress = session.DataFactory.CreateWindProgress(roundWindName, handNumber);
+            session.Reflection.InvokeWithSignature(
+                session.GameFlow,
                 "StartRound",
-                new[] { flow.Types.WindProgress, typeof(bool) },
+                new[] { session.Types.WindProgress, typeof(bool) },
                 windProgress,
                 false);
         }
 
         public void EndRound(string reason)
         {
-            flow.Reflection.InvokeWithSignature(
-                flow.GameFlow,
+            session.Reflection.InvokeWithSignature(
+                session.GameFlow,
                 "EndRound",
                 new[] { typeof(string) },
                 reason);
@@ -84,21 +81,21 @@ namespace MahjongPrototype.Tests.TestSupport.Features.WindProgress
         {
             object sourceSeat = sourceSeatName == null
                 ? null
-                : flow.DataFactory.ParseSeat(sourceSeatName);
+                : session.DataFactory.ParseSeat(sourceSeatName);
 
-            flow.Reflection.InvokeWithSignature(
-                flow.CurrentState,
+            session.Reflection.InvokeWithSignature(
+                session.CurrentState,
                 "BeginWinDecisionDetailed",
                 new[]
                 {
-                    flow.Types.SeatId,
-                    flow.Types.WinType,
-                    typeof(Nullable<>).MakeGenericType(flow.Types.Tile),
-                    typeof(Nullable<>).MakeGenericType(flow.Types.SeatId),
+                    session.Types.SeatId,
+                    session.Types.WinType,
+                    typeof(Nullable<>).MakeGenericType(session.Types.Tile),
+                    typeof(Nullable<>).MakeGenericType(session.Types.SeatId),
                     typeof(int)
                 },
-                flow.DataFactory.ParseSeat(winnerSeatName),
-                flow.DataFactory.ParseWinType(winTypeName),
+                session.DataFactory.ParseSeat(winnerSeatName),
+                session.DataFactory.ParseWinType(winTypeName),
                 null,
                 sourceSeat,
                 TurnIndex);
@@ -106,12 +103,12 @@ namespace MahjongPrototype.Tests.TestSupport.Features.WindProgress
 
         public void DeclareWin()
         {
-            flow.Reflection.Invoke(flow.GameFlow, "RequestDeclareWin");
+            Commands.RequestDeclareWin();
         }
 
         public void DeclineWin()
         {
-            flow.Reflection.Invoke(flow.GameFlow, "RequestDeclineWin");
+            Commands.RequestDeclineWin();
         }
 
         public void Dispose()
@@ -120,13 +117,11 @@ namespace MahjongPrototype.Tests.TestSupport.Features.WindProgress
                 return;
 
             disposed = true;
-            flow.Dispose();
+            session.Dispose();
         }
 
-        private object CurrentWindProgress =>
-            flow.Reflection.GetProperty(flow.CurrentState, "WindProgress");
-
-        private int TurnIndex =>
-            (int)flow.Reflection.GetProperty(flow.CurrentState, "TurnIndex");
+        private int TurnIndex => Query.TurnIndex;
+        private MahjongGameStateTestQuery Query => session.Query;
+        private MahjongGameFlowTestCommands Commands => session.Commands;
     }
 }
