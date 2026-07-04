@@ -103,6 +103,42 @@ namespace MahjongPrototype.Tests
             Assert.That(driver.IsEvaluated(result), Is.True);
             Assert.That(driver.IsTenpai(result), Is.True);
             Assert.That(driver.IsDiscardFuriten(result), Is.True);
+            Assert.That(driver.IsTemporaryFuriten(result), Is.False);
+            Assert.That(driver.IsReachPassFuriten(result), Is.False);
+            Assert.That(driver.IsFuriten(result), Is.True);
+        }
+
+        [Test]
+        public void EvaluateAll_TemporaryFuritenOnly_IsFuriten()
+        {
+            object gameState = driver.CreateGameState("East");
+            driver.AssignHand(gameState, "East", FuritenTestHands.EvaluatorSingleWait());
+            driver.MarkTemporaryFuriten(gameState, "East");
+
+            object result = driver.EvaluateSeat(gameState, "East");
+
+            Assert.That(driver.IsEvaluated(result), Is.True);
+            Assert.That(driver.IsTenpai(result), Is.True);
+            Assert.That(driver.IsDiscardFuriten(result), Is.False);
+            Assert.That(driver.IsTemporaryFuriten(result), Is.True);
+            Assert.That(driver.IsReachPassFuriten(result), Is.False);
+            Assert.That(driver.IsFuriten(result), Is.True);
+        }
+
+        [Test]
+        public void EvaluateAll_ReachPassFuritenOnly_IsFuriten()
+        {
+            object gameState = driver.CreateGameState("East");
+            driver.AssignHand(gameState, "East", FuritenTestHands.EvaluatorSingleWait());
+            driver.MarkReachPassFuriten(gameState, "East");
+
+            object result = driver.EvaluateSeat(gameState, "East");
+
+            Assert.That(driver.IsEvaluated(result), Is.True);
+            Assert.That(driver.IsTenpai(result), Is.True);
+            Assert.That(driver.IsDiscardFuriten(result), Is.False);
+            Assert.That(driver.IsTemporaryFuriten(result), Is.False);
+            Assert.That(driver.IsReachPassFuriten(result), Is.True);
             Assert.That(driver.IsFuriten(result), Is.True);
         }
 
@@ -118,6 +154,8 @@ namespace MahjongPrototype.Tests
             Assert.That(driver.IsEvaluated(result), Is.True);
             Assert.That(driver.IsTenpai(result), Is.True);
             Assert.That(driver.IsDiscardFuriten(result), Is.False);
+            Assert.That(driver.IsTemporaryFuriten(result), Is.False);
+            Assert.That(driver.IsReachPassFuriten(result), Is.False);
             Assert.That(driver.IsFuriten(result), Is.False);
         }
 
@@ -203,6 +241,25 @@ namespace MahjongPrototype.Tests
             Assert.That(driver.IsEvaluated(result), Is.True);
             Assert.That(driver.IsTenpai(result), Is.False);
             Assert.That(driver.IsDiscardFuriten(result), Is.False);
+            Assert.That(driver.IsTemporaryFuriten(result), Is.False);
+            Assert.That(driver.IsReachPassFuriten(result), Is.False);
+            Assert.That(driver.IsFuriten(result), Is.False);
+        }
+
+        [Test]
+        public void EvaluateAll_NotTenpaiWithMissedRonState_ClearsFuritenTypes()
+        {
+            object gameState = driver.CreateGameState("East");
+            driver.AssignHand(gameState, "East", FuritenTestHands.NonTenpai());
+            driver.MarkTemporaryFuriten(gameState, "East");
+
+            object result = driver.EvaluateSeat(gameState, "East");
+
+            Assert.That(driver.IsEvaluated(result), Is.True);
+            Assert.That(driver.IsTenpai(result), Is.False);
+            Assert.That(driver.IsDiscardFuriten(result), Is.False);
+            Assert.That(driver.IsTemporaryFuriten(result), Is.False);
+            Assert.That(driver.IsReachPassFuriten(result), Is.False);
             Assert.That(driver.IsFuriten(result), Is.False);
         }
 
@@ -247,7 +304,72 @@ namespace MahjongPrototype.Tests
             Assert.That(driver.IsEvaluated(result), Is.False);
             Assert.That(driver.IsTenpai(result), Is.False);
             Assert.That(driver.IsDiscardFuriten(result), Is.False);
+            Assert.That(driver.IsTemporaryFuriten(result), Is.False);
+            Assert.That(driver.IsReachPassFuriten(result), Is.False);
             Assert.That(driver.IsFuriten(result), Is.False);
+        }
+
+        [Test]
+        public void EvaluateAll_NotEvaluatedWithMissedRonState_ClearsFuritenTypes()
+        {
+            object gameState = driver.CreateGameState("East");
+            driver.AssignHand(gameState, "East", FuritenTestHands.EvaluatorSingleWait());
+            driver.MarkReachPassFuriten(gameState, "East");
+            driver.SetDrawnTile(gameState, "East", "1m");
+
+            object result = driver.EvaluateSeat(gameState, "East");
+
+            Assert.That(driver.IsEvaluated(result), Is.False);
+            Assert.That(driver.IsTenpai(result), Is.False);
+            Assert.That(driver.IsDiscardFuriten(result), Is.False);
+            Assert.That(driver.IsTemporaryFuriten(result), Is.False);
+            Assert.That(driver.IsReachPassFuriten(result), Is.False);
+            Assert.That(driver.IsFuriten(result), Is.False);
+        }
+
+        [Test]
+        public void EvaluateAll_DiscardAndTemporaryFuriten_IsFuriten()
+        {
+            object gameState = driver.CreateGameState("East");
+            driver.AssignHand(gameState, "East", FuritenTestHands.EvaluatorSingleWait());
+            driver.AddDiscard(gameState, "East", "C", 1);
+            driver.MarkTemporaryFuriten(gameState, "East");
+
+            object result = driver.EvaluateSeat(gameState, "East");
+
+            Assert.That(driver.IsDiscardFuriten(result), Is.True);
+            Assert.That(driver.IsTemporaryFuriten(result), Is.True);
+            Assert.That(driver.IsReachPassFuriten(result), Is.False);
+            Assert.That(driver.IsFuriten(result), Is.True);
+        }
+
+        [Test]
+        public void EvaluateAll_DiscardAndReachPassFuriten_IsFuriten()
+        {
+            object gameState = driver.CreateGameState("East");
+            driver.AssignHand(gameState, "East", FuritenTestHands.EvaluatorSingleWait());
+            driver.AddDiscard(gameState, "East", "C", 1);
+            driver.MarkReachPassFuriten(gameState, "East");
+
+            object result = driver.EvaluateSeat(gameState, "East");
+
+            Assert.That(driver.IsDiscardFuriten(result), Is.True);
+            Assert.That(driver.IsTemporaryFuriten(result), Is.False);
+            Assert.That(driver.IsReachPassFuriten(result), Is.True);
+            Assert.That(driver.IsFuriten(result), Is.True);
+        }
+
+        [Test]
+        public void ClearTemporaryFuriten_DoesNotClearReachPassFuriten()
+        {
+            object gameState = driver.CreateGameState("East");
+            driver.MarkTemporaryFuriten(gameState, "East");
+            driver.MarkReachPassFuriten(gameState, "East");
+
+            driver.ClearTemporaryFuriten(gameState, "East");
+
+            Assert.That(driver.IsSeatTemporaryFuriten(gameState, "East"), Is.False);
+            Assert.That(driver.IsSeatReachPassFuriten(gameState, "East"), Is.True);
         }
 
         [Test]

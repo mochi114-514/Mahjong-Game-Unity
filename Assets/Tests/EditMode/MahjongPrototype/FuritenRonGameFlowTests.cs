@@ -135,6 +135,200 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
+        public void RonDecision_ReachPlayerDeclinesRon_MarksReachPassFuriten()
+        {
+            using (FuritenRonTestDriver driver = FuritenRonTestDriver.Create(2))
+            {
+                StartRonDecisionFromWest(driver, true);
+
+                driver.RequestDeclineWin();
+
+                Assert.That(driver.IsSeatReachPassFuriten("East"), Is.True);
+                Assert.That(driver.IsSeatTemporaryFuriten("East"), Is.False);
+            }
+        }
+
+        [Test]
+        public void RonDecision_ReachPassFuriten_BlocksLaterRonDecision()
+        {
+            using (FuritenRonTestDriver driver = FuritenRonTestDriver.Create(2))
+            {
+                StartRonDecisionFromWest(driver, true);
+                driver.RequestDeclineWin();
+                DeclinePendingWinIfAny(driver);
+                driver.SetCurrentTurn("West");
+                driver.SetDrawnTile("West", "5m");
+
+                bool discarded = driver.DiscardDrawnTile("West");
+
+                Assert.That(discarded, Is.True);
+                Assert.That(driver.IsWinDecisionPending, Is.False);
+            }
+        }
+
+        [Test]
+        public void Draw_ReachPassFuriten_RemainsAfterOwnSuccessfulDraw()
+        {
+            using (FuritenRonTestDriver driver = FuritenRonTestDriver.Create(2))
+            {
+                StartRonDecisionFromWest(driver, true);
+                driver.RequestDeclineWin();
+                DeclinePendingWinIfAny(driver);
+                driver.SetCurrentTurn("East");
+                driver.ClearDrawnTile("East");
+
+                bool drew = driver.DrawTileForSeat("East", "9m");
+
+                Assert.That(drew, Is.True);
+                Assert.That(driver.IsSeatReachPassFuriten("East"), Is.True);
+            }
+        }
+
+        [Test]
+        public void TsumoDecision_ReachPassFuriten_DoesNotBlockTsumo()
+        {
+            using (FuritenRonTestDriver driver = FuritenRonTestDriver.Create(2))
+            {
+                StartRonDecisionFromWest(driver, true);
+                driver.RequestDeclineWin();
+                DeclinePendingWinIfAny(driver);
+                driver.SetCurrentTurn("East");
+                driver.ClearDrawnTile("East");
+
+                bool drew = driver.DrawTileForSeat("East", "5m");
+
+                Assert.That(drew, Is.True);
+                Assert.That(driver.IsSeatReachPassFuriten("East"), Is.True);
+                Assert.That(driver.IsWinDecisionPending, Is.True);
+                Assert.That(driver.WinDecisionType, Is.EqualTo("Tsumo"));
+                Assert.That(driver.WinDecisionSeat, Is.EqualTo("East"));
+            }
+        }
+
+        [Test]
+        public void StartRound_ReachPassFuriten_DoesNotCarryToNewRound()
+        {
+            using (FuritenRonTestDriver driver = FuritenRonTestDriver.Create(2))
+            {
+                StartRonDecisionFromWest(driver, true);
+                driver.RequestDeclineWin();
+                DeclinePendingWinIfAny(driver);
+                Assert.That(driver.IsSeatReachPassFuriten("East"), Is.True);
+
+                driver.StartRound();
+
+                Assert.That(driver.IsSeatReachPassFuriten("East"), Is.False);
+                Assert.That(driver.IsSeatTemporaryFuriten("East"), Is.False);
+            }
+        }
+
+        [Test]
+        public void RonDecision_NonReachPlayerDeclinesRon_MarksTemporaryFuriten()
+        {
+            using (FuritenRonTestDriver driver = FuritenRonTestDriver.Create(2))
+            {
+                StartRonDecisionFromWest(driver, false);
+
+                driver.RequestDeclineWin();
+
+                Assert.That(driver.IsSeatTemporaryFuriten("East"), Is.True);
+                Assert.That(driver.IsSeatReachPassFuriten("East"), Is.False);
+                Assert.That(driver.IsSeatFuriten("East"), Is.True);
+            }
+        }
+
+        [Test]
+        public void RonDecision_TemporaryFuriten_BlocksLaterRonDecision()
+        {
+            using (FuritenRonTestDriver driver = FuritenRonTestDriver.Create(2))
+            {
+                StartRonDecisionFromWest(driver, false);
+                driver.RequestDeclineWin();
+                driver.SetCurrentTurn("West");
+                driver.SetDrawnTile("West", "5m");
+
+                bool discarded = driver.DiscardDrawnTile("West");
+
+                Assert.That(discarded, Is.True);
+                Assert.That(driver.IsWinDecisionPending, Is.False);
+            }
+        }
+
+        [Test]
+        public void Draw_TemporaryFuriten_ClearsOnOwnSuccessfulDraw()
+        {
+            using (FuritenRonTestDriver driver = FuritenRonTestDriver.Create(2))
+            {
+                StartRonDecisionFromWest(driver, false);
+                driver.RequestDeclineWin();
+                driver.SetCurrentTurn("East");
+
+                bool drew = driver.DrawTileForSeat("East", "9m");
+
+                Assert.That(drew, Is.True);
+                Assert.That(driver.IsSeatTemporaryFuriten("East"), Is.False);
+                Assert.That(driver.IsSeatReachPassFuriten("East"), Is.False);
+            }
+        }
+
+        [Test]
+        public void RonDecision_TemporaryFuritenClearedByDraw_CanRonAgain()
+        {
+            using (FuritenRonTestDriver driver = FuritenRonTestDriver.Create(2))
+            {
+                StartRonDecisionFromWest(driver, false);
+                driver.RequestDeclineWin();
+                driver.SetCurrentTurn("East");
+                Assert.That(driver.DrawTileForSeat("East", "9m"), Is.True);
+                driver.RequestDeclineReach();
+                Assert.That(driver.DiscardDrawnTile("East"), Is.True);
+                driver.SetCurrentTurn("West");
+                driver.SetDrawnTile("West", "5m");
+
+                bool discarded = driver.DiscardDrawnTile("West");
+
+                Assert.That(discarded, Is.True);
+                Assert.That(driver.IsWinDecisionPending, Is.True);
+                Assert.That(driver.WinDecisionType, Is.EqualTo("Ron"));
+                Assert.That(driver.WinDecisionSeat, Is.EqualTo("East"));
+            }
+        }
+
+        [Test]
+        public void Draw_OtherSeatDoesNotClearTemporaryFuriten()
+        {
+            using (FuritenRonTestDriver driver = FuritenRonTestDriver.Create(2))
+            {
+                StartRonDecisionFromWest(driver, false);
+                driver.RequestDeclineWin();
+                driver.SetCurrentTurn("West");
+
+                bool drew = driver.DrawTileForSeat("West", "9m");
+
+                Assert.That(drew, Is.True);
+                Assert.That(driver.IsSeatTemporaryFuriten("East"), Is.True);
+            }
+        }
+
+        [Test]
+        public void TsumoDecision_DeclineTsumo_DoesNotMarkMissedRonFuriten()
+        {
+            using (FuritenRonTestDriver driver = FuritenRonTestDriver.Create(1))
+            {
+                driver.StartRound();
+                driver.SetHand("East", FuritenTestHands.SimpleFiveManWait());
+                driver.DrawSelfTile("5m");
+                Assert.That(driver.IsWinDecisionPending, Is.True);
+                Assert.That(driver.WinDecisionType, Is.EqualTo("Tsumo"));
+
+                driver.RequestDeclineWin();
+
+                Assert.That(driver.IsSeatTemporaryFuriten("East"), Is.False);
+                Assert.That(driver.IsSeatReachPassFuriten("East"), Is.False);
+            }
+        }
+
+        [Test]
         public void TsumoDecision_OwnDiscardFuriten_DoesNotBlockTsumo()
         {
             using (FuritenRonTestDriver driver = FuritenRonTestDriver.Create(1))
@@ -167,6 +361,30 @@ namespace MahjongPrototype.Tests
                 Assert.That(driver.TryGetSeatResult(resultSet, "South", out _), Is.False);
                 Assert.That(driver.GameStateSnapshot(), Is.EqualTo(before));
             }
+        }
+
+        private static void StartRonDecisionFromWest(
+            FuritenRonTestDriver driver,
+            bool declareReach)
+        {
+            driver.StartRound();
+            driver.SetHand("East", FuritenTestHands.SimpleFiveManWait());
+            if (declareReach)
+                driver.DeclareReach("East", 1);
+
+            driver.SetDrawnTile("West", "5m");
+            driver.SetCurrentTurn("West");
+
+            Assert.That(driver.DiscardDrawnTile("West"), Is.True);
+            Assert.That(driver.IsWinDecisionPending, Is.True);
+            Assert.That(driver.WinDecisionType, Is.EqualTo("Ron"));
+            Assert.That(driver.WinDecisionSeat, Is.EqualTo("East"));
+        }
+
+        private static void DeclinePendingWinIfAny(FuritenRonTestDriver driver)
+        {
+            if (driver.IsWinDecisionPending)
+                driver.RequestDeclineWin();
         }
     }
 }

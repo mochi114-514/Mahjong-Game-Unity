@@ -77,6 +77,11 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Furiten
             session.DataFactory.SetCurrentTurn(CurrentState, seatName);
         }
 
+        public void DeclareReach(string seatName, int turnIndex)
+        {
+            session.Reflection.Invoke(GetPlayerSeat(seatName), "DeclareReach", turnIndex);
+        }
+
         public void SetSeatParticipantType(string seatName, string participantTypeName)
         {
             session.DataFactory.SetParticipantType(CurrentState, seatName, participantTypeName);
@@ -91,6 +96,27 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Furiten
         {
             Commands.RequestForceDrawSkill(tileCode);
             Commands.RequestDraw();
+        }
+
+        public bool DrawTileForSeat(string seatName, string tileCode)
+        {
+            Commands.RequestForceDrawSkillForSeat(seatName, tileCode);
+            return Commands.TryRequestDrawForSeat(seatName);
+        }
+
+        public void ClearDrawnTile(string seatName)
+        {
+            session.Reflection.Invoke(GetPlayerSeat(seatName), "ClearDrawnTile");
+        }
+
+        public void RequestDeclineWin()
+        {
+            Commands.RequestDeclineWin();
+        }
+
+        public void RequestDeclineReach()
+        {
+            session.Reflection.Invoke(session.GameFlow, "RequestDeclineReach");
         }
 
         public object EvaluateAllFuriten()
@@ -111,6 +137,16 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Furiten
             object resultSet = EvaluateAllFuriten();
             NUnit.Framework.Assert.That(TryGetSeatResult(resultSet, seatName, out object result), NUnit.Framework.Is.True);
             return (bool)session.Reflection.GetProperty(result, "IsDiscardFuriten");
+        }
+
+        public bool IsSeatTemporaryFuriten(string seatName)
+        {
+            return (bool)session.Reflection.GetProperty(GetPlayerSeat(seatName), "IsTemporaryFuriten");
+        }
+
+        public bool IsSeatReachPassFuriten(string seatName)
+        {
+            return (bool)session.Reflection.GetProperty(GetPlayerSeat(seatName), "IsReachPassFuriten");
         }
 
         public bool IsSeatFuriten(string seatName)
@@ -182,5 +218,10 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Furiten
 
         private MahjongGameStateTestQuery Query => session.Query;
         private MahjongGameFlowTestCommands Commands => session.Commands;
+
+        private object GetPlayerSeat(string seatName)
+        {
+            return session.DataFactory.GetPlayerSeat(CurrentState, seatName);
+        }
     }
 }

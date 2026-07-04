@@ -53,6 +53,38 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
+        public void RefreshFuritenUi_SelfTemporaryFuriten_ShowsText()
+        {
+            using (FuritenUiTestDriver driver = FuritenUiTestDriver.Create(1))
+            {
+                driver.StartRound();
+                driver.AddHandTiles("East", SimpleFiveManWait);
+                driver.MarkTemporaryFuriten("East");
+
+                driver.RefreshFuritenUi();
+
+                Assert.That(driver.FuritenTextVisible, Is.True);
+                Assert.That(driver.FuritenText, Is.EqualTo("フリテン"));
+            }
+        }
+
+        [Test]
+        public void RefreshFuritenUi_SelfReachPassFuriten_ShowsText()
+        {
+            using (FuritenUiTestDriver driver = FuritenUiTestDriver.Create(1))
+            {
+                driver.StartRound();
+                driver.AddHandTiles("East", SimpleFiveManWait);
+                driver.MarkReachPassFuriten("East");
+
+                driver.RefreshFuritenUi();
+
+                Assert.That(driver.FuritenTextVisible, Is.True);
+                Assert.That(driver.FuritenText, Is.EqualTo("フリテン"));
+            }
+        }
+
+        [Test]
         public void RefreshFuritenUi_CpuSeatOnlyFuriten_DoesNotShowSelfUi()
         {
             using (FuritenUiTestDriver driver = FuritenUiTestDriver.Create(2))
@@ -110,6 +142,37 @@ namespace MahjongPrototype.Tests
                 driver.HandleTileDiscarded(record);
 
                 Assert.That(driver.FuritenTextVisible, Is.True);
+            }
+        }
+
+        [Test]
+        public void HandleWinDeclined_SelfSeat_ReevaluatesAndShowsFuritenText()
+        {
+            using (FuritenUiTestDriver driver = FuritenUiTestDriver.Create(1))
+            {
+                driver.StartRound();
+                driver.AddHandTiles("East", SimpleFiveManWait);
+                driver.MarkTemporaryFuriten("East");
+
+                driver.HandleWinDeclined("East", 1);
+
+                Assert.That(driver.FuritenTextVisible, Is.True);
+            }
+        }
+
+        [Test]
+        public void HandleWinDeclined_OtherSeatFuriten_DoesNotShowSelfUi()
+        {
+            using (FuritenUiTestDriver driver = FuritenUiTestDriver.Create(2))
+            {
+                driver.StartRound();
+                driver.AddHandTiles("East", SimpleFiveManWait);
+                driver.AddHandTiles("West", SimpleFiveManWait);
+                driver.MarkTemporaryFuriten("West");
+
+                driver.HandleWinDeclined("West", 1);
+
+                Assert.That(driver.FuritenTextVisible, Is.False);
             }
         }
 

@@ -143,6 +143,16 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Furiten
             session.DataFactory.SetDrawnTile(session.CurrentState, seatName, tileCode);
         }
 
+        public void MarkTemporaryFuriten(string seatName)
+        {
+            session.Reflection.Invoke(GetPlayerSeat(seatName), "MarkTemporaryFuriten");
+        }
+
+        public void MarkReachPassFuriten(string seatName)
+        {
+            session.Reflection.Invoke(GetPlayerSeat(seatName), "MarkReachPassFuriten");
+        }
+
         public void RefreshFuritenUi()
         {
             session.Reflection.Invoke(uiManager, "RefreshFuritenUi");
@@ -177,6 +187,15 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Furiten
         public void HandleTileDiscarded(object discardRecord)
         {
             session.Reflection.Invoke(uiManager, "HandleTileDiscarded", discardRecord);
+        }
+
+        public void HandleWinDeclined(string seatName, int turnIndex)
+        {
+            session.Reflection.Invoke(
+                uiManager,
+                "HandleWinDeclined",
+                session.DataFactory.ParseSeat(seatName),
+                turnIndex);
         }
 
         public void HandleRoundStarted(int handNumber, int wallCount)
@@ -456,6 +475,11 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Furiten
                 snapshot += "|" + session.Collections.Item(discards, i);
 
             return snapshot;
+        }
+
+        private object GetPlayerSeat(string seatName)
+        {
+            return session.DataFactory.GetPlayerSeat(session.CurrentState, seatName);
         }
     }
 }

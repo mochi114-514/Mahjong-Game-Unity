@@ -430,12 +430,15 @@ namespace MahjongPrototype.UI
             RefreshInteractionUi();
         }
 
-        private void HandleWinDeclined(SeatId _, int __)
+        private void HandleWinDeclined(SeatId seat, int _)
         {
             RefreshGlobalStatus();
             RefreshWinDecisionUi();
             RefreshReachDecisionUi();
             RefreshInteractionUi();
+
+            if (IsSelfSeat(seat))
+                RefreshFuritenUi();
         }
 
         private void HandleReachDecisionStarted(SeatId _, int __)

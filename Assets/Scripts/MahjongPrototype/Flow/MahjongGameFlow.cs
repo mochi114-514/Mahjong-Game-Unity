@@ -305,6 +305,7 @@ namespace MahjongPrototype
             }
 
             playerSeat.SetDrawnTile(result.Tile);
+            playerSeat.ClearTemporaryFuriten();
             NotifyTurnDebug(
                 completedEventName,
                 $"phase={gameState.TurnPhase}; drawnTile={result.Tile}",
@@ -628,6 +629,7 @@ namespace MahjongPrototype
             SeatId seat = gameState.WinDecisionSeat;
             WinType? winType = gameState.WinDecisionType;
             int turnIndex = gameState.WinDecisionTurnIndex;
+            MarkDeclinedRonFuriten(seat, winType);
             ClearWinDecision();
 
             NotifyWinDeclined(seat, turnIndex);
@@ -1144,6 +1146,21 @@ namespace MahjongPrototype
             }
 
             return false;
+        }
+
+        private void MarkDeclinedRonFuriten(SeatId seat, WinType? winType)
+        {
+            if (winType != WinType.Ron)
+                return;
+
+            PlayerSeat playerSeat = gameState.GetPlayerSeat(seat);
+            if (playerSeat.IsReachDeclared)
+            {
+                playerSeat.MarkReachPassFuriten();
+                return;
+            }
+
+            playerSeat.MarkTemporaryFuriten();
         }
 
         private void CommitDrawnTileToHandIfPresent(SeatId seat)

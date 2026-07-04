@@ -81,7 +81,9 @@ namespace MahjongPrototype.Services
             return FuritenSeatEvaluationResult.Evaluated(
                 seat,
                 isTenpai,
-                isDiscardFuriten);
+                isDiscardFuriten,
+                playerSeat.IsTemporaryFuriten,
+                playerSeat.IsReachPassFuriten);
         }
 
         private static bool TryBuildTypeCounts(
