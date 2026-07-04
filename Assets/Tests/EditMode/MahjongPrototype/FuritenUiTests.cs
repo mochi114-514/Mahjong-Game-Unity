@@ -160,20 +160,6 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void RefreshFromFlow_SynchronizesCurrentFuritenState()
-        {
-            using (FuritenUiTestDriver driver = FuritenUiTestDriver.Create(1))
-            {
-                driver.StartRound();
-                driver.AddSelfFuritenHand(SimpleFiveManWait);
-
-                driver.RefreshFromFlow();
-
-                Assert.That(driver.FuritenTextVisible, Is.True);
-            }
-        }
-
-        [Test]
         public void Refresh_CanShowZeroHanTenpaiAndFuritenTogether()
         {
             using (FuritenUiTestDriver driver = FuritenUiTestDriver.Create(1))

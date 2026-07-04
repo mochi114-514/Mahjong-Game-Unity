@@ -148,11 +148,6 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Furiten
             session.Reflection.Invoke(uiManager, "RefreshFuritenUi");
         }
 
-        public void RefreshFromFlow()
-        {
-            session.Reflection.Invoke(uiManager, "RefreshFromFlow");
-        }
-
         public void RefreshCurrentState()
         {
             session.Reflection.InvokeWithSignature(
