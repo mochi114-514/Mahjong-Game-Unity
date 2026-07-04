@@ -34,8 +34,6 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Furiten
             "MahjongPrototype.UI.MahjongZeroHanTenpaiController, Assembly-CSharp";
         private const string MahjongFuritenControllerTypeName =
             "MahjongPrototype.UI.MahjongFuritenController, Assembly-CSharp";
-        private const string FuritenUiLifecycleTraceTypeName =
-            "MahjongPrototype.Diagnostics.FuritenUiLifecycleTrace, Assembly-CSharp";
         private const string TextMeshProUguiTypeName =
             "TMPro.TextMeshProUGUI, Unity.TextMeshPro";
         private const string ToggleTypeName =
@@ -71,16 +69,6 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Furiten
         public bool FuritenTextVisible => furitenTextObject.activeSelf;
         public bool ZeroHanTextVisible => zeroHanTextObject.activeSelf;
         public string FuritenText => (string)session.Reflection.GetProperty(furitenText, "text");
-
-        public static void ResetTrace(string label)
-        {
-            InvokeTrace("Reset", label);
-        }
-
-        public static void DisableTrace(string label)
-        {
-            InvokeTrace("Disable", label);
-        }
 
         public static FuritenUiTestDriver Create(int participantCount)
         {
@@ -128,9 +116,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Furiten
 
         public void StartRound()
         {
-            TraceSnapshot("Driver.StartRound.before");
             session.Reflection.Invoke(session.GameFlow, "StartNewRound");
-            TraceSnapshot("Driver.StartRound.after");
         }
 
         public void AddHandTiles(string seatName, params string[] tileCodes)
@@ -153,7 +139,6 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Furiten
         {
             AddHandTiles("East", tileCodes);
             AddDiscard("East", "5m", 0);
-            TraceSnapshot("Driver.AddSelfFuritenHand.after");
         }
 
         public void SetDrawnTile(string seatName, string tileCode)
@@ -214,21 +199,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Furiten
 
         public void SetUiActive(bool active)
         {
-            TraceSnapshot($"Driver.SetUiActive.before active={active}");
             uiObject.SetActive(active);
-            TraceSnapshot($"Driver.SetUiActive.after active={active}");
-        }
-
-        public void TraceSnapshot(string label)
-        {
-            InvokeTrace(
-                "LogSnapshot",
-                label,
-                session.GameFlow,
-                uiObject,
-                uiManager,
-                furitenController,
-                furitenTextObject);
         }
 
         public string SnapshotState()
@@ -286,7 +257,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Furiten
             reflection.SetPrivateField(uiManager, "zeroHanTenpaiController", zeroHanController);
             reflection.SetPrivateField(uiManager, "furitenController", furitenController);
 
-            FuritenUiTestDriver driver = new FuritenUiTestDriver(
+            return new FuritenUiTestDriver(
                 session,
                 uiObject,
                 uiManager,
@@ -294,8 +265,6 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Furiten
                 zeroHanObject,
                 furitenObject,
                 furitenText);
-            driver.TraceSnapshot("Driver.CreateUi.after");
-            return driver;
         }
 
         private static void AssignUiManagerSupportControllers(
@@ -447,18 +416,6 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Furiten
             GameObject gameObject = new GameObject(name);
             gameObject.transform.SetParent(parent);
             return gameObject;
-        }
-
-        private static void InvokeTrace(string methodName, params object[] args)
-        {
-            Type traceType = Type.GetType(FuritenUiLifecycleTraceTypeName, throwOnError: true);
-            MethodInfo method = traceType.GetMethod(
-                methodName,
-                BindingFlags.Public | BindingFlags.Static);
-            if (method == null)
-                throw new MissingMethodException(traceType.FullName, methodName);
-
-            method.Invoke(null, args);
         }
 
         private object CreateDrawResult(string seatName, string tileCode, string purposeName)

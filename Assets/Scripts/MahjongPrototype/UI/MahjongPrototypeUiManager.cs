@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using MahjongPrototype;
-using MahjongPrototype.Diagnostics;
 using MahjongPrototype.Domain;
 using MahjongPrototype.Notifications;
 using MahjongPrototype.Services;
@@ -74,14 +73,11 @@ namespace MahjongPrototype.UI
 
         private void Awake()
         {
-            FuritenUiLifecycleTrace.LogSnapshot("UiManager.Awake.start", gameFlow, gameObject, this, furitenController);
             CacheReferences();
-            FuritenUiLifecycleTrace.LogSnapshot("UiManager.Awake.end", gameFlow, gameObject, this, furitenController);
         }
 
         private void OnEnable()
         {
-            FuritenUiLifecycleTrace.LogSnapshot("UiManager.OnEnable.start", gameFlow, gameObject, this, furitenController);
             CacheReferences();
             EnsureDisplayController();
             EnsureInputController();
@@ -93,14 +89,11 @@ namespace MahjongPrototype.UI
             EnsureZeroHanTenpaiController();
             EnsureFuritenController();
             SubscribeNotifications();
-            FuritenUiLifecycleTrace.LogSnapshot("UiManager.OnEnable.before-RefreshFromFlow", gameFlow, gameObject, this, furitenController);
             RefreshFromFlow();
-            FuritenUiLifecycleTrace.LogSnapshot("UiManager.OnEnable.end", gameFlow, gameObject, this, furitenController);
         }
 
         private void Start()
         {
-            FuritenUiLifecycleTrace.LogSnapshot("UiManager.Start.start", gameFlow, gameObject, this, furitenController);
             CacheReferences();
             EnsureDisplayController();
             EnsureInputController();
@@ -111,17 +104,13 @@ namespace MahjongPrototype.UI
             EnsureLogPreviewController();
             EnsureZeroHanTenpaiController();
             EnsureFuritenController();
-            FuritenUiLifecycleTrace.LogSnapshot("UiManager.Start.before-RefreshFromFlow", gameFlow, gameObject, this, furitenController);
             RefreshFromFlow();
             RefreshLogPreview();
-            FuritenUiLifecycleTrace.LogSnapshot("UiManager.Start.end", gameFlow, gameObject, this, furitenController);
         }
 
         private void OnDisable()
         {
-            FuritenUiLifecycleTrace.LogSnapshot("UiManager.OnDisable.start", gameFlow, gameObject, this, furitenController);
             UnsubscribeNotifications();
-            FuritenUiLifecycleTrace.LogSnapshot("UiManager.OnDisable.end", gameFlow, gameObject, this, furitenController);
         }
 
         public void Refresh(MahjongGameState state)
@@ -131,7 +120,6 @@ namespace MahjongPrototype.UI
 
         private void Refresh(MahjongGameState state, bool refreshTenpaiIndicators)
         {
-            FuritenUiLifecycleTrace.LogSnapshot($"UiManager.Refresh.start refreshTenpaiIndicators={refreshTenpaiIndicators}", gameFlow, gameObject, this, furitenController);
             if (state == null)
             {
                 RefreshTableCenterUi(null);
@@ -152,7 +140,6 @@ namespace MahjongPrototype.UI
                 RefreshZeroHanTenpaiUi();
                 RefreshFuritenUi();
             }
-            FuritenUiLifecycleTrace.LogSnapshot($"UiManager.Refresh.end refreshTenpaiIndicators={refreshTenpaiIndicators}", gameFlow, gameObject, this, furitenController);
         }
 
         public void RefreshFromFlow()
@@ -162,7 +149,6 @@ namespace MahjongPrototype.UI
 
         private void RefreshFromFlow(bool refreshTenpaiIndicators)
         {
-            FuritenUiLifecycleTrace.LogSnapshot($"UiManager.RefreshFromFlow.start refreshTenpaiIndicators={refreshTenpaiIndicators}", gameFlow, gameObject, this, furitenController);
             if (gameFlow == null)
             {
                 WarnMissingOnce(ref warnedMissingFlow, "MahjongGameFlow is not assigned.");
@@ -172,7 +158,6 @@ namespace MahjongPrototype.UI
             }
 
             Refresh(gameFlow.CurrentState, refreshTenpaiIndicators);
-            FuritenUiLifecycleTrace.LogSnapshot($"UiManager.RefreshFromFlow.end refreshTenpaiIndicators={refreshTenpaiIndicators}", gameFlow, gameObject, this, furitenController);
         }
 
         private void CacheReferences()
@@ -210,7 +195,6 @@ namespace MahjongPrototype.UI
 
         private void SubscribeNotifications()
         {
-            FuritenUiLifecycleTrace.LogSnapshot("UiManager.SubscribeNotifications.start", gameFlow, gameObject, this, furitenController);
             if (eventNotifier == null)
             {
                 WarnMissingOnce(
@@ -238,12 +222,10 @@ namespace MahjongPrototype.UI
             eventNotifier.ReachDeclined += HandleReachDeclined;
             eventNotifier.HandAutoSorted += HandleHandAutoSorted;
             eventNotifier.RoundEnded += HandleRoundEnded;
-            FuritenUiLifecycleTrace.LogSnapshot("UiManager.SubscribeNotifications.end", gameFlow, gameObject, this, furitenController);
         }
 
         private void UnsubscribeNotifications()
         {
-            FuritenUiLifecycleTrace.LogSnapshot("UiManager.UnsubscribeNotifications.start", gameFlow, gameObject, this, furitenController);
             if (eventNotifier == null)
                 return;
 
@@ -266,7 +248,6 @@ namespace MahjongPrototype.UI
             eventNotifier.ReachDeclined -= HandleReachDeclined;
             eventNotifier.HandAutoSorted -= HandleHandAutoSorted;
             eventNotifier.RoundEnded -= HandleRoundEnded;
-            FuritenUiLifecycleTrace.LogSnapshot("UiManager.UnsubscribeNotifications.end", gameFlow, gameObject, this, furitenController);
         }
 
         private void EnsureDisplayController()
@@ -363,18 +344,14 @@ namespace MahjongPrototype.UI
 
         private void HandleRoundStarted(int _, int __)
         {
-            FuritenUiLifecycleTrace.LogSnapshot("UiManager.HandleRoundStarted.start", gameFlow, gameObject, this, furitenController);
             RefreshFromFlow(false);
             ClearZeroHanTenpaiUi();
             ClearFuritenUi();
-            FuritenUiLifecycleTrace.LogSnapshot("UiManager.HandleRoundStarted.end", gameFlow, gameObject, this, furitenController);
         }
 
         private void HandleRoundSetupCompleted()
         {
-            FuritenUiLifecycleTrace.LogSnapshot("UiManager.HandleRoundSetupCompleted.start", gameFlow, gameObject, this, furitenController);
             RefreshFromFlow();
-            FuritenUiLifecycleTrace.LogSnapshot("UiManager.HandleRoundSetupCompleted.end", gameFlow, gameObject, this, furitenController);
         }
 
         private void HandleTurnStarted(SeatId _, int __)
@@ -820,7 +797,6 @@ namespace MahjongPrototype.UI
 
         private void RefreshFuritenUi()
         {
-            FuritenUiLifecycleTrace.LogSnapshot("UiManager.RefreshFuritenUi.start", gameFlow, gameObject, this, furitenController);
             if (furitenController == null)
                 EnsureFuritenController();
 
@@ -832,7 +808,6 @@ namespace MahjongPrototype.UI
                 state == null ||
                 state.IsRoundEnded)
             {
-                FuritenUiLifecycleTrace.LogSnapshot("UiManager.RefreshFuritenUi.clear-null-or-ended", gameFlow, gameObject, this, furitenController);
                 furitenController.Clear();
                 return;
             }
@@ -845,9 +820,7 @@ namespace MahjongPrototype.UI
                     out FuritenSeatEvaluationResult result) &&
                 result.IsEvaluated &&
                 result.IsFuriten;
-            FuritenUiLifecycleTrace.LogFuritenEvaluation("UiManager.RefreshFuritenUi.before-SetVisible", gameFlow, state, resultSet, shouldShow);
             furitenController.SetVisible(shouldShow);
-            FuritenUiLifecycleTrace.LogSnapshot("UiManager.RefreshFuritenUi.end", gameFlow, gameObject, this, furitenController);
         }
 
         private void ClearZeroHanTenpaiUi()
@@ -861,13 +834,11 @@ namespace MahjongPrototype.UI
 
         private void ClearFuritenUi()
         {
-            FuritenUiLifecycleTrace.LogSnapshot("UiManager.ClearFuritenUi.start", gameFlow, gameObject, this, furitenController);
             if (furitenController == null)
                 EnsureFuritenController();
 
             if (furitenController != null)
                 furitenController.Clear();
-            FuritenUiLifecycleTrace.LogSnapshot("UiManager.ClearFuritenUi.end", gameFlow, gameObject, this, furitenController);
         }
 
         private void WarnMissingOnce(ref bool warned, string message)

@@ -164,27 +164,17 @@ namespace MahjongPrototype.Tests
         [UnityTest]
         public IEnumerator OnEnable_SynchronizesCurrentFuritenState()
         {
-            FuritenUiTestDriver.ResetTrace("Test.OnEnable_SynchronizesCurrentFuritenState.start");
             using (FuritenUiTestDriver driver = FuritenUiTestDriver.Create(1))
             {
-                driver.TraceSnapshot("Test.after-driver-create");
                 driver.StartRound();
-                driver.TraceSnapshot("Test.after-start-round");
                 driver.AddSelfFuritenHand(SimpleFiveManWait);
-                driver.TraceSnapshot("Test.after-add-self-furiten-hand");
                 driver.SetUiActive(false);
-                driver.TraceSnapshot("Test.after-set-ui-inactive");
 
-                driver.TraceSnapshot("Test.before-set-ui-active");
                 driver.SetUiActive(true);
-                driver.TraceSnapshot("Test.after-set-ui-active");
                 yield return null;
-                driver.TraceSnapshot("Test.after-yield-before-assert");
 
                 Assert.That(driver.FuritenTextVisible, Is.True);
             }
-
-            FuritenUiTestDriver.DisableTrace("Test.OnEnable_SynchronizesCurrentFuritenState.end");
         }
 
         [Test]

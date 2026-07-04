@@ -1,5 +1,4 @@
 using System;
-using MahjongPrototype.Diagnostics;
 using MahjongPrototype.Domain;
 using MahjongPrototype.Services;
 using MahjongPrototype.Skills;
@@ -46,7 +45,6 @@ namespace MahjongPrototype.Notifications
 
         public void NotifyRunStarted()
         {
-            FuritenUiLifecycleTrace.LogSnapshot("EventNotifier.NotifyRunStarted", GetComponent<MahjongGameFlow>());
             RunStarted?.Invoke(string.Empty);
             NotifyAny();
         }
@@ -59,35 +57,30 @@ namespace MahjongPrototype.Notifications
 
         public void NotifyRoundStarted(int turnIndex, int wallCount)
         {
-            FuritenUiLifecycleTrace.LogSnapshot($"EventNotifier.NotifyRoundStarted turnIndex={turnIndex} wallCount={wallCount}", GetComponent<MahjongGameFlow>());
             RoundStarted?.Invoke(turnIndex, wallCount);
             NotifyAny();
         }
 
         public void NotifyRoundSetupCompleted()
         {
-            FuritenUiLifecycleTrace.LogSnapshot("EventNotifier.NotifyRoundSetupCompleted", GetComponent<MahjongGameFlow>());
             RoundSetupCompleted?.Invoke();
             NotifyAny();
         }
 
         public void NotifyTurnStarted(SeatId seat, int turnIndex)
         {
-            FuritenUiLifecycleTrace.LogSnapshot($"EventNotifier.NotifyTurnStarted seat={seat} turnIndex={turnIndex}", GetComponent<MahjongGameFlow>());
             TurnStarted?.Invoke(seat, turnIndex);
             NotifyAny();
         }
 
         public void NotifyTileDrawn(DrawResult drawResult)
         {
-            FuritenUiLifecycleTrace.LogSnapshot($"EventNotifier.NotifyTileDrawn seat={drawResult.Seat} purpose={drawResult.Purpose}", GetComponent<MahjongGameFlow>());
             TileDrawn?.Invoke(drawResult);
             NotifyAny();
         }
 
         public void NotifyTileDiscarded(DiscardRecord discardRecord)
         {
-            FuritenUiLifecycleTrace.LogSnapshot($"EventNotifier.NotifyTileDiscarded actor={discardRecord.ActorSeat} tile={discardRecord.Tile}", GetComponent<MahjongGameFlow>());
             TileDiscarded?.Invoke(discardRecord);
             NotifyAny();
         }
