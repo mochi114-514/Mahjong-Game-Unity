@@ -18,12 +18,26 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Furiten
             "MahjongPrototype.Skills.ActiveSkillEffect, Assembly-CSharp";
         private const string MahjongPrototypeUiManagerTypeName =
             "MahjongPrototype.UI.MahjongPrototypeUiManager, Assembly-CSharp";
+        private const string MahjongUiDisplayControllerTypeName =
+            "MahjongPrototype.UI.MahjongUiDisplayController, Assembly-CSharp";
+        private const string MahjongUiInputControllerTypeName =
+            "MahjongPrototype.UI.MahjongUiInputController, Assembly-CSharp";
+        private const string MahjongUiCommandRouterTypeName =
+            "MahjongPrototype.UI.MahjongUiCommandRouter, Assembly-CSharp";
+        private const string MahjongWinDecisionControllerTypeName =
+            "MahjongPrototype.UI.MahjongWinDecisionController, Assembly-CSharp";
+        private const string MahjongReachDecisionControllerTypeName =
+            "MahjongPrototype.UI.MahjongReachDecisionController, Assembly-CSharp";
+        private const string MahjongLogPreviewControllerTypeName =
+            "MahjongPrototype.UI.MahjongLogPreviewController, Assembly-CSharp";
         private const string MahjongZeroHanTenpaiControllerTypeName =
             "MahjongPrototype.UI.MahjongZeroHanTenpaiController, Assembly-CSharp";
         private const string MahjongFuritenControllerTypeName =
             "MahjongPrototype.UI.MahjongFuritenController, Assembly-CSharp";
         private const string TextMeshProUguiTypeName =
             "TMPro.TextMeshProUGUI, Unity.TextMeshPro";
+        private const string ToggleTypeName =
+            "UnityEngine.UI.Toggle, UnityEngine.UI";
 
         private readonly MahjongGameFlowTestSession session;
         private readonly GameObject uiObject;
@@ -239,6 +253,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Furiten
                 reflection.RequireType(MahjongPrototypeUiManagerTypeName));
             reflection.SetPrivateField(uiManager, "gameFlow", session.GameFlow);
             reflection.SetPrivateField(uiManager, "eventNotifier", session.EventNotifier);
+            AssignUiManagerSupportControllers(reflection, session.GameFlow, uiObject.transform, uiManager);
             reflection.SetPrivateField(uiManager, "zeroHanTenpaiController", zeroHanController);
             reflection.SetPrivateField(uiManager, "furitenController", furitenController);
 
@@ -250,6 +265,157 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Furiten
                 zeroHanObject,
                 furitenObject,
                 furitenText);
+        }
+
+        private static void AssignUiManagerSupportControllers(
+            ReflectionTestAccess reflection,
+            object gameFlow,
+            Transform uiRoot,
+            Component uiManager)
+        {
+            GameObject supportRoot = new GameObject("UiManagerSupport");
+            supportRoot.SetActive(false);
+            supportRoot.transform.SetParent(uiRoot);
+
+            Component displayController = CreateDisplayController(reflection, supportRoot.transform);
+            Component inputController = CreateInputController(reflection, supportRoot.transform);
+            Component commandRouter = CreateCommandRouter(
+                reflection,
+                supportRoot.transform,
+                gameFlow,
+                inputController);
+            Component winDecisionController = CreateWinDecisionController(reflection, supportRoot.transform);
+            Component reachDecisionController = CreateReachDecisionController(reflection, supportRoot.transform);
+            Component logPreviewController = CreateLogPreviewController(reflection, supportRoot.transform);
+
+            reflection.SetPrivateField(uiManager, "displayController", displayController);
+            reflection.SetPrivateField(uiManager, "inputController", inputController);
+            reflection.SetPrivateField(uiManager, "commandRouter", commandRouter);
+            reflection.SetPrivateField(uiManager, "winDecisionController", winDecisionController);
+            reflection.SetPrivateField(uiManager, "reachDecisionController", reachDecisionController);
+            reflection.SetPrivateField(uiManager, "logPreviewController", logPreviewController);
+        }
+
+        private static Component CreateDisplayController(
+            ReflectionTestAccess reflection,
+            Transform parent)
+        {
+            GameObject displayObject = CreateChild(parent, "UiDisplaySupport");
+            Component controller = displayObject.AddComponent(
+                reflection.RequireType(MahjongUiDisplayControllerTypeName));
+
+            reflection.SetPrivateField(
+                controller,
+                "currentTurnText",
+                CreateText(reflection, displayObject.transform, "CurrentTurnText"));
+            reflection.SetPrivateField(
+                controller,
+                "turnIndexText",
+                CreateText(reflection, displayObject.transform, "TurnIndexText"));
+            reflection.SetPrivateField(
+                controller,
+                "wallCountText",
+                CreateText(reflection, displayObject.transform, "WallCountText"));
+            reflection.SetPrivateField(
+                controller,
+                "activeSkillText",
+                CreateText(reflection, displayObject.transform, "ActiveSkillText"));
+
+            return controller;
+        }
+
+        private static Component CreateInputController(
+            ReflectionTestAccess reflection,
+            Transform parent)
+        {
+            GameObject inputObject = CreateChild(parent, "UiInputSupport");
+            Component autoSortToggle = CreateComponent(
+                reflection,
+                inputObject.transform,
+                "AutoSortToggle",
+                ToggleTypeName);
+            Component controller = inputObject.AddComponent(
+                reflection.RequireType(MahjongUiInputControllerTypeName));
+            reflection.SetPrivateField(controller, "autoSortToggle", autoSortToggle);
+            return controller;
+        }
+
+        private static Component CreateCommandRouter(
+            ReflectionTestAccess reflection,
+            Transform parent,
+            object gameFlow,
+            Component inputController)
+        {
+            GameObject commandObject = CreateChild(parent, "UiCommandRouterSupport");
+            Component controller = commandObject.AddComponent(
+                reflection.RequireType(MahjongUiCommandRouterTypeName));
+            reflection.SetPrivateField(controller, "gameFlow", gameFlow);
+            reflection.SetPrivateField(controller, "inputController", inputController);
+            return controller;
+        }
+
+        private static Component CreateWinDecisionController(
+            ReflectionTestAccess reflection,
+            Transform parent)
+        {
+            GameObject controllerObject = CreateChild(parent, "WinDecisionSupport");
+            GameObject root = CreateChild(controllerObject.transform, "WinDecisionRoot");
+            Component label = CreateText(reflection, root.transform, "WinButtonLabel");
+            Component controller = controllerObject.AddComponent(
+                reflection.RequireType(MahjongWinDecisionControllerTypeName));
+            reflection.SetPrivateField(controller, "winDecisionRoot", root);
+            reflection.SetPrivateField(controller, "winButtonLabel", label);
+            return controller;
+        }
+
+        private static Component CreateReachDecisionController(
+            ReflectionTestAccess reflection,
+            Transform parent)
+        {
+            GameObject controllerObject = CreateChild(parent, "ReachDecisionSupport");
+            GameObject decisionRoot = CreateChild(controllerObject.transform, "ReachDecisionRoot");
+            GameObject cancelRoot = CreateChild(controllerObject.transform, "ReachCancelRoot");
+            Component controller = controllerObject.AddComponent(
+                reflection.RequireType(MahjongReachDecisionControllerTypeName));
+            reflection.SetPrivateField(controller, "reachDecisionRoot", decisionRoot);
+            reflection.SetPrivateField(controller, "reachCancelRoot", cancelRoot);
+            return controller;
+        }
+
+        private static Component CreateLogPreviewController(
+            ReflectionTestAccess reflection,
+            Transform parent)
+        {
+            GameObject controllerObject = CreateChild(parent, "LogPreviewSupport");
+            Component text = CreateText(reflection, controllerObject.transform, "RecentLogText");
+            Component controller = controllerObject.AddComponent(
+                reflection.RequireType(MahjongLogPreviewControllerTypeName));
+            reflection.SetPrivateField(controller, "recentLogText", text);
+            return controller;
+        }
+
+        private static Component CreateText(
+            ReflectionTestAccess reflection,
+            Transform parent,
+            string name)
+        {
+            return CreateComponent(reflection, parent, name, TextMeshProUguiTypeName);
+        }
+
+        private static Component CreateComponent(
+            ReflectionTestAccess reflection,
+            Transform parent,
+            string name,
+            string typeName)
+        {
+            return CreateChild(parent, name).AddComponent(reflection.RequireType(typeName));
+        }
+
+        private static GameObject CreateChild(Transform parent, string name)
+        {
+            GameObject gameObject = new GameObject(name);
+            gameObject.transform.SetParent(parent);
+            return gameObject;
         }
 
         private object CreateDrawResult(string seatName, string tileCode, string purposeName)
