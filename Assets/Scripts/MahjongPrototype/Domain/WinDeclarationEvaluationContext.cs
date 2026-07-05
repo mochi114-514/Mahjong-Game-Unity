@@ -14,8 +14,32 @@ namespace MahjongPrototype.Domain
             RoundWind roundWind,
             SeatId seatWind,
             bool isReachDeclared,
+            bool isClosed)
+            : this(
+                handTiles,
+                winningTile,
+                winType,
+                winnerSeat,
+                sourceSeat,
+                roundWind,
+                seatWind,
+                isReachDeclared,
+                isClosed,
+                false)
+        {
+        }
+
+        public WinDeclarationEvaluationContext(
+            IReadOnlyList<Tile> handTiles,
+            Tile winningTile,
+            WinType winType,
+            SeatId winnerSeat,
+            SeatId? sourceSeat,
+            RoundWind roundWind,
+            SeatId seatWind,
+            bool isReachDeclared,
             bool isClosed,
-            bool isIppatsuEligible = false)
+            bool isIppatsuEligible)
         {
             HandTiles = handTiles ?? throw new ArgumentNullException(nameof(handTiles));
             WinningTile = winningTile;

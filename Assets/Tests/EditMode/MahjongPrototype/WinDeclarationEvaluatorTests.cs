@@ -538,7 +538,15 @@ namespace MahjongPrototype.Tests
                     "1m 2m 3m 1p 2p 3p 1s 2s 3s E E E C",
                     "C"), Is.True);
                 Assert.That(driver.CreateWinDeclarationEvaluatorWithEmptyCatalog(), Is.Not.Null);
-                Assert.That(driver.CreateLegacyHandEvaluationContext(), Is.Not.Null);
+                object legacyHandContext = driver.CreateLegacyHandEvaluationContext();
+                Assert.That(legacyHandContext, Is.Not.Null);
+                Assert.That(driver.IsIppatsuEligible(legacyHandContext), Is.False);
+                object legacyDetailedHandContext = driver.CreateLegacyDetailedHandEvaluationContext();
+                Assert.That(legacyDetailedHandContext, Is.Not.Null);
+                Assert.That(driver.IsIppatsuEligible(legacyDetailedHandContext), Is.False);
+                object legacyWinDeclarationContext = driver.CreateLegacyWinDeclarationEvaluationContext();
+                Assert.That(legacyWinDeclarationContext, Is.Not.Null);
+                Assert.That(driver.IsIppatsuEligible(legacyWinDeclarationContext), Is.False);
                 Assert.That(driver.CreateLegacyWinDeclarationEvaluationResult(), Is.Not.Null);
                 object legacyHandEvaluationResult = driver.CreateLegacyHandEvaluationResult();
                 Assert.That(legacyHandEvaluationResult, Is.Not.Null);

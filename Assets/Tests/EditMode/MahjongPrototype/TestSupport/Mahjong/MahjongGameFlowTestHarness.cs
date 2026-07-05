@@ -32,7 +32,11 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
                 ApplyOptions(options);
 
                 if (options.AddGameLogRecorder)
+                {
                     GameLogRecorder = Root.AddComponent(types.MahjongGameLogRecorder);
+                    Reflection.Invoke(GameLogRecorder, "CacheReferences");
+                    Reflection.Invoke(GameLogRecorder, "SubscribeEvents");
+                }
             }
             catch
             {

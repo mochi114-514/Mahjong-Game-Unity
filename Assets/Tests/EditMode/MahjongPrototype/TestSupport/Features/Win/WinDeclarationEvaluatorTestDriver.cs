@@ -8,12 +8,16 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
     {
         private const string HandEvaluationContextTypeName =
             "MahjongPrototype.Domain.HandEvaluationContext, Assembly-CSharp";
+        private const string WinDeclarationEvaluationContextTypeName =
+            "MahjongPrototype.Domain.WinDeclarationEvaluationContext, Assembly-CSharp";
         private const string HandEvaluationResultTypeName =
             "MahjongPrototype.Domain.HandEvaluationResult, Assembly-CSharp";
         private const string WinDeclarationEvaluationResultTypeName =
             "MahjongPrototype.Domain.WinDeclarationEvaluationResult, Assembly-CSharp";
         private const string WinningHandShapeTypeName =
             "MahjongPrototype.Domain.WinningHandShape, Assembly-CSharp";
+        private const string WinningHandAnalysisResultTypeName =
+            "MahjongPrototype.Domain.WinningHandAnalysisResult, Assembly-CSharp";
         private const string EvaluatedYakuTypeName =
             "MahjongPrototype.Domain.EvaluatedYaku, Assembly-CSharp";
 
@@ -439,6 +443,45 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
                 support.DataFactory.ParseSeat("East"),
                 false,
                 true);
+        }
+
+        public object CreateLegacyDetailedHandEvaluationContext()
+        {
+            return support.Reflection.CreateInstance(
+                support.Reflection.RequireType(HandEvaluationContextTypeName),
+                support.CreateTiles("1m 2m 3m 1p 2p 3p 1s 2s 3s E E E C"),
+                support.DataFactory.CreateTile("C"),
+                support.DataFactory.ParseWinType("Ron"),
+                ParseWinningHandShape("Standard"),
+                support.Reflection.GetStaticProperty(
+                    support.Reflection.RequireType(WinningHandAnalysisResultTypeName),
+                    "NotWin"),
+                support.DataFactory.ParseSeat("East"),
+                null,
+                support.DataFactory.ParseRoundWind("East"),
+                support.DataFactory.ParseSeat("East"),
+                false,
+                true);
+        }
+
+        public object CreateLegacyWinDeclarationEvaluationContext()
+        {
+            return support.Reflection.CreateInstance(
+                support.Reflection.RequireType(WinDeclarationEvaluationContextTypeName),
+                support.CreateTiles("1m 2m 3m 1p 2p 3p 1s 2s 3s E E E C"),
+                support.DataFactory.CreateTile("C"),
+                support.DataFactory.ParseWinType("Ron"),
+                support.DataFactory.ParseSeat("East"),
+                null,
+                support.DataFactory.ParseRoundWind("East"),
+                support.DataFactory.ParseSeat("East"),
+                false,
+                true);
+        }
+
+        public bool IsIppatsuEligible(object context)
+        {
+            return (bool)support.Reflection.GetProperty(context, "IsIppatsuEligible");
         }
 
         public object CreateLegacyWinDeclarationEvaluationResult()

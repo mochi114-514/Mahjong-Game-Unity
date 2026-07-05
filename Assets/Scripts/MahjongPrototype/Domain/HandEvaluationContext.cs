@@ -15,8 +15,34 @@ namespace MahjongPrototype.Domain
             RoundWind roundWind,
             SeatId seatWind,
             bool isReachDeclared,
+            bool isClosed)
+            : this(
+                handTiles,
+                winningTile,
+                winType,
+                shape,
+                winnerSeat,
+                sourceSeat,
+                roundWind,
+                seatWind,
+                isReachDeclared,
+                isClosed,
+                false)
+        {
+        }
+
+        public HandEvaluationContext(
+            IReadOnlyList<Tile> handTiles,
+            Tile winningTile,
+            WinType winType,
+            WinningHandShape shape,
+            SeatId winnerSeat,
+            SeatId? sourceSeat,
+            RoundWind roundWind,
+            SeatId seatWind,
+            bool isReachDeclared,
             bool isClosed,
-            bool isIppatsuEligible = false)
+            bool isIppatsuEligible)
             : this(
                 handTiles,
                 winningTile,
@@ -44,8 +70,36 @@ namespace MahjongPrototype.Domain
             RoundWind roundWind,
             SeatId seatWind,
             bool isReachDeclared,
+            bool isClosed)
+            : this(
+                handTiles,
+                winningTile,
+                winType,
+                shape,
+                winningHandAnalysis,
+                winnerSeat,
+                sourceSeat,
+                roundWind,
+                seatWind,
+                isReachDeclared,
+                isClosed,
+                false)
+        {
+        }
+
+        public HandEvaluationContext(
+            IReadOnlyList<Tile> handTiles,
+            Tile winningTile,
+            WinType winType,
+            WinningHandShape shape,
+            WinningHandAnalysisResult winningHandAnalysis,
+            SeatId winnerSeat,
+            SeatId? sourceSeat,
+            RoundWind roundWind,
+            SeatId seatWind,
+            bool isReachDeclared,
             bool isClosed,
-            bool isIppatsuEligible = false)
+            bool isIppatsuEligible)
         {
             HandTiles = handTiles ?? throw new ArgumentNullException(nameof(handTiles));
             WinningTile = winningTile;
