@@ -112,6 +112,7 @@ namespace MahjongPrototype.Services
         {
             TryAddYaku(yakus, YakuKind.Pinfu, IsPinfu(context, candidate), context.IsClosed);
             EvaluatePeikouYaku(context, candidate, yakus);
+            EvaluateYakuhaiYaku(context, candidate, yakus);
         }
 
         private void EvaluateSevenPairsCandidateYaku(
@@ -307,6 +308,68 @@ namespace MahjongPrototype.Services
                 pairCount += entry.Value / 2;
 
             return pairCount;
+        }
+
+        private void EvaluateYakuhaiYaku(
+            HandEvaluationContext context,
+            HandEvaluationCandidate candidate,
+            List<EvaluatedYaku> yakus)
+        {
+            if (context == null ||
+                candidate == null ||
+                candidate.Type != HandEvaluationCandidateType.Standard)
+            {
+                return;
+            }
+
+            StandardHandDecomposition decomposition =
+                candidate.StandardInterpretation?.Decomposition;
+
+            if (decomposition == null || decomposition.Melds == null)
+                return;
+
+            for (int i = 0; i < decomposition.Melds.Count; i++)
+            {
+                HandMeld meld = decomposition.Melds[i];
+                if (meld == null ||
+                    meld.Type != MeldType.Triplet ||
+                    meld.Tiles == null ||
+                    meld.Tiles.Count <= 0)
+                {
+                    continue;
+                }
+
+                Tile representativeTile = meld.Tiles[0];
+                if (!representativeTile.IsHonorTile)
+                    continue;
+
+                AddYakuhaiForHonor(context, representativeTile.Honor, yakus);
+            }
+        }
+
+        private void AddYakuhaiForHonor(
+            HandEvaluationContext context,
+            HonorKind honor,
+            List<EvaluatedYaku> yakus)
+        {
+            if (honor == ToHonorKind(context.SeatWind))
+                TryAddYaku(yakus, YakuKind.YakuhaiSeatWind, true, context.IsClosed);
+
+            if (honor == ToHonorKind(context.RoundWind))
+                TryAddYaku(yakus, YakuKind.YakuhaiRoundWind, true, context.IsClosed);
+
+            switch (honor)
+            {
+                case HonorKind.White:
+                    TryAddYaku(yakus, YakuKind.YakuhaiWhiteDragon, true, context.IsClosed);
+                    break;
+                case HonorKind.Green:
+                    TryAddYaku(yakus, YakuKind.YakuhaiGreenDragon, true, context.IsClosed);
+                    break;
+                case HonorKind.Red:
+                    TryAddYaku(yakus, YakuKind.YakuhaiRedDragon, true, context.IsClosed);
+                    break;
+            }
         }
 
         private static bool IsValuePair(
