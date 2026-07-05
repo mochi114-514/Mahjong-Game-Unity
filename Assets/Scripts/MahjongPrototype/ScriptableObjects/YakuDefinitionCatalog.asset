@@ -97,3 +97,39 @@ MonoBehaviour:
     openHan: 1
     isYakuman: 0
     isEnabled: 1
+  - kind: 100
+    displayName: "\u30C0\u30D6\u30EB\u30EA\u30FC\u30C1"
+    closedHan: 2
+    openHan: 0
+    isYakuman: 0
+    isEnabled: 1
+  - kind: 105
+    displayName: "\u4E09\u8272\u540C\u523B"
+    closedHan: 2
+    openHan: 1
+    isYakuman: 0
+    isEnabled: 1
+  - kind: 106
+    displayName: "\u4E09\u8272\u540C\u9806"
+    closedHan: 2
+    openHan: 1
+    isYakuman: 0
+    isEnabled: 1
+  - kind: 107
+    displayName: "\u4E00\u6C17\u901A\u8CAB"
+    closedHan: 2
+    openHan: 1
+    isYakuman: 0
+    isEnabled: 1
+  - kind: 108
+    displayName: "\u6DF7\u5168\u5E2F\u4E48\u4E5D"
+    closedHan: 2
+    openHan: 1
+    isYakuman: 0
+    isEnabled: 1
+  - kind: 109
+    displayName: "\u5C0F\u4E09\u5143"
+    closedHan: 2
+    openHan: 2
+    isYakuman: 0
+    isEnabled: 1
