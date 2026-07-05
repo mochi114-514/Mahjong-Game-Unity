@@ -104,6 +104,7 @@ namespace MahjongPrototype.Services
             List<EvaluatedYaku> yakus)
         {
             TryAddYaku(yakus, YakuKind.Pinfu, IsPinfu(context, candidate), context.IsClosed);
+            EvaluatePeikouYaku(context, candidate, yakus);
         }
 
         private void EvaluateSevenPairsCandidateYaku(
@@ -134,24 +135,25 @@ namespace MahjongPrototype.Services
                 context.IsClosed);
         }
 
-        private void TryAddYaku(
+        private bool TryAddYaku(
             List<EvaluatedYaku> yakus,
             YakuKind kind,
             bool condition,
             bool isClosed)
         {
             if (!condition || !catalog.TryGet(kind, out YakuDefinition definition))
-                return;
+                return false;
 
             HanValue han = ResolveHan(definition, isClosed);
             if (!definition.IsYakuman && han == HanValue.None)
-                return;
+                return false;
 
             yakus.Add(new EvaluatedYaku(
                 definition.Kind,
                 definition.DisplayName,
                 definition.IsYakuman ? HanValue.None : han,
                 definition.IsYakuman));
+            return true;
         }
 
         private static HanValue ResolveHan(YakuDefinition definition, bool isClosed)
@@ -224,6 +226,80 @@ namespace MahjongPrototype.Services
             }
 
             return true;
+        }
+
+        private void EvaluatePeikouYaku(
+            HandEvaluationContext context,
+            HandEvaluationCandidate candidate,
+            List<EvaluatedYaku> yakus)
+        {
+            if (context == null ||
+                candidate == null ||
+                !context.IsClosed ||
+                candidate.Type != HandEvaluationCandidateType.Standard)
+            {
+                return;
+            }
+
+            StandardHandDecomposition decomposition =
+                candidate.StandardInterpretation?.Decomposition;
+
+            if (decomposition == null ||
+                decomposition.Melds == null ||
+                decomposition.Melds.Count != 4)
+            {
+                return;
+            }
+
+            int identicalSequencePairCount =
+                CountIdenticalSequencePairs(decomposition);
+
+            if (identicalSequencePairCount >= 2 &&
+                TryAddYaku(
+                    yakus,
+                    YakuKind.Ryanpeikou,
+                    true,
+                    context.IsClosed))
+            {
+                return;
+            }
+
+            TryAddYaku(
+                yakus,
+                YakuKind.Iipeikou,
+                identicalSequencePairCount >= 1,
+                context.IsClosed);
+        }
+
+        private static int CountIdenticalSequencePairs(
+            StandardHandDecomposition decomposition)
+        {
+            Dictionary<int, int> sequenceCounts = new Dictionary<int, int>();
+
+            for (int i = 0; i < decomposition.Melds.Count; i++)
+            {
+                HandMeld meld = decomposition.Melds[i];
+                if (meld == null ||
+                    meld.Type != MeldType.Sequence ||
+                    meld.Tiles == null ||
+                    meld.Tiles.Count != 3)
+                {
+                    continue;
+                }
+
+                int key = meld.Tiles[0].TypeIndex;
+
+                if (!sequenceCounts.TryGetValue(key, out int count))
+                    count = 0;
+
+                sequenceCounts[key] = count + 1;
+            }
+
+            int pairCount = 0;
+            foreach (KeyValuePair<int, int> entry in sequenceCounts)
+                pairCount += entry.Value / 2;
+
+            return pairCount;
         }
 
         private static bool IsValuePair(
