@@ -631,26 +631,17 @@ namespace MahjongPrototype.UI
 
         private void RefreshInteractionState(MahjongGameState state)
         {
-            bool canUseGameplayInput = CanUseSelfGameplayInput(state);
-            bool isDeclaredReachWaitingForDraw =
-                state != null &&
-                state.IsSelfTurn &&
-                !state.IsInteractionLocked &&
-                state.GetPlayerSeat(state.SelfSeat).IsReachDeclared &&
-                !state.GetPlayerSeat(state.SelfSeat).HasDrawnTile;
-            bool canUseControlPanelInput =
-                canUseGameplayInput &&
-                (state == null || !state.IsReachDiscardSelectionPending) &&
-                !isDeclaredReachWaitingForDraw;
+            bool canUseSelfTileInput = CanUseSelfGameplayInput(state);
+            bool canUseControlPanelInput = CanUseControlAreaInput(state);
 
             if (inputController != null)
                 inputController.SetGameplayInputInteractable(canUseControlPanelInput);
 
             if (playerArea3DPresenter != null)
-                playerArea3DPresenter.SetSelfInteractable(state, canUseGameplayInput);
+                playerArea3DPresenter.SetSelfInteractable(state, canUseSelfTileInput);
 
             ApplyReachDiscardCandidateInteractable(state);
-            ApplyDeclaredReachInteractable(state, canUseGameplayInput);
+            ApplyDeclaredReachInteractable(state, canUseSelfTileInput);
         }
 
         private void RefreshInteractionUi()
@@ -666,6 +657,24 @@ namespace MahjongPrototype.UI
                 state != null &&
                 state.IsSelfTurn &&
                 !state.IsInteractionLocked;
+        }
+
+        private bool CanUseControlAreaInput(MahjongGameState state)
+        {
+            return gameFlow != null &&
+                state != null &&
+                !state.IsInteractionLocked &&
+                !state.IsReachDiscardSelectionPending &&
+                !IsDeclaredReachWaitingForDraw(state);
+        }
+
+        private static bool IsDeclaredReachWaitingForDraw(MahjongGameState state)
+        {
+            return state != null &&
+                state.IsSelfTurn &&
+                !state.IsInteractionLocked &&
+                state.GetPlayerSeat(state.SelfSeat).IsReachDeclared &&
+                !state.GetPlayerSeat(state.SelfSeat).HasDrawnTile;
         }
 
         private bool IsSelfSeat(SeatId seat)
