@@ -88,7 +88,10 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
             string handText,
             string winningTileCode,
             string winTypeName,
-            bool isReachDeclared)
+            bool isReachDeclared,
+            string roundWindName = "East",
+            string seatWindName = "East",
+            bool isClosed = true)
         {
             return Reflection.CreateInstance(
                 Reflection.RequireType(WinDeclarationEvaluationContextTypeName),
@@ -97,10 +100,10 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
                 DataFactory.ParseWinType(winTypeName),
                 DataFactory.ParseSeat("East"),
                 null,
-                DataFactory.ParseRoundWind("East"),
-                DataFactory.ParseSeat("East"),
+                DataFactory.ParseRoundWind(roundWindName),
+                DataFactory.ParseSeat(seatWindName),
                 isReachDeclared,
-                true);
+                isClosed);
         }
 
         public object CreateYakuDefinition(

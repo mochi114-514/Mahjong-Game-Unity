@@ -63,14 +63,20 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
             string handText,
             string winningTileCode,
             string winTypeName,
-            bool isReachDeclared = false)
+            bool isReachDeclared = false,
+            string roundWindName = "East",
+            string seatWindName = "East",
+            bool isClosed = true)
         {
             object evaluator = support.CreateWinDeclarationEvaluator(catalog);
             object context = support.CreateWinDeclarationEvaluationContext(
                 handText,
                 winningTileCode,
                 winTypeName,
-                isReachDeclared);
+                isReachDeclared,
+                roundWindName,
+                seatWindName,
+                isClosed);
 
             return support.Reflection.Invoke(evaluator, "EvaluateWithTile", context);
         }
@@ -150,6 +156,49 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
             return support.Reflection.GetProperty(
                 Candidate(candidateResult),
                 "StandardInterpretation") != null;
+        }
+
+        public string CandidateWaitTypeName(object candidateResult)
+        {
+            object interpretation = CandidateStandardInterpretation(candidateResult);
+            return interpretation == null
+                ? "None"
+                : support.Reflection.GetProperty(interpretation, "WaitType").ToString();
+        }
+
+        public string CandidatePairTileCode(object candidateResult)
+        {
+            object decomposition = CandidateStandardDecomposition(candidateResult);
+            if (decomposition == null)
+                return null;
+
+            object pairTile = support.Reflection.GetProperty(decomposition, "PairTile");
+            return support.Reflection.GetProperty(pairTile, "Code") as string;
+        }
+
+        public int CandidateStandardMeldCount(object candidateResult)
+        {
+            object melds = CandidateStandardMelds(candidateResult);
+            return melds == null ? 0 : support.Collections.Count(melds);
+        }
+
+        public bool CandidateAllStandardMeldsHaveType(
+            object candidateResult,
+            string meldTypeName)
+        {
+            object melds = CandidateStandardMelds(candidateResult);
+            if (melds == null)
+                return false;
+
+            int count = support.Collections.Count(melds);
+            for (int i = 0; i < count; i++)
+            {
+                object meld = support.Collections.Item(melds, i);
+                if (support.Reflection.GetProperty(meld, "Type").ToString() != meldTypeName)
+                    return false;
+            }
+
+            return true;
         }
 
         public bool CandidateSevenPairsIsWin(object candidateResult)
@@ -340,6 +389,29 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
         private object Candidate(object candidateResult)
         {
             return support.Reflection.GetProperty(candidateResult, "Candidate");
+        }
+
+        private object CandidateStandardInterpretation(object candidateResult)
+        {
+            return support.Reflection.GetProperty(
+                Candidate(candidateResult),
+                "StandardInterpretation");
+        }
+
+        private object CandidateStandardDecomposition(object candidateResult)
+        {
+            object interpretation = CandidateStandardInterpretation(candidateResult);
+            return interpretation == null
+                ? null
+                : support.Reflection.GetProperty(interpretation, "Decomposition");
+        }
+
+        private object CandidateStandardMelds(object candidateResult)
+        {
+            object decomposition = CandidateStandardDecomposition(candidateResult);
+            return decomposition == null
+                ? null
+                : support.Reflection.GetProperty(decomposition, "Melds");
         }
 
         private static object HandEvaluationResult(object result)

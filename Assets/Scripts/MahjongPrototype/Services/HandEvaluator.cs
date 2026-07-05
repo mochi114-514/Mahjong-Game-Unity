@@ -96,6 +96,7 @@ namespace MahjongPrototype.Services
                 context.WinType == WinType.Tsumo && context.IsClosed,
                 context.IsClosed);
             TryAddYaku(yakus, YakuKind.Tanyao, IsTanyao(context), context.IsClosed);
+            TryAddYaku(yakus, YakuKind.Pinfu, IsPinfu(context, candidate), context.IsClosed);
 
             TryAddYaku(
                 yakus,
@@ -157,6 +158,112 @@ namespace MahjongPrototype.Services
         private static bool IsSimpleNumberTile(Tile tile)
         {
             return tile.IsNumberTile && tile.Rank >= 2 && tile.Rank <= 8;
+        }
+
+        private static bool IsPinfu(
+            HandEvaluationContext context,
+            HandEvaluationCandidate candidate)
+        {
+            if (context == null || candidate == null)
+                return false;
+
+            if (!context.IsClosed)
+                return false;
+
+            if (candidate.Type != HandEvaluationCandidateType.Standard)
+                return false;
+
+            StandardWinningInterpretation interpretation =
+                candidate.StandardInterpretation;
+            if (interpretation == null || interpretation.WaitType != WaitType.Ryanmen)
+                return false;
+
+            StandardHandDecomposition decomposition = interpretation.Decomposition;
+            if (decomposition == null || !AreAllMeldsSequences(decomposition))
+                return false;
+
+            return !IsValuePair(
+                decomposition.PairTile,
+                context.SeatWind,
+                context.RoundWind);
+        }
+
+        private static bool AreAllMeldsSequences(
+            StandardHandDecomposition decomposition)
+        {
+            if (decomposition == null ||
+                decomposition.Melds == null ||
+                decomposition.Melds.Count != 4)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < decomposition.Melds.Count; i++)
+            {
+                HandMeld meld = decomposition.Melds[i];
+                if (meld == null || meld.Type != MeldType.Sequence)
+                    return false;
+            }
+
+            return true;
+        }
+
+        private static bool IsValuePair(
+            Tile pairTile,
+            SeatId seatWind,
+            RoundWind roundWind)
+        {
+            if (!pairTile.IsValid)
+                return true;
+
+            if (pairTile.IsNumberTile)
+                return false;
+
+            if (!pairTile.IsHonorTile)
+                return true;
+
+            switch (pairTile.Honor)
+            {
+                case HonorKind.White:
+                case HonorKind.Green:
+                case HonorKind.Red:
+                    return true;
+            }
+
+            HonorKind seatWindHonor = ToHonorKind(seatWind);
+            HonorKind roundWindHonor = ToHonorKind(roundWind);
+            return pairTile.Honor == seatWindHonor ||
+                   pairTile.Honor == roundWindHonor;
+        }
+
+        private static HonorKind ToHonorKind(SeatId seatWind)
+        {
+            switch (seatWind)
+            {
+                case SeatId.East:
+                    return HonorKind.East;
+                case SeatId.South:
+                    return HonorKind.South;
+                case SeatId.West:
+                    return HonorKind.West;
+                case SeatId.North:
+                    return HonorKind.North;
+                default:
+                    return HonorKind.None;
+            }
+        }
+
+        private static HonorKind ToHonorKind(RoundWind roundWind)
+        {
+            switch (roundWind)
+            {
+                case RoundWind.East:
+                    return HonorKind.East;
+                case RoundWind.South:
+                    return HonorKind.South;
+                default:
+                    return HonorKind.None;
+            }
         }
     }
 }
