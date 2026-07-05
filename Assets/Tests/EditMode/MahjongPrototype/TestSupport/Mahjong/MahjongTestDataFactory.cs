@@ -208,10 +208,40 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
             string openHanName,
             bool isYakuman = false)
         {
+            return CreateYakuDefinition(
+                yakuKindName,
+                yakuKindName,
+                closedHanName,
+                openHanName,
+                isYakuman);
+        }
+
+        public object CreateYakuDefinitionWithDisplayName(
+            string yakuKindName,
+            string displayName,
+            string closedHanName,
+            string openHanName,
+            bool isYakuman = false)
+        {
+            return CreateYakuDefinition(
+                yakuKindName,
+                displayName,
+                closedHanName,
+                openHanName,
+                isYakuman);
+        }
+
+        private object CreateYakuDefinition(
+            string yakuKindName,
+            string displayName,
+            string closedHanName,
+            string openHanName,
+            bool isYakuman)
+        {
             return reflection.CreateInstance(
                 types.YakuDefinition,
                 Enum.Parse(types.YakuKind, yakuKindName),
-                yakuKindName,
+                displayName,
                 Enum.Parse(types.HanValue, closedHanName),
                 Enum.Parse(types.HanValue, openHanName),
                 isYakuman,

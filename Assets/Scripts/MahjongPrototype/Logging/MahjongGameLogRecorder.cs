@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Text;
 using MahjongPrototype.Domain;
 using MahjongPrototype.Notifications;
 using MahjongPrototype.Services;
@@ -55,7 +57,7 @@ namespace MahjongPrototype.Logging
             eventNotifier.SeatSlotsAssigned += HandleSeatSlotsAssigned;
             eventNotifier.TurnDebug += HandleTurnDebug;
             eventNotifier.WinCheckedDetailed += HandleWinCheckedDetailed;
-            eventNotifier.WinDeclaredDetailed += HandleWinDeclaredDetailed;
+            eventNotifier.WinDeclaredEvaluated += HandleWinDeclaredEvaluated;
             eventNotifier.WinDeclinedDetailed += HandleWinDeclinedDetailed;
             eventNotifier.SkillActivatedDetailed += HandleSkillActivatedDetailed;
             eventNotifier.SkillEffectRegistered += HandleSkillEffectRegistered;
@@ -83,7 +85,7 @@ namespace MahjongPrototype.Logging
             eventNotifier.SeatSlotsAssigned -= HandleSeatSlotsAssigned;
             eventNotifier.TurnDebug -= HandleTurnDebug;
             eventNotifier.WinCheckedDetailed -= HandleWinCheckedDetailed;
-            eventNotifier.WinDeclaredDetailed -= HandleWinDeclaredDetailed;
+            eventNotifier.WinDeclaredEvaluated -= HandleWinDeclaredEvaluated;
             eventNotifier.WinDeclinedDetailed -= HandleWinDeclinedDetailed;
             eventNotifier.SkillActivatedDetailed -= HandleSkillActivatedDetailed;
             eventNotifier.SkillEffectRegistered -= HandleSkillEffectRegistered;
@@ -225,16 +227,34 @@ namespace MahjongPrototype.Logging
                 turnIndex: turnIndex);
         }
 
-        private void HandleWinDeclaredDetailed(SeatId seat, WinType? winType, int turnIndex)
+        private void HandleWinDeclaredEvaluated(
+            SeatId seat,
+            WinType? winType,
+            Tile? winningTile,
+            SeatId? sourceSeat,
+            int turnIndex,
+            WinDeclarationEvaluationResult evaluationResult)
         {
+            string message = BuildWinDeclaredEvaluationText(
+                seat,
+                winType,
+                winningTile,
+                sourceSeat,
+                evaluationResult);
+
             DevLog.Record(
                 "Mahjong",
                 "WinDeclared",
-                $"winType={winType}; win declared.",
+                message,
                 seat: seat,
+                tile: winningTile,
                 hand: GetHandText(seat),
                 wallCount: GetWallCount(),
                 turnIndex: turnIndex);
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            Debug.Log(message, this);
+#endif
         }
 
         private void HandleWinDeclinedDetailed(SeatId seat, WinType? winType, int turnIndex)
@@ -418,6 +438,232 @@ namespace MahjongPrototype.Logging
                 hand: GetHandText(seat),
                 wallCount: GetWallCount(),
                 turnIndex: turnIndex);
+        }
+
+        private static string BuildWinDeclaredEvaluationText(
+            SeatId seat,
+            WinType? winType,
+            Tile? winningTile,
+            SeatId? sourceSeat,
+            WinDeclarationEvaluationResult evaluationResult)
+        {
+            StringBuilder builder = new StringBuilder();
+            builder.AppendLine("[和了結果]");
+            builder.AppendLine("和了者=" + seat);
+            builder.AppendLine("和了方法=" + FormatWinType(winType));
+            builder.AppendLine("和了牌=" + FormatTile(winningTile));
+
+            if (winType == WinType.Ron && sourceSeat.HasValue)
+                builder.AppendLine("放銃者=" + sourceSeat.Value);
+
+            if (evaluationResult == null)
+            {
+                builder.Append("役=評価結果なし");
+                return builder.ToString();
+            }
+
+            HandEvaluationResult handEvaluation = evaluationResult.HandEvaluationResult;
+            if (handEvaluation == null)
+            {
+                builder.Append("役=評価結果なし");
+                return builder.ToString();
+            }
+
+            if (AppendCandidateResults(builder, handEvaluation.CandidateResults, winningTile))
+                return builder.ToString();
+
+            if (AppendLegacyYakuResult(builder, handEvaluation))
+                return builder.ToString();
+
+            builder.Append("役=役なし");
+            return builder.ToString();
+        }
+
+        private static bool AppendCandidateResults(
+            StringBuilder builder,
+            IReadOnlyList<HandEvaluationCandidateResult> candidateResults,
+            Tile? winningTile)
+        {
+            if (candidateResults == null || candidateResults.Count == 0)
+                return false;
+
+            int displayedCount = 0;
+            for (int i = 0; i < candidateResults.Count; i++)
+            {
+                HandEvaluationCandidateResult candidateResult = candidateResults[i];
+                if (candidateResult == null || !candidateResult.HasYaku)
+                    continue;
+
+                displayedCount++;
+                AppendCandidateResult(
+                    builder,
+                    displayedCount,
+                    candidateResult,
+                    winningTile);
+            }
+
+            return displayedCount > 0;
+        }
+
+        private static void AppendCandidateResult(
+            StringBuilder builder,
+            int displayIndex,
+            HandEvaluationCandidateResult candidateResult,
+            Tile? winningTile)
+        {
+            HandEvaluationCandidate candidate = candidateResult.Candidate;
+            builder.Append("成立候補");
+            builder.Append(displayIndex);
+            builder.Append(": 形=");
+            builder.Append(FormatCandidateType(candidate));
+            builder.Append(" / 待ち=");
+            builder.Append(FormatCandidateWait(candidate, winningTile));
+            builder.Append(" / 役=");
+            builder.Append(FormatYakuList(candidateResult.Yakus));
+            builder.Append(" / 合計=");
+            builder.Append(FormatTotalHan(candidateResult.HasYakuman, candidateResult.TotalHan));
+            builder.AppendLine();
+        }
+
+        private static bool AppendLegacyYakuResult(
+            StringBuilder builder,
+            HandEvaluationResult handEvaluation)
+        {
+            if (handEvaluation.Yakus == null || handEvaluation.Yakus.Count == 0)
+                return false;
+
+            builder.Append("成立候補1: 形=旧評価 / 待ち=不明 / 役=");
+            builder.Append(FormatYakuList(handEvaluation.Yakus));
+            builder.Append(" / 合計=");
+            builder.Append(FormatTotalHan(handEvaluation.HasYakuman, handEvaluation.TotalHan));
+            return true;
+        }
+
+        private static string FormatYakuList(IReadOnlyList<EvaluatedYaku> yakus)
+        {
+            if (yakus == null || yakus.Count == 0)
+                return "なし";
+
+            StringBuilder builder = new StringBuilder();
+            for (int i = 0; i < yakus.Count; i++)
+            {
+                if (i > 0)
+                    builder.Append(", ");
+
+                EvaluatedYaku yaku = yakus[i];
+                builder.Append(yaku.DisplayName);
+                builder.Append(yaku.IsYakuman ? "(役満)" : "(" + (int)yaku.Han + "翻)");
+            }
+
+            return builder.ToString();
+        }
+
+        private static string FormatTotalHan(bool hasYakuman, int totalHan)
+        {
+            return hasYakuman ? "役満" : totalHan + "翻";
+        }
+
+        private static string FormatCandidateType(HandEvaluationCandidate candidate)
+        {
+            if (candidate == null)
+                return "不明";
+
+            switch (candidate.Type)
+            {
+                case HandEvaluationCandidateType.Standard:
+                    return "通常形";
+                case HandEvaluationCandidateType.SevenPairs:
+                    return "七対子";
+                case HandEvaluationCandidateType.ThirteenOrphans:
+                    return "国士無双";
+                default:
+                    return "不明";
+            }
+        }
+
+        private static string FormatCandidateWait(
+            HandEvaluationCandidate candidate,
+            Tile? winningTile)
+        {
+            if (candidate == null)
+                return "不明";
+
+            switch (candidate.Type)
+            {
+                case HandEvaluationCandidateType.Standard:
+                    return FormatWaitType(
+                        candidate.StandardInterpretation != null
+                            ? candidate.StandardInterpretation.WaitType
+                            : WaitType.None);
+                case HandEvaluationCandidateType.SevenPairs:
+                    return "単騎";
+                case HandEvaluationCandidateType.ThirteenOrphans:
+                    return FormatThirteenOrphansWait(
+                        candidate.ThirteenOrphansAnalysis,
+                        winningTile);
+                default:
+                    return "不明";
+            }
+        }
+
+        private static string FormatWaitType(WaitType waitType)
+        {
+            switch (waitType)
+            {
+                case WaitType.Ryanmen:
+                    return "両面";
+                case WaitType.Kanchan:
+                    return "嵌張";
+                case WaitType.Penchan:
+                    return "辺張";
+                case WaitType.Tanki:
+                    return "単騎";
+                case WaitType.Shanpon:
+                    return "双碰";
+                default:
+                    return "不明";
+            }
+        }
+
+        private static string FormatThirteenOrphansWait(
+            ThirteenOrphansAnalysis analysis,
+            Tile? winningTile)
+        {
+            if (analysis == null ||
+                !analysis.IsWin ||
+                !analysis.PairTile.IsValid ||
+                !winningTile.HasValue ||
+                !winningTile.Value.IsValid)
+            {
+                return "国士無双";
+            }
+
+            return winningTile.Value == analysis.PairTile
+                ? "国士十三面"
+                : "国士単騎";
+        }
+
+        private static string FormatWinType(WinType? winType)
+        {
+            if (!winType.HasValue)
+                return "不明";
+
+            switch (winType.Value)
+            {
+                case WinType.Tsumo:
+                    return "ツモ";
+                case WinType.Ron:
+                    return "ロン";
+                default:
+                    return "不明";
+            }
+        }
+
+        private static string FormatTile(Tile? tile)
+        {
+            return tile.HasValue && tile.Value.IsValid
+                ? tile.Value.Code
+                : "不明";
         }
 
         private string GetSeatSlotLogLabel(MahjongGameState state, SeatSlot slot)

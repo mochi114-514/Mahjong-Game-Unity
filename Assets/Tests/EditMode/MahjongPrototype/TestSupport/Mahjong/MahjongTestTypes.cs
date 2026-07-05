@@ -21,6 +21,8 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
         private const string MahjongGameFlowTypeName = "MahjongPrototype.MahjongGameFlow, Assembly-CSharp";
         private const string MahjongEventNotifierTypeName =
             "MahjongPrototype.Notifications.MahjongEventNotifier, Assembly-CSharp";
+        private const string MahjongGameLogRecorderTypeName =
+            "MahjongPrototype.Logging.MahjongGameLogRecorder, Assembly-CSharp";
         private const string HanValueTypeName = "MahjongPrototype.Domain.HanValue, Assembly-CSharp";
         private const string YakuKindTypeName = "MahjongPrototype.Domain.YakuKind, Assembly-CSharp";
         private const string YakuDefinitionTypeName =
@@ -49,6 +51,7 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
         public Type MahjongGameState => reflection.RequireType(MahjongGameStateTypeName);
         public Type MahjongGameFlow => reflection.RequireType(MahjongGameFlowTypeName);
         public Type MahjongEventNotifier => reflection.RequireType(MahjongEventNotifierTypeName);
+        public Type MahjongGameLogRecorder => reflection.RequireType(MahjongGameLogRecorderTypeName);
         public Type HanValue => reflection.RequireType(HanValueTypeName);
         public Type YakuKind => reflection.RequireType(YakuKindTypeName);
         public Type YakuDefinition => reflection.RequireType(YakuDefinitionTypeName);

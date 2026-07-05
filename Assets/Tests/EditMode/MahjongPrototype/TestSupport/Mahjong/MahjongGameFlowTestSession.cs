@@ -17,6 +17,7 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
 
         public object GameFlow => harness.GameFlow;
         public object EventNotifier => harness.EventNotifier;
+        public object GameLogRecorder => harness.GameLogRecorder;
         public object CurrentState => harness.CurrentState;
         public ReflectionTestAccess Reflection => harness.Reflection;
         public CollectionTestAccess Collections => harness.Collections;

@@ -34,6 +34,7 @@ namespace MahjongPrototype.Notifications
         public event Action<string, string, SeatId?, Tile?, int?> TurnDebug;
         public event Action<SeatId, WinType, Tile?, SeatId?, int, bool> WinCheckedDetailed;
         public event Action<SeatId, WinType?, int> WinDeclaredDetailed;
+        public event Action<SeatId, WinType?, Tile?, SeatId?, int, WinDeclarationEvaluationResult> WinDeclaredEvaluated;
         public event Action<SeatId, WinType?, int> WinDeclinedDetailed;
         public event Action<SeatId, ActiveSkillEffect, bool> SkillActivatedDetailed;
         public event Action<PendingSkillReservation> SkillReserved;
@@ -201,6 +202,24 @@ namespace MahjongPrototype.Notifications
         public void NotifyWinDeclaredDetailed(SeatId seat, WinType? winType, int turnIndex)
         {
             WinDeclaredDetailed?.Invoke(seat, winType, turnIndex);
+            NotifyAny();
+        }
+
+        public void NotifyWinDeclaredEvaluated(
+            SeatId seat,
+            WinType? winType,
+            Tile? winningTile,
+            SeatId? sourceSeat,
+            int turnIndex,
+            WinDeclarationEvaluationResult evaluationResult)
+        {
+            WinDeclaredEvaluated?.Invoke(
+                seat,
+                winType,
+                winningTile,
+                sourceSeat,
+                turnIndex,
+                evaluationResult);
             NotifyAny();
         }
 

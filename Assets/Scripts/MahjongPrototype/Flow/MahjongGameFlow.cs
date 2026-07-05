@@ -604,7 +604,11 @@ namespace MahjongPrototype
 
             SeatId seat = gameState.WinDecisionSeat;
             WinType? winType = gameState.WinDecisionType;
+            Tile? winningTile = gameState.WinningTile;
+            SeatId? sourceSeat = gameState.WinSourceSeat;
             int turnIndex = gameState.WinDecisionTurnIndex;
+            WinDeclarationEvaluationResult evaluationResult =
+                gameState.PendingWinDeclarationEvaluation;
 
             EndRound(
                 RoundEndReasonWin,
@@ -612,6 +616,13 @@ namespace MahjongPrototype
                 {
                     NotifyWinDeclared(seat, turnIndex);
                     NotifyWinDeclaredDetailed(seat, winType, turnIndex);
+                    NotifyWinDeclaredEvaluated(
+                        seat,
+                        winType,
+                        winningTile,
+                        sourceSeat,
+                        turnIndex,
+                        evaluationResult);
                 });
         }
 
@@ -1623,6 +1634,23 @@ namespace MahjongPrototype
         private void NotifyWinDeclaredDetailed(SeatId seat, WinType? winType, int turnIndex)
         {
             eventNotifier?.NotifyWinDeclaredDetailed(seat, winType, turnIndex);
+        }
+
+        private void NotifyWinDeclaredEvaluated(
+            SeatId seat,
+            WinType? winType,
+            Tile? winningTile,
+            SeatId? sourceSeat,
+            int turnIndex,
+            WinDeclarationEvaluationResult evaluationResult)
+        {
+            eventNotifier?.NotifyWinDeclaredEvaluated(
+                seat,
+                winType,
+                winningTile,
+                sourceSeat,
+                turnIndex,
+                evaluationResult);
         }
 
         private void NotifyWinDeclinedDetailed(SeatId seat, WinType? winType, int turnIndex)

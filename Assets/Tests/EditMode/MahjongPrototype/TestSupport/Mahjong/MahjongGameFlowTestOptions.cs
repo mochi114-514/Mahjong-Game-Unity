@@ -4,6 +4,7 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
     {
         public string RootName { get; set; }
         public bool AddEventNotifier { get; set; }
+        public bool AddGameLogRecorder { get; set; }
         public bool? LogWarnings { get; set; }
         public int? ParticipantCount { get; set; }
         public int? InitialHandTileCount { get; set; }

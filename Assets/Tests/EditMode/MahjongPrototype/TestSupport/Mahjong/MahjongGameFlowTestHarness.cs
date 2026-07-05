@@ -30,6 +30,9 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
 
                 GameFlow = Root.AddComponent(types.MahjongGameFlow);
                 ApplyOptions(options);
+
+                if (options.AddGameLogRecorder)
+                    GameLogRecorder = Root.AddComponent(types.MahjongGameLogRecorder);
             }
             catch
             {
@@ -41,6 +44,7 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
         public GameObject Root { get; }
         public object GameFlow { get; }
         public object EventNotifier { get; }
+        public object GameLogRecorder { get; }
         public ReflectionTestAccess Reflection { get; }
         public CollectionTestAccess Collections { get; }
         public MahjongTestTypes Types { get; }
