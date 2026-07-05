@@ -7,6 +7,8 @@ namespace MahjongPrototype.Services
     public sealed class HandEvaluator
     {
         private readonly YakuDefinitionCatalog catalog;
+        private const int CompleteDragonMask = 7;
+        private const int CompleteIttsuuSequenceMask = 7;
 
         public HandEvaluator(YakuDefinitionCatalog catalog)
         {
@@ -81,7 +83,9 @@ namespace MahjongPrototype.Services
                     break;
             }
 
-            return new HandEvaluationCandidateResult(candidate, yakus);
+            List<EvaluatedYaku> finalizedYakus = KeepOnlyYakumanWhenPresent(yakus);
+
+            return new HandEvaluationCandidateResult(candidate, finalizedYakus);
         }
 
         private void EvaluateCommonYaku(
@@ -129,8 +133,10 @@ namespace MahjongPrototype.Services
             TryAddYaku(yakus, YakuKind.Pinfu, IsPinfu(context, candidate), context.IsClosed);
             EvaluatePeikouYaku(context, candidate, yakus);
             EvaluateYakuhaiYaku(context, candidate, yakus);
+            EvaluateDragonGroupYaku(context, candidate, yakus);
             EvaluateSanshokuDoujunYaku(context, candidate, yakus);
             EvaluateSanshokuDoukouYaku(context, candidate, yakus);
+            EvaluateIttsuuYaku(context, candidate, yakus);
         }
 
         private void EvaluateSevenPairsCandidateYaku(
@@ -185,6 +191,36 @@ namespace MahjongPrototype.Services
         private static HanValue ResolveHan(YakuDefinition definition, bool isClosed)
         {
             return isClosed ? definition.ClosedHan : definition.OpenHan;
+        }
+
+        private static List<EvaluatedYaku> KeepOnlyYakumanWhenPresent(
+            List<EvaluatedYaku> yakus)
+        {
+            if (yakus == null || yakus.Count == 0)
+                return yakus ?? new List<EvaluatedYaku>();
+
+            bool hasYakuman = false;
+            for (int i = 0; i < yakus.Count; i++)
+            {
+                if (yakus[i].IsYakuman)
+                {
+                    hasYakuman = true;
+                    break;
+                }
+            }
+
+            if (!hasYakuman)
+                return yakus;
+
+            List<EvaluatedYaku> yakumanOnly = new List<EvaluatedYaku>();
+            for (int i = 0; i < yakus.Count; i++)
+            {
+                EvaluatedYaku yaku = yakus[i];
+                if (yaku.IsYakuman)
+                    yakumanOnly.Add(yaku);
+            }
+
+            return yakumanOnly;
         }
 
         private static bool IsTanyao(HandEvaluationContext context)
@@ -365,6 +401,82 @@ namespace MahjongPrototype.Services
             }
         }
 
+        private void EvaluateDragonGroupYaku(
+            HandEvaluationContext context,
+            HandEvaluationCandidate candidate,
+            List<EvaluatedYaku> yakus)
+        {
+            if (context == null ||
+                candidate == null ||
+                candidate.Type != HandEvaluationCandidateType.Standard)
+            {
+                return;
+            }
+
+            if (!TryGetDragonGroupMasks(
+                    candidate,
+                    out int dragonTripletMask,
+                    out int dragonPairMask))
+            {
+                return;
+            }
+
+            if (dragonTripletMask == CompleteDragonMask)
+            {
+                TryAddYaku(
+                    yakus,
+                    YakuKind.Daisangen,
+                    true,
+                    context.IsClosed);
+                return;
+            }
+
+            if (CountBits(dragonTripletMask) == 2 &&
+                dragonPairMask != 0 &&
+                (dragonTripletMask & dragonPairMask) == 0 &&
+                (dragonTripletMask | dragonPairMask) == CompleteDragonMask)
+            {
+                TryAddYaku(
+                    yakus,
+                    YakuKind.Shousangen,
+                    true,
+                    context.IsClosed);
+            }
+        }
+
+        private static bool TryGetDragonGroupMasks(
+            HandEvaluationCandidate candidate,
+            out int dragonTripletMask,
+            out int dragonPairMask)
+        {
+            dragonTripletMask = 0;
+            dragonPairMask = 0;
+
+            StandardHandDecomposition decomposition =
+                candidate.StandardInterpretation?.Decomposition;
+
+            if (decomposition == null || decomposition.Melds == null)
+                return false;
+
+            dragonPairMask = ToDragonMask(decomposition.PairTile);
+
+            for (int i = 0; i < decomposition.Melds.Count; i++)
+            {
+                HandMeld meld = decomposition.Melds[i];
+                if (meld == null ||
+                    meld.Type != MeldType.Triplet ||
+                    meld.Tiles == null ||
+                    meld.Tiles.Count <= 0)
+                {
+                    continue;
+                }
+
+                dragonTripletMask |= ToDragonMask(meld.Tiles[0]);
+            }
+
+            return true;
+        }
+
         private void AddYakuhaiForHonor(
             HandEvaluationContext context,
             HonorKind honor,
@@ -494,6 +606,72 @@ namespace MahjongPrototype.Services
             }
         }
 
+        private void EvaluateIttsuuYaku(
+            HandEvaluationContext context,
+            HandEvaluationCandidate candidate,
+            List<EvaluatedYaku> yakus)
+        {
+            if (context == null ||
+                candidate == null ||
+                candidate.Type != HandEvaluationCandidateType.Standard)
+            {
+                return;
+            }
+
+            StandardHandDecomposition decomposition =
+                candidate.StandardInterpretation?.Decomposition;
+
+            if (decomposition == null || decomposition.Melds == null)
+                return;
+
+            int manSequenceMask = 0;
+            int pinSequenceMask = 0;
+            int souSequenceMask = 0;
+            for (int i = 0; i < decomposition.Melds.Count; i++)
+            {
+                HandMeld meld = decomposition.Melds[i];
+                if (meld == null ||
+                    meld.Type != MeldType.Sequence ||
+                    meld.Tiles == null ||
+                    meld.Tiles.Count != 3)
+                {
+                    continue;
+                }
+
+                Tile representativeTile = meld.Tiles[0];
+                if (!representativeTile.IsNumberTile)
+                    continue;
+
+                int sequenceMask = ToIttsuuSequenceMask(representativeTile.Rank);
+                if (sequenceMask == 0)
+                    continue;
+
+                switch (representativeTile.Suit)
+                {
+                    case TileSuit.Man:
+                        manSequenceMask |= sequenceMask;
+                        break;
+                    case TileSuit.Pin:
+                        pinSequenceMask |= sequenceMask;
+                        break;
+                    case TileSuit.Sou:
+                        souSequenceMask |= sequenceMask;
+                        break;
+                }
+            }
+
+            if (HasCompleteIttsuu(manSequenceMask) ||
+                HasCompleteIttsuu(pinSequenceMask) ||
+                HasCompleteIttsuu(souSequenceMask))
+            {
+                TryAddYaku(
+                    yakus,
+                    YakuKind.Ittsuu,
+                    true,
+                    context.IsClosed);
+            }
+        }
+
         private static int ToSuitMask(TileSuit suit)
         {
             switch (suit)
@@ -512,6 +690,59 @@ namespace MahjongPrototype.Services
         private static bool HasAllNumberSuits(int suitMask)
         {
             return (suitMask & 7) == 7;
+        }
+
+        private static int ToDragonMask(Tile tile)
+        {
+            return tile.IsHonorTile ? ToDragonMask(tile.Honor) : 0;
+        }
+
+        private static int ToDragonMask(HonorKind honor)
+        {
+            switch (honor)
+            {
+                case HonorKind.White:
+                    return 1;
+                case HonorKind.Green:
+                    return 2;
+                case HonorKind.Red:
+                    return 4;
+                default:
+                    return 0;
+            }
+        }
+
+        private static int CountBits(int mask)
+        {
+            int count = 0;
+            while (mask != 0)
+            {
+                count += mask & 1;
+                mask >>= 1;
+            }
+
+            return count;
+        }
+
+        private static int ToIttsuuSequenceMask(int startRank)
+        {
+            switch (startRank)
+            {
+                case 1:
+                    return 1;
+                case 4:
+                    return 2;
+                case 7:
+                    return 4;
+                default:
+                    return 0;
+            }
+        }
+
+        private static bool HasCompleteIttsuu(int sequenceMask)
+        {
+            return (sequenceMask & CompleteIttsuuSequenceMask) ==
+                   CompleteIttsuuSequenceMask;
         }
 
         private static bool IsValuePair(
