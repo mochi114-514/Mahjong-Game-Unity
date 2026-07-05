@@ -92,6 +92,13 @@ namespace MahjongPrototype.Services
             TryAddYaku(yakus, YakuKind.Reach, context.IsReachDeclared, context.IsClosed);
             TryAddYaku(
                 yakus,
+                YakuKind.Ippatsu,
+                context.IsReachDeclared &&
+                context.IsIppatsuEligible &&
+                context.IsClosed,
+                context.IsClosed);
+            TryAddYaku(
+                yakus,
                 YakuKind.MenzenTsumo,
                 context.WinType == WinType.Tsumo && context.IsClosed,
                 context.IsClosed);

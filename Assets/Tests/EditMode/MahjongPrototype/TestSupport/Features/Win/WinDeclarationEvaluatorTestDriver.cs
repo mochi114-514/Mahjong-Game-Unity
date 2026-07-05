@@ -39,13 +39,32 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
             string yakuKindName,
             string closedHanName,
             string openHanName,
-            bool isYakuman = false)
+            bool isYakuman = false,
+            bool isEnabled = true)
         {
             return support.CreateYakuDefinition(
                 yakuKindName,
                 closedHanName,
                 openHanName,
-                isYakuman);
+                isYakuman,
+                isEnabled);
+        }
+
+        public object CreateDefinitionWithDisplayName(
+            string yakuKindName,
+            string displayName,
+            string closedHanName,
+            string openHanName,
+            bool isYakuman = false,
+            bool isEnabled = true)
+        {
+            return support.DataFactory.CreateYakuDefinitionWithDisplayName(
+                yakuKindName,
+                displayName,
+                closedHanName,
+                openHanName,
+                isYakuman,
+                isEnabled);
         }
 
         public bool CanWinWithTileShapeOnly(string handText, string winningTileCode)
@@ -66,7 +85,8 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
             bool isReachDeclared = false,
             string roundWindName = "East",
             string seatWindName = "East",
-            bool isClosed = true)
+            bool isClosed = true,
+            bool isIppatsuEligible = false)
         {
             object evaluator = support.CreateWinDeclarationEvaluator(catalog);
             object context = support.CreateWinDeclarationEvaluationContext(
@@ -76,7 +96,8 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
                 isReachDeclared,
                 roundWindName,
                 seatWindName,
-                isClosed);
+                isClosed,
+                isIppatsuEligible);
 
             return support.Reflection.Invoke(evaluator, "EvaluateWithTile", context);
         }
@@ -316,19 +337,21 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
             return support.Collections.Item(CandidateYakus(candidateResult), index);
         }
 
+        public string CandidateYakuDisplayName(object candidateResult, string yakuKindName)
+        {
+            object yaku = CandidateYaku(candidateResult, yakuKindName);
+            return support.Reflection.GetProperty(yaku, "DisplayName") as string;
+        }
+
+        public string CandidateYakuHanName(object candidateResult, string yakuKindName)
+        {
+            object yaku = CandidateYaku(candidateResult, yakuKindName);
+            return support.Reflection.GetProperty(yaku, "Han").ToString();
+        }
+
         public bool CandidateContainsYaku(object candidateResult, string yakuKindName)
         {
-            object yakus = CandidateYakus(candidateResult);
-            int count = support.Collections.Count(yakus);
-
-            for (int i = 0; i < count; i++)
-            {
-                object yaku = support.Collections.Item(yakus, i);
-                if (support.Reflection.GetProperty(yaku, "Kind").ToString() == yakuKindName)
-                    return true;
-            }
-
-            return false;
+            return CandidateYaku(candidateResult, yakuKindName) != null;
         }
 
         public bool CandidatePropertyCanWrite(object candidateResult, string propertyName)
@@ -499,6 +522,21 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
         private object Candidate(object candidateResult)
         {
             return support.Reflection.GetProperty(candidateResult, "Candidate");
+        }
+
+        private object CandidateYaku(object candidateResult, string yakuKindName)
+        {
+            object yakus = CandidateYakus(candidateResult);
+            int count = support.Collections.Count(yakus);
+
+            for (int i = 0; i < count; i++)
+            {
+                object yaku = support.Collections.Item(yakus, i);
+                if (support.Reflection.GetProperty(yaku, "Kind").ToString() == yakuKindName)
+                    return yaku;
+            }
+
+            return null;
         }
 
         private object CreateEvaluatedYakuList(

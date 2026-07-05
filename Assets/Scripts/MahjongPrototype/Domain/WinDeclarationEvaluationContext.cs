@@ -14,7 +14,8 @@ namespace MahjongPrototype.Domain
             RoundWind roundWind,
             SeatId seatWind,
             bool isReachDeclared,
-            bool isClosed)
+            bool isClosed,
+            bool isIppatsuEligible = false)
         {
             HandTiles = handTiles ?? throw new ArgumentNullException(nameof(handTiles));
             WinningTile = winningTile;
@@ -25,6 +26,7 @@ namespace MahjongPrototype.Domain
             SeatWind = seatWind;
             IsReachDeclared = isReachDeclared;
             IsClosed = isClosed;
+            IsIppatsuEligible = isIppatsuEligible;
         }
 
         public IReadOnlyList<Tile> HandTiles { get; }
@@ -36,5 +38,6 @@ namespace MahjongPrototype.Domain
         public SeatId SeatWind { get; }
         public bool IsReachDeclared { get; }
         public bool IsClosed { get; }
+        public bool IsIppatsuEligible { get; }
     }
 }

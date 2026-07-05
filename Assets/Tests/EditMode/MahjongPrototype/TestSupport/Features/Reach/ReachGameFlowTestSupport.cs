@@ -235,6 +235,11 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
             return (bool)Reflection.GetProperty(Query.GetPlayerSeat(seatName), "IsReachDeclared");
         }
 
+        public bool IsIppatsuEligible(string seatName)
+        {
+            return (bool)Reflection.GetProperty(Query.GetPlayerSeat(seatName), "IsIppatsuEligible");
+        }
+
         public int ReachDeclaredTurnIndex(string seatName)
         {
             return (int)Reflection.GetProperty(Query.GetPlayerSeat(seatName), "ReachDeclaredTurnIndex");

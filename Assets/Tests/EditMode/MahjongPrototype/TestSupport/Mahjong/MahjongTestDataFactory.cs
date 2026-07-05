@@ -206,14 +206,16 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
             string yakuKindName,
             string closedHanName,
             string openHanName,
-            bool isYakuman = false)
+            bool isYakuman = false,
+            bool isEnabled = true)
         {
             return CreateYakuDefinition(
                 yakuKindName,
                 yakuKindName,
                 closedHanName,
                 openHanName,
-                isYakuman);
+                isYakuman,
+                isEnabled);
         }
 
         public object CreateYakuDefinitionWithDisplayName(
@@ -221,14 +223,16 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
             string displayName,
             string closedHanName,
             string openHanName,
-            bool isYakuman = false)
+            bool isYakuman = false,
+            bool isEnabled = true)
         {
             return CreateYakuDefinition(
                 yakuKindName,
                 displayName,
                 closedHanName,
                 openHanName,
-                isYakuman);
+                isYakuman,
+                isEnabled);
         }
 
         private object CreateYakuDefinition(
@@ -236,7 +240,8 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
             string displayName,
             string closedHanName,
             string openHanName,
-            bool isYakuman)
+            bool isYakuman,
+            bool isEnabled)
         {
             return reflection.CreateInstance(
                 types.YakuDefinition,
@@ -245,7 +250,7 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
                 Enum.Parse(types.HanValue, closedHanName),
                 Enum.Parse(types.HanValue, openHanName),
                 isYakuman,
-                true);
+                isEnabled);
         }
 
         public string HandDisplayString(object gameState, string seatName)

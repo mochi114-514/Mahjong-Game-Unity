@@ -91,7 +91,8 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
             bool isReachDeclared,
             string roundWindName = "East",
             string seatWindName = "East",
-            bool isClosed = true)
+            bool isClosed = true,
+            bool isIppatsuEligible = false)
         {
             return Reflection.CreateInstance(
                 Reflection.RequireType(WinDeclarationEvaluationContextTypeName),
@@ -103,20 +104,23 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
                 DataFactory.ParseRoundWind(roundWindName),
                 DataFactory.ParseSeat(seatWindName),
                 isReachDeclared,
-                isClosed);
+                isClosed,
+                isIppatsuEligible);
         }
 
         public object CreateYakuDefinition(
             string yakuKindName,
             string closedHanName,
             string openHanName,
-            bool isYakuman = false)
+            bool isYakuman = false,
+            bool isEnabled = true)
         {
             return DataFactory.CreateYakuDefinition(
                 yakuKindName,
                 closedHanName,
                 openHanName,
-                isYakuman);
+                isYakuman,
+                isEnabled);
         }
 
         public object CreateYakuCatalog(params object[] definitions)

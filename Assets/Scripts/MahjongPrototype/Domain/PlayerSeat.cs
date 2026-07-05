@@ -18,6 +18,7 @@ namespace MahjongPrototype.Domain
         public Tile? DrawnTile => drawnTile;
         public bool IsReachDeclared { get; private set; }
         public int ReachDeclaredTurnIndex { get; private set; }
+        public bool IsIppatsuEligible { get; private set; }
         public bool IsTemporaryFuriten { get; private set; }
         public bool IsReachPassFuriten { get; private set; }
 
@@ -63,6 +64,12 @@ namespace MahjongPrototype.Domain
         {
             IsReachDeclared = true;
             ReachDeclaredTurnIndex = turnIndex;
+            IsIppatsuEligible = true;
+        }
+
+        public void ClearIppatsuEligibility()
+        {
+            IsIppatsuEligible = false;
         }
 
         public void MarkTemporaryFuriten()

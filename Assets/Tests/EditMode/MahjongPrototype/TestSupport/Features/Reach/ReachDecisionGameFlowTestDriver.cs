@@ -40,6 +40,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
         public int DiscardCount => support.DiscardCount;
 
         public bool IsReachDeclared(string seatName) => support.IsReachDeclared(seatName);
+        public bool IsIppatsuEligible(string seatName) => support.IsIppatsuEligible(seatName);
         public int ReachDeclaredTurnIndex(string seatName) => support.ReachDeclaredTurnIndex(seatName);
         public string DiscardSourceNameAt(int index) => support.DiscardSourceNameAt(index);
         public string DiscardTileCodeAt(int index) => support.DiscardTileCodeAt(index);

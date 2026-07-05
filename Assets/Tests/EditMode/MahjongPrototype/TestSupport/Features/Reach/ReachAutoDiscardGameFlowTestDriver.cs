@@ -56,6 +56,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
         public string CurrentYieldTypeName(object routine) => support.CurrentYieldTypeName(routine);
 
         public bool IsReachDeclared(string seatName) => support.IsReachDeclared(seatName);
+        public bool IsIppatsuEligible(string seatName) => support.IsIppatsuEligible(seatName);
         public bool HasDrawnTile(string seatName) => support.HasDrawnTile(seatName);
         public string DrawnTileCode(string seatName) => support.DrawnTileCode(seatName);
         public bool IsWinDecisionPending => support.IsWinDecisionPending;

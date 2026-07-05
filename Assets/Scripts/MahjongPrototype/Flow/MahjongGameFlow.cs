@@ -376,7 +376,8 @@ namespace MahjongPrototype
             }
 
             CommitDrawnTileToHandIfPresent(selfSeat);
-            CompleteReachDeclarationIfPending(result.Record);
+            bool declaredReachNow = CompleteReachDeclarationIfPending(result.Record);
+            ExpireIppatsuAfterDiscard(result.Record, declaredReachNow);
             NotifyTurnDebug(
                 "DiscardCompleted",
                 $"phase={gameState.TurnPhase}; discardTile={result.Record.Tile}",
@@ -463,7 +464,8 @@ namespace MahjongPrototype
                 return false;
             }
 
-            CompleteReachDeclarationIfPending(result.Record);
+            bool declaredReachNow = CompleteReachDeclarationIfPending(result.Record);
+            ExpireIppatsuAfterDiscard(result.Record, declaredReachNow);
             NotifyTurnDebug(
                 "DiscardCompleted",
                 $"phase={gameState.TurnPhase}; discardTile={result.Record.Tile}",
@@ -1221,13 +1223,13 @@ namespace MahjongPrototype
             return false;
         }
 
-        private void CompleteReachDeclarationIfPending(DiscardRecord record)
+        private bool CompleteReachDeclarationIfPending(DiscardRecord record)
         {
             if (gameState == null ||
                 !gameState.IsReachDiscardSelectionPending ||
                 record.ActorSeat != gameState.ReachDecisionSeat)
             {
-                return;
+                return false;
             }
 
             SeatId seat = record.ActorSeat;
@@ -1242,6 +1244,19 @@ namespace MahjongPrototype
                 seat: seat,
                 tile: record.Tile,
                 turnIndex: turnIndex);
+            return true;
+        }
+
+        private void ExpireIppatsuAfterDiscard(
+            DiscardRecord record,
+            bool declaredReachNow)
+        {
+            if (gameState == null || declaredReachNow)
+                return;
+
+            PlayerSeat playerSeat = gameState.GetPlayerSeat(record.ActorSeat);
+            if (playerSeat.IsIppatsuEligible)
+                playerSeat.ClearIppatsuEligibility();
         }
 
         private WinDeclarationEvaluationContext CreateWinDeclarationContext(
@@ -1260,7 +1275,8 @@ namespace MahjongPrototype
                 gameState.WindProgress.RoundWind,
                 winnerSeat,
                 playerSeat.IsReachDeclared,
-                true);
+                true,
+                playerSeat.IsIppatsuEligible);
         }
 
         private void SetWinDecisionPending(bool isPending, SeatId seat, int turnIndex)

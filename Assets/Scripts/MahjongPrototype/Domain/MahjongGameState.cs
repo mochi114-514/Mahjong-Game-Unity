@@ -318,6 +318,12 @@ namespace MahjongPrototype.Domain
             reachDiscardCandidates.Clear();
         }
 
+        public void ClearIppatsuEligibilityForAllPlayers()
+        {
+            for (int i = 0; i < ActiveTurnSeats.Count; i++)
+                GetPlayerSeat(ActiveTurnSeats[i]).ClearIppatsuEligibility();
+        }
+
         public void AddActiveSkillEffect(ActiveSkillEffect effect)
         {
             if (effect == null)
