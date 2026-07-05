@@ -503,9 +503,9 @@ namespace MahjongPrototype
                 return;
             }
 
-            if (gameState.IsReachDecisionPending || gameState.IsReachDiscardSelectionPending)
+            if (gameState.IsReachDiscardSelectionPending)
             {
-                Warn("Resolve reach decision before activating another skill.");
+                Warn("Resolve reach discard selection before activating another skill.");
                 return;
             }
 

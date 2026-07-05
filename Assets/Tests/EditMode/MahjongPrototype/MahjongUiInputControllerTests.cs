@@ -164,10 +164,46 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
+        public void RefreshInteractionState_ReachDecision_KeepsControlAreaInteractableAndSelfTilesDisabled()
+        {
+            using (Driver driver = Driver.Create())
+            {
+                driver.PrepareNormalSelfTurn();
+                driver.BeginReachDecision();
+
+                driver.RefreshInteraction();
+
+                Assert.That(driver.DrawInteractable, Is.True);
+                Assert.That(driver.ForceDrawSkillInteractable, Is.True);
+                Assert.That(driver.TargetTileInputInteractable, Is.True);
+                Assert.That(driver.FirstSelfHandTileInteractable, Is.False);
+                Assert.That(driver.SelfDrawnTileInteractable, Is.False);
+            }
+        }
+
+        [Test]
+        public void RefreshInteractionState_ReachDiscardSelection_LocksControlAreaAndEnablesOnlyCandidates()
+        {
+            using (Driver driver = Driver.Create())
+            {
+                driver.PrepareNormalSelfTurn();
+                driver.BeginReachDiscardSelection();
+
+                driver.RefreshInteraction();
+
+                Assert.That(driver.DrawInteractable, Is.False);
+                Assert.That(driver.ForceDrawSkillInteractable, Is.False);
+                Assert.That(driver.TargetTileInputInteractable, Is.False);
+                Assert.That(driver.FirstSelfHandTileInteractable, Is.True);
+                Assert.That(driver.SecondSelfHandTileInteractable, Is.False);
+                Assert.That(driver.SelfDrawnTileInteractable, Is.False);
+            }
+        }
+
+        [Test]
         public void RefreshInteractionState_LockedStatesKeepControlAreaNotInteractable()
         {
             AssertControlAreaLocked(driver => driver.BeginWinDecision());
-            AssertControlAreaLocked(driver => driver.BeginReachDecision());
             AssertControlAreaLocked(driver => driver.BeginReachDiscardSelection());
             AssertControlAreaLocked(driver => driver.MarkRoundEnded());
             AssertControlAreaLocked(driver => driver.DeclareReachWaitingForDraw());
@@ -314,6 +350,7 @@ namespace MahjongPrototype.Tests
             public bool TargetTileInputInteractable =>
                 (bool)reflection.GetProperty(targetTileInput, "interactable");
             public bool FirstSelfHandTileInteractable => TileInteractable(FirstSelfHandTile);
+            public bool SecondSelfHandTileInteractable => TileInteractable(SelfHandTileAt(1));
             public bool SelfDrawnTileInteractable => TileInteractable(SelfDrawnTile);
 
             public static Driver Create()
@@ -474,12 +511,7 @@ namespace MahjongPrototype.Tests
 
             private object FirstSelfHandTile
             {
-                get
-                {
-                    object activeTiles = reflection.GetPrivateField(handView, "activeTiles");
-                    Assert.That(collections.Count(activeTiles), Is.GreaterThan(0));
-                    return collections.Item(activeTiles, 0);
-                }
+                get { return SelfHandTileAt(0); }
             }
 
             private object SelfDrawnTile
@@ -490,6 +522,13 @@ namespace MahjongPrototype.Tests
                     Assert.That(activeTile, Is.Not.Null);
                     return activeTile;
                 }
+            }
+
+            private object SelfHandTileAt(int index)
+            {
+                object activeTiles = reflection.GetPrivateField(handView, "activeTiles");
+                Assert.That(collections.Count(activeTiles), Is.GreaterThan(index));
+                return collections.Item(activeTiles, index);
             }
 
             private static Driver CreateUi(

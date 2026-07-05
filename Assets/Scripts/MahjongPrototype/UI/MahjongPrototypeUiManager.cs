@@ -663,7 +663,8 @@ namespace MahjongPrototype.UI
         {
             return gameFlow != null &&
                 state != null &&
-                !state.IsInteractionLocked &&
+                !state.IsWinDecisionPending &&
+                !state.IsRoundEnded &&
                 !state.IsReachDiscardSelectionPending &&
                 !IsDeclaredReachWaitingForDraw(state);
         }

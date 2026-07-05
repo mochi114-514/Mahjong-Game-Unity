@@ -213,6 +213,12 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
         public bool IsReachDiscardSelectionPending =>
             (bool)Reflection.GetProperty(CurrentState, "IsReachDiscardSelectionPending");
 
+        public string ReachDecisionSeatName =>
+            Reflection.GetProperty(CurrentState, "ReachDecisionSeat").ToString();
+
+        public int ReachDecisionTurnIndex =>
+            (int)Reflection.GetProperty(CurrentState, "ReachDecisionTurnIndex");
+
         public string TurnPhaseName => Query.TurnPhaseName;
 
         public string CurrentTurnName => Query.CurrentTurnName;
@@ -223,6 +229,20 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
             Collections.Count(Reflection.GetProperty(CurrentState, "ReachDiscardCandidates"));
 
         public int DiscardCount => Query.DiscardCount;
+
+        public int WallCount => Query.WallCount;
+
+        public int ActiveSkillEffectCount => Query.ActiveSkillEffectCount;
+
+        public string ActiveSkillEffectOwnerSeatNameAt(int index)
+        {
+            return Query.ActiveSkillEffectOwnerSeatNameAt(index);
+        }
+
+        public string ActiveSkillEffectTargetTileCodeAt(int index)
+        {
+            return Reflection.GetProperty(Query.ActiveSkillEffectAt(index), "TargetTile").ToString();
+        }
 
         public string WinDecisionTypeName => Query.WinDecisionTypeName;
 
@@ -253,6 +273,16 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
         public string DrawnTileCode(string seatName)
         {
             return Query.DrawnTileCode(seatName);
+        }
+
+        public string DrawnTileCodeOrNull(string seatName)
+        {
+            return Query.DrawnTileCodeOrNull(seatName);
+        }
+
+        public string HandDisplayString(string seatName)
+        {
+            return Query.HandDisplayString(seatName);
         }
 
         public string DiscardActorSeatNameAt(int index)
