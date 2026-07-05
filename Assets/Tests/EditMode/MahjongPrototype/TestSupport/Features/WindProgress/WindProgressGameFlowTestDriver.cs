@@ -14,7 +14,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.WindProgress
             this.session = session;
         }
 
-        public static WindProgressGameFlowTestDriver Create()
+        public static WindProgressGameFlowTestDriver Create(int participantCount = 1)
         {
             ReflectionTestAccess reflection = new ReflectionTestAccess();
             CollectionTestAccess collections = new CollectionTestAccess(reflection);
@@ -23,7 +23,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.WindProgress
             MahjongGameFlowTestOptions options = new MahjongGameFlowTestOptions
             {
                 RootName = "WindProgressGameFlowTest",
-                ParticipantCount = 1,
+                ParticipantCount = participantCount,
                 InitialHandTileCount = 0,
                 AutoStart = false,
                 EnableAutoDraw = false,
@@ -49,20 +49,37 @@ namespace MahjongPrototype.Tests.TestSupport.Features.WindProgress
 
         public bool IsRoundEnded => Query.IsRoundEnded;
 
+        public string SelfSeatName => Query.SelfSeatName;
+
         public void StartNewRound()
         {
             Commands.StartNewRound();
         }
 
-        public void StartRound(string roundWindName, int handNumber)
+        public void StartRound(string roundWindName, int handNumber, string selfSeatName = "East")
         {
             object windProgress = session.DataFactory.CreateWindProgress(roundWindName, handNumber);
             session.Reflection.InvokeWithSignature(
                 session.GameFlow,
                 "StartRound",
-                new[] { session.Types.WindProgress, typeof(bool) },
+                new[] { session.Types.WindProgress, typeof(bool), session.Types.SeatId },
                 windProgress,
-                false);
+                false,
+                session.DataFactory.ParseSeat(selfSeatName));
+        }
+
+        public string RotateSeatForNextRound(string seatName)
+        {
+            object result = session.Reflection.InvokeStatic(
+                session.Types.MahjongGameFlow,
+                "RotateSeatForNextRound",
+                session.DataFactory.ParseSeat(seatName));
+            return result.ToString();
+        }
+
+        public string SeatByPlayerIdName(string playerIdName)
+        {
+            return Query.SeatByPlayerIdName(playerIdName);
         }
 
         public void EndRound(string reason)

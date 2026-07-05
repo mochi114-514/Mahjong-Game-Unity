@@ -168,7 +168,8 @@ namespace MahjongPrototype
         public void StartNewRound()
         {
             currentWindProgress = WindProgress.East1;
-            StartRound(currentWindProgress, true);
+            SeatId initialSelfSeat = ResolveSelfSeat();
+            StartRound(currentWindProgress, true, initialSelfSeat);
         }
 
         private void StartNextRound()
@@ -183,11 +184,15 @@ namespace MahjongPrototype
                 return;
             }
 
+            SeatId nextSelfSeat = RotateSeatForNextRound(gameState.SelfSeat);
             currentWindProgress = next;
-            StartRound(currentWindProgress, false);
+            StartRound(currentWindProgress, false, nextSelfSeat);
         }
 
-        private void StartRound(WindProgress windProgress, bool notifyRunStarted)
+        private void StartRound(
+            WindProgress windProgress,
+            bool notifyRunStarted,
+            SeatId selfSeat)
         {
             currentWindProgress = windProgress;
             CacheReferences();
@@ -204,7 +209,6 @@ namespace MahjongPrototype
 
             int? seed = useFixedRandomSeed ? fixedRandomSeed : (int?)null;
             gameState = new MahjongGameState(Wall.CreateStandardShuffled(seed), windProgress);
-            SeatId selfSeat = ResolveSelfSeat();
             AssignParticipantsToSeats(selfSeat);
             gameState.RebuildActiveTurnSeatsFromSeatSlots();
             playerTurnManager.InitializeRound(gameState, selfSeat);
@@ -1439,6 +1443,11 @@ namespace MahjongPrototype
         private static SeatId GetRelativeSeat(SeatId originSeat, int offset)
         {
             return (SeatId)(((int)originSeat + offset) % 4);
+        }
+
+        private static SeatId RotateSeatForNextRound(SeatId currentSeat)
+        {
+            return GetRelativeSeat(currentSeat, 3);
         }
 
         private SeatId ResolveSelfSeat()
