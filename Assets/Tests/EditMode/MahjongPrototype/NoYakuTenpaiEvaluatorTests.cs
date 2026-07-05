@@ -75,6 +75,23 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
+        public void Evaluate_HidesWhenPinfuCandidateWaitExists()
+        {
+            using (NoYakuTenpaiEvaluatorTestDriver driver =
+                NoYakuTenpaiEvaluatorTestDriver.Create())
+            {
+                object result = driver.Evaluate(
+                    driver.CreateCatalog(driver.CreateDefinition("Pinfu", "One", "None")),
+                    "1m 2m 3m 4m 5m 2p 3p 4p 5p 6p 7p 4s 4s");
+
+                Assert.That(driver.IsEvaluated(result), Is.True);
+                Assert.That(driver.IsTenpai(result), Is.True);
+                Assert.That(driver.HasAnyYakuWait(result), Is.True);
+                Assert.That(driver.ShouldShowZeroHanTenpai(result), Is.False);
+            }
+        }
+
+        [Test]
         public void Evaluate_HidesForYakumanWaitUsingHasYaku()
         {
             using (NoYakuTenpaiEvaluatorTestDriver driver =

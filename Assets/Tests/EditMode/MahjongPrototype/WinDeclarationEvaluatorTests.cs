@@ -178,9 +178,10 @@ namespace MahjongPrototype.Tests
                     "2m 3m 4m 2p 3p 4p 2s 3s 4s 6s 7s 8s 5m",
                     "5m",
                     "Ron");
+                object tanyaoCandidate = driver.FindCandidateContainingYaku(result, "Tanyao");
 
-                AssertCanDeclareWithTotalHan(driver, result, 1);
-                Assert.That(driver.ContainsYaku(result, "Tanyao"), Is.True);
+                AssertCanDeclareWithCandidateTotalHan(driver, result, tanyaoCandidate, 1);
+                Assert.That(driver.ContainsYaku(result, "Tanyao"), Is.False);
             }
         }
 
@@ -195,9 +196,10 @@ namespace MahjongPrototype.Tests
                     "1m 1m 2m 2m 3p 3p 4p 4p 5s 5s E E C",
                     "C",
                     "Ron");
+                object sevenPairsCandidate = driver.FindCandidateContainingYaku(result, "SevenPairs");
 
-                AssertCanDeclareWithTotalHan(driver, result, 2);
-                Assert.That(driver.ContainsYaku(result, "SevenPairs"), Is.True);
+                AssertCanDeclareWithCandidateTotalHan(driver, result, sevenPairsCandidate, 2);
+                Assert.That(driver.ContainsYaku(result, "SevenPairs"), Is.False);
                 Assert.That(driver.AnalysisSevenPairsIsWin(result), Is.True);
                 Assert.That(driver.AnalysisStandardWinningInterpretationCount(result), Is.EqualTo(0));
             }
@@ -236,11 +238,16 @@ namespace MahjongPrototype.Tests
                     "1m 9m 1p 9p 1s 9s E S W N P F C",
                     "E",
                     "Ron");
+                object kokushiCandidate = driver.FindCandidateContainingYaku(result, "KokushiMusou");
 
                 Assert.That(driver.CanDeclareWin(result), Is.True);
                 Assert.That(driver.HandEvaluationHasYakuman(result), Is.True);
                 Assert.That(driver.HandEvaluationHasYaku(result), Is.True);
-                Assert.That(driver.ContainsYaku(result, "KokushiMusou"), Is.True);
+                Assert.That(driver.TotalHan(result), Is.EqualTo(0));
+                Assert.That(driver.TopLevelYakuCount(result), Is.EqualTo(0));
+                Assert.That(driver.ContainsYaku(result, "KokushiMusou"), Is.False);
+                Assert.That(kokushiCandidate, Is.Not.Null);
+                Assert.That(driver.CandidateHasYakuman(kokushiCandidate), Is.True);
                 Assert.That(driver.AnalysisThirteenOrphansIsWin(result), Is.True);
             }
         }
@@ -308,7 +315,7 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void EvaluateWithTile_KeepsTopLevelBehaviorBasedOnRepresentativeShape()
+        public void EvaluateWithTile_UsesYakuCandidateWhenRepresentativeShapeDiffers()
         {
             using (WinDeclarationEvaluatorTestDriver driver =
                 WinDeclarationEvaluatorTestDriver.Create())
@@ -321,12 +328,13 @@ namespace MahjongPrototype.Tests
                 object sevenPairsCandidate = FindCandidateOfType(driver, result, "SevenPairs");
 
                 Assert.That(driver.IsWinningShape(result), Is.True);
-                Assert.That(driver.HasYaku(result), Is.False);
-                Assert.That(driver.CanDeclareWin(result), Is.False);
-                Assert.That(driver.HandEvaluationHasYaku(result), Is.False);
+                Assert.That(driver.HasYaku(result), Is.True);
+                Assert.That(driver.CanDeclareWin(result), Is.True);
+                Assert.That(driver.HandEvaluationHasYaku(result), Is.True);
                 Assert.That(driver.ContainsYaku(result, "SevenPairs"), Is.False);
                 Assert.That(driver.CandidateHasYaku(sevenPairsCandidate), Is.True);
                 Assert.That(driver.CandidateContainsYaku(sevenPairsCandidate, "SevenPairs"), Is.True);
+                Assert.That(driver.TotalHan(result), Is.EqualTo(0));
             }
         }
 
@@ -371,6 +379,9 @@ namespace MahjongPrototype.Tests
                     "Ron");
 
                 Assert.That(driver.CandidateResultCount(result), Is.GreaterThan(0));
+                Assert.That(driver.HandEvaluationHasYaku(result), Is.False);
+                Assert.That(driver.HasYaku(result), Is.False);
+                Assert.That(driver.CanDeclareWin(result), Is.False);
                 for (int i = 0; i < driver.CandidateResultCount(result); i++)
                 {
                     object candidate = driver.CandidateResultAt(result, i);
@@ -436,9 +447,10 @@ namespace MahjongPrototype.Tests
                     "C",
                     "Ron",
                     isReachDeclared: true);
+                object reachCandidate = driver.FindCandidateContainingYaku(result, "Reach");
 
-                AssertCanDeclareWithTotalHan(driver, result, 1);
-                Assert.That(driver.ContainsYaku(result, "Reach"), Is.True);
+                AssertCanDeclareWithCandidateTotalHan(driver, result, reachCandidate, 1);
+                Assert.That(driver.ContainsYaku(result, "Reach"), Is.False);
             }
         }
 
@@ -453,9 +465,66 @@ namespace MahjongPrototype.Tests
                     "1m 2m 3m 1p 2p 3p 1s 2s 3s E E E C",
                     "C",
                     "Tsumo");
+                object tsumoCandidate = driver.FindCandidateContainingYaku(result, "MenzenTsumo");
 
-                AssertCanDeclareWithTotalHan(driver, result, 1);
-                Assert.That(driver.ContainsYaku(result, "MenzenTsumo"), Is.True);
+                AssertCanDeclareWithCandidateTotalHan(driver, result, tsumoCandidate, 1);
+                Assert.That(driver.ContainsYaku(result, "MenzenTsumo"), Is.False);
+            }
+        }
+
+        [Test]
+        public void HandEvaluationResult_UsesLegacyYakusOnlyWhenCandidatesAreMissing()
+        {
+            using (WinDeclarationEvaluatorTestDriver driver =
+                WinDeclarationEvaluatorTestDriver.Create())
+            {
+                object result =
+                    driver.CreateLegacyHandEvaluationResultWithYaku("Reach", "One");
+
+                Assert.That(driver.CandidateResultCount(result), Is.EqualTo(0));
+                Assert.That(driver.HandEvaluationHasYaku(result), Is.True);
+                Assert.That(driver.TopLevelYakuCount(result), Is.EqualTo(1));
+                Assert.That(driver.TotalHan(result), Is.EqualTo(1));
+            }
+        }
+
+        [Test]
+        public void HandEvaluationResult_PrefersCandidateResultsOverLegacyYakus()
+        {
+            using (WinDeclarationEvaluatorTestDriver driver =
+                WinDeclarationEvaluatorTestDriver.Create())
+            {
+                object candidateSource = driver.EvaluateWithTile(
+                    driver.CreateCatalog(),
+                    "2m 2m 3m 3m 4m 4m 5m 5m 6m 6m 7m 7m 8m",
+                    "8m",
+                    "Ron");
+                object result = driver.CreateHandEvaluationResultWithLegacyYakuAndCandidateResults(
+                    "Reach",
+                    "One",
+                    candidateSource);
+
+                Assert.That(driver.CandidateResultCount(result), Is.GreaterThan(0));
+                Assert.That(driver.AnyCandidateHasYaku(result), Is.False);
+                Assert.That(driver.HandEvaluationHasYaku(result), Is.False);
+                Assert.That(driver.TopLevelYakuCount(result), Is.EqualTo(0));
+                Assert.That(driver.TotalHan(result), Is.EqualTo(0));
+            }
+        }
+
+        [Test]
+        public void HandEvaluator_DoesNotFallbackToRepresentativeShapeWithoutDetailedAnalysis()
+        {
+            using (WinDeclarationEvaluatorTestDriver driver =
+                WinDeclarationEvaluatorTestDriver.Create())
+            {
+                object result = driver.EvaluateLegacyHandEvaluationContext(
+                    driver.CreateCatalog(driver.CreateDefinition("SevenPairs", "Two", "None")),
+                    "SevenPairs");
+
+                Assert.That(driver.CandidateResultCount(result), Is.EqualTo(0));
+                Assert.That(driver.HandEvaluationHasYaku(result), Is.False);
+                Assert.That(driver.TopLevelYakuCount(result), Is.EqualTo(0));
             }
         }
 
@@ -477,16 +546,21 @@ namespace MahjongPrototype.Tests
             }
         }
 
-        private static void AssertCanDeclareWithTotalHan(
+        private static void AssertCanDeclareWithCandidateTotalHan(
             WinDeclarationEvaluatorTestDriver driver,
             object result,
+            object candidate,
             int expectedTotalHan)
         {
             Assert.That(driver.IsWinningShape(result), Is.True);
             Assert.That(driver.HasYaku(result), Is.True);
             Assert.That(driver.CanDeclareWin(result), Is.True);
-            Assert.That(driver.TotalHan(result), Is.EqualTo(expectedTotalHan));
             Assert.That(driver.HandEvaluationHasYaku(result), Is.True);
+            Assert.That(driver.TotalHan(result), Is.EqualTo(0));
+            Assert.That(driver.TopLevelYakuCount(result), Is.EqualTo(0));
+            Assert.That(candidate, Is.Not.Null);
+            Assert.That(driver.CandidateHasYaku(candidate), Is.True);
+            Assert.That(driver.CandidateTotalHan(candidate), Is.EqualTo(expectedTotalHan));
         }
 
         private static object FindCandidateOfType(

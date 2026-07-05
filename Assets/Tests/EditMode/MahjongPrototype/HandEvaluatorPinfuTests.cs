@@ -8,6 +8,8 @@ namespace MahjongPrototype.Tests
         private const string BasicPinfuHand =
             "2m 3m 1p 2p 3p 4p 5p 6p 7s 8s 9s 5s 5s";
         private const string BasicPinfuWinningTile = "4m";
+        private const string MultiWaitPinfuHand =
+            "1m 2m 3m 4m 5m 2p 3p 4p 5p 6p 7p 4s 4s";
 
         [Test]
         public void EvaluateWithTile_AddsPinfuToRyanmenAllSequenceStandardCandidate()
@@ -329,6 +331,54 @@ namespace MahjongPrototype.Tests
 
                 Assert.That(pinfuStandardCount, Is.GreaterThan(0));
                 Assert.That(nonPinfuStandardCount, Is.GreaterThan(0));
+                Assert.That(driver.HandEvaluationHasYaku(result), Is.True);
+                Assert.That(driver.TopLevelYakuCount(result), Is.EqualTo(0));
+                Assert.That(driver.TotalHan(result), Is.EqualTo(0));
+            }
+        }
+
+        [Test]
+        public void EvaluateWithTile_MultiWaitSixManPinfuCandidateAllowsWin()
+        {
+            using (WinDeclarationEvaluatorTestDriver driver =
+                WinDeclarationEvaluatorTestDriver.Create())
+            {
+                object result = driver.EvaluateWithTile(
+                    CreatePinfuCatalog(driver),
+                    MultiWaitPinfuHand,
+                    "6m",
+                    "Ron");
+                object candidate = FindStandardCandidateWithWaitType(driver, result, "Ryanmen");
+
+                Assert.That(candidate, Is.Not.Null);
+                Assert.That(driver.CandidateContainsYaku(candidate, "Pinfu"), Is.True);
+                Assert.That(driver.HandEvaluationHasYaku(result), Is.True);
+                Assert.That(driver.HasYaku(result), Is.True);
+                Assert.That(driver.CanDeclareWin(result), Is.True);
+            }
+        }
+
+        [Test]
+        public void EvaluateWithTile_MultiWaitThreeManUsesRyanmenCandidateEvenWhenPenchanExists()
+        {
+            using (WinDeclarationEvaluatorTestDriver driver =
+                WinDeclarationEvaluatorTestDriver.Create())
+            {
+                object result = driver.EvaluateWithTile(
+                    CreatePinfuCatalog(driver),
+                    MultiWaitPinfuHand,
+                    "3m",
+                    "Ron");
+                object ryanmenCandidate = FindStandardCandidateWithWaitType(driver, result, "Ryanmen");
+                object penchanCandidate = FindStandardCandidateWithWaitType(driver, result, "Penchan");
+
+                Assert.That(ryanmenCandidate, Is.Not.Null);
+                Assert.That(penchanCandidate, Is.Not.Null);
+                Assert.That(driver.CandidateContainsYaku(ryanmenCandidate, "Pinfu"), Is.True);
+                Assert.That(driver.CandidateContainsYaku(penchanCandidate, "Pinfu"), Is.False);
+                Assert.That(driver.CountCandidatesContainingYaku(result, "Pinfu"), Is.GreaterThan(0));
+                Assert.That(driver.HandEvaluationHasYaku(result), Is.True);
+                Assert.That(driver.CanDeclareWin(result), Is.True);
             }
         }
 
@@ -398,7 +448,7 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void EvaluateWithTile_KeepsPinfuOutOfTopLevelEvaluation()
+        public void EvaluateWithTile_PinfuOnlyCandidateAllowsWinWithoutTopLevelYakuList()
         {
             using (WinDeclarationEvaluatorTestDriver driver =
                 WinDeclarationEvaluatorTestDriver.Create())
@@ -413,9 +463,11 @@ namespace MahjongPrototype.Tests
                 Assert.That(driver.CandidateHasYaku(candidate), Is.True);
                 Assert.That(driver.CandidateTotalHan(candidate), Is.EqualTo(1));
                 Assert.That(driver.ContainsYaku(result, "Pinfu"), Is.False);
-                Assert.That(driver.HandEvaluationHasYaku(result), Is.False);
-                Assert.That(driver.HasYaku(result), Is.False);
-                Assert.That(driver.CanDeclareWin(result), Is.False);
+                Assert.That(driver.TopLevelYakuCount(result), Is.EqualTo(0));
+                Assert.That(driver.TotalHan(result), Is.EqualTo(0));
+                Assert.That(driver.HandEvaluationHasYaku(result), Is.True);
+                Assert.That(driver.HasYaku(result), Is.True);
+                Assert.That(driver.CanDeclareWin(result), Is.True);
             }
         }
 

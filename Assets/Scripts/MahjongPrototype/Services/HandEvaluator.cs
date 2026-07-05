@@ -18,38 +18,15 @@ namespace MahjongPrototype.Services
             if (context == null || catalog == null)
                 return HandEvaluationResult.Empty;
 
-            List<EvaluatedYaku> yakus = EvaluateTopLevelYakus(context);
             List<HandEvaluationCandidateResult> candidateResults =
                 EvaluateCandidateResults(context);
 
-            if (yakus.Count <= 0 && candidateResults.Count <= 0)
+            if (candidateResults.Count <= 0)
                 return HandEvaluationResult.Empty;
 
-            return new HandEvaluationResult(yakus, candidateResults);
-        }
-
-        private List<EvaluatedYaku> EvaluateTopLevelYakus(HandEvaluationContext context)
-        {
-            List<EvaluatedYaku> yakus = new List<EvaluatedYaku>();
-            TryAddYaku(yakus, YakuKind.Reach, context.IsReachDeclared, context.IsClosed);
-            TryAddYaku(
-                yakus,
-                YakuKind.MenzenTsumo,
-                context.WinType == WinType.Tsumo && context.IsClosed,
-                context.IsClosed);
-            TryAddYaku(
-                yakus,
-                YakuKind.SevenPairs,
-                context.Shape == WinningHandShape.SevenPairs,
-                context.IsClosed);
-            TryAddYaku(
-                yakus,
-                YakuKind.KokushiMusou,
-                context.Shape == WinningHandShape.ThirteenOrphans,
-                context.IsClosed);
-            TryAddYaku(yakus, YakuKind.Tanyao, IsTanyao(context), context.IsClosed);
-
-            return yakus;
+            return new HandEvaluationResult(
+                new List<EvaluatedYaku>(),
+                candidateResults);
         }
 
         private List<HandEvaluationCandidateResult> EvaluateCandidateResults(
@@ -89,6 +66,29 @@ namespace MahjongPrototype.Services
             HandEvaluationCandidate candidate)
         {
             List<EvaluatedYaku> yakus = new List<EvaluatedYaku>();
+            EvaluateCommonYaku(context, candidate, yakus);
+
+            switch (candidate.Type)
+            {
+                case HandEvaluationCandidateType.Standard:
+                    EvaluateStandardCandidateYaku(context, candidate, yakus);
+                    break;
+                case HandEvaluationCandidateType.SevenPairs:
+                    EvaluateSevenPairsCandidateYaku(context, candidate, yakus);
+                    break;
+                case HandEvaluationCandidateType.ThirteenOrphans:
+                    EvaluateThirteenOrphansCandidateYaku(context, candidate, yakus);
+                    break;
+            }
+
+            return new HandEvaluationCandidateResult(candidate, yakus);
+        }
+
+        private void EvaluateCommonYaku(
+            HandEvaluationContext context,
+            HandEvaluationCandidate candidate,
+            List<EvaluatedYaku> yakus)
+        {
             TryAddYaku(yakus, YakuKind.Reach, context.IsReachDeclared, context.IsClosed);
             TryAddYaku(
                 yakus,
@@ -96,8 +96,21 @@ namespace MahjongPrototype.Services
                 context.WinType == WinType.Tsumo && context.IsClosed,
                 context.IsClosed);
             TryAddYaku(yakus, YakuKind.Tanyao, IsTanyao(context), context.IsClosed);
-            TryAddYaku(yakus, YakuKind.Pinfu, IsPinfu(context, candidate), context.IsClosed);
+        }
 
+        private void EvaluateStandardCandidateYaku(
+            HandEvaluationContext context,
+            HandEvaluationCandidate candidate,
+            List<EvaluatedYaku> yakus)
+        {
+            TryAddYaku(yakus, YakuKind.Pinfu, IsPinfu(context, candidate), context.IsClosed);
+        }
+
+        private void EvaluateSevenPairsCandidateYaku(
+            HandEvaluationContext context,
+            HandEvaluationCandidate candidate,
+            List<EvaluatedYaku> yakus)
+        {
             TryAddYaku(
                 yakus,
                 YakuKind.SevenPairs,
@@ -105,6 +118,13 @@ namespace MahjongPrototype.Services
                 candidate.SevenPairsAnalysis != null &&
                 candidate.SevenPairsAnalysis.IsWin,
                 context.IsClosed);
+        }
+
+        private void EvaluateThirteenOrphansCandidateYaku(
+            HandEvaluationContext context,
+            HandEvaluationCandidate candidate,
+            List<EvaluatedYaku> yakus)
+        {
             TryAddYaku(
                 yakus,
                 YakuKind.KokushiMusou,
@@ -112,8 +132,6 @@ namespace MahjongPrototype.Services
                 candidate.ThirteenOrphansAnalysis != null &&
                 candidate.ThirteenOrphansAnalysis.IsWin,
                 context.IsClosed);
-
-            return new HandEvaluationCandidateResult(candidate, yakus);
         }
 
         private void TryAddYaku(

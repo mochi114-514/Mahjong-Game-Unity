@@ -61,6 +61,22 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
             Commands.RequestDraw();
         }
 
+        public void DrawBasicPinfuTsumoShape()
+        {
+            Commands.StartNewRound();
+            AddBasicPinfuTenpaiHand();
+
+            Commands.RequestForceDrawSkill("4m");
+            Commands.RequestDraw();
+        }
+
+        public object EvaluateBasicPinfuTenpai()
+        {
+            Commands.StartNewRound();
+            AddBasicPinfuTenpaiHand();
+            return session.Reflection.Invoke(session.GameFlow, "EvaluateSelfNoYakuTenpai");
+        }
+
         public bool CanDeclareWin(object evaluation)
         {
             return (bool)session.Reflection.GetProperty(evaluation, "CanDeclareWin");
@@ -70,6 +86,56 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
         {
             object handEvaluation = session.Reflection.GetProperty(evaluation, "HandEvaluationResult");
             return (int)session.Reflection.GetProperty(handEvaluation, "TotalHan");
+        }
+
+        public int CandidateResultCount(object evaluation)
+        {
+            return session.Collections.Count(CandidateResults(evaluation));
+        }
+
+        public object CandidateResultAt(object evaluation, int index)
+        {
+            return session.Collections.Item(CandidateResults(evaluation), index);
+        }
+
+        public bool CandidateContainsYaku(object candidateResult, string yakuKindName)
+        {
+            object yakus = session.Reflection.GetProperty(candidateResult, "Yakus");
+            int count = session.Collections.Count(yakus);
+
+            for (int i = 0; i < count; i++)
+            {
+                object yaku = session.Collections.Item(yakus, i);
+                if (session.Reflection.GetProperty(yaku, "Kind").ToString() == yakuKindName)
+                    return true;
+            }
+
+            return false;
+        }
+
+        public int CandidateTotalHan(object candidateResult)
+        {
+            return (int)session.Reflection.GetProperty(candidateResult, "TotalHan");
+        }
+
+        public bool NoYakuTenpaiIsEvaluated(object result)
+        {
+            return (bool)session.Reflection.GetProperty(result, "IsEvaluated");
+        }
+
+        public bool NoYakuTenpaiIsTenpai(object result)
+        {
+            return (bool)session.Reflection.GetProperty(result, "IsTenpai");
+        }
+
+        public bool NoYakuTenpaiHasAnyYakuWait(object result)
+        {
+            return (bool)session.Reflection.GetProperty(result, "HasAnyYakuWait");
+        }
+
+        public bool NoYakuTenpaiShouldShowZeroHanTenpai(object result)
+        {
+            return (bool)session.Reflection.GetProperty(result, "ShouldShowZeroHanTenpai");
         }
 
         public void Dispose()
@@ -121,6 +187,23 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
                 types,
                 dataFactory);
             return new WinDeclarationGameFlowTestDriver(session);
+        }
+
+        private void AddBasicPinfuTenpaiHand()
+        {
+            session.DataFactory.AddHandTiles(
+                Query.GetPlayerSeat("East"),
+                "2m", "3m",
+                "1p", "2p", "3p",
+                "4p", "5p", "6p",
+                "7s", "8s", "9s",
+                "5s", "5s");
+        }
+
+        private object CandidateResults(object evaluation)
+        {
+            object handEvaluation = session.Reflection.GetProperty(evaluation, "HandEvaluationResult");
+            return session.Reflection.GetProperty(handEvaluation, "CandidateResults");
         }
 
         private MahjongGameStateTestQuery Query => session.Query;

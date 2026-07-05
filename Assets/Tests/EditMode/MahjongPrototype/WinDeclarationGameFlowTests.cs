@@ -30,8 +30,51 @@ namespace MahjongPrototype.Tests
                 Assert.That(driver.IsWinDecisionPending, Is.True);
                 Assert.That(evaluation, Is.Not.Null);
                 Assert.That(driver.CanDeclareWin(evaluation), Is.True);
-                Assert.That(driver.TotalHan(evaluation), Is.EqualTo(1));
+                object candidate = FindCandidateContainingYaku(driver, evaluation, "MenzenTsumo");
+                Assert.That(candidate, Is.Not.Null);
+                Assert.That(driver.CandidateTotalHan(candidate), Is.EqualTo(1));
+                Assert.That(driver.TotalHan(evaluation), Is.EqualTo(0));
             }
+        }
+
+        [Test]
+        public void PinfuOnlyWinningShape_BeginsWinDecisionAndDoesNotShowNoYakuTenpai()
+        {
+            using (WinDeclarationGameFlowTestDriver driver =
+                WinDeclarationGameFlowTestDriver.CreateWithRegisteredYaku("Pinfu", "One", "None"))
+            {
+                object tenpaiEvaluation = driver.EvaluateBasicPinfuTenpai();
+
+                Assert.That(driver.NoYakuTenpaiIsEvaluated(tenpaiEvaluation), Is.True);
+                Assert.That(driver.NoYakuTenpaiIsTenpai(tenpaiEvaluation), Is.True);
+                Assert.That(driver.NoYakuTenpaiHasAnyYakuWait(tenpaiEvaluation), Is.True);
+                Assert.That(driver.NoYakuTenpaiShouldShowZeroHanTenpai(tenpaiEvaluation), Is.False);
+
+                driver.DrawBasicPinfuTsumoShape();
+                object evaluation = driver.PendingWinDeclarationEvaluation;
+                object candidate = FindCandidateContainingYaku(driver, evaluation, "Pinfu");
+
+                Assert.That(driver.IsWinDecisionPending, Is.True);
+                Assert.That(evaluation, Is.Not.Null);
+                Assert.That(driver.CanDeclareWin(evaluation), Is.True);
+                Assert.That(candidate, Is.Not.Null);
+                Assert.That(driver.CandidateTotalHan(candidate), Is.EqualTo(1));
+            }
+        }
+
+        private static object FindCandidateContainingYaku(
+            WinDeclarationGameFlowTestDriver driver,
+            object evaluation,
+            string yakuKindName)
+        {
+            for (int i = 0; i < driver.CandidateResultCount(evaluation); i++)
+            {
+                object candidate = driver.CandidateResultAt(evaluation, i);
+                if (driver.CandidateContainsYaku(candidate, yakuKindName))
+                    return candidate;
+            }
+
+            return null;
         }
     }
 }

@@ -4,11 +4,13 @@ namespace MahjongPrototype.Domain
 {
     public sealed class HandEvaluationResult
     {
+        private static readonly IReadOnlyList<EvaluatedYaku> EmptyYakus =
+            new List<EvaluatedYaku>().AsReadOnly();
         private static readonly IReadOnlyList<HandEvaluationCandidateResult> EmptyCandidateResults =
             new List<HandEvaluationCandidateResult>().AsReadOnly();
 
         public static HandEvaluationResult Empty { get; } =
-            new HandEvaluationResult(new List<EvaluatedYaku>(), EmptyCandidateResults);
+            new HandEvaluationResult(EmptyYakus, EmptyCandidateResults);
 
         public HandEvaluationResult(IReadOnlyList<EvaluatedYaku> yakus)
             : this(yakus, EmptyCandidateResults)
@@ -26,8 +28,17 @@ namespace MahjongPrototype.Domain
                     copiedYakus.Add(yakus[i]);
             }
 
-            Yakus = copiedYakus.AsReadOnly();
             CandidateResults = CopyCandidateResults(candidateResults);
+            if (CandidateResults.Count > 0)
+            {
+                Yakus = EmptyYakus;
+                TotalHan = 0;
+                HasYakuman = ContainsCandidateWithYakuman(CandidateResults);
+                HasYaku = ContainsCandidateWithYaku(CandidateResults);
+                return;
+            }
+
+            Yakus = copiedYakus.Count == 0 ? EmptyYakus : copiedYakus.AsReadOnly();
 
             int totalHan = 0;
             bool hasYakuman = false;
@@ -48,8 +59,16 @@ namespace MahjongPrototype.Domain
             HasYaku = HasYakuman || TotalHan > 0;
         }
 
+        /// <summary>
+        /// Top-level yaku output reserved for the future selected candidate.
+        /// Candidate-based evaluations keep this empty until candidate selection is implemented.
+        /// </summary>
         public IReadOnlyList<EvaluatedYaku> Yakus { get; }
         public IReadOnlyList<HandEvaluationCandidateResult> CandidateResults { get; }
+        /// <summary>
+        /// Top-level han output reserved for the future selected candidate.
+        /// Candidate-based evaluations keep this 0 until candidate selection is implemented.
+        /// </summary>
         public int TotalHan { get; }
         public bool HasYakuman { get; }
         public bool HasYaku { get; }
@@ -71,6 +90,38 @@ namespace MahjongPrototype.Domain
             return copiedResults.Count == 0
                 ? EmptyCandidateResults
                 : copiedResults.AsReadOnly();
+        }
+
+        private static bool ContainsCandidateWithYaku(
+            IReadOnlyList<HandEvaluationCandidateResult> candidateResults)
+        {
+            if (candidateResults == null)
+                return false;
+
+            for (int i = 0; i < candidateResults.Count; i++)
+            {
+                HandEvaluationCandidateResult result = candidateResults[i];
+                if (result != null && result.HasYaku)
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool ContainsCandidateWithYakuman(
+            IReadOnlyList<HandEvaluationCandidateResult> candidateResults)
+        {
+            if (candidateResults == null)
+                return false;
+
+            for (int i = 0; i < candidateResults.Count; i++)
+            {
+                HandEvaluationCandidateResult result = candidateResults[i];
+                if (result != null && result.HasYakuman)
+                    return true;
+            }
+
+            return false;
         }
     }
 }

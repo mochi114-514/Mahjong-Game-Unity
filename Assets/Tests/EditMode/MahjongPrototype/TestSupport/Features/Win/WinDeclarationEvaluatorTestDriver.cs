@@ -101,6 +101,12 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
             return (int)support.Reflection.GetProperty(HandEvaluationResult(result), "TotalHan");
         }
 
+        public int TopLevelYakuCount(object result)
+        {
+            return support.Collections.Count(
+                support.Reflection.GetProperty(HandEvaluationResult(result), "Yakus"));
+        }
+
         public bool HandEvaluationHasYaku(object result)
         {
             return (bool)support.Reflection.GetProperty(HandEvaluationResult(result), "HasYaku");
@@ -144,6 +150,69 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
             }
 
             return matchingCount;
+        }
+
+        public int CountCandidatesContainingYaku(object result, string yakuKindName)
+        {
+            int matchingCount = 0;
+            for (int i = 0; i < CandidateResultCount(result); i++)
+            {
+                if (CandidateContainsYaku(CandidateResultAt(result, i), yakuKindName))
+                    matchingCount++;
+            }
+
+            return matchingCount;
+        }
+
+        public object FindCandidateContainingYaku(object result, string yakuKindName)
+        {
+            for (int i = 0; i < CandidateResultCount(result); i++)
+            {
+                object candidate = CandidateResultAt(result, i);
+                if (CandidateContainsYaku(candidate, yakuKindName))
+                    return candidate;
+            }
+
+            return null;
+        }
+
+        public object FindStandardCandidateWithWaitType(
+            object result,
+            string waitTypeName)
+        {
+            for (int i = 0; i < CandidateResultCount(result); i++)
+            {
+                object candidate = CandidateResultAt(result, i);
+                if (CandidateTypeName(candidate) == "Standard" &&
+                    CandidateWaitTypeName(candidate) == waitTypeName)
+                {
+                    return candidate;
+                }
+            }
+
+            return null;
+        }
+
+        public bool AnyCandidateHasYaku(object result)
+        {
+            for (int i = 0; i < CandidateResultCount(result); i++)
+            {
+                if (CandidateHasYaku(CandidateResultAt(result, i)))
+                    return true;
+            }
+
+            return false;
+        }
+
+        public bool AnyCandidateHasYakuman(object result)
+        {
+            for (int i = 0; i < CandidateResultCount(result); i++)
+            {
+                if (CandidateHasYakuman(CandidateResultAt(result, i)))
+                    return true;
+            }
+
+            return false;
         }
 
         public string CandidateTypeName(object candidateResult)
@@ -330,12 +399,17 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
 
         public object CreateLegacyHandEvaluationContext()
         {
+            return CreateLegacyHandEvaluationContext("Standard");
+        }
+
+        public object CreateLegacyHandEvaluationContext(string shapeName)
+        {
             return support.Reflection.CreateInstance(
                 support.Reflection.RequireType(HandEvaluationContextTypeName),
                 support.CreateTiles("1m 2m 3m 1p 2p 3p 1s 2s 3s E E E C"),
                 support.DataFactory.CreateTile("C"),
                 support.DataFactory.ParseWinType("Ron"),
-                ParseWinningHandShape("Standard"),
+                ParseWinningHandShape(shapeName),
                 support.DataFactory.ParseSeat("East"),
                 null,
                 support.DataFactory.ParseRoundWind("East"),
@@ -372,6 +446,42 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
                 yakus);
         }
 
+        public object CreateLegacyHandEvaluationResultWithYaku(
+            string yakuKindName,
+            string hanValueName,
+            bool isYakuman = false)
+        {
+            return support.Reflection.CreateInstance(
+                support.Reflection.RequireType(HandEvaluationResultTypeName),
+                CreateEvaluatedYakuList(yakuKindName, hanValueName, isYakuman));
+        }
+
+        public object CreateHandEvaluationResultWithLegacyYakuAndCandidateResults(
+            string yakuKindName,
+            string hanValueName,
+            object resultWithCandidateResults,
+            bool isYakuman = false)
+        {
+            return support.Reflection.CreateInstance(
+                support.Reflection.RequireType(HandEvaluationResultTypeName),
+                CreateEvaluatedYakuList(yakuKindName, hanValueName, isYakuman),
+                CandidateResultsCollection(resultWithCandidateResults));
+        }
+
+        public object EvaluateLegacyHandEvaluationContext(object catalog)
+        {
+            return EvaluateLegacyHandEvaluationContext(catalog, "Standard");
+        }
+
+        public object EvaluateLegacyHandEvaluationContext(object catalog, string shapeName)
+        {
+            object evaluator = support.CreateHandEvaluator(catalog);
+            return support.Reflection.Invoke(
+                evaluator,
+                "Evaluate",
+                CreateLegacyHandEvaluationContext(shapeName));
+        }
+
         public object CreateWinDeclarationEvaluatorWithEmptyCatalog()
         {
             return support.CreateWinDeclarationEvaluator(support.CreateYakuCatalog());
@@ -389,6 +499,25 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
         private object Candidate(object candidateResult)
         {
             return support.Reflection.GetProperty(candidateResult, "Candidate");
+        }
+
+        private object CreateEvaluatedYakuList(
+            string yakuKindName,
+            string hanValueName,
+            bool isYakuman)
+        {
+            Type evaluatedYakuType = support.Reflection.RequireType(EvaluatedYakuTypeName);
+            Type listType = typeof(List<>).MakeGenericType(evaluatedYakuType);
+            object yakus = Activator.CreateInstance(listType);
+            object yaku = support.Reflection.CreateInstance(
+                evaluatedYakuType,
+                Enum.Parse(support.Types.YakuKind, yakuKindName),
+                yakuKindName,
+                Enum.Parse(support.Types.HanValue, hanValueName),
+                isYakuman);
+
+            listType.GetMethod("Add").Invoke(yakus, new[] { yaku });
+            return yakus;
         }
 
         private object CandidateStandardInterpretation(object candidateResult)
