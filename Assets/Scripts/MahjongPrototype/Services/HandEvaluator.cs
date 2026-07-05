@@ -137,6 +137,7 @@ namespace MahjongPrototype.Services
             EvaluateSanshokuDoujunYaku(context, candidate, yakus);
             EvaluateSanshokuDoukouYaku(context, candidate, yakus);
             EvaluateIttsuuYaku(context, candidate, yakus);
+            EvaluateChantaYaku(context, candidate, yakus);
         }
 
         private void EvaluateSevenPairsCandidateYaku(
@@ -672,6 +673,100 @@ namespace MahjongPrototype.Services
             }
         }
 
+        private void EvaluateChantaYaku(
+            HandEvaluationContext context,
+            HandEvaluationCandidate candidate,
+            List<EvaluatedYaku> yakus)
+        {
+            if (context == null ||
+                candidate == null ||
+                candidate.Type != HandEvaluationCandidateType.Standard)
+            {
+                return;
+            }
+
+            StandardHandDecomposition decomposition =
+                candidate.StandardInterpretation?.Decomposition;
+
+            if (!TryAnalyzeChantaShape(decomposition, out bool hasHonor))
+                return;
+
+            if (hasHonor)
+            {
+                TryAddYaku(
+                    yakus,
+                    YakuKind.Chanta,
+                    true,
+                    context.IsClosed);
+                return;
+            }
+
+            TryAddYaku(
+                yakus,
+                YakuKind.Junchan,
+                true,
+                context.IsClosed);
+        }
+
+        private static bool TryAnalyzeChantaShape(
+            StandardHandDecomposition decomposition,
+            out bool hasHonor)
+        {
+            hasHonor = false;
+
+            if (decomposition == null ||
+                decomposition.Melds == null ||
+                decomposition.Melds.Count != 4)
+            {
+                return false;
+            }
+
+            Tile pairTile = decomposition.PairTile;
+            if (!IsTerminalOrHonor(pairTile))
+                return false;
+
+            if (pairTile.IsHonorTile)
+                hasHonor = true;
+
+            bool hasSequence = false;
+            for (int i = 0; i < decomposition.Melds.Count; i++)
+            {
+                HandMeld meld = decomposition.Melds[i];
+                if (meld == null ||
+                    meld.Tiles == null ||
+                    meld.Tiles.Count != 3)
+                {
+                    return false;
+                }
+
+                Tile representativeTile = meld.Tiles[0];
+                switch (meld.Type)
+                {
+                    case MeldType.Sequence:
+                        if (!representativeTile.IsNumberTile ||
+                            (representativeTile.Rank != 1 &&
+                             representativeTile.Rank != 7))
+                        {
+                            return false;
+                        }
+
+                        hasSequence = true;
+                        break;
+                    case MeldType.Triplet:
+                        if (!IsTerminalOrHonor(representativeTile))
+                            return false;
+
+                        if (representativeTile.IsHonorTile)
+                            hasHonor = true;
+                        break;
+                    default:
+                        return false;
+                }
+            }
+
+            return hasSequence;
+        }
+
         private static int ToSuitMask(TileSuit suit)
         {
             switch (suit)
@@ -690,6 +785,12 @@ namespace MahjongPrototype.Services
         private static bool HasAllNumberSuits(int suitMask)
         {
             return (suitMask & 7) == 7;
+        }
+
+        private static bool IsTerminalOrHonor(Tile tile)
+        {
+            return tile.IsHonorTile ||
+                   (tile.IsNumberTile && (tile.Rank == 1 || tile.Rank == 9));
         }
 
         private static int ToDragonMask(Tile tile)
