@@ -89,7 +89,7 @@ namespace MahjongPrototype.Services
             HandEvaluationCandidate candidate,
             List<EvaluatedYaku> yakus)
         {
-            TryAddYaku(yakus, YakuKind.Reach, context.IsReachDeclared, context.IsClosed);
+            EvaluateReachYaku(context, yakus);
             TryAddYaku(
                 yakus,
                 YakuKind.Ippatsu,
@@ -105,6 +105,22 @@ namespace MahjongPrototype.Services
             TryAddYaku(yakus, YakuKind.Tanyao, IsTanyao(context), context.IsClosed);
         }
 
+        private void EvaluateReachYaku(
+            HandEvaluationContext context,
+            List<EvaluatedYaku> yakus)
+        {
+            if (context == null || !context.IsReachDeclared || !context.IsClosed)
+                return;
+
+            if (context.IsDoubleReachDeclared &&
+                TryAddYaku(yakus, YakuKind.DoubleReach, true, context.IsClosed))
+            {
+                return;
+            }
+
+            TryAddYaku(yakus, YakuKind.Reach, true, context.IsClosed);
+        }
+
         private void EvaluateStandardCandidateYaku(
             HandEvaluationContext context,
             HandEvaluationCandidate candidate,
@@ -113,6 +129,8 @@ namespace MahjongPrototype.Services
             TryAddYaku(yakus, YakuKind.Pinfu, IsPinfu(context, candidate), context.IsClosed);
             EvaluatePeikouYaku(context, candidate, yakus);
             EvaluateYakuhaiYaku(context, candidate, yakus);
+            EvaluateSanshokuDoujunYaku(context, candidate, yakus);
+            EvaluateSanshokuDoukouYaku(context, candidate, yakus);
         }
 
         private void EvaluateSevenPairsCandidateYaku(
@@ -370,6 +388,130 @@ namespace MahjongPrototype.Services
                     TryAddYaku(yakus, YakuKind.YakuhaiRedDragon, true, context.IsClosed);
                     break;
             }
+        }
+
+        private void EvaluateSanshokuDoujunYaku(
+            HandEvaluationContext context,
+            HandEvaluationCandidate candidate,
+            List<EvaluatedYaku> yakus)
+        {
+            if (context == null ||
+                candidate == null ||
+                candidate.Type != HandEvaluationCandidateType.Standard)
+            {
+                return;
+            }
+
+            StandardHandDecomposition decomposition =
+                candidate.StandardInterpretation?.Decomposition;
+
+            if (decomposition == null || decomposition.Melds == null)
+                return;
+
+            int[] suitMasksByStartRank = new int[10];
+            for (int i = 0; i < decomposition.Melds.Count; i++)
+            {
+                HandMeld meld = decomposition.Melds[i];
+                if (meld == null ||
+                    meld.Type != MeldType.Sequence ||
+                    meld.Tiles == null ||
+                    meld.Tiles.Count != 3)
+                {
+                    continue;
+                }
+
+                Tile representativeTile = meld.Tiles[0];
+                if (!representativeTile.IsNumberTile)
+                    continue;
+
+                suitMasksByStartRank[representativeTile.Rank] |=
+                    ToSuitMask(representativeTile.Suit);
+            }
+
+            for (int rank = 1; rank <= 7; rank++)
+            {
+                if (HasAllNumberSuits(suitMasksByStartRank[rank]))
+                {
+                    TryAddYaku(
+                        yakus,
+                        YakuKind.SanshokuDoujun,
+                        true,
+                        context.IsClosed);
+                    return;
+                }
+            }
+        }
+
+        private void EvaluateSanshokuDoukouYaku(
+            HandEvaluationContext context,
+            HandEvaluationCandidate candidate,
+            List<EvaluatedYaku> yakus)
+        {
+            if (context == null ||
+                candidate == null ||
+                candidate.Type != HandEvaluationCandidateType.Standard)
+            {
+                return;
+            }
+
+            StandardHandDecomposition decomposition =
+                candidate.StandardInterpretation?.Decomposition;
+
+            if (decomposition == null || decomposition.Melds == null)
+                return;
+
+            int[] suitMasksByRank = new int[10];
+            for (int i = 0; i < decomposition.Melds.Count; i++)
+            {
+                HandMeld meld = decomposition.Melds[i];
+                if (meld == null ||
+                    meld.Type != MeldType.Triplet ||
+                    meld.Tiles == null ||
+                    meld.Tiles.Count <= 0)
+                {
+                    continue;
+                }
+
+                Tile representativeTile = meld.Tiles[0];
+                if (!representativeTile.IsNumberTile)
+                    continue;
+
+                suitMasksByRank[representativeTile.Rank] |=
+                    ToSuitMask(representativeTile.Suit);
+            }
+
+            for (int rank = 1; rank <= 9; rank++)
+            {
+                if (HasAllNumberSuits(suitMasksByRank[rank]))
+                {
+                    TryAddYaku(
+                        yakus,
+                        YakuKind.SanshokuDoukou,
+                        true,
+                        context.IsClosed);
+                    return;
+                }
+            }
+        }
+
+        private static int ToSuitMask(TileSuit suit)
+        {
+            switch (suit)
+            {
+                case TileSuit.Man:
+                    return 1;
+                case TileSuit.Pin:
+                    return 2;
+                case TileSuit.Sou:
+                    return 4;
+                default:
+                    return 0;
+            }
+        }
+
+        private static bool HasAllNumberSuits(int suitMask)
+        {
+            return (suitMask & 7) == 7;
         }
 
         private static bool IsValuePair(

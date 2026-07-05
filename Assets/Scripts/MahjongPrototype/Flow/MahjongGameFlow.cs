@@ -1239,7 +1239,8 @@ namespace MahjongPrototype
             SeatId seat = record.ActorSeat;
             int turnIndex = gameState.TurnIndex;
             PlayerSeat playerSeat = gameState.GetPlayerSeat(seat);
-            playerSeat.DeclareReach(turnIndex);
+            bool isDoubleReachDeclared = IsFirstDiscardBySeat(gameState, seat);
+            playerSeat.DeclareReach(turnIndex, isDoubleReachDeclared);
             gameState.ClearReachDecision();
             NotifyReachDeclared(seat, turnIndex);
             NotifyTurnDebug(
@@ -1249,6 +1250,27 @@ namespace MahjongPrototype
                 tile: record.Tile,
                 turnIndex: turnIndex);
             return true;
+        }
+
+        private static bool IsFirstDiscardBySeat(
+            MahjongGameState gameState,
+            SeatId seat)
+        {
+            if (gameState == null || gameState.Discards == null)
+                return false;
+
+            int discardCount = 0;
+            for (int i = 0; i < gameState.Discards.Count; i++)
+            {
+                if (gameState.Discards[i].ActorSeat != seat)
+                    continue;
+
+                discardCount++;
+                if (discardCount > 1)
+                    return false;
+            }
+
+            return discardCount == 1;
         }
 
         private void ExpireIppatsuAfterDiscard(
@@ -1280,7 +1302,8 @@ namespace MahjongPrototype
                 winnerSeat,
                 playerSeat.IsReachDeclared,
                 true,
-                playerSeat.IsIppatsuEligible);
+                playerSeat.IsIppatsuEligible,
+                playerSeat.IsDoubleReachDeclared);
         }
 
         private void SetWinDecisionPending(bool isPending, SeatId seat, int turnIndex)

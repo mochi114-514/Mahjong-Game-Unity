@@ -27,6 +27,7 @@ namespace MahjongPrototype.Domain
                 seatWind,
                 isReachDeclared,
                 isClosed,
+                false,
                 false)
         {
         }
@@ -48,6 +49,35 @@ namespace MahjongPrototype.Domain
                 winningTile,
                 winType,
                 shape,
+                winnerSeat,
+                sourceSeat,
+                roundWind,
+                seatWind,
+                isReachDeclared,
+                isClosed,
+                isIppatsuEligible,
+                false)
+        {
+        }
+
+        public HandEvaluationContext(
+            IReadOnlyList<Tile> handTiles,
+            Tile winningTile,
+            WinType winType,
+            WinningHandShape shape,
+            SeatId winnerSeat,
+            SeatId? sourceSeat,
+            RoundWind roundWind,
+            SeatId seatWind,
+            bool isReachDeclared,
+            bool isClosed,
+            bool isIppatsuEligible,
+            bool isDoubleReachDeclared)
+            : this(
+                handTiles,
+                winningTile,
+                winType,
+                shape,
                 WinningHandAnalysisResult.NotWin,
                 winnerSeat,
                 sourceSeat,
@@ -55,7 +85,8 @@ namespace MahjongPrototype.Domain
                 seatWind,
                 isReachDeclared,
                 isClosed,
-                isIppatsuEligible)
+                isIppatsuEligible,
+                isDoubleReachDeclared)
         {
         }
 
@@ -83,6 +114,7 @@ namespace MahjongPrototype.Domain
                 seatWind,
                 isReachDeclared,
                 isClosed,
+                false,
                 false)
         {
         }
@@ -100,6 +132,37 @@ namespace MahjongPrototype.Domain
             bool isReachDeclared,
             bool isClosed,
             bool isIppatsuEligible)
+            : this(
+                handTiles,
+                winningTile,
+                winType,
+                shape,
+                winningHandAnalysis,
+                winnerSeat,
+                sourceSeat,
+                roundWind,
+                seatWind,
+                isReachDeclared,
+                isClosed,
+                isIppatsuEligible,
+                false)
+        {
+        }
+
+        public HandEvaluationContext(
+            IReadOnlyList<Tile> handTiles,
+            Tile winningTile,
+            WinType winType,
+            WinningHandShape shape,
+            WinningHandAnalysisResult winningHandAnalysis,
+            SeatId winnerSeat,
+            SeatId? sourceSeat,
+            RoundWind roundWind,
+            SeatId seatWind,
+            bool isReachDeclared,
+            bool isClosed,
+            bool isIppatsuEligible,
+            bool isDoubleReachDeclared)
         {
             HandTiles = handTiles ?? throw new ArgumentNullException(nameof(handTiles));
             WinningTile = winningTile;
@@ -113,6 +176,7 @@ namespace MahjongPrototype.Domain
             IsReachDeclared = isReachDeclared;
             IsClosed = isClosed;
             IsIppatsuEligible = isIppatsuEligible;
+            IsDoubleReachDeclared = isDoubleReachDeclared;
         }
 
         public IReadOnlyList<Tile> HandTiles { get; }
@@ -127,5 +191,6 @@ namespace MahjongPrototype.Domain
         public bool IsReachDeclared { get; }
         public bool IsClosed { get; }
         public bool IsIppatsuEligible { get; }
+        public bool IsDoubleReachDeclared { get; }
     }
 }

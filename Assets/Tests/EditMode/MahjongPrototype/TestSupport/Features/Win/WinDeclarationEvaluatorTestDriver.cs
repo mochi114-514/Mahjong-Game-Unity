@@ -90,7 +90,8 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
             string roundWindName = "East",
             string seatWindName = "East",
             bool isClosed = true,
-            bool isIppatsuEligible = false)
+            bool isIppatsuEligible = false,
+            bool isDoubleReachDeclared = false)
         {
             object evaluator = support.CreateWinDeclarationEvaluator(catalog);
             object context = support.CreateWinDeclarationEvaluationContext(
@@ -101,7 +102,8 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
                 roundWindName,
                 seatWindName,
                 isClosed,
-                isIppatsuEligible);
+                isIppatsuEligible,
+                isDoubleReachDeclared);
 
             return support.Reflection.Invoke(evaluator, "EvaluateWithTile", context);
         }
@@ -464,6 +466,82 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
                 true);
         }
 
+        public object CreateLegacyHandEvaluationContextWithIppatsu()
+        {
+            return support.Reflection.CreateInstance(
+                support.Reflection.RequireType(HandEvaluationContextTypeName),
+                support.CreateTiles("1m 2m 3m 1p 2p 3p 1s 2s 3s E E E C"),
+                support.DataFactory.CreateTile("C"),
+                support.DataFactory.ParseWinType("Ron"),
+                ParseWinningHandShape("Standard"),
+                support.DataFactory.ParseSeat("East"),
+                null,
+                support.DataFactory.ParseRoundWind("East"),
+                support.DataFactory.ParseSeat("East"),
+                true,
+                true,
+                true);
+        }
+
+        public object CreateLegacyDetailedHandEvaluationContextWithIppatsu()
+        {
+            return support.Reflection.CreateInstance(
+                support.Reflection.RequireType(HandEvaluationContextTypeName),
+                support.CreateTiles("1m 2m 3m 1p 2p 3p 1s 2s 3s E E E C"),
+                support.DataFactory.CreateTile("C"),
+                support.DataFactory.ParseWinType("Ron"),
+                ParseWinningHandShape("Standard"),
+                support.Reflection.GetStaticProperty(
+                    support.Reflection.RequireType(WinningHandAnalysisResultTypeName),
+                    "NotWin"),
+                support.DataFactory.ParseSeat("East"),
+                null,
+                support.DataFactory.ParseRoundWind("East"),
+                support.DataFactory.ParseSeat("East"),
+                true,
+                true,
+                true);
+        }
+
+        public object CreateDoubleReachHandEvaluationContext()
+        {
+            return support.Reflection.CreateInstance(
+                support.Reflection.RequireType(HandEvaluationContextTypeName),
+                support.CreateTiles("1m 2m 3m 1p 2p 3p 1s 2s 3s E E E C"),
+                support.DataFactory.CreateTile("C"),
+                support.DataFactory.ParseWinType("Ron"),
+                ParseWinningHandShape("Standard"),
+                support.DataFactory.ParseSeat("East"),
+                null,
+                support.DataFactory.ParseRoundWind("East"),
+                support.DataFactory.ParseSeat("East"),
+                true,
+                true,
+                true,
+                true);
+        }
+
+        public object CreateDoubleReachDetailedHandEvaluationContext()
+        {
+            return support.Reflection.CreateInstance(
+                support.Reflection.RequireType(HandEvaluationContextTypeName),
+                support.CreateTiles("1m 2m 3m 1p 2p 3p 1s 2s 3s E E E C"),
+                support.DataFactory.CreateTile("C"),
+                support.DataFactory.ParseWinType("Ron"),
+                ParseWinningHandShape("Standard"),
+                support.Reflection.GetStaticProperty(
+                    support.Reflection.RequireType(WinningHandAnalysisResultTypeName),
+                    "NotWin"),
+                support.DataFactory.ParseSeat("East"),
+                null,
+                support.DataFactory.ParseRoundWind("East"),
+                support.DataFactory.ParseSeat("East"),
+                true,
+                true,
+                true,
+                true);
+        }
+
         public object CreateLegacyWinDeclarationEvaluationContext()
         {
             return support.Reflection.CreateInstance(
@@ -479,9 +557,47 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
                 true);
         }
 
+        public object CreateLegacyWinDeclarationEvaluationContextWithIppatsu()
+        {
+            return support.Reflection.CreateInstance(
+                support.Reflection.RequireType(WinDeclarationEvaluationContextTypeName),
+                support.CreateTiles("1m 2m 3m 1p 2p 3p 1s 2s 3s E E E C"),
+                support.DataFactory.CreateTile("C"),
+                support.DataFactory.ParseWinType("Ron"),
+                support.DataFactory.ParseSeat("East"),
+                null,
+                support.DataFactory.ParseRoundWind("East"),
+                support.DataFactory.ParseSeat("East"),
+                true,
+                true,
+                true);
+        }
+
+        public object CreateDoubleReachWinDeclarationEvaluationContext()
+        {
+            return support.Reflection.CreateInstance(
+                support.Reflection.RequireType(WinDeclarationEvaluationContextTypeName),
+                support.CreateTiles("1m 2m 3m 1p 2p 3p 1s 2s 3s E E E C"),
+                support.DataFactory.CreateTile("C"),
+                support.DataFactory.ParseWinType("Ron"),
+                support.DataFactory.ParseSeat("East"),
+                null,
+                support.DataFactory.ParseRoundWind("East"),
+                support.DataFactory.ParseSeat("East"),
+                true,
+                true,
+                true,
+                true);
+        }
+
         public bool IsIppatsuEligible(object context)
         {
             return (bool)support.Reflection.GetProperty(context, "IsIppatsuEligible");
+        }
+
+        public bool IsDoubleReachDeclared(object context)
+        {
+            return (bool)support.Reflection.GetProperty(context, "IsDoubleReachDeclared");
         }
 
         public object CreateLegacyWinDeclarationEvaluationResult()
