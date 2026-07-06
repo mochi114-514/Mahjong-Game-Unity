@@ -142,6 +142,7 @@ namespace MahjongPrototype.Services
             EvaluateSanshokuDoukouYaku(context, candidate, yakus);
             EvaluateIttsuuYaku(context, candidate, yakus);
             EvaluateChantaYaku(context, candidate, yakus);
+            EvaluateChuurenYaku(context, candidate, yakus);
         }
 
         private void EvaluateTileCompositionYaku(
@@ -161,7 +162,9 @@ namespace MahjongPrototype.Services
                     context,
                     out int numberSuitMask,
                     out bool hasHonor,
-                    out bool allTilesAreGreen))
+                    out bool allTilesAreGreen,
+                    out bool allTilesAreHonors,
+                    out bool allTilesAreTerminalNumbers))
             {
                 return;
             }
@@ -175,6 +178,17 @@ namespace MahjongPrototype.Services
             EvaluateRyuuiisouYaku(
                 context,
                 allTilesAreGreen,
+                yakus);
+
+            EvaluateTsuuiisouYaku(
+                context,
+                allTilesAreHonors,
+                yakus);
+
+            EvaluateChinroutouYaku(
+                context,
+                candidate,
+                allTilesAreTerminalNumbers,
                 yakus);
         }
 
@@ -285,11 +299,15 @@ namespace MahjongPrototype.Services
             HandEvaluationContext context,
             out int numberSuitMask,
             out bool hasHonor,
-            out bool allTilesAreGreen)
+            out bool allTilesAreGreen,
+            out bool allTilesAreHonors,
+            out bool allTilesAreTerminalNumbers)
         {
             numberSuitMask = 0;
             hasHonor = false;
             allTilesAreGreen = true;
+            allTilesAreHonors = true;
+            allTilesAreTerminalNumbers = true;
 
             if (context == null ||
                 context.HandTiles == null ||
@@ -304,7 +322,9 @@ namespace MahjongPrototype.Services
                         context.HandTiles[i],
                         ref numberSuitMask,
                         ref hasHonor,
-                        ref allTilesAreGreen))
+                        ref allTilesAreGreen,
+                        ref allTilesAreHonors,
+                        ref allTilesAreTerminalNumbers))
                 {
                     return false;
                 }
@@ -314,14 +334,18 @@ namespace MahjongPrototype.Services
                 context.WinningTile,
                 ref numberSuitMask,
                 ref hasHonor,
-                ref allTilesAreGreen);
+                ref allTilesAreGreen,
+                ref allTilesAreHonors,
+                ref allTilesAreTerminalNumbers);
         }
 
         private static bool TryAnalyzeTileCompositionTile(
             Tile tile,
             ref int numberSuitMask,
             ref bool hasHonor,
-            ref bool allTilesAreGreen)
+            ref bool allTilesAreGreen,
+            ref bool allTilesAreHonors,
+            ref bool allTilesAreTerminalNumbers)
         {
             if (!tile.IsValid)
                 return false;
@@ -334,6 +358,12 @@ namespace MahjongPrototype.Services
 
             if (!IsGreenTile(tile))
                 allTilesAreGreen = false;
+
+            if (!tile.IsHonorTile)
+                allTilesAreHonors = false;
+
+            if (!IsTerminalNumber(tile))
+                allTilesAreTerminalNumbers = false;
 
             return true;
         }
@@ -373,6 +403,32 @@ namespace MahjongPrototype.Services
                 yakus,
                 YakuKind.Ryuuiisou,
                 allTilesAreGreen,
+                context.IsClosed);
+        }
+
+        private void EvaluateTsuuiisouYaku(
+            HandEvaluationContext context,
+            bool allTilesAreHonors,
+            List<EvaluatedYaku> yakus)
+        {
+            TryAddYaku(
+                yakus,
+                YakuKind.Tsuuiisou,
+                allTilesAreHonors,
+                context.IsClosed);
+        }
+
+        private void EvaluateChinroutouYaku(
+            HandEvaluationContext context,
+            HandEvaluationCandidate candidate,
+            bool allTilesAreTerminalNumbers,
+            List<EvaluatedYaku> yakus)
+        {
+            TryAddYaku(
+                yakus,
+                YakuKind.Chinroutou,
+                candidate.Type == HandEvaluationCandidateType.Standard &&
+                allTilesAreTerminalNumbers,
                 context.IsClosed);
         }
 
@@ -1108,6 +1164,187 @@ namespace MahjongPrototype.Services
             return hasSequence;
         }
 
+        private void EvaluateChuurenYaku(
+            HandEvaluationContext context,
+            HandEvaluationCandidate candidate,
+            List<EvaluatedYaku> yakus)
+        {
+            if (!TryAnalyzeChuurenShape(
+                    context,
+                    candidate,
+                    out bool isChuuren,
+                    out bool isJunseiChuuren) ||
+                !isChuuren)
+            {
+                return;
+            }
+
+            if (isJunseiChuuren)
+            {
+                if (!TryAddYaku(
+                        yakus,
+                        YakuKind.JunseiChuurenPoutou,
+                        true,
+                        context.IsClosed))
+                {
+                    TryAddYaku(
+                        yakus,
+                        YakuKind.ChuurenPoutou,
+                        true,
+                        context.IsClosed);
+                }
+
+                return;
+            }
+
+            TryAddYaku(
+                yakus,
+                YakuKind.ChuurenPoutou,
+                true,
+                context.IsClosed);
+        }
+
+        private static bool TryAnalyzeChuurenShape(
+            HandEvaluationContext context,
+            HandEvaluationCandidate candidate,
+            out bool isChuuren,
+            out bool isJunseiChuuren)
+        {
+            isChuuren = false;
+            isJunseiChuuren = false;
+
+            if (context == null ||
+                candidate == null ||
+                !context.IsClosed ||
+                candidate.Type != HandEvaluationCandidateType.Standard ||
+                context.HandTiles == null ||
+                !context.WinningTile.IsValid)
+            {
+                return false;
+            }
+
+            if (!TryBuildSingleSuitRankCounts(
+                    context.HandTiles,
+                    context.WinningTile,
+                    true,
+                    14,
+                    out int[] completedRankCounts))
+            {
+                return false;
+            }
+
+            isChuuren = MatchesChuurenCompletedCounts(completedRankCounts);
+            if (!isChuuren)
+                return true;
+
+            if (TryBuildSingleSuitRankCounts(
+                    context.HandTiles,
+                    context.WinningTile,
+                    false,
+                    13,
+                    out int[] baseRankCounts))
+            {
+                isJunseiChuuren = MatchesJunseiChuurenBaseCounts(baseRankCounts);
+            }
+
+            return true;
+        }
+
+        private static bool TryBuildSingleSuitRankCounts(
+            IReadOnlyList<Tile> tiles,
+            Tile winningTile,
+            bool includeWinningTile,
+            int expectedTileCount,
+            out int[] rankCounts)
+        {
+            rankCounts = new int[10];
+
+            if (tiles == null)
+                return false;
+
+            TileSuit suit = TileSuit.None;
+            int tileCount = 0;
+            for (int i = 0; i < tiles.Count; i++)
+            {
+                if (!TryAddSingleSuitRankCount(
+                        tiles[i],
+                        rankCounts,
+                        ref suit))
+                {
+                    return false;
+                }
+
+                tileCount++;
+            }
+
+            if (includeWinningTile)
+            {
+                if (!TryAddSingleSuitRankCount(
+                        winningTile,
+                        rankCounts,
+                        ref suit))
+                {
+                    return false;
+                }
+
+                tileCount++;
+            }
+
+            return tileCount == expectedTileCount;
+        }
+
+        private static bool TryAddSingleSuitRankCount(
+            Tile tile,
+            int[] rankCounts,
+            ref TileSuit suit)
+        {
+            if (!tile.IsNumberTile)
+                return false;
+
+            if (suit == TileSuit.None)
+            {
+                suit = tile.Suit;
+            }
+            else if (suit != tile.Suit)
+            {
+                return false;
+            }
+
+            rankCounts[tile.Rank]++;
+            return true;
+        }
+
+        private static bool MatchesChuurenCompletedCounts(int[] rankCounts)
+        {
+            int extraTileCount = 0;
+            for (int rank = 1; rank <= 9; rank++)
+            {
+                int requiredCount = ChuurenRequiredCount(rank);
+                if (rankCounts[rank] < requiredCount)
+                    return false;
+
+                extraTileCount += rankCounts[rank] - requiredCount;
+            }
+
+            return extraTileCount == 1;
+        }
+
+        private static bool MatchesJunseiChuurenBaseCounts(int[] rankCounts)
+        {
+            for (int rank = 1; rank <= 9; rank++)
+            {
+                if (rankCounts[rank] != ChuurenRequiredCount(rank))
+                    return false;
+            }
+
+            return true;
+        }
+
+        private static int ChuurenRequiredCount(int rank)
+        {
+            return rank == 1 || rank == 9 ? 3 : 1;
+        }
+
         private static int ToSuitMask(TileSuit suit)
         {
             switch (suit)
@@ -1136,7 +1373,12 @@ namespace MahjongPrototype.Services
         private static bool IsTerminalOrHonor(Tile tile)
         {
             return tile.IsHonorTile ||
-                   (tile.IsNumberTile && (tile.Rank == 1 || tile.Rank == 9));
+                   IsTerminalNumber(tile);
+        }
+
+        private static bool IsTerminalNumber(Tile tile)
+        {
+            return tile.IsNumberTile && (tile.Rank == 1 || tile.Rank == 9);
         }
 
         private static bool IsGreenTile(Tile tile)
