@@ -8,6 +8,7 @@ namespace MahjongPrototype.Services
     {
         private readonly YakuDefinitionCatalog catalog;
         private const int CompleteDragonMask = 7;
+        private const int CompleteWindMask = 15;
         private const int CompleteIttsuuSequenceMask = 7;
 
         public HandEvaluator(YakuDefinitionCatalog catalog)
@@ -135,6 +136,7 @@ namespace MahjongPrototype.Services
             EvaluatePeikouYaku(context, candidate, yakus);
             EvaluateYakuhaiYaku(context, candidate, yakus);
             EvaluateDragonGroupYaku(context, candidate, yakus);
+            EvaluateWindGroupYaku(context, candidate, yakus);
             EvaluateSanshokuDoujunYaku(context, candidate, yakus);
             EvaluateSanshokuDoukouYaku(context, candidate, yakus);
             EvaluateIttsuuYaku(context, candidate, yakus);
@@ -608,6 +610,86 @@ namespace MahjongPrototype.Services
             return true;
         }
 
+        private void EvaluateWindGroupYaku(
+            HandEvaluationContext context,
+            HandEvaluationCandidate candidate,
+            List<EvaluatedYaku> yakus)
+        {
+            if (context == null ||
+                candidate == null ||
+                candidate.Type != HandEvaluationCandidateType.Standard)
+            {
+                return;
+            }
+
+            if (!TryGetWindGroupMasks(
+                    candidate,
+                    out int windTripletMask,
+                    out int windPairMask))
+            {
+                return;
+            }
+
+            if (windTripletMask == CompleteWindMask)
+            {
+                TryAddYaku(
+                    yakus,
+                    YakuKind.Daisuushii,
+                    true,
+                    context.IsClosed);
+                return;
+            }
+
+            if (CountBits(windTripletMask) == 3 &&
+                windPairMask != 0 &&
+                (windTripletMask & windPairMask) == 0 &&
+                (windTripletMask | windPairMask) == CompleteWindMask)
+            {
+                TryAddYaku(
+                    yakus,
+                    YakuKind.Shousuushii,
+                    true,
+                    context.IsClosed);
+            }
+        }
+
+        private static bool TryGetWindGroupMasks(
+            HandEvaluationCandidate candidate,
+            out int windTripletMask,
+            out int windPairMask)
+        {
+            windTripletMask = 0;
+            windPairMask = 0;
+
+            StandardHandDecomposition decomposition =
+                candidate.StandardInterpretation?.Decomposition;
+
+            if (decomposition == null ||
+                decomposition.Melds == null ||
+                decomposition.Melds.Count != 4)
+            {
+                return false;
+            }
+
+            windPairMask = ToWindMask(decomposition.PairTile);
+
+            for (int i = 0; i < decomposition.Melds.Count; i++)
+            {
+                HandMeld meld = decomposition.Melds[i];
+                if (meld == null ||
+                    meld.Type != MeldType.Triplet ||
+                    meld.Tiles == null ||
+                    meld.Tiles.Count != 3)
+                {
+                    continue;
+                }
+
+                windTripletMask |= ToWindMask(meld.Tiles[0]);
+            }
+
+            return true;
+        }
+
         private void AddYakuhaiForHonor(
             HandEvaluationContext context,
             HonorKind honor,
@@ -964,6 +1046,28 @@ namespace MahjongPrototype.Services
                     return 2;
                 case HonorKind.Red:
                     return 4;
+                default:
+                    return 0;
+            }
+        }
+
+        private static int ToWindMask(Tile tile)
+        {
+            return tile.IsHonorTile ? ToWindMask(tile.Honor) : 0;
+        }
+
+        private static int ToWindMask(HonorKind honor)
+        {
+            switch (honor)
+            {
+                case HonorKind.East:
+                    return 1;
+                case HonorKind.South:
+                    return 2;
+                case HonorKind.West:
+                    return 4;
+                case HonorKind.North:
+                    return 8;
                 default:
                     return 0;
             }
