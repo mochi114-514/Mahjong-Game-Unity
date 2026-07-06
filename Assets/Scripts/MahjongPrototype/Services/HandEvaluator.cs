@@ -164,7 +164,8 @@ namespace MahjongPrototype.Services
                     out bool hasHonor,
                     out bool allTilesAreGreen,
                     out bool allTilesAreHonors,
-                    out bool allTilesAreTerminalNumbers))
+                    out bool allTilesAreTerminalNumbers,
+                    out bool allTilesAreTerminalOrHonors))
             {
                 return;
             }
@@ -180,15 +181,12 @@ namespace MahjongPrototype.Services
                 allTilesAreGreen,
                 yakus);
 
-            EvaluateTsuuiisouYaku(
-                context,
-                allTilesAreHonors,
-                yakus);
-
-            EvaluateChinroutouYaku(
+            EvaluateHonorTerminalGroupYaku(
                 context,
                 candidate,
+                allTilesAreHonors,
                 allTilesAreTerminalNumbers,
+                allTilesAreTerminalOrHonors,
                 yakus);
         }
 
@@ -211,12 +209,38 @@ namespace MahjongPrototype.Services
             HandEvaluationCandidate candidate,
             List<EvaluatedYaku> yakus)
         {
+            if (context == null ||
+                candidate == null ||
+                !context.IsClosed ||
+                candidate.Type != HandEvaluationCandidateType.ThirteenOrphans ||
+                candidate.ThirteenOrphansAnalysis == null ||
+                !candidate.ThirteenOrphansAnalysis.IsWin)
+            {
+                return;
+            }
+
+            if (IsKokushiMusouThirteenWait(context, candidate))
+            {
+                if (!TryAddYaku(
+                        yakus,
+                        YakuKind.KokushiMusouThirteenWait,
+                        true,
+                        context.IsClosed))
+                {
+                    TryAddYaku(
+                        yakus,
+                        YakuKind.KokushiMusou,
+                        true,
+                        context.IsClosed);
+                }
+
+                return;
+            }
+
             TryAddYaku(
                 yakus,
                 YakuKind.KokushiMusou,
-                candidate.Type == HandEvaluationCandidateType.ThirteenOrphans &&
-                candidate.ThirteenOrphansAnalysis != null &&
-                candidate.ThirteenOrphansAnalysis.IsWin,
+                true,
                 context.IsClosed);
         }
 
@@ -301,13 +325,15 @@ namespace MahjongPrototype.Services
             out bool hasHonor,
             out bool allTilesAreGreen,
             out bool allTilesAreHonors,
-            out bool allTilesAreTerminalNumbers)
+            out bool allTilesAreTerminalNumbers,
+            out bool allTilesAreTerminalOrHonors)
         {
             numberSuitMask = 0;
             hasHonor = false;
             allTilesAreGreen = true;
             allTilesAreHonors = true;
             allTilesAreTerminalNumbers = true;
+            allTilesAreTerminalOrHonors = true;
 
             if (context == null ||
                 context.HandTiles == null ||
@@ -324,7 +350,8 @@ namespace MahjongPrototype.Services
                         ref hasHonor,
                         ref allTilesAreGreen,
                         ref allTilesAreHonors,
-                        ref allTilesAreTerminalNumbers))
+                        ref allTilesAreTerminalNumbers,
+                        ref allTilesAreTerminalOrHonors))
                 {
                     return false;
                 }
@@ -336,7 +363,8 @@ namespace MahjongPrototype.Services
                 ref hasHonor,
                 ref allTilesAreGreen,
                 ref allTilesAreHonors,
-                ref allTilesAreTerminalNumbers);
+                ref allTilesAreTerminalNumbers,
+                ref allTilesAreTerminalOrHonors);
         }
 
         private static bool TryAnalyzeTileCompositionTile(
@@ -345,7 +373,8 @@ namespace MahjongPrototype.Services
             ref bool hasHonor,
             ref bool allTilesAreGreen,
             ref bool allTilesAreHonors,
-            ref bool allTilesAreTerminalNumbers)
+            ref bool allTilesAreTerminalNumbers,
+            ref bool allTilesAreTerminalOrHonors)
         {
             if (!tile.IsValid)
                 return false;
@@ -364,6 +393,9 @@ namespace MahjongPrototype.Services
 
             if (!IsTerminalNumber(tile))
                 allTilesAreTerminalNumbers = false;
+
+            if (!IsTerminalOrHonor(tile))
+                allTilesAreTerminalOrHonors = false;
 
             return true;
         }
@@ -406,30 +438,86 @@ namespace MahjongPrototype.Services
                 context.IsClosed);
         }
 
-        private void EvaluateTsuuiisouYaku(
-            HandEvaluationContext context,
-            bool allTilesAreHonors,
-            List<EvaluatedYaku> yakus)
-        {
-            TryAddYaku(
-                yakus,
-                YakuKind.Tsuuiisou,
-                allTilesAreHonors,
-                context.IsClosed);
-        }
-
-        private void EvaluateChinroutouYaku(
+        private void EvaluateHonorTerminalGroupYaku(
             HandEvaluationContext context,
             HandEvaluationCandidate candidate,
+            bool allTilesAreHonors,
             bool allTilesAreTerminalNumbers,
+            bool allTilesAreTerminalOrHonors,
             List<EvaluatedYaku> yakus)
         {
+            if (!allTilesAreTerminalOrHonors)
+                return;
+
+            bool isStandard =
+                candidate.Type == HandEvaluationCandidateType.Standard;
+            bool isSevenPairs =
+                candidate.Type == HandEvaluationCandidateType.SevenPairs;
+
+            TryAddYaku(
+                yakus,
+                YakuKind.Honroutou,
+                isStandard || isSevenPairs,
+                context.IsClosed);
+
+            if (allTilesAreHonors)
+            {
+                TryAddYaku(
+                    yakus,
+                    YakuKind.Tsuuiisou,
+                    true,
+                    context.IsClosed);
+                return;
+            }
+
             TryAddYaku(
                 yakus,
                 YakuKind.Chinroutou,
-                candidate.Type == HandEvaluationCandidateType.Standard &&
-                allTilesAreTerminalNumbers,
+                isStandard && allTilesAreTerminalNumbers,
                 context.IsClosed);
+        }
+
+        private static bool IsKokushiMusouThirteenWait(
+            HandEvaluationContext context,
+            HandEvaluationCandidate candidate)
+        {
+            if (context == null ||
+                candidate == null ||
+                candidate.Type != HandEvaluationCandidateType.ThirteenOrphans ||
+                candidate.ThirteenOrphansAnalysis == null ||
+                !candidate.ThirteenOrphansAnalysis.IsWin ||
+                context.HandTiles == null ||
+                context.HandTiles.Count != 13 ||
+                !IsTerminalOrHonor(context.WinningTile))
+            {
+                return false;
+            }
+
+            bool[] seenTypeIndexes = new bool[34];
+            int uniqueTypeCount = 0;
+            for (int i = 0; i < context.HandTiles.Count; i++)
+            {
+                Tile tile = context.HandTiles[i];
+                if (!IsTerminalOrHonor(tile))
+                    return false;
+
+                int typeIndex = tile.TypeIndex;
+                if (typeIndex < 0 ||
+                    typeIndex >= seenTypeIndexes.Length ||
+                    seenTypeIndexes[typeIndex])
+                {
+                    return false;
+                }
+
+                seenTypeIndexes[typeIndex] = true;
+                uniqueTypeCount++;
+            }
+
+            int winningTypeIndex = context.WinningTile.TypeIndex;
+            return uniqueTypeCount == 13 &&
+                   winningTypeIndex >= 0 &&
+                   winningTypeIndex < seenTypeIndexes.Length &&
+                   seenTypeIndexes[winningTypeIndex];
         }
 
         private static bool IsPinfu(
