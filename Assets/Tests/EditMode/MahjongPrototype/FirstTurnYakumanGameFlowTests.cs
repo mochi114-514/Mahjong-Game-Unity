@@ -172,6 +172,10 @@ namespace MahjongPrototype.Tests
 
             public void ForceCurrentTurn(string seatName, int turnIndex)
             {
+                session.DataFactory.SetParticipantType(
+                    session.CurrentState,
+                    seatName,
+                    "LocalHuman");
                 session.DataFactory.SetCurrentTurn(session.CurrentState, seatName);
                 session.Reflection.SetProperty(
                     session.CurrentState,

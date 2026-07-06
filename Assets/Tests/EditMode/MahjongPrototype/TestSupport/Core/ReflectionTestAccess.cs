@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using NUnit.Framework;
 
@@ -36,24 +37,30 @@ namespace MahjongPrototype.Tests.TestSupport.Core
         {
             Assert.That(target, Is.Not.Null, $"Cannot invoke {methodName} on a null target.");
 
-            MethodInfo method = target.GetType().GetMethod(methodName, InstanceMemberFlags);
-            Assert.That(
-                method,
-                Is.Not.Null,
-                $"Method not found: {target.GetType().FullName}.{methodName}({FormatArgumentTypes(args)})");
-            return method.Invoke(target, args);
+            MethodInfo method = ResolveMethod(
+                target.GetType(),
+                methodName,
+                InstanceMemberFlags,
+                args,
+                out object[] invocationArgs);
+            object result = method.Invoke(target, invocationArgs);
+            CopyBackByRefArguments(method, invocationArgs, args);
+            return result;
         }
 
         public object InvokeStatic(Type type, string methodName, params object[] args)
         {
             Assert.That(type, Is.Not.Null, $"Cannot invoke static method {methodName} on a null type.");
 
-            MethodInfo method = type.GetMethod(methodName, StaticMemberFlags);
-            Assert.That(
-                method,
-                Is.Not.Null,
-                $"Static method not found: {type.FullName}.{methodName}({FormatArgumentTypes(args)})");
-            return method.Invoke(null, args);
+            MethodInfo method = ResolveMethod(
+                type,
+                methodName,
+                StaticMemberFlags,
+                args,
+                out object[] invocationArgs);
+            object result = method.Invoke(null, invocationArgs);
+            CopyBackByRefArguments(method, invocationArgs, args);
+            return result;
         }
 
         public object GetStaticProperty(Type type, string propertyName)
@@ -154,6 +161,177 @@ namespace MahjongPrototype.Tests.TestSupport.Core
             return FormatTypes(types);
         }
 
+        private static MethodInfo ResolveMethod(
+            Type type,
+            string methodName,
+            BindingFlags flags,
+            object[] args,
+            out object[] invocationArgs)
+        {
+            object[] providedArgs = args ?? new object[0];
+            List<MethodMatch> matches = new List<MethodMatch>();
+            MethodInfo[] methods = type.GetMethods(flags);
+
+            for (int i = 0; i < methods.Length; i++)
+            {
+                MethodInfo method = methods[i];
+                if (method.Name != methodName || method.ContainsGenericParameters)
+                    continue;
+
+                if (!TryBuildInvocationArguments(
+                        method.GetParameters(),
+                        providedArgs,
+                        out object[] candidateArgs,
+                        out int score))
+                {
+                    continue;
+                }
+
+                matches.Add(new MethodMatch(method, candidateArgs, score));
+            }
+
+            if (matches.Count == 0)
+            {
+                Assert.Fail(
+                    $"Method not found: {type.FullName}.{methodName}({FormatArgumentTypes(providedArgs)})");
+            }
+
+            matches.Sort((left, right) => left.Score.CompareTo(right.Score));
+            if (matches.Count > 1 && matches[0].Score == matches[1].Score)
+            {
+                Assert.Fail(
+                    $"Ambiguous method match: {type.FullName}.{methodName}({FormatArgumentTypes(providedArgs)}). " +
+                    $"Candidates: {FormatMethodMatches(matches, matches[0].Score)}");
+            }
+
+            invocationArgs = matches[0].InvocationArgs;
+            return matches[0].Method;
+        }
+
+        private static bool TryBuildInvocationArguments(
+            ParameterInfo[] parameters,
+            object[] providedArgs,
+            out object[] invocationArgs,
+            out int score)
+        {
+            invocationArgs = null;
+            score = 0;
+
+            if (providedArgs.Length > parameters.Length)
+                return false;
+
+            object[] candidateArgs = new object[parameters.Length];
+            for (int i = 0; i < providedArgs.Length; i++)
+            {
+                if (!CanAssignArgument(
+                        providedArgs[i],
+                        parameters[i],
+                        out int argumentScore))
+                {
+                    return false;
+                }
+
+                candidateArgs[i] = providedArgs[i];
+                score += argumentScore;
+            }
+
+            for (int i = providedArgs.Length; i < parameters.Length; i++)
+            {
+                if (!parameters[i].IsOptional)
+                    return false;
+
+                candidateArgs[i] = Type.Missing;
+                score += 10;
+            }
+
+            invocationArgs = candidateArgs;
+            return true;
+        }
+
+        private static bool CanAssignArgument(object arg, ParameterInfo parameter, out int score)
+        {
+            Type parameterType = parameter.ParameterType;
+            Type effectiveParameterType = parameterType.IsByRef
+                ? parameterType.GetElementType()
+                : parameterType;
+
+            if (arg == null)
+            {
+                score = 3;
+                if (parameterType.IsByRef && parameter.IsOut)
+                    return true;
+
+                return !effectiveParameterType.IsValueType ||
+                    Nullable.GetUnderlyingType(effectiveParameterType) != null;
+            }
+
+            Type argumentType = arg.GetType();
+            if (effectiveParameterType == argumentType)
+            {
+                score = 0;
+                return true;
+            }
+
+            Type nullableType = Nullable.GetUnderlyingType(effectiveParameterType);
+            if (nullableType != null && nullableType == argumentType)
+            {
+                score = 1;
+                return true;
+            }
+
+            if (effectiveParameterType.IsAssignableFrom(argumentType))
+            {
+                score = 2;
+                return true;
+            }
+
+            score = int.MaxValue;
+            return false;
+        }
+
+        private static void CopyBackByRefArguments(
+            MethodInfo method,
+            object[] invocationArgs,
+            object[] originalArgs)
+        {
+            if (originalArgs == null || originalArgs.Length == 0)
+                return;
+
+            ParameterInfo[] parameters = method.GetParameters();
+            int count = Math.Min(originalArgs.Length, parameters.Length);
+            for (int i = 0; i < count; i++)
+            {
+                if (!parameters[i].ParameterType.IsByRef)
+                    continue;
+
+                originalArgs[i] = invocationArgs[i];
+            }
+        }
+
+        private static string FormatMethodMatches(List<MethodMatch> matches, int score)
+        {
+            List<string> names = new List<string>();
+            for (int i = 0; i < matches.Count; i++)
+            {
+                if (matches[i].Score != score)
+                    continue;
+
+                names.Add(FormatMethod(matches[i].Method));
+            }
+
+            return string.Join("; ", names);
+        }
+
+        private static string FormatMethod(MethodInfo method)
+        {
+            ParameterInfo[] parameters = method.GetParameters();
+            Type[] parameterTypes = new Type[parameters.Length];
+            for (int i = 0; i < parameters.Length; i++)
+                parameterTypes[i] = parameters[i].ParameterType;
+
+            return $"{method.Name}({FormatTypes(parameterTypes)})";
+        }
+
         private static string FormatTypes(Type[] types)
         {
             if (types == null || types.Length == 0)
@@ -164,6 +342,20 @@ namespace MahjongPrototype.Tests.TestSupport.Core
                 names[i] = types[i] == null ? "null" : types[i].FullName;
 
             return string.Join(", ", names);
+        }
+
+        private readonly struct MethodMatch
+        {
+            public MethodMatch(MethodInfo method, object[] invocationArgs, int score)
+            {
+                Method = method;
+                InvocationArgs = invocationArgs;
+                Score = score;
+            }
+
+            public MethodInfo Method { get; }
+            public object[] InvocationArgs { get; }
+            public int Score { get; }
         }
     }
 }
