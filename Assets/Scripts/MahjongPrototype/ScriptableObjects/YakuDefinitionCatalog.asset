@@ -205,6 +205,12 @@ MonoBehaviour:
     openHan: 0
     isYakuman: 1
     isEnabled: 1
+  - kind: 110
+    displayName: "\u6DF7\u8001\u982D"
+    closedHan: 2
+    openHan: 2
+    isYakuman: 0
+    isEnabled: 1
   - kind: 308
     displayName: "\u6E05\u8001\u982D"
     closedHan: 0
@@ -219,18 +225,6 @@ MonoBehaviour:
     isEnabled: 1
   - kind: 311
     displayName: "\u7D14\u6B63\u4E5D\u84EE\u5B9D\u71C8"
-    closedHan: 0
-    openHan: 0
-    isYakuman: 1
-    isEnabled: 1
-  - kind: 311
-    displayName: "\u7D14\u6B63\u4E5D\u84EE\u5B9D\u71C8"
-    closedHan: 0
-    openHan: 0
-    isYakuman: 1
-    isEnabled: 1
-  - kind: 110
-    displayName: "\u6DF7\u8001\u982D"
     closedHan: 0
     openHan: 0
     isYakuman: 1

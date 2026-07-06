@@ -91,7 +91,8 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
             string seatWindName = "East",
             bool isClosed = true,
             bool isIppatsuEligible = false,
-            bool isDoubleReachDeclared = false)
+            bool isDoubleReachDeclared = false,
+            bool isFirstTurnTsumoEligible = false)
         {
             object evaluator = support.CreateWinDeclarationEvaluator(catalog);
             object context = support.CreateWinDeclarationEvaluationContext(
@@ -103,7 +104,8 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
                 seatWindName,
                 isClosed,
                 isIppatsuEligible,
-                isDoubleReachDeclared);
+                isDoubleReachDeclared,
+                isFirstTurnTsumoEligible);
 
             return support.Reflection.Invoke(evaluator, "EvaluateWithTile", context);
         }
@@ -542,6 +544,28 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
                 true);
         }
 
+        public object CreateFirstTurnTsumoHandEvaluationContext()
+        {
+            return support.Reflection.CreateInstance(
+                support.Reflection.RequireType(HandEvaluationContextTypeName),
+                support.CreateTiles("1m 2m 3m 1p 2p 3p 1s 2s 3s E E E C"),
+                support.DataFactory.CreateTile("C"),
+                support.DataFactory.ParseWinType("Tsumo"),
+                ParseWinningHandShape("Standard"),
+                support.Reflection.GetStaticProperty(
+                    support.Reflection.RequireType(WinningHandAnalysisResultTypeName),
+                    "NotWin"),
+                support.DataFactory.ParseSeat("East"),
+                null,
+                support.DataFactory.ParseRoundWind("East"),
+                support.DataFactory.ParseSeat("East"),
+                false,
+                true,
+                false,
+                false,
+                true);
+        }
+
         public object CreateLegacyWinDeclarationEvaluationContext()
         {
             return support.Reflection.CreateInstance(
@@ -590,6 +614,24 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
                 true);
         }
 
+        public object CreateFirstTurnTsumoWinDeclarationEvaluationContext()
+        {
+            return support.Reflection.CreateInstance(
+                support.Reflection.RequireType(WinDeclarationEvaluationContextTypeName),
+                support.CreateTiles("1m 2m 3m 1p 2p 3p 1s 2s 3s E E E C"),
+                support.DataFactory.CreateTile("C"),
+                support.DataFactory.ParseWinType("Tsumo"),
+                support.DataFactory.ParseSeat("East"),
+                null,
+                support.DataFactory.ParseRoundWind("East"),
+                support.DataFactory.ParseSeat("East"),
+                false,
+                true,
+                false,
+                false,
+                true);
+        }
+
         public bool IsIppatsuEligible(object context)
         {
             return (bool)support.Reflection.GetProperty(context, "IsIppatsuEligible");
@@ -598,6 +640,11 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
         public bool IsDoubleReachDeclared(object context)
         {
             return (bool)support.Reflection.GetProperty(context, "IsDoubleReachDeclared");
+        }
+
+        public bool IsFirstTurnTsumoEligible(object context)
+        {
+            return (bool)support.Reflection.GetProperty(context, "IsFirstTurnTsumoEligible");
         }
 
         public object CreateLegacyWinDeclarationEvaluationResult()

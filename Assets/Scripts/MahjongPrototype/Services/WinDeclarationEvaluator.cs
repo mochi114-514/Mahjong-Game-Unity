@@ -44,7 +44,8 @@ namespace MahjongPrototype.Services
                 context.IsReachDeclared,
                 context.IsClosed,
                 context.IsIppatsuEligible,
-                context.IsDoubleReachDeclared);
+                context.IsDoubleReachDeclared,
+                context.IsFirstTurnTsumoEligible);
             HandEvaluationResult handEvaluationResult = handEvaluator.Evaluate(handContext);
             return new WinDeclarationEvaluationResult(
                 winCheckResult,

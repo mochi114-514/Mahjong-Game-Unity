@@ -1273,6 +1273,29 @@ namespace MahjongPrototype
             return discardCount == 1;
         }
 
+        private static bool IsFirstTurnTsumoEligible(
+            MahjongGameState gameState,
+            SeatId seat,
+            WinType winType)
+        {
+            if (winType != WinType.Tsumo ||
+                gameState == null ||
+                gameState.Discards == null)
+            {
+                return false;
+            }
+
+            bool hasAnyDiscard = false;
+            for (int i = 0; i < gameState.Discards.Count; i++)
+            {
+                hasAnyDiscard = true;
+                if (gameState.Discards[i].ActorSeat == seat)
+                    return false;
+            }
+
+            return seat != SeatId.East || !hasAnyDiscard;
+        }
+
         private void ExpireIppatsuAfterDiscard(
             DiscardRecord record,
             bool declaredReachNow)
@@ -1292,6 +1315,8 @@ namespace MahjongPrototype
             SeatId? sourceSeat)
         {
             SeatId winnerSeat = playerSeat.SeatId;
+            bool isFirstTurnTsumoEligible =
+                IsFirstTurnTsumoEligible(gameState, winnerSeat, winType);
             return new WinDeclarationEvaluationContext(
                 playerSeat.Hand.GetTiles(),
                 winningTile,
@@ -1303,7 +1328,8 @@ namespace MahjongPrototype
                 playerSeat.IsReachDeclared,
                 true,
                 playerSeat.IsIppatsuEligible,
-                playerSeat.IsDoubleReachDeclared);
+                playerSeat.IsDoubleReachDeclared,
+                isFirstTurnTsumoEligible);
         }
 
         private void SetWinDecisionPending(bool isPending, SeatId seat, int turnIndex)

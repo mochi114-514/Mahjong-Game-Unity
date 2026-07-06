@@ -109,6 +109,7 @@ namespace MahjongPrototype.Services
                 context.WinType == WinType.Tsumo && context.IsClosed,
                 context.IsClosed);
             TryAddYaku(yakus, YakuKind.Tanyao, IsTanyao(context), context.IsClosed);
+            EvaluateFirstTurnYakuman(context, yakus);
         }
 
         private void EvaluateReachYaku(
@@ -125,6 +126,27 @@ namespace MahjongPrototype.Services
             }
 
             TryAddYaku(yakus, YakuKind.Reach, true, context.IsClosed);
+        }
+
+        private void EvaluateFirstTurnYakuman(
+            HandEvaluationContext context,
+            List<EvaluatedYaku> yakus)
+        {
+            if (context == null ||
+                !context.IsFirstTurnTsumoEligible ||
+                context.WinType != WinType.Tsumo ||
+                !context.IsClosed)
+            {
+                return;
+            }
+
+            TryAddYaku(
+                yakus,
+                context.SeatWind == SeatId.East
+                    ? YakuKind.Tenhou
+                    : YakuKind.Chiihou,
+                true,
+                context.IsClosed);
         }
 
         private void EvaluateStandardCandidateYaku(

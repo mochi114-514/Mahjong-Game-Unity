@@ -26,6 +26,7 @@ namespace MahjongPrototype.Domain
                 isReachDeclared,
                 isClosed,
                 false,
+                false,
                 false)
         {
         }
@@ -52,6 +53,7 @@ namespace MahjongPrototype.Domain
                 isReachDeclared,
                 isClosed,
                 isIppatsuEligible,
+                false,
                 false)
         {
         }
@@ -68,6 +70,35 @@ namespace MahjongPrototype.Domain
             bool isClosed,
             bool isIppatsuEligible,
             bool isDoubleReachDeclared)
+            : this(
+                handTiles,
+                winningTile,
+                winType,
+                winnerSeat,
+                sourceSeat,
+                roundWind,
+                seatWind,
+                isReachDeclared,
+                isClosed,
+                isIppatsuEligible,
+                isDoubleReachDeclared,
+                false)
+        {
+        }
+
+        public WinDeclarationEvaluationContext(
+            IReadOnlyList<Tile> handTiles,
+            Tile winningTile,
+            WinType winType,
+            SeatId winnerSeat,
+            SeatId? sourceSeat,
+            RoundWind roundWind,
+            SeatId seatWind,
+            bool isReachDeclared,
+            bool isClosed,
+            bool isIppatsuEligible,
+            bool isDoubleReachDeclared,
+            bool isFirstTurnTsumoEligible)
         {
             HandTiles = handTiles ?? throw new ArgumentNullException(nameof(handTiles));
             WinningTile = winningTile;
@@ -80,6 +111,7 @@ namespace MahjongPrototype.Domain
             IsClosed = isClosed;
             IsIppatsuEligible = isIppatsuEligible;
             IsDoubleReachDeclared = isDoubleReachDeclared;
+            IsFirstTurnTsumoEligible = isFirstTurnTsumoEligible;
         }
 
         public IReadOnlyList<Tile> HandTiles { get; }
@@ -93,5 +125,6 @@ namespace MahjongPrototype.Domain
         public bool IsClosed { get; }
         public bool IsIppatsuEligible { get; }
         public bool IsDoubleReachDeclared { get; }
+        public bool IsFirstTurnTsumoEligible { get; }
     }
 }

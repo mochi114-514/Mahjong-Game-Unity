@@ -93,7 +93,8 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
             string seatWindName = "East",
             bool isClosed = true,
             bool isIppatsuEligible = false,
-            bool isDoubleReachDeclared = false)
+            bool isDoubleReachDeclared = false,
+            bool isFirstTurnTsumoEligible = false)
         {
             return Reflection.CreateInstance(
                 Reflection.RequireType(WinDeclarationEvaluationContextTypeName),
@@ -107,7 +108,8 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
                 isReachDeclared,
                 isClosed,
                 isIppatsuEligible,
-                isDoubleReachDeclared);
+                isDoubleReachDeclared,
+                isFirstTurnTsumoEligible);
         }
 
         public object CreateYakuDefinition(
