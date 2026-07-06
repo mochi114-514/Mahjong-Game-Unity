@@ -229,3 +229,15 @@ MonoBehaviour:
     openHan: 0
     isYakuman: 1
     isEnabled: 1
+  - kind: 313
+    displayName: "\u5929\u548C"
+    closedHan: 0
+    openHan: 0
+    isYakuman: 1
+    isEnabled: 1
+  - kind: 314
+    displayName: "\u5730\u548C"
+    closedHan: 0
+    openHan: 0
+    isYakuman: 1
+    isEnabled: 1
