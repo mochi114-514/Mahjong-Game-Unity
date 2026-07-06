@@ -19,6 +19,7 @@ namespace MahjongPrototype.Tests
             Assert.That(driver.RecordActorSeat(record), Is.EqualTo("East"));
             Assert.That(driver.RecordTile(record), Is.EqualTo("1m"));
             Assert.That(driver.RecordTurnIndex(record), Is.EqualTo(1));
+            Assert.That(driver.RecordIsLastLiveWallDiscard(record), Is.False);
         }
 
         [Test]
@@ -35,6 +36,35 @@ namespace MahjongPrototype.Tests
             Assert.That(driver.RecordActorSeat(record), Is.EqualTo("East"));
             Assert.That(driver.RecordTile(record), Is.EqualTo("2m"));
             Assert.That(driver.RecordTurnIndex(record), Is.EqualTo(1));
+            Assert.That(driver.RecordIsLastLiveWallDiscard(record), Is.False);
+        }
+
+        [Test]
+        public void DiscardTile_AfterMatchingLastTurnDraw_SetsLastLiveWallDiscard()
+        {
+            DiscardServiceTestDriver driver = DiscardServiceTestDriver.Create();
+            object gameState = driver.CreateGameState("East");
+            driver.AddHandTile(gameState, "East", "1m");
+            driver.RecordTurnDraw(gameState, "East", "2m", 1, true);
+
+            object result = driver.DiscardHandTile(gameState, "East", 0);
+            object record = driver.RecordOf(result);
+
+            Assert.That(driver.RecordIsLastLiveWallDiscard(record), Is.True);
+        }
+
+        [Test]
+        public void DiscardDrawnTile_AfterMatchingLastTurnDraw_SetsLastLiveWallDiscard()
+        {
+            DiscardServiceTestDriver driver = DiscardServiceTestDriver.Create();
+            object gameState = driver.CreateGameState("East");
+            driver.SetDrawnTile(gameState, "East", "2m");
+            driver.RecordTurnDraw(gameState, "East", "2m", 1, true);
+
+            object result = driver.DiscardDrawnTile(gameState, "East");
+            object record = driver.RecordOf(result);
+
+            Assert.That(driver.RecordIsLastLiveWallDiscard(record), Is.True);
         }
 
         [Test]

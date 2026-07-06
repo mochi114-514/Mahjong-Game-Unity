@@ -92,7 +92,9 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
             bool isClosed = true,
             bool isIppatsuEligible = false,
             bool isDoubleReachDeclared = false,
-            bool isFirstTurnTsumoEligible = false)
+            bool isFirstTurnTsumoEligible = false,
+            bool isLastLiveWallDraw = false,
+            bool isLastLiveWallDiscard = false)
         {
             object evaluator = support.CreateWinDeclarationEvaluator(catalog);
             object context = support.CreateWinDeclarationEvaluationContext(
@@ -105,7 +107,9 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
                 isClosed,
                 isIppatsuEligible,
                 isDoubleReachDeclared,
-                isFirstTurnTsumoEligible);
+                isFirstTurnTsumoEligible,
+                isLastLiveWallDraw,
+                isLastLiveWallDiscard);
 
             return support.Reflection.Invoke(evaluator, "EvaluateWithTile", context);
         }
@@ -563,7 +567,33 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
                 true,
                 false,
                 false,
-                true);
+                true,
+                false,
+                false);
+        }
+
+        public object CreateLastLiveWallDrawHandEvaluationContext()
+        {
+            return support.Reflection.CreateInstance(
+                support.Reflection.RequireType(HandEvaluationContextTypeName),
+                support.CreateTiles("1m 2m 3m 1p 2p 3p 1s 2s 3s E E E C"),
+                support.DataFactory.CreateTile("C"),
+                support.DataFactory.ParseWinType("Tsumo"),
+                ParseWinningHandShape("Standard"),
+                support.Reflection.GetStaticProperty(
+                    support.Reflection.RequireType(WinningHandAnalysisResultTypeName),
+                    "NotWin"),
+                support.DataFactory.ParseSeat("East"),
+                null,
+                support.DataFactory.ParseRoundWind("East"),
+                support.DataFactory.ParseSeat("East"),
+                false,
+                true,
+                false,
+                false,
+                false,
+                true,
+                false);
         }
 
         public object CreateLegacyWinDeclarationEvaluationContext()
@@ -629,6 +659,28 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
                 true,
                 false,
                 false,
+                true,
+                false,
+                false);
+        }
+
+        public object CreateLastLiveWallDiscardWinDeclarationEvaluationContext()
+        {
+            return support.Reflection.CreateInstance(
+                support.Reflection.RequireType(WinDeclarationEvaluationContextTypeName),
+                support.CreateTiles("1m 2m 3m 1p 2p 3p 1s 2s 3s E E E C"),
+                support.DataFactory.CreateTile("C"),
+                support.DataFactory.ParseWinType("Ron"),
+                support.DataFactory.ParseSeat("East"),
+                null,
+                support.DataFactory.ParseRoundWind("East"),
+                support.DataFactory.ParseSeat("East"),
+                false,
+                true,
+                false,
+                false,
+                false,
+                false,
                 true);
         }
 
@@ -645,6 +697,16 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
         public bool IsFirstTurnTsumoEligible(object context)
         {
             return (bool)support.Reflection.GetProperty(context, "IsFirstTurnTsumoEligible");
+        }
+
+        public bool IsLastLiveWallDraw(object context)
+        {
+            return (bool)support.Reflection.GetProperty(context, "IsLastLiveWallDraw");
+        }
+
+        public bool IsLastLiveWallDiscard(object context)
+        {
+            return (bool)support.Reflection.GetProperty(context, "IsLastLiveWallDiscard");
         }
 
         public object CreateLegacyWinDeclarationEvaluationResult()

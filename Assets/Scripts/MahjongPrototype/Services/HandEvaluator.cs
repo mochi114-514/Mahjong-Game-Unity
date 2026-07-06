@@ -108,6 +108,7 @@ namespace MahjongPrototype.Services
                 YakuKind.MenzenTsumo,
                 context.WinType == WinType.Tsumo && context.IsClosed,
                 context.IsClosed);
+            EvaluateLastTileYaku(context, yakus);
             TryAddYaku(yakus, YakuKind.Tanyao, IsTanyao(context), context.IsClosed);
             EvaluateFirstTurnYakuman(context, yakus);
         }
@@ -147,6 +148,33 @@ namespace MahjongPrototype.Services
                     : YakuKind.Chiihou,
                 true,
                 context.IsClosed);
+        }
+
+        private void EvaluateLastTileYaku(
+            HandEvaluationContext context,
+            List<EvaluatedYaku> yakus)
+        {
+            if (context == null)
+                return;
+
+            if (context.WinType == WinType.Tsumo && context.IsLastLiveWallDraw)
+            {
+                TryAddYaku(
+                    yakus,
+                    YakuKind.HaiteiRaoyue,
+                    true,
+                    context.IsClosed);
+                return;
+            }
+
+            if (context.WinType == WinType.Ron && context.IsLastLiveWallDiscard)
+            {
+                TryAddYaku(
+                    yakus,
+                    YakuKind.HouteiRaoyui,
+                    true,
+                    context.IsClosed);
+            }
         }
 
         private void EvaluateStandardCandidateYaku(

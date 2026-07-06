@@ -94,7 +94,9 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
             bool isClosed = true,
             bool isIppatsuEligible = false,
             bool isDoubleReachDeclared = false,
-            bool isFirstTurnTsumoEligible = false)
+            bool isFirstTurnTsumoEligible = false,
+            bool isLastLiveWallDraw = false,
+            bool isLastLiveWallDiscard = false)
         {
             return Reflection.CreateInstance(
                 Reflection.RequireType(WinDeclarationEvaluationContextTypeName),
@@ -109,7 +111,9 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
                 isClosed,
                 isIppatsuEligible,
                 isDoubleReachDeclared,
-                isFirstTurnTsumoEligible);
+                isFirstTurnTsumoEligible,
+                isLastLiveWallDraw,
+                isLastLiveWallDiscard);
         }
 
         public object CreateYakuDefinition(

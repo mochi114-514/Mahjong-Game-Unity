@@ -308,6 +308,7 @@ namespace MahjongPrototype
                 return false;
             }
 
+            RecordTurnDrawIfNeeded(result);
             playerSeat.SetDrawnTile(result.Tile);
             playerSeat.ClearTemporaryFuriten();
             NotifyTurnDebug(
@@ -390,7 +391,7 @@ namespace MahjongPrototype
                 turnIndex: result.Record.TurnIndex);
             NotifyTileDiscarded(result.Record);
             if (!TryBeginRonDecision(result.Record))
-                AdvanceTurn();
+                AdvanceOrEndAfterDiscard(result.Record);
         }
 
         public void RequestDiscardDrawnTile()
@@ -478,7 +479,7 @@ namespace MahjongPrototype
                 turnIndex: result.Record.TurnIndex);
             NotifyTileDiscarded(result.Record);
             if (!TryBeginRonDecision(result.Record))
-                AdvanceTurn();
+                AdvanceOrEndAfterDiscard(result.Record);
             return true;
         }
 
@@ -646,6 +647,8 @@ namespace MahjongPrototype
             SeatId seat = gameState.WinDecisionSeat;
             WinType? winType = gameState.WinDecisionType;
             int turnIndex = gameState.WinDecisionTurnIndex;
+            bool shouldEndAfterDeclinedLastLiveWallRon =
+                winType == WinType.Ron && IsLastDiscardLastLiveWallDiscard();
             MarkDeclinedRonFuriten(seat, winType);
             ClearWinDecision();
 
@@ -659,7 +662,12 @@ namespace MahjongPrototype
             }
 
             if (winType == WinType.Ron && !gameState.IsRoundEnded)
-                AdvanceTurn();
+            {
+                if (shouldEndAfterDeclinedLastLiveWallRon)
+                    EndRound(RoundEndReasonWallEmpty);
+                else
+                    AdvanceTurn();
+            }
         }
 
         public void RequestDeclareReach()
@@ -791,6 +799,37 @@ namespace MahjongPrototype
                 seat: nextSeat,
                 turnIndex: gameState.TurnIndex);
             StartTurn(nextSeat, gameState.TurnIndex);
+        }
+
+        private void AdvanceOrEndAfterDiscard(DiscardRecord record)
+        {
+            if (record.IsLastLiveWallDiscard)
+            {
+                EndRound(RoundEndReasonWallEmpty);
+                return;
+            }
+
+            AdvanceTurn();
+        }
+
+        private bool IsLastDiscardLastLiveWallDiscard()
+        {
+            if (gameState == null || gameState.Discards.Count <= 0)
+                return false;
+
+            return gameState.Discards[gameState.Discards.Count - 1].IsLastLiveWallDiscard;
+        }
+
+        private void RecordTurnDrawIfNeeded(DrawResult result)
+        {
+            if (gameState == null || !result.Success || result.Purpose != DrawPurpose.TurnDraw)
+                return;
+
+            gameState.RecordTurnDraw(
+                result.Seat,
+                result.Tile,
+                gameState.TurnIndex,
+                result.WallCountAfterDraw == 0);
         }
 
         private void StartTurn(SeatId seat, int turnIndex)
@@ -1127,7 +1166,8 @@ namespace MahjongPrototype
                         candidatePlayerSeat,
                         WinType.Ron,
                         discard.Tile,
-                        discard.ActorSeat));
+                        discard.ActorSeat,
+                        discard));
                 if (IsNoYakuWinningShape(evaluationResult, candidatePlayerSeat))
                     candidatePlayerSeat.MarkTemporaryFuriten();
 
@@ -1296,6 +1336,26 @@ namespace MahjongPrototype
             return seat != SeatId.East || !hasAnyDiscard;
         }
 
+        private static bool IsLastLiveWallDraw(
+            MahjongGameState gameState,
+            SeatId seat,
+            Tile winningTile,
+            WinType winType)
+        {
+            if (winType != WinType.Tsumo || gameState == null)
+                return false;
+
+            TurnDrawRecord? lastTurnDraw = gameState.LastTurnDraw;
+            if (!lastTurnDraw.HasValue)
+                return false;
+
+            TurnDrawRecord record = lastTurnDraw.Value;
+            return record.IsLastLiveWallDraw &&
+                record.ActorSeat == seat &&
+                record.TurnIndex == gameState.TurnIndex &&
+                record.Tile.Equals(winningTile);
+        }
+
         private void ExpireIppatsuAfterDiscard(
             DiscardRecord record,
             bool declaredReachNow)
@@ -1312,11 +1372,18 @@ namespace MahjongPrototype
             PlayerSeat playerSeat,
             WinType winType,
             Tile winningTile,
-            SeatId? sourceSeat)
+            SeatId? sourceSeat,
+            DiscardRecord? sourceDiscard = null)
         {
             SeatId winnerSeat = playerSeat.SeatId;
             bool isFirstTurnTsumoEligible =
                 IsFirstTurnTsumoEligible(gameState, winnerSeat, winType);
+            bool isLastLiveWallDraw =
+                IsLastLiveWallDraw(gameState, winnerSeat, winningTile, winType);
+            bool isLastLiveWallDiscard =
+                winType == WinType.Ron &&
+                sourceDiscard.HasValue &&
+                sourceDiscard.Value.IsLastLiveWallDiscard;
             return new WinDeclarationEvaluationContext(
                 playerSeat.Hand.GetTiles(),
                 winningTile,
@@ -1329,7 +1396,9 @@ namespace MahjongPrototype
                 true,
                 playerSeat.IsIppatsuEligible,
                 playerSeat.IsDoubleReachDeclared,
-                isFirstTurnTsumoEligible);
+                isFirstTurnTsumoEligible,
+                isLastLiveWallDraw,
+                isLastLiveWallDiscard);
         }
 
         private void SetWinDecisionPending(bool isPending, SeatId seat, int turnIndex)

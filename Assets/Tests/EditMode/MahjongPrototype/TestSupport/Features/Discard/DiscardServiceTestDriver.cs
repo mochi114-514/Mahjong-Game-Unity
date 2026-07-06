@@ -50,6 +50,22 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Discard
             dataFactory.SetDrawnTile(gameState, seatName, tileCode);
         }
 
+        public void RecordTurnDraw(
+            object gameState,
+            string seatName,
+            string tileCode,
+            int turnIndex,
+            bool isLastLiveWallDraw)
+        {
+            reflection.Invoke(
+                gameState,
+                "RecordTurnDraw",
+                dataFactory.ParseSeat(seatName),
+                dataFactory.CreateTile(tileCode),
+                turnIndex,
+                isLastLiveWallDraw);
+        }
+
         public object DiscardHandTile(object gameState, string seatName, int handIndex)
         {
             return reflection.Invoke(
@@ -103,6 +119,10 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Discard
         {
             return (int)reflection.GetProperty(record, "TurnIndex");
         }
+
+        public bool RecordIsLastLiveWallDiscard(object record)
+        {
+            return (bool)reflection.GetProperty(record, "IsLastLiveWallDiscard");
+        }
     }
 }
-

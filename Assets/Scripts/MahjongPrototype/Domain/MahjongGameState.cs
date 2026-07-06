@@ -23,6 +23,7 @@ namespace MahjongPrototype.Domain
         private readonly List<ActiveSkillEffect> activeSkillEffects = new List<ActiveSkillEffect>();
         private readonly List<ReachDiscardCandidate> reachDiscardCandidates =
             new List<ReachDiscardCandidate>();
+        private TurnDrawRecord? lastTurnDraw;
 
         public MahjongGameState(Wall wall)
             : this(wall, WindProgress.East1)
@@ -58,6 +59,7 @@ namespace MahjongPrototype.Domain
         public SeatId? WinSourceSeat { get; private set; }
         public int WinDecisionTurnIndex { get; private set; }
         public WinDeclarationEvaluationResult PendingWinDeclarationEvaluation { get; private set; }
+        public TurnDrawRecord? LastTurnDraw => lastTurnDraw;
         public bool IsReachDecisionPending { get; private set; }
         public bool IsReachDiscardSelectionPending { get; private set; }
         public SeatId ReachDecisionSeat { get; private set; }
@@ -205,6 +207,19 @@ namespace MahjongPrototype.Domain
         public void AddDiscard(DiscardRecord record)
         {
             discards.Add(record);
+        }
+
+        public void RecordTurnDraw(
+            SeatId actorSeat,
+            Tile tile,
+            int turnIndex,
+            bool isLastLiveWallDraw)
+        {
+            lastTurnDraw = new TurnDrawRecord(
+                actorSeat,
+                tile,
+                turnIndex,
+                isLastLiveWallDraw);
         }
 
         public void BeginWinDecision(SeatId seat, int turnIndex)

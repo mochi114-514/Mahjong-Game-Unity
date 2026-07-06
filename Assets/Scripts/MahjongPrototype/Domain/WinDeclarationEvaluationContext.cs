@@ -82,6 +82,8 @@ namespace MahjongPrototype.Domain
                 isClosed,
                 isIppatsuEligible,
                 isDoubleReachDeclared,
+                false,
+                false,
                 false)
         {
         }
@@ -99,6 +101,39 @@ namespace MahjongPrototype.Domain
             bool isIppatsuEligible,
             bool isDoubleReachDeclared,
             bool isFirstTurnTsumoEligible)
+            : this(
+                handTiles,
+                winningTile,
+                winType,
+                winnerSeat,
+                sourceSeat,
+                roundWind,
+                seatWind,
+                isReachDeclared,
+                isClosed,
+                isIppatsuEligible,
+                isDoubleReachDeclared,
+                isFirstTurnTsumoEligible,
+                false,
+                false)
+        {
+        }
+
+        public WinDeclarationEvaluationContext(
+            IReadOnlyList<Tile> handTiles,
+            Tile winningTile,
+            WinType winType,
+            SeatId winnerSeat,
+            SeatId? sourceSeat,
+            RoundWind roundWind,
+            SeatId seatWind,
+            bool isReachDeclared,
+            bool isClosed,
+            bool isIppatsuEligible,
+            bool isDoubleReachDeclared,
+            bool isFirstTurnTsumoEligible,
+            bool isLastLiveWallDraw,
+            bool isLastLiveWallDiscard)
         {
             HandTiles = handTiles ?? throw new ArgumentNullException(nameof(handTiles));
             WinningTile = winningTile;
@@ -112,6 +147,8 @@ namespace MahjongPrototype.Domain
             IsIppatsuEligible = isIppatsuEligible;
             IsDoubleReachDeclared = isDoubleReachDeclared;
             IsFirstTurnTsumoEligible = isFirstTurnTsumoEligible;
+            IsLastLiveWallDraw = isLastLiveWallDraw;
+            IsLastLiveWallDiscard = isLastLiveWallDiscard;
         }
 
         public IReadOnlyList<Tile> HandTiles { get; }
@@ -126,5 +163,7 @@ namespace MahjongPrototype.Domain
         public bool IsIppatsuEligible { get; }
         public bool IsDoubleReachDeclared { get; }
         public bool IsFirstTurnTsumoEligible { get; }
+        public bool IsLastLiveWallDraw { get; }
+        public bool IsLastLiveWallDiscard { get; }
     }
 }

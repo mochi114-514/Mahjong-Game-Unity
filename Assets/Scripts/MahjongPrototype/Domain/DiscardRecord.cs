@@ -8,17 +8,29 @@ namespace MahjongPrototype.Domain
         }
 
         public DiscardRecord(SeatId actorSeat, Tile tile, int turnIndex, DiscardSource source)
+            : this(actorSeat, tile, turnIndex, source, false)
+        {
+        }
+
+        public DiscardRecord(
+            SeatId actorSeat,
+            Tile tile,
+            int turnIndex,
+            DiscardSource source,
+            bool isLastLiveWallDiscard)
         {
             ActorSeat = actorSeat;
             Tile = tile;
             TurnIndex = turnIndex;
             Source = source;
+            IsLastLiveWallDiscard = isLastLiveWallDiscard;
         }
 
         public SeatId ActorSeat { get; }
         public Tile Tile { get; }
         public int TurnIndex { get; }
         public DiscardSource Source { get; }
+        public bool IsLastLiveWallDiscard { get; }
 
         public override string ToString()
         {

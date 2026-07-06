@@ -23,7 +23,8 @@ namespace MahjongPrototype.Services
                 actorSeat,
                 discardedTile,
                 gameState.TurnIndex,
-                DiscardSource.Hand);
+                DiscardSource.Hand,
+                IsLastLiveWallDiscard(gameState, actorSeat));
             gameState.AddDiscard(record);
             return DiscardResult.Discarded(record);
         }
@@ -46,9 +47,24 @@ namespace MahjongPrototype.Services
                 actorSeat,
                 discardedTile,
                 gameState.TurnIndex,
-                DiscardSource.DrawnTile);
+                DiscardSource.DrawnTile,
+                IsLastLiveWallDiscard(gameState, actorSeat));
             gameState.AddDiscard(record);
             return DiscardResult.Discarded(record);
+        }
+
+        private static bool IsLastLiveWallDiscard(
+            MahjongGameState gameState,
+            SeatId actorSeat)
+        {
+            TurnDrawRecord? lastTurnDraw = gameState.LastTurnDraw;
+            if (!lastTurnDraw.HasValue)
+                return false;
+
+            TurnDrawRecord record = lastTurnDraw.Value;
+            return record.IsLastLiveWallDraw &&
+                record.ActorSeat == actorSeat &&
+                record.TurnIndex == gameState.TurnIndex;
         }
     }
 }

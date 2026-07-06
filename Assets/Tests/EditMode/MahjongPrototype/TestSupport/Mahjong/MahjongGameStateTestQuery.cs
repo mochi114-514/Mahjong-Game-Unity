@@ -82,6 +82,15 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
             GetStateProperty("PendingWinDeclarationEvaluation");
         public bool PendingWinDeclarationEvaluationIsNull =>
             PendingWinDeclarationEvaluation == null;
+        public bool HasLastTurnDraw => LastTurnDraw() != null;
+        public string LastTurnDrawActorSeatName =>
+            reflection.GetProperty(LastTurnDraw(), "ActorSeat").ToString();
+        public string LastTurnDrawTileCode =>
+            reflection.GetProperty(LastTurnDraw(), "Tile").ToString();
+        public int LastTurnDrawTurnIndex =>
+            (int)reflection.GetProperty(LastTurnDraw(), "TurnIndex");
+        public bool LastTurnDrawIsLastLiveWallDraw =>
+            (bool)reflection.GetProperty(LastTurnDraw(), "IsLastLiveWallDraw");
         public string WindProgressRoundWindName =>
             reflection.GetProperty(WindProgress, "RoundWind").ToString();
         public int WindProgressHandNumber =>
@@ -223,6 +232,8 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
 
         public string LastDiscardSourceName =>
             reflection.GetProperty(LastDiscard(), "Source").ToString();
+        public bool LastDiscardIsLastLiveWallDiscard =>
+            (bool)reflection.GetProperty(LastDiscard(), "IsLastLiveWallDiscard");
 
         public object ActiveSkillEffectAt(int index)
         {
@@ -242,6 +253,11 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
             reflection.Invoke(State, "GetPlayerSeat", CurrentTurn);
 
         private object WindProgress => GetStateProperty("WindProgress");
+
+        private object LastTurnDraw()
+        {
+            return GetStateProperty("LastTurnDraw");
+        }
 
         private object GetStateProperty(string propertyName)
         {
