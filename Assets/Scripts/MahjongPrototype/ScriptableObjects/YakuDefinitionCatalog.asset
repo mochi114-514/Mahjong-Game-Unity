@@ -67,6 +67,12 @@ MonoBehaviour:
     openHan: 0
     isYakuman: 1
     isEnabled: 1
+  - kind: 301
+    displayName: "\u56FD\u58EB\u7121\u53CC\u3000\u5341\u4E09\u9762\u5F85\u3061"
+    closedHan: 0
+    openHan: 0
+    isYakuman: 1
+    isEnabled: 1
   - kind: 7
     displayName: "\u5F79\u724C\u30FB\u81EA\u98A8"
     closedHan: 1
@@ -223,14 +229,8 @@ MonoBehaviour:
     openHan: 0
     isYakuman: 1
     isEnabled: 1
-  - kind: 311
-    displayName: "\u7D14\u6B63\u4E5D\u84EE\u5B9D\u71C8"
-    closedHan: 0
-    openHan: 0
-    isYakuman: 1
-    isEnabled: 1
-  - kind: 311
-    displayName: "\u7D14\u6B63\u4E5D\u84EE\u5B9D\u71C8"
+  - kind: 110
+    displayName: "\u6DF7\u8001\u982D"
     closedHan: 0
     openHan: 0
     isYakuman: 1
