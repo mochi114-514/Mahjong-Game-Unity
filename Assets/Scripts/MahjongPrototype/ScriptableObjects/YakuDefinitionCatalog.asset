@@ -31,6 +31,18 @@ MonoBehaviour:
     openHan: 0
     isYakuman: 0
     isEnabled: 1
+  - kind: 14
+    displayName: "\u6D77\u5E95\u6488\u6708"
+    closedHan: 1
+    openHan: 1
+    isYakuman: 0
+    isEnabled: 1
+  - kind: 15
+    displayName: "\u6CB3\u5E95\u6488\u9B5A"
+    closedHan: 1
+    openHan: 1
+    isYakuman: 0
+    isEnabled: 1
   - kind: 4
     displayName: "\u65AD\u4E48\u4E5D"
     closedHan: 1
