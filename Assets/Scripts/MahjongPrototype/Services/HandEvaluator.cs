@@ -69,6 +69,7 @@ namespace MahjongPrototype.Services
         {
             List<EvaluatedYaku> yakus = new List<EvaluatedYaku>();
             EvaluateCommonYaku(context, candidate, yakus);
+            EvaluateTileCompositionYaku(context, candidate, yakus);
 
             switch (candidate.Type)
             {
@@ -138,6 +139,40 @@ namespace MahjongPrototype.Services
             EvaluateSanshokuDoukouYaku(context, candidate, yakus);
             EvaluateIttsuuYaku(context, candidate, yakus);
             EvaluateChantaYaku(context, candidate, yakus);
+        }
+
+        private void EvaluateTileCompositionYaku(
+            HandEvaluationContext context,
+            HandEvaluationCandidate candidate,
+            List<EvaluatedYaku> yakus)
+        {
+            if (context == null ||
+                candidate == null ||
+                (candidate.Type != HandEvaluationCandidateType.Standard &&
+                 candidate.Type != HandEvaluationCandidateType.SevenPairs))
+            {
+                return;
+            }
+
+            if (!TryAnalyzeTileComposition(
+                    context,
+                    out int numberSuitMask,
+                    out bool hasHonor,
+                    out bool allTilesAreGreen))
+            {
+                return;
+            }
+
+            EvaluateFlushYaku(
+                context,
+                numberSuitMask,
+                hasHonor,
+                yakus);
+
+            EvaluateRyuuiisouYaku(
+                context,
+                allTilesAreGreen,
+                yakus);
         }
 
         private void EvaluateSevenPairsCandidateYaku(
@@ -241,6 +276,101 @@ namespace MahjongPrototype.Services
         private static bool IsSimpleNumberTile(Tile tile)
         {
             return tile.IsNumberTile && tile.Rank >= 2 && tile.Rank <= 8;
+        }
+
+        private static bool TryAnalyzeTileComposition(
+            HandEvaluationContext context,
+            out int numberSuitMask,
+            out bool hasHonor,
+            out bool allTilesAreGreen)
+        {
+            numberSuitMask = 0;
+            hasHonor = false;
+            allTilesAreGreen = true;
+
+            if (context == null ||
+                context.HandTiles == null ||
+                !context.WinningTile.IsValid)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < context.HandTiles.Count; i++)
+            {
+                if (!TryAnalyzeTileCompositionTile(
+                        context.HandTiles[i],
+                        ref numberSuitMask,
+                        ref hasHonor,
+                        ref allTilesAreGreen))
+                {
+                    return false;
+                }
+            }
+
+            return TryAnalyzeTileCompositionTile(
+                context.WinningTile,
+                ref numberSuitMask,
+                ref hasHonor,
+                ref allTilesAreGreen);
+        }
+
+        private static bool TryAnalyzeTileCompositionTile(
+            Tile tile,
+            ref int numberSuitMask,
+            ref bool hasHonor,
+            ref bool allTilesAreGreen)
+        {
+            if (!tile.IsValid)
+                return false;
+
+            if (tile.IsNumberTile)
+                numberSuitMask |= ToSuitMask(tile.Suit);
+
+            if (tile.IsHonorTile)
+                hasHonor = true;
+
+            if (!IsGreenTile(tile))
+                allTilesAreGreen = false;
+
+            return true;
+        }
+
+        private void EvaluateFlushYaku(
+            HandEvaluationContext context,
+            int numberSuitMask,
+            bool hasHonor,
+            List<EvaluatedYaku> yakus)
+        {
+            if (!HasExactlyOneNumberSuit(numberSuitMask))
+                return;
+
+            if (hasHonor)
+            {
+                TryAddYaku(
+                    yakus,
+                    YakuKind.Honitsu,
+                    true,
+                    context.IsClosed);
+                return;
+            }
+
+            TryAddYaku(
+                yakus,
+                YakuKind.Chinitsu,
+                true,
+                context.IsClosed);
+        }
+
+        private void EvaluateRyuuiisouYaku(
+            HandEvaluationContext context,
+            bool allTilesAreGreen,
+            List<EvaluatedYaku> yakus)
+        {
+            TryAddYaku(
+                yakus,
+                YakuKind.Ryuuiisou,
+                allTilesAreGreen,
+                context.IsClosed);
         }
 
         private static bool IsPinfu(
@@ -787,10 +917,36 @@ namespace MahjongPrototype.Services
             return (suitMask & 7) == 7;
         }
 
+        private static bool HasExactlyOneNumberSuit(int suitMask)
+        {
+            return suitMask == 1 || suitMask == 2 || suitMask == 4;
+        }
+
         private static bool IsTerminalOrHonor(Tile tile)
         {
             return tile.IsHonorTile ||
                    (tile.IsNumberTile && (tile.Rank == 1 || tile.Rank == 9));
+        }
+
+        private static bool IsGreenTile(Tile tile)
+        {
+            if (tile.IsHonorTile)
+                return tile.Honor == HonorKind.Green;
+
+            if (!tile.IsNumberTile || tile.Suit != TileSuit.Sou)
+                return false;
+
+            switch (tile.Rank)
+            {
+                case 2:
+                case 3:
+                case 4:
+                case 6:
+                case 8:
+                    return true;
+                default:
+                    return false;
+            }
         }
 
         private static int ToDragonMask(Tile tile)
