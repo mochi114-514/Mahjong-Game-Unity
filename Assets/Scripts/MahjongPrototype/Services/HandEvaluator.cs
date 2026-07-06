@@ -137,6 +137,7 @@ namespace MahjongPrototype.Services
             EvaluateYakuhaiYaku(context, candidate, yakus);
             EvaluateDragonGroupYaku(context, candidate, yakus);
             EvaluateWindGroupYaku(context, candidate, yakus);
+            EvaluateConcealedTripletYaku(context, candidate, yakus);
             EvaluateSanshokuDoujunYaku(context, candidate, yakus);
             EvaluateSanshokuDoukouYaku(context, candidate, yakus);
             EvaluateIttsuuYaku(context, candidate, yakus);
@@ -688,6 +689,134 @@ namespace MahjongPrototype.Services
             }
 
             return true;
+        }
+
+        private void EvaluateConcealedTripletYaku(
+            HandEvaluationContext context,
+            HandEvaluationCandidate candidate,
+            List<EvaluatedYaku> yakus)
+        {
+            if (!TryCountConcealedTriplets(
+                    context,
+                    candidate,
+                    out int concealedTripletCount))
+            {
+                return;
+            }
+
+            TryAddYaku(
+                yakus,
+                YakuKind.Sanankou,
+                concealedTripletCount >= 3,
+                context.IsClosed);
+
+            StandardWinningInterpretation interpretation =
+                candidate.StandardInterpretation;
+            if (concealedTripletCount != 4 || interpretation == null)
+                return;
+
+            if (interpretation.WaitType == WaitType.Tanki)
+            {
+                if (!TryAddYaku(
+                        yakus,
+                        YakuKind.SuuankouTanki,
+                        true,
+                        context.IsClosed))
+                {
+                    TryAddYaku(
+                        yakus,
+                        YakuKind.Suuankou,
+                        true,
+                        context.IsClosed);
+                }
+
+                return;
+            }
+
+            if (interpretation.WaitType == WaitType.Shanpon &&
+                context.WinType == WinType.Tsumo)
+            {
+                TryAddYaku(
+                    yakus,
+                    YakuKind.Suuankou,
+                    true,
+                    context.IsClosed);
+            }
+        }
+
+        private static bool TryCountConcealedTriplets(
+            HandEvaluationContext context,
+            HandEvaluationCandidate candidate,
+            out int concealedTripletCount)
+        {
+            concealedTripletCount = 0;
+
+            // PROTOTYPE: open meld visibility is not modeled yet.
+            if (context == null ||
+                candidate == null ||
+                !context.IsClosed ||
+                candidate.Type != HandEvaluationCandidateType.Standard)
+            {
+                return false;
+            }
+
+            StandardWinningInterpretation interpretation =
+                candidate.StandardInterpretation;
+            StandardHandDecomposition decomposition =
+                interpretation?.Decomposition;
+            if (interpretation == null ||
+                decomposition == null ||
+                decomposition.Melds == null ||
+                decomposition.Melds.Count != 4)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < decomposition.Melds.Count; i++)
+            {
+                HandMeld meld = decomposition.Melds[i];
+                if (meld == null || meld.Type != MeldType.Triplet)
+                    continue;
+
+                if (IsRonCompletedShanponTriplet(
+                        context,
+                        interpretation,
+                        decomposition,
+                        i))
+                {
+                    continue;
+                }
+
+                concealedTripletCount++;
+            }
+
+            return true;
+        }
+
+        private static bool IsRonCompletedShanponTriplet(
+            HandEvaluationContext context,
+            StandardWinningInterpretation interpretation,
+            StandardHandDecomposition decomposition,
+            int meldIndex)
+        {
+            if (context.WinType != WinType.Ron ||
+                interpretation.WaitType != WaitType.Shanpon)
+            {
+                return false;
+            }
+
+            WinningTilePlacement placement = interpretation.Placement;
+            if (placement == null ||
+                placement.Type != WinningTilePlacementType.Meld ||
+                placement.TargetMeldIndex != meldIndex ||
+                meldIndex < 0 ||
+                meldIndex >= decomposition.Melds.Count)
+            {
+                return false;
+            }
+
+            HandMeld targetMeld = decomposition.Melds[meldIndex];
+            return targetMeld != null && targetMeld.Type == MeldType.Triplet;
         }
 
         private void AddYakuhaiForHonor(
