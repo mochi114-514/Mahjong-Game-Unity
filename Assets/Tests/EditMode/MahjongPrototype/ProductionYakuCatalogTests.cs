@@ -29,8 +29,8 @@ namespace MahjongPrototype.Tests
         public void ProductionCatalog_DefinitionCountIsExpected()
         {
             Assert.That(
-                LoadDefinitions(),
-                Has.Count.EqualTo(ExpectedDefinitions.Length),
+                LoadDefinitions().Count,
+                Is.EqualTo(ExpectedDefinitions.Length),
                 $"Production yaku catalog at {CatalogPath} must contain exactly {ExpectedDefinitions.Length} definitions.");
         }
 
