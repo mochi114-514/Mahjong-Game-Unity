@@ -81,6 +81,26 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
+        public void NonLastDrawTsumoCandidate_DoesNotIncludeLastTileYaku()
+        {
+            using (Driver driver = Driver.Create(participantCount: 1))
+            {
+                driver.StartNewRound();
+                driver.AddHandTiles("East", StandardHand);
+                driver.SetTurnDrawOrder("C", "9m");
+
+                driver.DrawForSeat("East");
+
+                Assert.That(driver.IsWinDecisionPending, Is.True);
+                Assert.That(driver.WallCount, Is.EqualTo(1));
+                Assert.That(driver.LastTurnDrawIsLastLiveWallDraw, Is.False);
+                Assert.That(driver.PendingCandidateContainsYaku("MenzenTsumo"), Is.True);
+                Assert.That(driver.PendingCandidateContainsYaku("HaiteiRaoyue"), Is.False);
+                Assert.That(driver.PendingCandidateContainsYaku("HouteiRaoyui"), Is.False);
+            }
+        }
+
+        [Test]
         public void LastDrawThenTsumogiri_RonCandidateIncludesHoutei()
         {
             using (Driver driver = Driver.Create(participantCount: 2))

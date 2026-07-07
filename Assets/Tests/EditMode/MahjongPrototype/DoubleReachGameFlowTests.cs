@@ -95,6 +95,30 @@ namespace MahjongPrototype.Tests
             }
         }
 
+        [Test]
+        public void RonAfterNormalReach_PropagatesReachWithoutDoubleReachToWinEvaluation()
+        {
+            using (Driver driver = Driver.Create(2))
+            {
+                driver.StartNewRound();
+                driver.SetParticipantType("West", "LocalHuman");
+                driver.DrawAndDiscardForSeat("East", "C");
+                driver.DrawAndDiscardForSeat("West", "C");
+
+                driver.PrepareReachableDrawForEastWithoutStartingRound();
+                driver.DeclareReachWithHandDiscard(12);
+                driver.DrawAndDiscardForSeat("West", "6m");
+
+                Assert.That(driver.IsWinDecisionPending, Is.True);
+                Assert.That(driver.PendingCandidateContainsYaku("Reach"), Is.True);
+                Assert.That(driver.PendingCandidateContainsYaku("DoubleReach"), Is.False);
+                Assert.That(driver.PendingCandidateContainsYaku("Ippatsu"), Is.True);
+                Assert.That(driver.IsReachDeclared("East"), Is.True);
+                Assert.That(driver.IsDoubleReachDeclared("East"), Is.False);
+                Assert.That(driver.IsIppatsuEligible("East"), Is.True);
+            }
+        }
+
         private sealed class Driver : IDisposable
         {
             private readonly MahjongGameFlowTestSession session;

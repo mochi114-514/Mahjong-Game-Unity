@@ -101,6 +101,24 @@ namespace MahjongPrototype.Tests
             }
         }
 
+        [Test]
+        public void StartNewRound_ClearsPreviousDiscardHistoryAndRestoresTenhouEligibility()
+        {
+            using (Driver driver = Driver.Create())
+            {
+                driver.StartNewRound();
+                driver.AddDiscard("East", "9s", 1);
+
+                driver.StartNewRound();
+                driver.DrawWinningTsumoForSeat("East");
+
+                Assert.That(driver.IsWinDecisionPending, Is.True);
+                Assert.That(driver.PendingCandidateContainsYaku("Tenhou"), Is.True);
+                Assert.That(driver.PendingCandidateContainsYaku("Chiihou"), Is.False);
+                Assert.That(driver.PendingCandidateContainsYaku("MenzenTsumo"), Is.False);
+            }
+        }
+
         private sealed class Driver : IDisposable
         {
             private const string StandardHand =
