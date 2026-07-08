@@ -53,7 +53,7 @@ namespace MahjongPrototype.UI
                 ref warnedMissingRoundResultRoot,
                 "RoundResultRoot is not assigned.");
             SetText(roundText, FormatWindProgress(result.WindProgress));
-            SetText(confirmButtonLabel, result.IsFinalRound ? "ゲーム終了" : "次局へ");
+            SetText(confirmButtonLabel, result.IsFinalRound ? "ゲーム終了" : "次局へ進む");
 
             switch (result.Type)
             {

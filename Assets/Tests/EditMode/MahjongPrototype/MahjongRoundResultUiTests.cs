@@ -1,11 +1,16 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using MahjongPrototype.Tests.TestSupport.Core;
 using MahjongPrototype.Tests.TestSupport.Mahjong;
 using NUnit.Framework;
+using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using Object = UnityEngine.Object;
 
 namespace MahjongPrototype.Tests
 {
@@ -108,7 +113,7 @@ namespace MahjongPrototype.Tests
                 Assert.That(harness.YakuValueAt(0), Is.EqualTo("1翻"));
                 Assert.That(harness.YakuNameAt(1), Is.EqualTo("断么九"));
                 Assert.That(harness.TotalText, Is.EqualTo("2翻"));
-                Assert.That(harness.ConfirmButtonLabel, Is.EqualTo("次局へ"));
+                Assert.That(harness.ConfirmButtonLabel, Is.EqualTo("次局へ進む"));
             }
         }
 
@@ -183,7 +188,7 @@ namespace MahjongPrototype.Tests
                 Assert.That(harness.RoundText, Is.EqualTo("東2局"));
                 Assert.That(harness.YakuRowCount, Is.EqualTo(0));
                 Assert.That(harness.TotalText, Is.EqualTo(string.Empty));
-                Assert.That(harness.ConfirmButtonLabel, Is.EqualTo("次局へ"));
+                Assert.That(harness.ConfirmButtonLabel, Is.EqualTo("次局へ進む"));
             }
         }
 
@@ -377,6 +382,173 @@ namespace MahjongPrototype.Tests
 
                 Assert.That(driver.RoundResultRootVisible, Is.False);
             }
+        }
+    }
+
+    public sealed class MahjongRoundResultPrefabAndSceneConnectionTests
+    {
+        private const string ResultPanelPath = "Assets/Prefab/Result/Result Panel.prefab";
+        private const string YakuRowPrefabPath = "Assets/Prefab/Result/Yaku Line Prefab.prefab";
+        private const string MainScenePath = "Assets/Scenes/Mahjong Prototype.unity";
+        private const string ResultControllerTypeName =
+            "MahjongPrototype.UI.MahjongRoundResultController, Assembly-CSharp";
+        private const string YakuRowControllerTypeName =
+            "MahjongPrototype.UI.MahjongRoundResultYakuRowController, Assembly-CSharp";
+        private const string UiManagerTypeName =
+            "MahjongPrototype.UI.MahjongPrototypeUiManager, Assembly-CSharp";
+        private const string InputControllerTypeName =
+            "MahjongPrototype.UI.MahjongUiInputController, Assembly-CSharp";
+
+        [Test]
+        public void ResultPanelPrefab_HasControllerAndInspectorReferences()
+        {
+            GameObject prefab = LoadPrefab(ResultPanelPath);
+            Component controller = RequireComponent(prefab, ResultControllerTypeName);
+            SerializedObject serialized = new SerializedObject(controller);
+
+            AssertObjectReference(serialized, "roundResultRoot", prefab);
+            AssertObjectReferenceName(serialized, "winDetailsRoot", "displayArea");
+            AssertObjectReferenceName(serialized, "sourceSeatRoot", "SourceSeatRoot");
+            AssertObjectReferenceName(serialized, "titleText", "TitleText");
+            AssertObjectReferenceTrimmedName(serialized, "roundText", "RoundText");
+            AssertObjectReferenceName(serialized, "winnerText", "WinnerText");
+            AssertObjectReferenceName(serialized, "winTypeText", "WinTypeText");
+            AssertObjectReferenceName(serialized, "sourceSeatText", "SourceSeatText");
+            AssertObjectReferenceName(serialized, "winningTileText", "WinningTileText");
+            AssertObjectReferenceName(serialized, "totalText", "TotalText");
+            AssertObjectReferenceName(serialized, "confirmButtonLabel", "Text (TMP)");
+
+            Object yakuListRoot = ObjectReference(serialized, "yakuListRoot");
+            Assert.That(yakuListRoot, Is.TypeOf<RectTransform>());
+            RectTransform yakuListTransform = (RectTransform)yakuListRoot;
+            Assert.That(yakuListTransform.name, Is.EqualTo("Content"));
+            Assert.That(yakuListTransform.parent.name, Is.EqualTo("displayArea"));
+            Assert.That(yakuListTransform.GetComponent<VerticalLayoutGroup>(), Is.Not.Null);
+
+            Object yakuRowPrefab = ObjectReference(serialized, "yakuRowPrefab");
+            Assert.That(AssetDatabase.GetAssetPath(yakuRowPrefab), Is.EqualTo(YakuRowPrefabPath));
+        }
+
+        [Test]
+        public void YakuLinePrefab_HasControllerReferencesAndLayoutElement()
+        {
+            GameObject prefab = LoadPrefab(YakuRowPrefabPath);
+            Component controller = RequireComponent(prefab, YakuRowControllerTypeName);
+            SerializedObject serialized = new SerializedObject(controller);
+
+            AssertObjectReferenceName(serialized, "yakuNameText", "Yaku Text");
+            AssertObjectReferenceName(serialized, "valueText", "YakuValueText");
+            Assert.That(prefab.GetComponent<LayoutElement>(), Is.Not.Null);
+        }
+
+        [Test]
+        public void MainScene_UsesExistingResultPanelInstanceAndConnectsUiReferences()
+        {
+            Scene scene = EditorSceneManager.OpenScene(MainScenePath, OpenSceneMode.Additive);
+
+            try
+            {
+                GameObject[] resultPanels = FindSceneGameObjects(scene, "Result Panel");
+                Assert.That(resultPanels, Has.Length.EqualTo(1));
+
+                GameObject resultPanel = resultPanels[0];
+                Assert.That(resultPanel.activeSelf, Is.False);
+                Component resultController = RequireComponent(resultPanel, ResultControllerTypeName);
+
+                Component uiManager = FindSceneComponent(scene, UiManagerTypeName);
+                SerializedObject uiSerialized = new SerializedObject(uiManager);
+                AssertObjectReference(uiSerialized, "roundResultController", resultController);
+
+                Component inputController = FindSceneComponent(scene, InputControllerTypeName);
+                SerializedObject inputSerialized = new SerializedObject(inputController);
+                Object confirmButtonReference =
+                    ObjectReference(inputSerialized, "roundResultConfirmButton");
+                Assert.That(confirmButtonReference, Is.TypeOf<Button>());
+
+                Button confirmButton = (Button)confirmButtonReference;
+                Assert.That(confirmButton.gameObject.name, Is.EqualTo("Button"));
+                Assert.That(confirmButton.transform.IsChildOf(resultPanel.transform), Is.True);
+                Assert.That(confirmButton.onClick.GetPersistentEventCount(), Is.EqualTo(0));
+            }
+            finally
+            {
+                if (scene.IsValid() && scene.isLoaded)
+                    EditorSceneManager.CloseScene(scene, true);
+            }
+        }
+
+        private static GameObject LoadPrefab(string path)
+        {
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            Assert.That(prefab, Is.Not.Null, $"Prefab not found at {path}.");
+            return prefab;
+        }
+
+        private static Component RequireComponent(GameObject gameObject, string typeName)
+        {
+            Type type = RequireType(typeName);
+            Component component = gameObject.GetComponent(type);
+            Assert.That(component, Is.Not.Null, $"{gameObject.name} is missing {typeName}.");
+            return component;
+        }
+
+        private static Component FindSceneComponent(Scene scene, string typeName)
+        {
+            Type type = RequireType(typeName);
+            Component component = Resources.FindObjectsOfTypeAll<GameObject>()
+                .Where(gameObject => gameObject.scene == scene)
+                .Select(gameObject => gameObject.GetComponent(type))
+                .FirstOrDefault(found => found != null);
+            Assert.That(component, Is.Not.Null, $"Scene is missing {typeName}.");
+            return component;
+        }
+
+        private static GameObject[] FindSceneGameObjects(Scene scene, string name)
+        {
+            return Resources.FindObjectsOfTypeAll<GameObject>()
+                .Where(gameObject => gameObject.scene == scene && gameObject.name == name)
+                .ToArray();
+        }
+
+        private static Type RequireType(string typeName)
+        {
+            Type type = Type.GetType(typeName);
+            Assert.That(type, Is.Not.Null, $"Type not found: {typeName}.");
+            return type;
+        }
+
+        private static void AssertObjectReference(
+            SerializedObject serialized,
+            string propertyName,
+            Object expected)
+        {
+            Assert.That(ObjectReference(serialized, propertyName), Is.SameAs(expected));
+        }
+
+        private static void AssertObjectReferenceName(
+            SerializedObject serialized,
+            string propertyName,
+            string expectedName)
+        {
+            Object reference = ObjectReference(serialized, propertyName);
+            Assert.That(reference.name, Is.EqualTo(expectedName));
+        }
+
+        private static void AssertObjectReferenceTrimmedName(
+            SerializedObject serialized,
+            string propertyName,
+            string expectedName)
+        {
+            Object reference = ObjectReference(serialized, propertyName);
+            Assert.That(reference.name.Trim(), Is.EqualTo(expectedName));
+        }
+
+        private static Object ObjectReference(SerializedObject serialized, string propertyName)
+        {
+            SerializedProperty property = serialized.FindProperty(propertyName);
+            Assert.That(property, Is.Not.Null, $"Serialized property not found: {propertyName}.");
+            Assert.That(property.objectReferenceValue, Is.Not.Null, $"{propertyName} is not assigned.");
+            return property.objectReferenceValue;
         }
     }
 

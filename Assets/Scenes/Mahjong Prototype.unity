@@ -204,7 +204,7 @@ MonoBehaviour:
   commandRouter: {fileID: 6100000003}
   winDecisionController: {fileID: 6100000001}
   reachDecisionController: {fileID: 381012988}
-  roundResultController: {fileID: 0}
+  roundResultController: {fileID: 6100000300}
   logPreviewController: {fileID: 45752828}
   zeroHanTenpaiController: {fileID: 6100000200}
   furitenController: {fileID: 6100000201}
@@ -331,7 +331,7 @@ MonoBehaviour:
   reachButton: {fileID: 634680667}
   declineReachButton: {fileID: 1811898792}
   cancelReachButton: {fileID: 6100000134}
-  roundResultConfirmButton: {fileID: 0}
+  roundResultConfirmButton: {fileID: 6100000301}
   targetTileInput: {fileID: 1477977273}
 --- !u!114 &45752831
 MonoBehaviour:
@@ -8198,6 +8198,16 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 5200779170243697936, guid: 6da48b3d801ed9c48a3efa7f41a6cb27, type: 3}
   m_PrefabInstance: {fileID: 7167925420230673608}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &6100000300 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 6100001000, guid: 655cbe60a6107244b913db4422f90f73, type: 3}
+  m_PrefabInstance: {fileID: 6741706795177742104}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &6100000301 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 991031076261630718, guid: 655cbe60a6107244b913db4422f90f73, type: 3}
+  m_PrefabInstance: {fileID: 6741706795177742104}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1001 &6741706795177742104
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -8217,6 +8227,10 @@ PrefabInstance:
     - target: {fileID: 4197448039899632052, guid: 655cbe60a6107244b913db4422f90f73, type: 3}
       propertyPath: m_Name
       value: Result Panel
+      objectReference: {fileID: 0}
+    - target: {fileID: 4197448039899632052, guid: 655cbe60a6107244b913db4422f90f73, type: 3}
+      propertyPath: m_IsActive
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 8258592632297405370, guid: 655cbe60a6107244b913db4422f90f73, type: 3}
       propertyPath: m_Pivot.x
