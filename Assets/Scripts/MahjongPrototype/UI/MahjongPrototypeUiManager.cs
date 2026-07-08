@@ -45,6 +45,9 @@ namespace MahjongPrototype.UI
         [Header("Reach Decision")]
         [SerializeField] private MahjongReachDecisionController reachDecisionController;
 
+        [Header("Round Result")]
+        [SerializeField] private MahjongRoundResultController roundResultController;
+
         [Header("Log Preview")]
         [Tooltip("Controller for the on-screen recent log preview.")]
         [SerializeField] private MahjongLogPreviewController logPreviewController;
@@ -62,6 +65,7 @@ namespace MahjongPrototype.UI
         private bool warnedMissingCommandRouter;
         private bool warnedMissingWinDecisionController;
         private bool warnedMissingReachDecisionController;
+        private bool warnedMissingRoundResultController;
         private bool warnedMissingLogPreviewController;
         private bool warnedMissingZeroHanTenpaiController;
         private bool warnedMissingFuritenController;
@@ -85,6 +89,7 @@ namespace MahjongPrototype.UI
             SyncAutoSortToggleFromFlow();
             EnsureWinDecisionController();
             EnsureReachDecisionController();
+            EnsureRoundResultController();
             EnsureLogPreviewController();
             EnsureZeroHanTenpaiController();
             EnsureFuritenController();
@@ -101,6 +106,7 @@ namespace MahjongPrototype.UI
             SyncAutoSortToggleFromFlow();
             EnsureWinDecisionController();
             EnsureReachDecisionController();
+            EnsureRoundResultController();
             EnsureLogPreviewController();
             EnsureZeroHanTenpaiController();
             EnsureFuritenController();
@@ -122,6 +128,7 @@ namespace MahjongPrototype.UI
         {
             if (state == null)
             {
+                ClearRoundResultUi();
                 RefreshTableCenterUi(null);
                 ClearZeroHanTenpaiUi();
                 ClearFuritenUi();
@@ -133,6 +140,7 @@ namespace MahjongPrototype.UI
             RefreshPlayerArea3D(state);
             RefreshWinDecision(state);
             RefreshReachDecision(state);
+            RefreshRoundResult(state);
             RefreshInteractionState(state);
             RefreshLogPreview();
             if (refreshTenpaiIndicators)
@@ -152,6 +160,7 @@ namespace MahjongPrototype.UI
             if (gameFlow == null)
             {
                 WarnMissingOnce(ref warnedMissingFlow, "MahjongGameFlow is not assigned.");
+                ClearRoundResultUi();
                 ClearZeroHanTenpaiUi();
                 ClearFuritenUi();
                 return;
@@ -191,6 +200,9 @@ namespace MahjongPrototype.UI
 
             if (furitenController == null)
                 furitenController = GetComponentInChildren<MahjongFuritenController>(true);
+
+            if (roundResultController == null)
+                roundResultController = GetComponentInChildren<MahjongRoundResultController>(true);
         }
 
         private void SubscribeNotifications()
@@ -222,6 +234,9 @@ namespace MahjongPrototype.UI
             eventNotifier.ReachDeclined += HandleReachDeclined;
             eventNotifier.HandAutoSorted += HandleHandAutoSorted;
             eventNotifier.RoundEnded += HandleRoundEnded;
+            eventNotifier.RoundResultReady += HandleRoundResultReady;
+            eventNotifier.RoundResultConfirmed += HandleRoundResultConfirmed;
+            eventNotifier.GameEnded += HandleGameEnded;
         }
 
         private void UnsubscribeNotifications()
@@ -248,6 +263,9 @@ namespace MahjongPrototype.UI
             eventNotifier.ReachDeclined -= HandleReachDeclined;
             eventNotifier.HandAutoSorted -= HandleHandAutoSorted;
             eventNotifier.RoundEnded -= HandleRoundEnded;
+            eventNotifier.RoundResultReady -= HandleRoundResultReady;
+            eventNotifier.RoundResultConfirmed -= HandleRoundResultConfirmed;
+            eventNotifier.GameEnded -= HandleGameEnded;
         }
 
         private void EnsureDisplayController()
@@ -340,6 +358,14 @@ namespace MahjongPrototype.UI
             WarnMissingOnce(
                 ref warnedMissingReachDecisionController,
                 "MahjongReachDecisionController is not assigned. Assign it in the Inspector.");
+        }
+
+        private void EnsureRoundResultController()
+        {
+            if (roundResultController == null)
+            {
+                roundResultController = GetComponentInChildren<MahjongRoundResultController>(true);
+            }
         }
 
         private void HandleRoundStarted(int _, int __)
@@ -494,6 +520,21 @@ namespace MahjongPrototype.UI
             ClearFuritenUi();
         }
 
+        private void HandleRoundResultReady(RoundResult result)
+        {
+            SetRoundResultUi(result);
+        }
+
+        private void HandleRoundResultConfirmed(RoundResult _)
+        {
+            ClearRoundResultUi();
+        }
+
+        private void HandleGameEnded(RoundResult _)
+        {
+            ClearRoundResultUi();
+        }
+
         private void RefreshDisplay(MahjongGameState state)
         {
             if (displayController == null)
@@ -627,6 +668,44 @@ namespace MahjongPrototype.UI
             MahjongGameState state = gameFlow != null ? gameFlow.CurrentState : null;
             if (state != null)
                 RefreshReachDecision(state);
+        }
+
+        private void RefreshRoundResult(MahjongGameState state)
+        {
+            if (state != null &&
+                state.IsRoundResultPending &&
+                state.CurrentRoundResult != null)
+            {
+                SetRoundResultUi(state.CurrentRoundResult);
+                return;
+            }
+
+            ClearRoundResultUi();
+        }
+
+        private void SetRoundResultUi(RoundResult result)
+        {
+            if (roundResultController == null)
+                EnsureRoundResultController();
+
+            if (roundResultController == null)
+            {
+                WarnMissingOnce(
+                    ref warnedMissingRoundResultController,
+                    "MahjongRoundResultController is not assigned. Assign it in the Inspector.");
+                return;
+            }
+
+            roundResultController.SetResult(result);
+        }
+
+        private void ClearRoundResultUi()
+        {
+            if (roundResultController == null)
+                EnsureRoundResultController();
+
+            if (roundResultController != null)
+                roundResultController.Clear();
         }
 
         private void RefreshInteractionState(MahjongGameState state)

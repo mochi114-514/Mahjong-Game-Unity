@@ -100,6 +100,7 @@ namespace MahjongPrototype.UI
             inputController.ReachRequested += HandleReachRequested;
             inputController.DeclineReachRequested += HandleDeclineReachRequested;
             inputController.CancelReachRequested += HandleCancelReachRequested;
+            inputController.RoundResultConfirmRequested += HandleRoundResultConfirmRequested;
             subscribedInputController = inputController;
         }
 
@@ -117,6 +118,7 @@ namespace MahjongPrototype.UI
             subscribedInputController.ReachRequested -= HandleReachRequested;
             subscribedInputController.DeclineReachRequested -= HandleDeclineReachRequested;
             subscribedInputController.CancelReachRequested -= HandleCancelReachRequested;
+            subscribedInputController.RoundResultConfirmRequested -= HandleRoundResultConfirmRequested;
             subscribedInputController = null;
         }
 
@@ -214,6 +216,14 @@ namespace MahjongPrototype.UI
                 return;
 
             gameFlow.RequestCancelReachDiscardSelection();
+        }
+
+        private void HandleRoundResultConfirmRequested()
+        {
+            if (!TryGetGameFlow("Cannot advance round result because MahjongGameFlow is not assigned."))
+                return;
+
+            gameFlow.RequestAdvanceFromRoundResult();
         }
 
         private void HandleHandTileClicked(SeatId dataSeat, int handIndex)

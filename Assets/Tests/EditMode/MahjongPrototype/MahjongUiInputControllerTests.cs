@@ -32,6 +32,7 @@ namespace MahjongPrototype.Tests
                 driver.ClickReach();
                 driver.ClickDeclineReach();
                 driver.ClickCancelReach();
+                driver.ClickRoundResultConfirm();
 
                 Assert.That(driver.DrawCount, Is.EqualTo(1));
                 Assert.That(driver.SkillTarget, Is.EqualTo("5m"));
@@ -42,6 +43,7 @@ namespace MahjongPrototype.Tests
                 Assert.That(driver.ReachCount, Is.EqualTo(1));
                 Assert.That(driver.DeclineReachCount, Is.EqualTo(1));
                 Assert.That(driver.CancelReachCount, Is.EqualTo(1));
+                Assert.That(driver.RoundResultConfirmCount, Is.EqualTo(1));
             }
         }
 
@@ -100,6 +102,7 @@ namespace MahjongPrototype.Tests
             {
                 driver.RetryInteractable = true;
                 driver.CancelReachInteractable = true;
+                driver.RoundResultConfirmInteractable = true;
 
                 driver.SetGameplayInputInteractable(false);
 
@@ -108,6 +111,40 @@ namespace MahjongPrototype.Tests
                 Assert.That(driver.TargetTileInputInteractable, Is.False);
                 Assert.That(driver.RetryInteractable, Is.True);
                 Assert.That(driver.CancelReachInteractable, Is.True);
+                Assert.That(driver.RoundResultConfirmInteractable, Is.True);
+            }
+        }
+
+        [Test]
+        public void RoundResultConfirmButton_EnableDisable_DoesNotRegisterMultipleHandlers()
+        {
+            using (MahjongUiInputControllerTestDriver driver =
+                MahjongUiInputControllerTestDriver.Create("InputControllerRoundResultConfirmTest"))
+            {
+                driver.SubscribeRoundResultConfirmRequested();
+
+                driver.EnableController();
+                driver.DisableController();
+                driver.EnableController();
+                driver.ClickRoundResultConfirm();
+
+                Assert.That(driver.RoundResultConfirmCount, Is.EqualTo(1));
+            }
+        }
+
+        [Test]
+        public void MissingRoundResultConfirmButton_Warns()
+        {
+            using (MahjongUiInputControllerTestDriver driver =
+                MahjongUiInputControllerTestDriver.Create("InputControllerNoRoundResultConfirmTest"))
+            {
+                driver.ClearRoundResultConfirmButton();
+
+                LogAssert.Expect(
+                    LogType.Warning,
+                    "MahjongUiInputController: RoundResultConfirmButton is not assigned.");
+
+                driver.EnableController();
             }
         }
 

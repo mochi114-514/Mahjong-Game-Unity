@@ -25,6 +25,8 @@ namespace MahjongPrototype.UI
         [SerializeField] private Button reachButton;
         [SerializeField] private Button declineReachButton;
         [SerializeField] private Button cancelReachButton;
+        [Header("Round Result")]
+        [SerializeField] private Button roundResultConfirmButton;
         [Tooltip("指定牌ツモの対象を入力するTMP_InputFieldです。1m-9m, 1p-9p, 1s-9s, E/S/W/N/P/F/C を受け付けます。")]
         [SerializeField] private TMP_InputField targetTileInput;
 
@@ -39,6 +41,7 @@ namespace MahjongPrototype.UI
         private bool warnedMissingReachButton;
         private bool warnedMissingDeclineReachButton;
         private bool warnedMissingCancelReachButton;
+        private bool warnedMissingRoundResultConfirmButton;
 
         public event Action DrawRequested;
         public event Action<string> ForceDrawSkillRequested;
@@ -49,6 +52,7 @@ namespace MahjongPrototype.UI
         public event Action ReachRequested;
         public event Action DeclineReachRequested;
         public event Action CancelReachRequested;
+        public event Action RoundResultConfirmRequested;
 
         private void OnEnable()
         {
@@ -146,6 +150,17 @@ namespace MahjongPrototype.UI
                 WarnMissingOnce(ref warnedMissingCancelReachButton, "CancelReachButton is not assigned.");
             }
 
+            if (roundResultConfirmButton != null)
+            {
+                roundResultConfirmButton.onClick.AddListener(HandleRoundResultConfirmClicked);
+            }
+            else
+            {
+                WarnMissingOnce(
+                    ref warnedMissingRoundResultConfirmButton,
+                    "RoundResultConfirmButton is not assigned.");
+            }
+
             isSubscribed = true;
         }
 
@@ -180,6 +195,9 @@ namespace MahjongPrototype.UI
 
             if (cancelReachButton != null)
                 cancelReachButton.onClick.RemoveListener(HandleCancelReachClicked);
+
+            if (roundResultConfirmButton != null)
+                roundResultConfirmButton.onClick.RemoveListener(HandleRoundResultConfirmClicked);
 
             isSubscribed = false;
         }
@@ -233,6 +251,11 @@ namespace MahjongPrototype.UI
         private void HandleCancelReachClicked()
         {
             CancelReachRequested?.Invoke();
+        }
+
+        private void HandleRoundResultConfirmClicked()
+        {
+            RoundResultConfirmRequested?.Invoke();
         }
 
         public void SetAutoSortWithoutNotify(bool enabled)

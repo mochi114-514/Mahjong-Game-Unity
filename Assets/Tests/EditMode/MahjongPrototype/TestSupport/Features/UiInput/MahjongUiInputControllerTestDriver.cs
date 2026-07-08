@@ -46,6 +46,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.UiInput
         public int ReachCount { get; private set; }
         public int DeclineReachCount { get; private set; }
         public int CancelReachCount { get; private set; }
+        public int RoundResultConfirmCount { get; private set; }
         public int AutoSortEventCount { get; private set; }
 
         public bool DrawInteractable => controls.DrawButton.interactable;
@@ -65,6 +66,11 @@ namespace MahjongPrototype.Tests.TestSupport.Features.UiInput
         }
 
         public bool AutoSortIsOn => controls.AutoSortToggle.isOn;
+        public bool RoundResultConfirmInteractable
+        {
+            get => controls.RoundResultConfirmButton.interactable;
+            set => controls.RoundResultConfirmButton.interactable = value;
+        }
 
         public string TargetTileText
         {
@@ -108,6 +114,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.UiInput
             AddEventHandler("ReachRequested", new Action(() => ReachCount++));
             AddEventHandler("DeclineReachRequested", new Action(() => DeclineReachCount++));
             AddEventHandler("CancelReachRequested", new Action(() => CancelReachCount++));
+            AddEventHandler("RoundResultConfirmRequested", new Action(() => RoundResultConfirmCount++));
         }
 
         public void SubscribeDrawRequested()
@@ -118,6 +125,11 @@ namespace MahjongPrototype.Tests.TestSupport.Features.UiInput
         public void SubscribeAutoSortChangedCount()
         {
             AddEventHandler("AutoSortChanged", new Action<bool>(_ => AutoSortEventCount++));
+        }
+
+        public void SubscribeRoundResultConfirmRequested()
+        {
+            AddEventHandler("RoundResultConfirmRequested", new Action(() => RoundResultConfirmCount++));
         }
 
         public void EnableController()
@@ -156,6 +168,11 @@ namespace MahjongPrototype.Tests.TestSupport.Features.UiInput
         public void ClearAutoSortToggle()
         {
             reflection.SetPrivateField(controller, "autoSortToggle", null);
+        }
+
+        public void ClearRoundResultConfirmButton()
+        {
+            reflection.SetPrivateField(controller, "roundResultConfirmButton", null);
         }
 
         public void ClickDraw()
@@ -203,6 +220,11 @@ namespace MahjongPrototype.Tests.TestSupport.Features.UiInput
             controls.CancelReachButton.onClick.Invoke();
         }
 
+        public void ClickRoundResultConfirm()
+        {
+            controls.RoundResultConfirmButton.onClick.Invoke();
+        }
+
         public void ClickUnassignedDrawButton()
         {
             unassignedDrawButton.onClick.Invoke();
@@ -242,6 +264,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.UiInput
             reflection.SetPrivateField(controller, "reachButton", controls.ReachButton);
             reflection.SetPrivateField(controller, "declineReachButton", controls.DeclineReachButton);
             reflection.SetPrivateField(controller, "cancelReachButton", controls.CancelReachButton);
+            reflection.SetPrivateField(controller, "roundResultConfirmButton", controls.RoundResultConfirmButton);
             reflection.SetPrivateField(controller, "targetTileInput", controls.TargetTileInput);
         }
 
@@ -272,6 +295,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.UiInput
             public Button ReachButton;
             public Button DeclineReachButton;
             public Button CancelReachButton;
+            public Button RoundResultConfirmButton;
             public Component TargetTileInput;
 
             public static Controls Create(ReflectionTestAccess reflection, Transform parent)
@@ -287,6 +311,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.UiInput
                     ReachButton = CreateButton(parent, "RenamedReach"),
                     DeclineReachButton = CreateButton(parent, "RenamedDeclineReach"),
                     CancelReachButton = CreateButton(parent, "RenamedCancelReach"),
+                    RoundResultConfirmButton = CreateButton(parent, "RenamedRoundResultConfirm"),
                     TargetTileInput = CreateInput(reflection, parent, "RenamedTargetTile")
                 };
             }
