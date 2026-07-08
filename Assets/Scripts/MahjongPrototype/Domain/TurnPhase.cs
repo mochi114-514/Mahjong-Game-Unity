@@ -8,6 +8,8 @@ namespace MahjongPrototype.Domain
         ReachDiscardSelection = 3,
         ReachDecision = 4,
         WinDecision = 5,
-        RoundEnded = 6
+        RoundEnded = 6,
+        RoundResult = 7,
+        GameEnded = 8
     }
 }

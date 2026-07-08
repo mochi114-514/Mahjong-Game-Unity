@@ -58,6 +58,8 @@ namespace MahjongPrototype
         private readonly ReachChecker reachChecker = new ReachChecker();
         private readonly SkillSystem skillSystem = new SkillSystem();
         private readonly SkillReservationService skillReservationService = new SkillReservationService();
+        private readonly WinningCandidateSelector winningCandidateSelector =
+            new WinningCandidateSelector();
 
         private HandEvaluator handEvaluator;
         private WinDeclarationEvaluator winDeclarationEvaluator;
@@ -172,21 +174,15 @@ namespace MahjongPrototype
             StartRound(currentWindProgress, true, initialSelfSeat);
         }
 
-        private void StartNextRound()
+        private bool StartNextRound()
         {
             if (!currentWindProgress.TryGetNext(out WindProgress next))
-            {
-                NotifyTurnDebug(
-                    "GameEnded",
-                    $"windProgress={currentWindProgress}",
-                    seat: gameState != null ? gameState.CurrentTurn : (SeatId?)null,
-                    turnIndex: gameState != null ? gameState.TurnIndex : (int?)null);
-                return;
-            }
+                return false;
 
             SeatId nextSelfSeat = RotateSeatForNextRound(gameState.SelfSeat);
             currentWindProgress = next;
             StartRound(currentWindProgress, false, nextSelfSeat);
+            return true;
         }
 
         private void StartRound(
@@ -225,6 +221,34 @@ namespace MahjongPrototype
         {
             // PROTOTYPE: Reset only the current flow state without reloading the scene.
             StartNewRound();
+        }
+
+        public void RequestAdvanceFromRoundResult()
+        {
+            if (gameState == null ||
+                !gameState.IsRoundResultPending ||
+                gameState.CurrentRoundResult == null)
+            {
+                return;
+            }
+
+            RoundResult result = gameState.CurrentRoundResult;
+            NotifyRoundResultConfirmed(result);
+
+            if (result.IsFinalRound)
+            {
+                gameState.CompleteRoundResult(true);
+                NotifyTurnDebug(
+                    "GameEnded",
+                    $"windProgress={result.WindProgress}",
+                    seat: gameState.CurrentTurn,
+                    turnIndex: gameState.TurnIndex);
+                NotifyGameEnded(result);
+                return;
+            }
+
+            gameState.CompleteRoundResult(false);
+            StartNextRound();
         }
 
         public void RequestDraw()
@@ -1459,9 +1483,14 @@ namespace MahjongPrototype
         private void EndRound(string reason, System.Action afterRoundMarkedEnded)
         {
             CancelPendingAutoDiscardDrawnTile();
+            RoundResult roundResult = CreateRoundResultForRoundEnd(reason);
             gameState.ClearWinDecision();
             gameState.ClearReachDecision();
-            gameState.IsRoundEnded = true;
+            if (roundResult != null)
+                gameState.BeginRoundResult(roundResult);
+            else
+                gameState.IsRoundEnded = true;
+
             NotifyTurnDebug(
                 "RoundEnded",
                 $"phase={gameState.TurnPhase}; reason={reason}; windProgress={gameState.WindProgress}",
@@ -1469,21 +1498,51 @@ namespace MahjongPrototype
                 turnIndex: gameState.TurnIndex);
             afterRoundMarkedEnded?.Invoke();
             eventNotifier?.NotifyRoundEnded(reason);
-
-            if (ShouldStartNextRoundAfterRoundEnd(reason))
-                StartNextRound();
+            if (roundResult != null)
+                NotifyRoundResultReady(roundResult);
         }
 
-        private static bool ShouldStartNextRoundAfterRoundEnd(string reason)
+        private RoundResult CreateRoundResultForRoundEnd(string reason)
         {
+            if (gameState == null)
+                return null;
+
             switch (reason)
             {
-                case RoundEndReasonWallEmpty:
                 case RoundEndReasonWin:
-                    return true;
+                    return CreateWinRoundResult();
+                case RoundEndReasonWallEmpty:
+                    return RoundResult.CreateExhaustiveDraw(
+                        gameState.WindProgress,
+                        gameState.TurnIndex,
+                        IsFinalRound(gameState.WindProgress));
                 default:
-                    return false;
+                    return null;
             }
+        }
+
+        private RoundResult CreateWinRoundResult()
+        {
+            WinType winType = gameState.WinDecisionType ?? WinType.Tsumo;
+            WinDeclarationEvaluationResult evaluationResult =
+                gameState.PendingWinDeclarationEvaluation;
+            HandEvaluationCandidateResult selectedCandidate =
+                winningCandidateSelector.Select(evaluationResult?.HandEvaluationResult);
+
+            return RoundResult.CreateWin(
+                gameState.WindProgress,
+                gameState.WinDecisionTurnIndex,
+                gameState.WinDecisionSeat,
+                winType,
+                gameState.WinSourceSeat,
+                gameState.WinningTile,
+                selectedCandidate,
+                IsFinalRound(gameState.WindProgress));
+        }
+
+        private static bool IsFinalRound(WindProgress windProgress)
+        {
+            return !windProgress.TryGetNext(out _);
         }
 
         private void NotifySkillResolutionEvents(DrawResult result)
@@ -1649,6 +1708,21 @@ namespace MahjongPrototype
         private void NotifyRoundStarted()
         {
             eventNotifier?.NotifyRoundStarted(gameState.TurnIndex, gameState.Wall.Count);
+        }
+
+        private void NotifyRoundResultReady(RoundResult result)
+        {
+            eventNotifier?.NotifyRoundResultReady(result);
+        }
+
+        private void NotifyRoundResultConfirmed(RoundResult result)
+        {
+            eventNotifier?.NotifyRoundResultConfirmed(result);
+        }
+
+        private void NotifyGameEnded(RoundResult result)
+        {
+            eventNotifier?.NotifyGameEnded(result);
         }
 
         private void NotifyRoundSetupCompleted()

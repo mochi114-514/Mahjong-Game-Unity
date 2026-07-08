@@ -30,6 +30,9 @@ namespace MahjongPrototype.Notifications
         public event Action<SeatId, int> ReachDeclined;
         public event Action<SeatId, int> HandAutoSorted;
         public event Action<string> RoundEnded;
+        public event Action<RoundResult> RoundResultReady;
+        public event Action<RoundResult> RoundResultConfirmed;
+        public event Action<RoundResult> GameEnded;
         public event Action SeatSlotsAssigned;
         public event Action<string, string, SeatId?, Tile?, int?> TurnDebug;
         public event Action<SeatId, WinType, Tile?, SeatId?, int, bool> WinCheckedDetailed;
@@ -167,6 +170,24 @@ namespace MahjongPrototype.Notifications
         public void NotifyRoundEnded(string reason)
         {
             RoundEnded?.Invoke(reason);
+            NotifyAny();
+        }
+
+        public void NotifyRoundResultReady(RoundResult result)
+        {
+            RoundResultReady?.Invoke(result);
+            NotifyAny();
+        }
+
+        public void NotifyRoundResultConfirmed(RoundResult result)
+        {
+            RoundResultConfirmed?.Invoke(result);
+            NotifyAny();
+        }
+
+        public void NotifyGameEnded(RoundResult result)
+        {
+            GameEnded?.Invoke(result);
             NotifyAny();
         }
 

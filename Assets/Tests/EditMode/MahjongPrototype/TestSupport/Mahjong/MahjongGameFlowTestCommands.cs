@@ -80,6 +80,11 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
             reflection.Invoke(GameFlow, "RequestDeclineWin");
         }
 
+        public void RequestAdvanceFromRoundResult()
+        {
+            reflection.Invoke(GameFlow, "RequestAdvanceFromRoundResult");
+        }
+
         public void StartTurn(string seatName, int turnIndex)
         {
             reflection.Invoke(GameFlow, "StartTurn", dataFactory.ParseSeat(seatName), turnIndex);

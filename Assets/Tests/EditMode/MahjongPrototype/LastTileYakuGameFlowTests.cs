@@ -173,6 +173,14 @@ namespace MahjongPrototype.Tests
                 driver.DrawForSeat("East");
                 driver.DiscardDrawnTile();
 
+                Assert.That(driver.IsRoundResultPending, Is.True);
+                Assert.That(driver.RoundResultTypeName, Is.EqualTo("ExhaustiveDraw"));
+                Assert.That(driver.WindProgressHandNumber, Is.EqualTo(1));
+                Assert.That(driver.DiscardCount, Is.EqualTo(1));
+                Assert.That(driver.HasLastTurnDraw, Is.True);
+
+                driver.AdvanceFromRoundResult();
+
                 Assert.That(driver.WindProgressHandNumber, Is.EqualTo(2));
                 Assert.That(driver.DiscardCount, Is.EqualTo(0));
                 Assert.That(driver.HasLastTurnDraw, Is.False);
@@ -195,6 +203,14 @@ namespace MahjongPrototype.Tests
                 Assert.That(driver.IsWinDecisionPending, Is.True);
 
                 driver.DeclineWin();
+
+                Assert.That(driver.IsRoundResultPending, Is.True);
+                Assert.That(driver.RoundResultTypeName, Is.EqualTo("ExhaustiveDraw"));
+                Assert.That(driver.WindProgressHandNumber, Is.EqualTo(1));
+                Assert.That(driver.DiscardCount, Is.EqualTo(1));
+                Assert.That(driver.HasLastTurnDraw, Is.True);
+
+                driver.AdvanceFromRoundResult();
 
                 Assert.That(driver.WindProgressHandNumber, Is.EqualTo(2));
                 Assert.That(driver.DiscardCount, Is.EqualTo(0));
@@ -275,6 +291,8 @@ namespace MahjongPrototype.Tests
                 session.Query.LastTurnDrawIsLastLiveWallDraw;
             public int WallCount => session.Query.WallCount;
             public bool IsWinDecisionPending => session.Query.IsWinDecisionPending;
+            public bool IsRoundResultPending => session.Query.IsRoundResultPending;
+            public string RoundResultTypeName => session.Query.RoundResultTypeName;
             public bool LastDiscardIsLastLiveWallDiscard =>
                 session.Query.LastDiscardIsLastLiveWallDiscard;
             public string LastDiscardSourceName => session.Query.LastDiscardSourceName;
@@ -344,6 +362,11 @@ namespace MahjongPrototype.Tests
             public void DeclineWin()
             {
                 session.Commands.RequestDeclineWin();
+            }
+
+            public void AdvanceFromRoundResult()
+            {
+                session.Commands.RequestAdvanceFromRoundResult();
             }
 
             public bool PendingCandidateContainsYaku(string yakuKindName)

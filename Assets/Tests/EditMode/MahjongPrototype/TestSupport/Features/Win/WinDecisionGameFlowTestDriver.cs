@@ -60,6 +60,11 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
             Commands.RequestDeclareWin();
         }
 
+        public void RequestAdvanceFromRoundResult()
+        {
+            Commands.RequestAdvanceFromRoundResult();
+        }
+
         public void RequestDeclineWin()
         {
             Commands.RequestDeclineWin();
@@ -136,6 +141,12 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
             (bool)Reflection.GetProperty(GameFlow, "IsWinDecisionPending");
 
         public bool IsRoundEnded => Query.IsRoundEnded;
+
+        public bool IsRoundResultPending => Query.IsRoundResultPending;
+
+        public string TurnPhaseName => Query.TurnPhaseName;
+
+        public string RoundResultTypeName => Query.RoundResultTypeName;
 
         public bool IsInteractionLocked => Query.IsInteractionLocked;
 

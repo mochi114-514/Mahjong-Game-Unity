@@ -49,6 +49,16 @@ namespace MahjongPrototype.Tests.TestSupport.Features.WindProgress
 
         public bool IsRoundEnded => Query.IsRoundEnded;
 
+        public bool IsRoundResultPending => Query.IsRoundResultPending;
+
+        public bool IsGameEnded => Query.IsGameEnded;
+
+        public string TurnPhaseName => Query.TurnPhaseName;
+
+        public string RoundResultTypeName => Query.RoundResultTypeName;
+
+        public bool CurrentRoundResultIsNull => Query.CurrentRoundResultIsNull;
+
         public string SelfSeatName => Query.SelfSeatName;
 
         public void StartNewRound()
@@ -121,6 +131,11 @@ namespace MahjongPrototype.Tests.TestSupport.Features.WindProgress
         public void DeclareWin()
         {
             Commands.RequestDeclareWin();
+        }
+
+        public void AdvanceFromRoundResult()
+        {
+            Commands.RequestAdvanceFromRoundResult();
         }
 
         public void DeclineWin()

@@ -44,7 +44,7 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void RequestDeclareWin_ClearsDecisionAndStartsNextRound()
+        public void RequestDeclareWin_ClearsDecisionAndWaitsForRoundResultAdvance()
         {
             using (WinDecisionGameFlowTestDriver driver = WinDecisionGameFlowTestDriver.Create())
             {
@@ -55,8 +55,19 @@ namespace MahjongPrototype.Tests
 
                 Assert.That(driver.PreviousStateIsWinDecisionPending, Is.False);
                 Assert.That(driver.WindProgressRoundWindName, Is.EqualTo("East"));
+                Assert.That(driver.WindProgressHandNumber, Is.EqualTo(1));
+                Assert.That(driver.IsRoundEnded, Is.True);
+                Assert.That(driver.IsRoundResultPending, Is.True);
+                Assert.That(driver.TurnPhaseName, Is.EqualTo("RoundResult"));
+                Assert.That(driver.RoundResultTypeName, Is.EqualTo("Win"));
+                Assert.That(driver.IsInteractionLocked, Is.True);
+
+                driver.RequestAdvanceFromRoundResult();
+
+                Assert.That(driver.WindProgressRoundWindName, Is.EqualTo("East"));
                 Assert.That(driver.WindProgressHandNumber, Is.EqualTo(2));
                 Assert.That(driver.IsRoundEnded, Is.False);
+                Assert.That(driver.IsRoundResultPending, Is.False);
                 Assert.That(driver.IsInteractionLocked, Is.False);
             }
         }

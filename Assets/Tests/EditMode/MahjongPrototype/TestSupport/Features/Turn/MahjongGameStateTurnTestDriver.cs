@@ -5,6 +5,9 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Turn
 {
     internal sealed class MahjongGameStateTurnTestDriver
     {
+        private const string RoundResultTypeName =
+            "MahjongPrototype.Domain.RoundResult, Assembly-CSharp";
+
         private readonly ReflectionTestAccess reflection;
         private readonly MahjongTestDataFactory dataFactory;
         private readonly object gameState;
@@ -54,6 +57,22 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Turn
             reflection.Invoke(gameState, "ClearWinDecision");
         }
 
+        public void BeginExhaustiveDrawRoundResult(bool isFinalRound = false)
+        {
+            object result = reflection.InvokeStatic(
+                reflection.RequireType(RoundResultTypeName),
+                "CreateExhaustiveDraw",
+                reflection.GetProperty(gameState, "WindProgress"),
+                TurnIndex,
+                isFinalRound);
+            reflection.Invoke(gameState, "BeginRoundResult", result);
+        }
+
+        public void CompleteRoundResult(bool gameEnded)
+        {
+            reflection.Invoke(gameState, "CompleteRoundResult", gameEnded);
+        }
+
         public void SetDrawnTile(string seatName, string tileCode)
         {
             dataFactory.SetDrawnTile(gameState, seatName, tileCode);
@@ -99,6 +118,12 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Turn
         public int WinDecisionTurnIndex => query.WinDecisionTurnIndex;
 
         public string WinningTileCodeOrNull => query.WinningTileCodeOrNull;
+
+        public bool IsRoundResultPending => query.IsRoundResultPending;
+
+        public bool IsGameEnded => query.IsGameEnded;
+
+        public bool CurrentRoundResultIsNull => query.CurrentRoundResultIsNull;
 
         public string TurnPhaseName => query.TurnPhaseName;
 

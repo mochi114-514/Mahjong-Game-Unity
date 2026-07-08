@@ -41,9 +41,15 @@ namespace MahjongPrototype.Tests
 
                 driver.EndRound("WallEmpty");
 
+                AssertRoundResultPending(driver, "ExhaustiveDraw");
+                AssertCurrentWindProgress(driver, "East", 1);
+
+                driver.AdvanceFromRoundResult();
+
                 AssertCurrentWindProgress(driver, "East", 2);
                 Assert.That(driver.SelfSeatName, Is.EqualTo("North"));
                 Assert.That(driver.IsRoundEnded, Is.False);
+                Assert.That(driver.IsRoundResultPending, Is.False);
             }
         }
 
@@ -58,31 +64,31 @@ namespace MahjongPrototype.Tests
                 AssertCurrentWindProgress(driver, "East", 1);
                 Assert.That(driver.SelfSeatName, Is.EqualTo("East"));
 
-                driver.EndRound("WallEmpty");
+                EndWallEmptyAndAdvance(driver);
                 AssertCurrentWindProgress(driver, "East", 2);
                 Assert.That(driver.SelfSeatName, Is.EqualTo("North"));
 
-                driver.EndRound("WallEmpty");
+                EndWallEmptyAndAdvance(driver);
                 AssertCurrentWindProgress(driver, "East", 3);
                 Assert.That(driver.SelfSeatName, Is.EqualTo("West"));
 
-                driver.EndRound("WallEmpty");
+                EndWallEmptyAndAdvance(driver);
                 AssertCurrentWindProgress(driver, "East", 4);
                 Assert.That(driver.SelfSeatName, Is.EqualTo("South"));
 
-                driver.EndRound("WallEmpty");
+                EndWallEmptyAndAdvance(driver);
                 AssertCurrentWindProgress(driver, "South", 1);
                 Assert.That(driver.SelfSeatName, Is.EqualTo("East"));
 
-                driver.EndRound("WallEmpty");
+                EndWallEmptyAndAdvance(driver);
                 AssertCurrentWindProgress(driver, "South", 2);
                 Assert.That(driver.SelfSeatName, Is.EqualTo("North"));
 
-                driver.EndRound("WallEmpty");
+                EndWallEmptyAndAdvance(driver);
                 AssertCurrentWindProgress(driver, "South", 3);
                 Assert.That(driver.SelfSeatName, Is.EqualTo("West"));
 
-                driver.EndRound("WallEmpty");
+                EndWallEmptyAndAdvance(driver);
                 AssertCurrentWindProgress(driver, "South", 4);
                 Assert.That(driver.SelfSeatName, Is.EqualTo("South"));
             }
@@ -101,7 +107,7 @@ namespace MahjongPrototype.Tests
                 Assert.That(driver.SeatByPlayerIdName("Player3"), Is.EqualTo("West"));
                 Assert.That(driver.SeatByPlayerIdName("Player4"), Is.EqualTo("North"));
 
-                driver.EndRound("WallEmpty");
+                EndWallEmptyAndAdvance(driver);
 
                 Assert.That(driver.SeatByPlayerIdName("Player1"), Is.EqualTo("North"));
                 Assert.That(driver.SeatByPlayerIdName("Player2"), Is.EqualTo("East"));
@@ -120,9 +126,16 @@ namespace MahjongPrototype.Tests
 
                 driver.EndRound("WallEmpty");
 
+                AssertRoundResultPending(driver, "ExhaustiveDraw");
                 AssertCurrentWindProgress(driver, "South", 4);
                 Assert.That(driver.SelfSeatName, Is.EqualTo("South"));
                 Assert.That(driver.IsRoundEnded, Is.True);
+                Assert.That(driver.IsGameEnded, Is.False);
+
+                driver.AdvanceFromRoundResult();
+
+                Assert.That(driver.IsGameEnded, Is.True);
+                Assert.That(driver.TurnPhaseName, Is.EqualTo("GameEnded"));
             }
         }
 
@@ -136,6 +149,11 @@ namespace MahjongPrototype.Tests
                 driver.BeginWinDecision("East", "Tsumo", null);
 
                 driver.DeclareWin();
+
+                AssertRoundResultPending(driver, "Win");
+                AssertCurrentWindProgress(driver, "East", 1);
+
+                driver.AdvanceFromRoundResult();
 
                 AssertCurrentWindProgress(driver, "East", 2);
                 Assert.That(driver.SelfSeatName, Is.EqualTo("North"));
@@ -154,6 +172,11 @@ namespace MahjongPrototype.Tests
 
                 driver.DeclareWin();
 
+                AssertRoundResultPending(driver, "Win");
+                AssertCurrentWindProgress(driver, "East", 1);
+
+                driver.AdvanceFromRoundResult();
+
                 AssertCurrentWindProgress(driver, "East", 2);
                 Assert.That(driver.SelfSeatName, Is.EqualTo("North"));
                 Assert.That(driver.IsRoundEnded, Is.False);
@@ -171,9 +194,16 @@ namespace MahjongPrototype.Tests
 
                 driver.DeclareWin();
 
+                AssertRoundResultPending(driver, "Win");
                 AssertCurrentWindProgress(driver, "South", 4);
                 Assert.That(driver.SelfSeatName, Is.EqualTo("South"));
                 Assert.That(driver.IsRoundEnded, Is.True);
+                Assert.That(driver.IsGameEnded, Is.False);
+
+                driver.AdvanceFromRoundResult();
+
+                Assert.That(driver.IsGameEnded, Is.True);
+                Assert.That(driver.TurnPhaseName, Is.EqualTo("GameEnded"));
             }
         }
 
@@ -201,7 +231,7 @@ namespace MahjongPrototype.Tests
                 WindProgressGameFlowTestDriver.Create())
             {
                 driver.StartNewRound();
-                driver.EndRound("WallEmpty");
+                EndWallEmptyAndAdvance(driver);
                 Assert.That(driver.SelfSeatName, Is.EqualTo("North"));
 
                 driver.StartNewRound();
@@ -218,6 +248,23 @@ namespace MahjongPrototype.Tests
         {
             Assert.That(driver.CurrentRoundWindName, Is.EqualTo(expectedRoundWind));
             Assert.That(driver.CurrentHandNumber, Is.EqualTo(expectedHandNumber));
+        }
+
+        private static void EndWallEmptyAndAdvance(WindProgressGameFlowTestDriver driver)
+        {
+            driver.EndRound("WallEmpty");
+            AssertRoundResultPending(driver, "ExhaustiveDraw");
+            driver.AdvanceFromRoundResult();
+        }
+
+        private static void AssertRoundResultPending(
+            WindProgressGameFlowTestDriver driver,
+            string expectedTypeName)
+        {
+            Assert.That(driver.IsRoundEnded, Is.True);
+            Assert.That(driver.IsRoundResultPending, Is.True);
+            Assert.That(driver.TurnPhaseName, Is.EqualTo("RoundResult"));
+            Assert.That(driver.RoundResultTypeName, Is.EqualTo(expectedTypeName));
         }
     }
 }

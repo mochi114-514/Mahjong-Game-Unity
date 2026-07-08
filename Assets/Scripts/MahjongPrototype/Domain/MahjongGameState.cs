@@ -52,6 +52,9 @@ namespace MahjongPrototype.Domain
         public bool IsSelfTurn => CurrentTurnPlayerId == SelfPlayerId;
         public int TurnIndex { get; set; }
         public bool IsRoundEnded { get; set; }
+        public RoundResult CurrentRoundResult { get; private set; }
+        public bool IsRoundResultPending { get; private set; }
+        public bool IsGameEnded { get; private set; }
         public bool IsWinDecisionPending { get; private set; }
         public SeatId WinDecisionSeat { get; private set; }
         public WinType? WinDecisionType { get; private set; }
@@ -65,21 +68,27 @@ namespace MahjongPrototype.Domain
         public SeatId ReachDecisionSeat { get; private set; }
         public int ReachDecisionTurnIndex { get; private set; }
         public TurnPhaseType TurnPhase =>
-            IsRoundEnded
-                ? TurnPhaseType.RoundEnded
-                : IsWinDecisionPending
-                    ? TurnPhaseType.WinDecision
-                    : IsReachDecisionPending
-                        ? TurnPhaseType.ReachDecision
-                        : IsReachDiscardSelectionPending
-                            ? TurnPhaseType.ReachDiscardSelection
-                            : GetPlayerSeat(CurrentTurn).HasDrawnTile
-                                ? TurnPhaseType.WaitingForDiscard
-                                : TurnPhaseType.WaitingForDraw;
+            IsGameEnded
+                ? TurnPhaseType.GameEnded
+                : IsRoundResultPending
+                    ? TurnPhaseType.RoundResult
+                    : IsRoundEnded
+                        ? TurnPhaseType.RoundEnded
+                        : IsWinDecisionPending
+                            ? TurnPhaseType.WinDecision
+                            : IsReachDecisionPending
+                                ? TurnPhaseType.ReachDecision
+                                : IsReachDiscardSelectionPending
+                                    ? TurnPhaseType.ReachDiscardSelection
+                                    : GetPlayerSeat(CurrentTurn).HasDrawnTile
+                                        ? TurnPhaseType.WaitingForDiscard
+                                        : TurnPhaseType.WaitingForDraw;
         public bool IsInteractionLocked =>
             TurnPhase == TurnPhaseType.WinDecision ||
             TurnPhase == TurnPhaseType.ReachDecision ||
-            TurnPhase == TurnPhaseType.RoundEnded;
+            TurnPhase == TurnPhaseType.RoundEnded ||
+            TurnPhase == TurnPhaseType.RoundResult ||
+            TurnPhase == TurnPhaseType.GameEnded;
         public IReadOnlyList<SeatId> ActiveSeats => activeSeats;
         public IReadOnlyList<SeatId> ActiveTurnSeats => activeSeats;
         public IReadOnlyList<SeatId> OccupiedSeats => GetOccupiedSeats();
@@ -275,6 +284,25 @@ namespace MahjongPrototype.Domain
             WinSourceSeat = null;
             WinDecisionTurnIndex = 0;
             PendingWinDeclarationEvaluation = null;
+        }
+
+        public void BeginRoundResult(RoundResult result)
+        {
+            if (result == null)
+                throw new ArgumentNullException(nameof(result));
+
+            CurrentRoundResult = result;
+            IsRoundResultPending = true;
+            IsGameEnded = false;
+            IsRoundEnded = true;
+        }
+
+        public void CompleteRoundResult(bool gameEnded)
+        {
+            IsRoundResultPending = false;
+            IsGameEnded = gameEnded;
+            if (!gameEnded)
+                CurrentRoundResult = null;
         }
 
         public void BeginReachDecision(

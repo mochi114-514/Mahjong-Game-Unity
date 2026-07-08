@@ -50,6 +50,10 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
         public int TurnIndex => (int)GetStateProperty("TurnIndex");
         public string TurnPhaseName => GetStateProperty("TurnPhase").ToString();
         public bool IsRoundEnded => (bool)GetStateProperty("IsRoundEnded");
+        public bool IsRoundResultPending => (bool)GetStateProperty("IsRoundResultPending");
+        public bool IsGameEnded => (bool)GetStateProperty("IsGameEnded");
+        public object CurrentRoundResult => GetStateProperty("CurrentRoundResult");
+        public bool CurrentRoundResultIsNull => CurrentRoundResult == null;
         public bool IsInteractionLocked => (bool)GetStateProperty("IsInteractionLocked");
         public string SelfSeatName => GetStateProperty("SelfSeat").ToString();
         public string SelfWindName => GetStateProperty("SelfWind").ToString();
@@ -95,6 +99,30 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
             reflection.GetProperty(WindProgress, "RoundWind").ToString();
         public int WindProgressHandNumber =>
             (int)reflection.GetProperty(WindProgress, "HandNumber");
+        public string RoundResultTypeName => RoundResultProperty("Type").ToString();
+        public string RoundResultRoundWindName =>
+            reflection.GetProperty(RoundResultProperty("WindProgress"), "RoundWind").ToString();
+        public int RoundResultHandNumber =>
+            (int)reflection.GetProperty(RoundResultProperty("WindProgress"), "HandNumber");
+        public int RoundResultTurnIndex => (int)RoundResultProperty("TurnIndex");
+        public bool RoundResultIsFinalRound => (bool)RoundResultProperty("IsFinalRound");
+        public string RoundResultWinnerSeatNameOrNull =>
+            NullablePropertyString(CurrentRoundResult, "WinnerSeat");
+        public string RoundResultWinTypeNameOrNull =>
+            NullablePropertyString(CurrentRoundResult, "WinType");
+        public string RoundResultSourceSeatNameOrNull =>
+            NullablePropertyString(CurrentRoundResult, "SourceSeat");
+        public string RoundResultWinningTileCodeOrNull =>
+            NullablePropertyString(CurrentRoundResult, "WinningTile");
+        public object RoundResultSelectedCandidate =>
+            RoundResultProperty("SelectedCandidate");
+        public bool RoundResultSelectedCandidateIsNull =>
+            RoundResultSelectedCandidate == null;
+        public int RoundResultYakuCount =>
+            collections.Count(RoundResultProperty("Yakus"));
+        public int RoundResultTotalHan => (int)RoundResultProperty("TotalHan");
+        public bool RoundResultHasYakuman => (bool)RoundResultProperty("HasYakuman");
+        public int RoundResultYakumanCount => (int)RoundResultProperty("YakumanCount");
 
         public string SeatByPlayerIdName(string playerIdName)
         {
@@ -257,6 +285,11 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
         private object LastTurnDraw()
         {
             return GetStateProperty("LastTurnDraw");
+        }
+
+        private object RoundResultProperty(string propertyName)
+        {
+            return reflection.GetProperty(CurrentRoundResult, propertyName);
         }
 
         private object GetStateProperty(string propertyName)
