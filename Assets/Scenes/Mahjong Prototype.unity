@@ -8193,20 +8193,32 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI.MahjongFuritenController
   furitenText: {fileID: 765603166}
---- !u!4 &2263956389251206368 stripped
-Transform:
-  m_CorrespondingSourceObject: {fileID: 5200779170243697936, guid: 6da48b3d801ed9c48a3efa7f41a6cb27, type: 3}
-  m_PrefabInstance: {fileID: 7167925420230673608}
-  m_PrefabAsset: {fileID: 0}
 --- !u!114 &6100000300 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 6100001000, guid: 655cbe60a6107244b913db4422f90f73, type: 3}
   m_PrefabInstance: {fileID: 6741706795177742104}
   m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5bbc16443b1941b18a8f0dba1165a000, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!114 &6100000301 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 991031076261630718, guid: 655cbe60a6107244b913db4422f90f73, type: 3}
   m_PrefabInstance: {fileID: 6741706795177742104}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4e29b1a8efbd4b44bb3f3716e73f07ff, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Button
+--- !u!4 &2263956389251206368 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 5200779170243697936, guid: 6da48b3d801ed9c48a3efa7f41a6cb27, type: 3}
+  m_PrefabInstance: {fileID: 7167925420230673608}
   m_PrefabAsset: {fileID: 0}
 --- !u!1001 &6741706795177742104
 PrefabInstance:
