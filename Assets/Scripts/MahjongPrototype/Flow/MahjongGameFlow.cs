@@ -19,12 +19,11 @@ namespace MahjongPrototype
         [Header("Prototype Players")]
         [SerializeField, Range(1, 4)] private int participantCount = 1;
 
-        [Header("Prototype View")]
-        [SerializeField] private SeatId viewerSeat = SeatId.East;
-
         [Header("Self Seat")]
         [FormerlySerializedAs("randomizeSelfWind")]
+        [Tooltip("有効な場合、開始時の自席をランダムに決定します。オフの場合はFixed Self Seatを使用します。")]
         [SerializeField] private bool randomizeSelfSeat = true;
+        [Tooltip("Randomize Self Seatをオフにしている場合、この席を自席として開始します。")]
         [FormerlySerializedAs("fixedSelfWind")]
         [SerializeField] private SeatId fixedSelfSeat = SeatId.East;
 
@@ -95,7 +94,6 @@ namespace MahjongPrototype
 
         public MahjongGameState CurrentState => gameState;
         public MahjongEventNotifier EventNotifier => eventNotifier;
-        public SeatId ViewerSeat => viewerSeat;
         public bool IsWinDecisionPending => gameState != null && gameState.IsWinDecisionPending;
         public bool IsAutoSortEnabled => autoSortEnabled;
         public bool IsInteractionLocked => gameState != null && gameState.IsInteractionLocked;
