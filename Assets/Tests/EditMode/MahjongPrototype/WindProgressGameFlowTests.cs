@@ -190,7 +190,7 @@ namespace MahjongPrototype.Tests
                 WindProgressGameFlowTestDriver.Create())
             {
                 driver.StartRound("South", 4, "South");
-                driver.BeginWinDecision("East", "Tsumo", null);
+                driver.BeginWinDecision("South", "Tsumo", null);
 
                 driver.DeclareWin();
 

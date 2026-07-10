@@ -423,7 +423,7 @@ namespace MahjongPrototype.Tests
             RectTransform yakuListTransform = (RectTransform)yakuListRoot;
             Assert.That(yakuListTransform.name, Is.EqualTo("Content"));
             Assert.That(yakuListTransform.parent.name, Is.EqualTo("displayArea"));
-            Assert.That(yakuListTransform.GetComponent<VerticalLayoutGroup>(), Is.Not.Null);
+            Assert.That(yakuListTransform.GetComponent<GridLayoutGroup>(), Is.Not.Null);
 
             Object yakuRowPrefab = ObjectReference(serialized, "yakuRowPrefab");
             Assert.That(AssetDatabase.GetAssetPath(yakuRowPrefab), Is.EqualTo(YakuRowPrefabPath));
