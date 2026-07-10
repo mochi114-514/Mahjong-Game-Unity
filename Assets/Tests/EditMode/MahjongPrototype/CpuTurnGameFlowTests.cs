@@ -8,6 +8,31 @@ namespace MahjongPrototype.Tests
     public sealed class CpuTurnGameFlowTests
     {
         [UnityTest]
+        public IEnumerator OpeningCpuTurn_WhenEastIsNotSelf_AdvancesThroughCpuController()
+        {
+            using (CpuTurnGameFlowTestDriver driver =
+                CpuTurnGameFlowTestDriver.CreateForOpeningCpuTurn())
+            {
+                driver.SubscribeCpuTurnEventTrace();
+                driver.StartNewRound();
+
+                Assert.That(driver.SelfSeatName, Is.EqualTo("West"));
+                Assert.That(driver.Player2SeatName, Is.EqualTo("East"));
+                Assert.That(driver.CurrentTurnName, Is.EqualTo("East"));
+                Assert.That(driver.TurnIndex, Is.EqualTo(1));
+                Assert.That(driver.Player2HasDrawnTile, Is.True);
+
+                yield return null;
+                yield return null;
+
+                Assert.That(driver.HasCpuDiscardRecord, Is.True);
+                Assert.That(driver.CpuDiscardActorSeatName, Is.EqualTo("East"));
+                Assert.That(driver.CurrentTurnName, Is.EqualTo(driver.SelfSeatName));
+                Assert.That(driver.TurnIndex, Is.EqualTo(2));
+            }
+        }
+
+        [UnityTest]
         public IEnumerator CpuTurn_AutoDrawsAndDiscardsDrawnTileThroughGameFlow()
         {
             using (CpuTurnGameFlowTestDriver driver = CpuTurnGameFlowTestDriver.Create())

@@ -31,10 +31,20 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Turn
                 enableAutoDraw: enableAutoDraw);
         }
 
+        public static CpuTurnGameFlowTestDriver CreateForOpeningCpuTurn()
+        {
+            return Create(
+                "OpeningCpuTurnGameFlowTest",
+                initialHandTileCount: 1,
+                enableAutoDraw: false,
+                fixedSelfSeatName: "West");
+        }
+
         private static CpuTurnGameFlowTestDriver Create(
             string rootName,
             int initialHandTileCount,
-            bool enableAutoDraw)
+            bool enableAutoDraw,
+            string fixedSelfSeatName = "East")
         {
             CpuTurnGameFlowTestDriver driver = new CpuTurnGameFlowTestDriver(
                 TurnGameFlowTestSupport.Create(
@@ -42,6 +52,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Turn
                     participantCount: 2,
                     initialHandTileCount: initialHandTileCount,
                     enableAutoDraw: enableAutoDraw,
+                    fixedSelfSeatName: fixedSelfSeatName,
                     addEventNotifier: true));
             driver.support.SetCpuDiscardDelay(0f);
             return driver;

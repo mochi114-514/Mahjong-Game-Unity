@@ -51,6 +51,8 @@ namespace MahjongPrototype
         [SerializeField] private bool autoSortEnabled;
 
         private readonly PlayerTurnManager playerTurnManager = new PlayerTurnManager(new TurnOrderService());
+        private readonly RoundStartingSeatResolver roundStartingSeatResolver =
+            new RoundStartingSeatResolver();
         private readonly DrawService drawService = new DrawService();
         private readonly DiscardService discardService = new DiscardService();
         private readonly WinChecker winChecker = new WinChecker();
@@ -207,7 +209,8 @@ namespace MahjongPrototype
             gameState = new MahjongGameState(Wall.CreateStandardShuffled(seed), windProgress);
             AssignParticipantsToSeats(selfSeat);
             gameState.RebuildActiveTurnSeatsFromSeatSlots();
-            playerTurnManager.InitializeRound(gameState, selfSeat);
+            SeatId startingSeat = roundStartingSeatResolver.Resolve(gameState.ActiveTurnSeats);
+            playerTurnManager.InitializeRound(gameState, startingSeat);
 
             NotifySeatSlotsAssigned();
             NotifyRoundStarted();

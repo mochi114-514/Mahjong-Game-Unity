@@ -189,13 +189,15 @@ namespace MahjongPrototype.Tests
             }
         }
 
-        [TestCase("East", "West")]
-        [TestCase("South", "North")]
-        [TestCase("West", "East")]
-        [TestCase("North", "South")]
+        [TestCase("East", "West", "East", "Player1")]
+        [TestCase("South", "North", "South", "Player1")]
+        [TestCase("West", "East", "East", "Player2")]
+        [TestCase("North", "South", "South", "Player2")]
         public void GameFlow_TwoParticipantsPlacesPlayer2AcrossFromSelf(
             string selfSeatName,
-            string player2SeatName)
+            string player2SeatName,
+            string expectedStartingSeatName,
+            string expectedStartingPlayerIdName)
         {
             using (TurnLifecycleGameFlowTestDriver driver =
                 TurnLifecycleGameFlowTestDriver.Create(
@@ -206,10 +208,31 @@ namespace MahjongPrototype.Tests
 
                 Assert.That(driver.SeatByPlayerId("Player1"), Is.EqualTo(selfSeatName));
                 Assert.That(driver.SeatByPlayerId("Player2"), Is.EqualTo(player2SeatName));
-                Assert.That(driver.CurrentTurnName, Is.EqualTo(selfSeatName));
-                Assert.That(driver.CurrentTurnPlayerIdName, Is.EqualTo("Player1"));
+                Assert.That(driver.CurrentTurnName, Is.EqualTo(expectedStartingSeatName));
+                Assert.That(driver.CurrentTurnPlayerIdName, Is.EqualTo(expectedStartingPlayerIdName));
                 Assert.That(driver.OccupiedSeatNames.Length, Is.EqualTo(2));
                 Assert.That(driver.ActiveTurnSeatNames.Length, Is.EqualTo(2));
+            }
+        }
+
+        [TestCase("South")]
+        [TestCase("West")]
+        [TestCase("North")]
+        public void GameFlow_FourParticipantsStartFromEastWhenSelfSeatIsNotEast(
+            string selfSeatName)
+        {
+            using (TurnLifecycleGameFlowTestDriver driver =
+                TurnLifecycleGameFlowTestDriver.Create(
+                    participantCount: 4,
+                    fixedSelfSeatName: selfSeatName))
+            {
+                driver.StartNewRound();
+
+                Assert.That(driver.SelfSeatName, Is.EqualTo(selfSeatName));
+                Assert.That(driver.SeatByPlayerId("Player1"), Is.EqualTo(selfSeatName));
+                Assert.That(driver.CurrentTurnName, Is.EqualTo("East"));
+                Assert.That(driver.IsSelfTurn, Is.False);
+                Assert.That(driver.TurnIndex, Is.EqualTo(1));
             }
         }
 
