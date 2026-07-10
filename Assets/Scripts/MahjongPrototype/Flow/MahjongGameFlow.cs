@@ -13,9 +13,6 @@ namespace MahjongPrototype
     [AddComponentMenu("Mahjong Prototype/Mahjong Game Flow")]
     public sealed class MahjongGameFlow : MonoBehaviour
     {
-        private const string RoundEndReasonWallEmpty = "WallEmpty";
-        private const string RoundEndReasonWin = "Win";
-
         [Header("Prototype Players")]
         [SerializeField, Range(1, 4)] private int participantCount = 1;
 
@@ -59,8 +56,6 @@ namespace MahjongPrototype
         private readonly ReachChecker reachChecker = new ReachChecker();
         private readonly SkillSystem skillSystem = new SkillSystem();
         private readonly SkillReservationService skillReservationService = new SkillReservationService();
-        private readonly WinningCandidateSelector winningCandidateSelector =
-            new WinningCandidateSelector();
 
         private HandEvaluator handEvaluator;
         private WinDeclarationEvaluator winDeclarationEvaluator;
@@ -68,9 +63,9 @@ namespace MahjongPrototype
         private FuritenEvaluator furitenEvaluator;
         private YakuDefinitionCatalog initializedYakuDefinitionCatalog;
         private RoundSetupService roundSetupService;
+        private RoundLifecycleService roundLifecycleService;
         private MahjongFlowEventPublisher eventPublisher;
         private MahjongGameState gameState;
-        private WindProgress currentWindProgress = WindProgress.East1;
         private Coroutine pendingAutoDiscardDrawnTileCoroutine;
         private int autoDiscardDrawnTileOperationVersion;
         private bool autoSortDeferredUntilReachDecisionResolved;
@@ -174,20 +169,9 @@ namespace MahjongPrototype
         [ContextMenu("Prototype/Start New Round")]
         public void StartNewRound()
         {
-            currentWindProgress = WindProgress.East1;
+            EnsureRoundLifecycleService();
             SeatId initialSelfSeat = ResolveSelfSeat();
-            StartRound(currentWindProgress, true, initialSelfSeat);
-        }
-
-        private bool StartNextRound()
-        {
-            if (!currentWindProgress.TryGetNext(out WindProgress next))
-                return false;
-
-            SeatId nextSelfSeat = RotateSeatForNextRound(gameState.SelfSeat);
-            currentWindProgress = next;
-            StartRound(currentWindProgress, false, nextSelfSeat);
-            return true;
+            StartRound(roundLifecycleService.GetInitialWindProgress(), true, initialSelfSeat);
         }
 
         private void StartRound(
@@ -195,7 +179,6 @@ namespace MahjongPrototype
             bool notifyRunStarted,
             SeatId selfSeat)
         {
-            currentWindProgress = windProgress;
             CacheReferences();
             EnsureCpuTurnController();
             InitializeEvaluators();
@@ -205,7 +188,6 @@ namespace MahjongPrototype
             CancelPendingAutoDiscardDrawnTile();
             autoSortDeferredUntilReachDecisionResolved = false;
 
-            ClearWinDecision();
             skillReservationService.Clear();
             if (notifyRunStarted)
                 EventPublisher.NotifyRunStarted();
@@ -234,19 +216,17 @@ namespace MahjongPrototype
 
         public void RequestAdvanceFromRoundResult()
         {
-            if (gameState == null ||
-                !gameState.IsRoundResultPending ||
-                gameState.CurrentRoundResult == null)
-            {
+            EnsureRoundLifecycleService();
+            RoundResult result = roundLifecycleService.GetPendingRoundResult(gameState);
+            if (result == null)
                 return;
-            }
 
-            RoundResult result = gameState.CurrentRoundResult;
             EventPublisher.NotifyRoundResultConfirmed(result);
+            RoundLifecycleTransition transition =
+                roundLifecycleService.AdvanceFromRoundResult(gameState);
 
-            if (result.IsFinalRound)
+            if (transition.Type == RoundLifecycleTransitionType.GameEnded)
             {
-                gameState.CompleteRoundResult(true);
                 EventPublisher.NotifyTurnDebug(
                     "GameEnded",
                     $"windProgress={result.WindProgress}",
@@ -256,8 +236,13 @@ namespace MahjongPrototype
                 return;
             }
 
-            gameState.CompleteRoundResult(false);
-            StartNextRound();
+            if (transition.Type == RoundLifecycleTransitionType.StartNextRound)
+            {
+                StartRound(
+                    transition.NextWindProgress.Value,
+                    false,
+                    transition.NextSelfSeat.Value);
+            }
         }
 
         public void RequestDraw()
@@ -337,7 +322,7 @@ namespace MahjongPrototype
             if (!result.Success)
             {
                 NotifySkillResolutionEvents(result);
-                EndRound(RoundEndReasonWallEmpty);
+                EndRound(RoundLifecycleService.RoundEndReasonWallEmpty);
                 return false;
             }
 
@@ -669,7 +654,7 @@ namespace MahjongPrototype
                 gameState.PendingWinDeclarationEvaluation;
 
             EndRound(
-                RoundEndReasonWin,
+                RoundLifecycleService.RoundEndReasonWin,
                 () =>
                 {
                     EventPublisher.NotifyWinDeclared(seat, turnIndex);
@@ -716,7 +701,7 @@ namespace MahjongPrototype
             if (winType == WinType.Ron && !gameState.IsRoundEnded)
             {
                 if (shouldEndAfterDeclinedLastLiveWallRon)
-                    EndRound(RoundEndReasonWallEmpty);
+                    EndRound(RoundLifecycleService.RoundEndReasonWallEmpty);
                 else
                     AdvanceTurn();
             }
@@ -851,7 +836,7 @@ namespace MahjongPrototype
         {
             if (record.IsLastLiveWallDiscard)
             {
-                EndRound(RoundEndReasonWallEmpty);
+            EndRound(RoundLifecycleService.RoundEndReasonWallEmpty);
                 return;
             }
 
@@ -1528,15 +1513,12 @@ namespace MahjongPrototype
 
         private void EndRound(string reason, System.Action afterRoundMarkedEnded)
         {
+            EnsureRoundLifecycleService();
+            cpuTurnController?.CancelPendingTurn();
             CancelPendingAutoDiscardDrawnTile();
             autoSortDeferredUntilReachDecisionResolved = false;
-            RoundResult roundResult = CreateRoundResultForRoundEnd(reason);
-            gameState.ClearWinDecision();
-            gameState.ClearReachDecision();
-            if (roundResult != null)
-                gameState.BeginRoundResult(roundResult);
-            else
-                gameState.IsRoundEnded = true;
+            RoundLifecycleEndResult endResult = roundLifecycleService.EndRound(gameState, reason);
+            RoundResult roundResult = endResult.RoundResult;
 
             EventPublisher.NotifyTurnDebug(
                 "RoundEnded",
@@ -1547,49 +1529,6 @@ namespace MahjongPrototype
             EventPublisher.NotifyRoundEnded(reason);
             if (roundResult != null)
                 EventPublisher.NotifyRoundResultReady(roundResult);
-        }
-
-        private RoundResult CreateRoundResultForRoundEnd(string reason)
-        {
-            if (gameState == null)
-                return null;
-
-            switch (reason)
-            {
-                case RoundEndReasonWin:
-                    return CreateWinRoundResult();
-                case RoundEndReasonWallEmpty:
-                    return RoundResult.CreateExhaustiveDraw(
-                        gameState.WindProgress,
-                        gameState.TurnIndex,
-                        IsFinalRound(gameState.WindProgress));
-                default:
-                    return null;
-            }
-        }
-
-        private RoundResult CreateWinRoundResult()
-        {
-            WinType winType = gameState.WinDecisionType ?? WinType.Tsumo;
-            WinDeclarationEvaluationResult evaluationResult =
-                gameState.PendingWinDeclarationEvaluation;
-            HandEvaluationCandidateResult selectedCandidate =
-                winningCandidateSelector.Select(evaluationResult?.HandEvaluationResult);
-
-            return RoundResult.CreateWin(
-                gameState.WindProgress,
-                gameState.WinDecisionTurnIndex,
-                gameState.WinDecisionSeat,
-                winType,
-                gameState.WinSourceSeat,
-                gameState.WinningTile,
-                selectedCandidate,
-                IsFinalRound(gameState.WindProgress));
-        }
-
-        private static bool IsFinalRound(WindProgress windProgress)
-        {
-            return !windProgress.TryGetNext(out _);
         }
 
         private void NotifySkillResolutionEvents(DrawResult result)
@@ -1620,6 +1559,15 @@ namespace MahjongPrototype
                 roundStartingSeatResolver,
                 playerTurnManager,
                 drawService);
+        }
+
+        private void EnsureRoundLifecycleService()
+        {
+            if (roundLifecycleService != null)
+                return;
+
+            roundLifecycleService = new RoundLifecycleService(
+                new WinningCandidateSelector());
         }
 
         private void InitializeEvaluators()
@@ -1655,14 +1603,9 @@ namespace MahjongPrototype
             participantCount = Mathf.Clamp(participantCount, 1, 4);
         }
 
-        private static SeatId GetRelativeSeat(SeatId originSeat, int offset)
-        {
-            return (SeatId)(((int)originSeat + offset) % 4);
-        }
-
         private static SeatId RotateSeatForNextRound(SeatId currentSeat)
         {
-            return GetRelativeSeat(currentSeat, 3);
+            return RoundLifecycleService.RotateSelfSeatForNextRound(currentSeat);
         }
 
         private SeatId ResolveSelfSeat()
