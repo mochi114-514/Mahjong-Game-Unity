@@ -159,6 +159,17 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
             Commands.RequestDeclineWin();
         }
 
+        public void RequestSetAutoSortEnabled(bool enabled)
+        {
+            Reflection.Invoke(GameFlow, "RequestSetAutoSortEnabled", enabled);
+        }
+
+        public void SortHandDirectly(string seatName)
+        {
+            object hand = Reflection.GetProperty(Query.GetPlayerSeat(seatName), "Hand");
+            Reflection.Invoke(hand, "SortByTypeIndex");
+        }
+
         public object BuildTurnAutomationPolicy(string seatName)
         {
             return Reflection.Invoke(
@@ -206,6 +217,8 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
         }
 
         public bool IsWinDecisionPending => Query.IsWinDecisionPending;
+
+        public bool IsAutoSortEnabled => (bool)Reflection.GetProperty(GameFlow, "IsAutoSortEnabled");
 
         public bool IsReachDecisionPending =>
             (bool)Reflection.GetProperty(CurrentState, "IsReachDecisionPending");

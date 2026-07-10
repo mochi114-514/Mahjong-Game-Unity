@@ -712,9 +712,13 @@ namespace MahjongPrototype.UI
         {
             bool canUseSelfTileInput = CanUseSelfGameplayInput(state);
             bool canUseControlPanelInput = CanUseControlAreaInput(state);
+            bool canUseAutoSortInput = CanUseAutoSortInput(state);
 
             if (inputController != null)
+            {
                 inputController.SetGameplayInputInteractable(canUseControlPanelInput);
+                inputController.SetAutoSortInteractable(canUseAutoSortInput);
+            }
 
             if (playerArea3DPresenter != null)
                 playerArea3DPresenter.SetSelfInteractable(state, canUseSelfTileInput);
@@ -746,6 +750,13 @@ namespace MahjongPrototype.UI
                 !state.IsRoundEnded &&
                 !state.IsReachDiscardSelectionPending &&
                 !IsDeclaredReachWaitingForDraw(state);
+        }
+
+        private static bool CanUseAutoSortInput(MahjongGameState state)
+        {
+            return state != null &&
+                !state.IsReachDecisionPending &&
+                !state.IsReachDiscardSelectionPending;
         }
 
         private static bool IsDeclaredReachWaitingForDraw(MahjongGameState state)

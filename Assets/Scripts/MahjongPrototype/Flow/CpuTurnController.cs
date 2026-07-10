@@ -46,6 +46,31 @@ namespace MahjongPrototype
             StopAllCoroutines();
         }
 
+        public bool TryRespondToWinDecision(
+            MahjongGameFlow gameFlow,
+            MahjongGameState gameState,
+            SeatId seat,
+            int turnIndex)
+        {
+            if (gameFlow == null ||
+                gameState == null ||
+                !ReferenceEquals(gameFlow.CurrentState, gameState) ||
+                gameState.IsRoundEnded ||
+                !gameState.IsWinDecisionPending ||
+                gameState.WinDecisionSeat != seat ||
+                gameState.WinDecisionTurnIndex != turnIndex)
+            {
+                return false;
+            }
+
+            SeatSlot slot = gameState.GetSeatSlot(seat);
+            if (!slot.HasPlayer || slot.ParticipantType != ParticipantType.Cpu)
+                return false;
+
+            // PROTOTYPE: CPU declares every legal self-draw win decision.
+            return gameFlow.TryRequestDeclareWinForSeat(seat);
+        }
+
         private IEnumerator RunCpuTurn(
             MahjongGameFlow gameFlow,
             MahjongGameState gameState,

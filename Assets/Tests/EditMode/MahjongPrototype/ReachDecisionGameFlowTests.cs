@@ -151,6 +151,51 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
+        public void ReachDecision_RequestSetAutoSortEnabled_DoesNotReorderHandOrClearDecision()
+        {
+            using (ReachDecisionGameFlowTestDriver driver =
+                ReachDecisionGameFlowTestDriver.Create())
+            {
+                driver.DrawReachableHand();
+                string handBefore = driver.HandDisplayString("East");
+                int candidateCountBefore = driver.ReachDiscardCandidateCount;
+                string currentTurnBefore = driver.CurrentTurnName;
+                int turnIndexBefore = driver.TurnIndex;
+
+                driver.RequestSetAutoSortEnabled(true);
+
+                Assert.That(driver.IsAutoSortEnabled, Is.True);
+                Assert.That(driver.HandDisplayString("East"), Is.EqualTo(handBefore));
+                Assert.That(driver.IsReachDecisionPending, Is.True);
+                Assert.That(driver.IsReachDiscardSelectionPending, Is.False);
+                Assert.That(driver.ReachDiscardCandidateCount, Is.EqualTo(candidateCountBefore));
+                Assert.That(driver.CurrentTurnName, Is.EqualTo(currentTurnBefore));
+                Assert.That(driver.TurnIndex, Is.EqualTo(turnIndexBefore));
+            }
+        }
+
+        [Test]
+        public void ReachDecision_RequestSetAutoSortEnabled_DefersSortUntilDecisionIsResolved()
+        {
+            using (ReachDecisionGameFlowTestDriver driver =
+                ReachDecisionGameFlowTestDriver.Create())
+            {
+                driver.DrawReachableHand();
+                string handBefore = driver.HandDisplayString("East");
+
+                driver.RequestSetAutoSortEnabled(true);
+                driver.RequestDeclineReach();
+
+                Assert.That(driver.IsReachDecisionPending, Is.False);
+                Assert.That(driver.IsReachDiscardSelectionPending, Is.False);
+                Assert.That(
+                    driver.HandDisplayString("East"),
+                    Is.EqualTo("1m 2m 3m 5m 2p 3p 4p 7s 8s 9s E E E"));
+                Assert.That(driver.HandDisplayString("East"), Is.Not.EqualTo(handBefore));
+            }
+        }
+
+        [Test]
         public void ReachDiscardSelection_RequestForceDrawSkill_IsRejectedAndKeepsSelection()
         {
             using (ReachDecisionGameFlowTestDriver driver =
@@ -177,6 +222,30 @@ namespace MahjongPrototype.Tests
                 Assert.That(driver.HandDisplayString("East"), Is.EqualTo(handBefore));
                 Assert.That(driver.DrawnTileCodeOrNull("East"), Is.EqualTo(drawnTileBefore));
                 Assert.That(driver.WallCount, Is.EqualTo(wallCountBefore));
+                Assert.That(driver.DiscardCount, Is.EqualTo(discardCountBefore));
+            }
+        }
+
+        [Test]
+        public void ReachDiscardSelection_RequestSetAutoSortEnabled_DoesNotReorderHandOrClearSelection()
+        {
+            using (ReachDecisionGameFlowTestDriver driver =
+                ReachDecisionGameFlowTestDriver.Create())
+            {
+                driver.DrawReachableHand();
+                driver.RequestDeclareReach();
+                string handBefore = driver.HandDisplayString("East");
+                int candidateCountBefore = driver.ReachDiscardCandidateCount;
+                int discardCountBefore = driver.DiscardCount;
+
+                driver.RequestSetAutoSortEnabled(true);
+
+                Assert.That(driver.IsAutoSortEnabled, Is.True);
+                Assert.That(driver.HandDisplayString("East"), Is.EqualTo(handBefore));
+                Assert.That(driver.IsReachDecisionPending, Is.False);
+                Assert.That(driver.IsReachDiscardSelectionPending, Is.True);
+                Assert.That(driver.IsReachDeclared("East"), Is.False);
+                Assert.That(driver.ReachDiscardCandidateCount, Is.EqualTo(candidateCountBefore));
                 Assert.That(driver.DiscardCount, Is.EqualTo(discardCountBefore));
             }
         }
@@ -230,6 +299,26 @@ namespace MahjongPrototype.Tests
                 Assert.That(driver.DiscardCount, Is.EqualTo(discardCountBefore));
                 Assert.That(driver.IsReachDeclared("East"), Is.False);
                 Assert.That(driver.IsReachDiscardSelectionPending, Is.True);
+            }
+        }
+
+        [Test]
+        public void ReachDiscardSelection_RejectsCandidateWhoseTileDoesNotMatchCurrentHandIndex()
+        {
+            using (ReachDecisionGameFlowTestDriver driver =
+                ReachDecisionGameFlowTestDriver.Create())
+            {
+                driver.DrawReachableHand();
+                driver.RequestDeclareReach();
+                int candidateCountBefore = driver.ReachDiscardCandidateCount;
+
+                driver.SortHandDirectly("East");
+                driver.RequestDiscard(12);
+
+                Assert.That(driver.DiscardCount, Is.EqualTo(0));
+                Assert.That(driver.IsReachDeclared("East"), Is.False);
+                Assert.That(driver.IsReachDiscardSelectionPending, Is.True);
+                Assert.That(driver.ReachDiscardCandidateCount, Is.EqualTo(candidateCountBefore));
             }
         }
 

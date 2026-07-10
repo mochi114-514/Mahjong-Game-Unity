@@ -77,6 +77,8 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Turn
         public void RequestDiscard(int handIndex) => Commands.RequestDiscard(handIndex);
         public void RequestDiscardDrawnTile() => Commands.RequestDiscardDrawnTile();
         public void RequestForceDrawSkill(string tileCode) => Commands.RequestForceDrawSkill(tileCode);
+        public void RequestForceDrawSkillForSeat(string seatName, string tileCode) =>
+            Commands.RequestForceDrawSkillForSeat(seatName, tileCode);
         public void RequestSetAutoSortEnabled(bool enabled) =>
             Reflection.Invoke(GameFlow, "RequestSetAutoSortEnabled", enabled);
         public void DealInitialHands() => Commands.DealInitialHands();
@@ -290,6 +292,12 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Turn
         public string TurnPhaseName => Query.TurnPhaseName;
 
         public bool IsRoundEnded => Query.IsRoundEnded;
+
+        public bool IsRoundResultPending => Query.IsRoundResultPending;
+
+        public string RoundResultTypeName => Query.RoundResultTypeName;
+
+        public string RoundResultWinnerSeatName => Query.RoundResultWinnerSeatNameOrNull;
 
         public bool IsInteractionLocked => Query.IsInteractionLocked;
 

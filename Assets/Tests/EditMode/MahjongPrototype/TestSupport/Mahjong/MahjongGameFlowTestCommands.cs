@@ -75,6 +75,14 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
             reflection.Invoke(GameFlow, "RequestDeclareWin");
         }
 
+        public bool TryRequestDeclareWinForSeat(string seatName)
+        {
+            return (bool)reflection.Invoke(
+                GameFlow,
+                "TryRequestDeclareWinForSeat",
+                dataFactory.ParseSeat(seatName));
+        }
+
         public void RequestDeclineWin()
         {
             reflection.Invoke(GameFlow, "RequestDeclineWin");

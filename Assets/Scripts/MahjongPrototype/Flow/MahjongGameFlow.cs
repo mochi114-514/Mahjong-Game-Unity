@@ -71,6 +71,7 @@ namespace MahjongPrototype
         private bool warnedMissingNotifier;
         private Coroutine pendingAutoDiscardDrawnTileCoroutine;
         private int autoDiscardDrawnTileOperationVersion;
+        private bool autoSortDeferredUntilReachDecisionResolved;
 
         private readonly struct TurnAutomationPolicy
         {
@@ -197,6 +198,7 @@ namespace MahjongPrototype
             NormalizeParticipantCount();
             cpuTurnController?.CancelPendingTurn();
             CancelPendingAutoDiscardDrawnTile();
+            autoSortDeferredUntilReachDecisionResolved = false;
 
             ClearWinDecision();
             skillReservationService.Clear();
@@ -616,6 +618,9 @@ namespace MahjongPrototype
                 return;
 
             autoSortEnabled = enabled;
+            if (!enabled)
+                autoSortDeferredUntilReachDecisionResolved = false;
+
             NotifyAutoSortChanged(enabled);
 
             if (enabled && gameState != null)
@@ -627,10 +632,25 @@ namespace MahjongPrototype
             if (!CanUseGameState())
                 return;
 
+            TryRequestDeclareWinForSeat(gameState.SelfSeat);
+        }
+
+        public bool TryRequestDeclareWinForSeat(SeatId actorSeat)
+        {
+            if (!CanUseGameState())
+                return false;
+
             if (!gameState.IsWinDecisionPending)
             {
                 Warn("No winning hand decision is pending.");
-                return;
+                return false;
+            }
+
+            if (gameState.WinDecisionSeat != actorSeat)
+            {
+                Warn("Only the win decision seat can declare win.");
+                NotifyTurnBlocked("WinBlocked", "NotWinDecisionSeat");
+                return false;
             }
 
             SeatId seat = gameState.WinDecisionSeat;
@@ -655,6 +675,7 @@ namespace MahjongPrototype
                         turnIndex,
                         evaluationResult);
                 });
+            return true;
         }
 
         public void RequestDeclineWin()
@@ -782,6 +803,7 @@ namespace MahjongPrototype
             SeatId seat = gameState.ReachDecisionSeat;
             int turnIndex = gameState.ReachDecisionTurnIndex;
             gameState.ClearReachDecision();
+            ApplyDeferredAutoSortAfterReachDecisionIfNeeded("ReachDeclined");
             NotifyTurnDebug(
                 "ReachDeclined",
                 $"phase={gameState.TurnPhase}",
@@ -1020,7 +1042,14 @@ namespace MahjongPrototype
             CheckWinPrototype();
 
             if (gameState.IsWinDecisionPending)
+            {
+                cpuTurnController?.TryRespondToWinDecision(
+                    this,
+                    gameState,
+                    gameState.WinDecisionSeat,
+                    gameState.WinDecisionTurnIndex);
                 return;
+            }
 
             if (ShouldAutoDiscardDrawnTileAfterDraw(seat))
             {
@@ -1275,16 +1304,32 @@ namespace MahjongPrototype
             if (seat != gameState.ReachDecisionSeat)
                 return false;
 
+            PlayerSeat playerSeat = gameState.GetPlayerSeat(seat);
+            if (playerSeat == null)
+                return false;
+
             for (int i = 0; i < gameState.ReachDiscardCandidates.Count; i++)
             {
                 ReachDiscardCandidate candidate = gameState.ReachDiscardCandidates[i];
-                if (candidate.Source != source)
+                if (candidate.Source != source || candidate.HandIndex != handIndex)
                     continue;
 
                 if (source == DiscardSource.DrawnTile)
-                    return true;
+                {
+                    if (playerSeat.HasDrawnTile &&
+                        playerSeat.DrawnTile.HasValue &&
+                        candidate.Tile == playerSeat.DrawnTile.Value)
+                    {
+                        return true;
+                    }
 
-                if (candidate.HandIndex == handIndex)
+                    continue;
+                }
+
+                if (handIndex < 0 || handIndex >= playerSeat.Hand.Count)
+                    continue;
+
+                if (candidate.Tile == playerSeat.Hand.GetTiles()[handIndex])
                     return true;
             }
 
@@ -1306,6 +1351,7 @@ namespace MahjongPrototype
             bool isDoubleReachDeclared = IsFirstDiscardBySeat(gameState, seat);
             playerSeat.DeclareReach(turnIndex, isDoubleReachDeclared);
             gameState.ClearReachDecision();
+            ApplyDeferredAutoSortAfterReachDecisionIfNeeded("ReachDeclared");
             NotifyReachDeclared(seat, turnIndex);
             NotifyTurnDebug(
                 "ReachDeclared",
@@ -1483,6 +1529,7 @@ namespace MahjongPrototype
         private void EndRound(string reason, System.Action afterRoundMarkedEnded)
         {
             CancelPendingAutoDiscardDrawnTile();
+            autoSortDeferredUntilReachDecisionResolved = false;
             RoundResult roundResult = CreateRoundResultForRoundEnd(reason);
             gameState.ClearWinDecision();
             gameState.ClearReachDecision();
@@ -1903,11 +1950,39 @@ namespace MahjongPrototype
 
         private void ApplyAutoSort(SeatId seat, string reason, bool notify)
         {
+            if (ShouldDeferAutoSortUntilReachDecisionResolved(seat))
+            {
+                autoSortDeferredUntilReachDecisionResolved = true;
+                return;
+            }
+
             gameState.GetPlayerSeat(seat).Hand.SortByTypeIndex();
             NotifyHandAutoSortedDetailed(seat, gameState.TurnIndex, reason);
 
             if (notify)
                 NotifyHandAutoSorted(seat, gameState.TurnIndex);
+        }
+
+        private bool ShouldDeferAutoSortUntilReachDecisionResolved(SeatId seat)
+        {
+            return gameState != null &&
+                gameState.IsSelfSeat(seat) &&
+                (gameState.IsReachDecisionPending || gameState.IsReachDiscardSelectionPending);
+        }
+
+        private void ApplyDeferredAutoSortAfterReachDecisionIfNeeded(string reason)
+        {
+            if (!autoSortDeferredUntilReachDecisionResolved ||
+                gameState == null ||
+                gameState.IsReachDecisionPending ||
+                gameState.IsReachDiscardSelectionPending)
+            {
+                return;
+            }
+
+            autoSortDeferredUntilReachDecisionResolved = false;
+            if (autoSortEnabled)
+                ApplyAutoSort(gameState.SelfSeat, reason, true);
         }
 
         private void Warn(string message)

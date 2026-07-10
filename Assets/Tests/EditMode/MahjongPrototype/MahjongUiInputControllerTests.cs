@@ -109,9 +109,25 @@ namespace MahjongPrototype.Tests
                 Assert.That(driver.DrawInteractable, Is.False);
                 Assert.That(driver.ForceDrawSkillInteractable, Is.False);
                 Assert.That(driver.TargetTileInputInteractable, Is.False);
+                Assert.That(driver.AutoSortInteractable, Is.True);
                 Assert.That(driver.RetryInteractable, Is.True);
                 Assert.That(driver.CancelReachInteractable, Is.True);
                 Assert.That(driver.RoundResultConfirmInteractable, Is.True);
+            }
+        }
+
+        [Test]
+        public void SetAutoSortInteractable_ControlsOnlyAutoSortToggle()
+        {
+            using (MahjongUiInputControllerTestDriver driver =
+                MahjongUiInputControllerTestDriver.Create("InputControllerAutoSortInteractableTest"))
+            {
+                driver.SetAutoSortInteractable(false);
+
+                Assert.That(driver.AutoSortInteractable, Is.False);
+                Assert.That(driver.DrawInteractable, Is.True);
+                Assert.That(driver.ForceDrawSkillInteractable, Is.True);
+                Assert.That(driver.TargetTileInputInteractable, Is.True);
             }
         }
 
@@ -178,6 +194,7 @@ namespace MahjongPrototype.Tests
                 Assert.That(driver.DrawInteractable, Is.True);
                 Assert.That(driver.ForceDrawSkillInteractable, Is.True);
                 Assert.That(driver.TargetTileInputInteractable, Is.True);
+                Assert.That(driver.AutoSortInteractable, Is.True);
                 Assert.That(driver.FirstSelfHandTileInteractable, Is.False);
                 Assert.That(driver.SelfDrawnTileInteractable, Is.False);
             }
@@ -195,6 +212,7 @@ namespace MahjongPrototype.Tests
                 Assert.That(driver.DrawInteractable, Is.True);
                 Assert.That(driver.ForceDrawSkillInteractable, Is.True);
                 Assert.That(driver.TargetTileInputInteractable, Is.True);
+                Assert.That(driver.AutoSortInteractable, Is.True);
                 Assert.That(driver.FirstSelfHandTileInteractable, Is.True);
                 Assert.That(driver.SelfDrawnTileInteractable, Is.True);
             }
@@ -213,6 +231,7 @@ namespace MahjongPrototype.Tests
                 Assert.That(driver.DrawInteractable, Is.True);
                 Assert.That(driver.ForceDrawSkillInteractable, Is.True);
                 Assert.That(driver.TargetTileInputInteractable, Is.True);
+                Assert.That(driver.AutoSortInteractable, Is.False);
                 Assert.That(driver.FirstSelfHandTileInteractable, Is.False);
                 Assert.That(driver.SelfDrawnTileInteractable, Is.False);
             }
@@ -231,6 +250,7 @@ namespace MahjongPrototype.Tests
                 Assert.That(driver.DrawInteractable, Is.False);
                 Assert.That(driver.ForceDrawSkillInteractable, Is.False);
                 Assert.That(driver.TargetTileInputInteractable, Is.False);
+                Assert.That(driver.AutoSortInteractable, Is.False);
                 Assert.That(driver.FirstSelfHandTileInteractable, Is.True);
                 Assert.That(driver.SecondSelfHandTileInteractable, Is.False);
                 Assert.That(driver.SelfDrawnTileInteractable, Is.False);
@@ -350,6 +370,7 @@ namespace MahjongPrototype.Tests
             private readonly Component drawnTileView;
             private readonly Button drawButton;
             private readonly Button forceDrawSkillButton;
+            private readonly Toggle autoSortToggle;
             private readonly Component targetTileInput;
             private bool commandRoutingEnabled;
             private bool disposed;
@@ -366,6 +387,7 @@ namespace MahjongPrototype.Tests
                 Component drawnTileView,
                 Button drawButton,
                 Button forceDrawSkillButton,
+                Toggle autoSortToggle,
                 Component targetTileInput)
             {
                 this.reflection = reflection;
@@ -379,11 +401,13 @@ namespace MahjongPrototype.Tests
                 this.drawnTileView = drawnTileView;
                 this.drawButton = drawButton;
                 this.forceDrawSkillButton = forceDrawSkillButton;
+                this.autoSortToggle = autoSortToggle;
                 this.targetTileInput = targetTileInput;
             }
 
             public bool DrawInteractable => drawButton.interactable;
             public bool ForceDrawSkillInteractable => forceDrawSkillButton.interactable;
+            public bool AutoSortInteractable => autoSortToggle.interactable;
             public bool TargetTileInputInteractable =>
                 (bool)reflection.GetProperty(targetTileInput, "interactable");
             public bool FirstSelfHandTileInteractable => TileInteractable(FirstSelfHandTile);
@@ -588,6 +612,7 @@ namespace MahjongPrototype.Tests
                             uiRoot.transform,
                             out Button drawButton,
                             out Button skillButton,
+                            out Toggle autoSortToggle,
                             out Component targetInput);
 
                     Component playerAreaPresenter =
@@ -623,6 +648,7 @@ namespace MahjongPrototype.Tests
                         drawnTileView,
                         drawButton,
                         skillButton,
+                        autoSortToggle,
                         targetInput);
                     return driver;
                 }
@@ -638,6 +664,7 @@ namespace MahjongPrototype.Tests
                 Transform parent,
                 out Button drawButton,
                 out Button forceDrawSkillButton,
+                out Toggle autoSortToggle,
                 out Component targetTileInput)
             {
                 GameObject inputObject = CreateChild(parent, "InputController");
@@ -646,12 +673,13 @@ namespace MahjongPrototype.Tests
 
                 drawButton = CreateButton(inputObject.transform, "Draw");
                 forceDrawSkillButton = CreateButton(inputObject.transform, "ForceDrawSkill");
+                autoSortToggle = CreateToggle(inputObject.transform, "AutoSort");
                 targetTileInput = CreateInput(inputObject.transform, "TargetTile");
 
                 reflection.SetPrivateField(controller, "drawButton", drawButton);
                 reflection.SetPrivateField(controller, "forceDrawSkillButton", forceDrawSkillButton);
                 reflection.SetPrivateField(controller, "targetTileInput", targetTileInput);
-                reflection.SetPrivateField(controller, "autoSortToggle", CreateToggle(inputObject.transform, "AutoSort"));
+                reflection.SetPrivateField(controller, "autoSortToggle", autoSortToggle);
                 reflection.SetPrivateField(controller, "retryButton", CreateButton(inputObject.transform, "Retry"));
                 reflection.SetPrivateField(controller, "winButton", CreateButton(inputObject.transform, "Win"));
                 reflection.SetPrivateField(controller, "declineWinButton", CreateButton(inputObject.transform, "DeclineWin"));

@@ -29,12 +29,15 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
         public void RequestDeclineReach() => support.RequestDeclineReach();
         public void RequestDiscard(int handIndex) => support.RequestDiscard(handIndex);
         public void RequestDiscardDrawnTile() => support.RequestDiscardDrawnTile();
+        public void RequestSetAutoSortEnabled(bool enabled) => support.RequestSetAutoSortEnabled(enabled);
+        public void SortHandDirectly(string seatName) => support.SortHandDirectly(seatName);
         public bool ShouldAutoDiscardDrawnTileAfterDraw(string seatName) =>
             support.ShouldAutoDiscardDrawnTileAfterDraw(seatName);
         public void TryAutoDiscardDrawnTileAfterDraw(string seatName) =>
             support.TryAutoDiscardDrawnTileAfterDraw(seatName);
 
         public bool IsWinDecisionPending => support.IsWinDecisionPending;
+        public bool IsAutoSortEnabled => support.IsAutoSortEnabled;
         public bool IsReachDecisionPending => support.IsReachDecisionPending;
         public bool IsReachDiscardSelectionPending => support.IsReachDiscardSelectionPending;
         public string ReachDecisionSeatName => support.ReachDecisionSeatName;

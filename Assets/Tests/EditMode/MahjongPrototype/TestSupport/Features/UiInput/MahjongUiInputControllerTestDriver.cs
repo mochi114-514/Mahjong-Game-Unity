@@ -66,6 +66,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.UiInput
         }
 
         public bool AutoSortIsOn => controls.AutoSortToggle.isOn;
+        public bool AutoSortInteractable => controls.AutoSortToggle.interactable;
         public bool RoundResultConfirmInteractable
         {
             get => controls.RoundResultConfirmButton.interactable;
@@ -233,6 +234,11 @@ namespace MahjongPrototype.Tests.TestSupport.Features.UiInput
         public void SetGameplayInputInteractable(bool interactable)
         {
             reflection.Invoke(controller, "SetGameplayInputInteractable", interactable);
+        }
+
+        public void SetAutoSortInteractable(bool interactable)
+        {
+            reflection.Invoke(controller, "SetAutoSortInteractable", interactable);
         }
 
         public void SetAutoSortWithoutNotify(bool value)

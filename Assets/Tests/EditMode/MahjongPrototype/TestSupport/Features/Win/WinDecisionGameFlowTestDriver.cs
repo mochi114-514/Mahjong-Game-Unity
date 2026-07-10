@@ -60,6 +60,11 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
             Commands.RequestDeclareWin();
         }
 
+        public bool TryRequestDeclareWinForSeat(string seatName)
+        {
+            return Commands.TryRequestDeclareWinForSeat(seatName);
+        }
+
         public void RequestAdvanceFromRoundResult()
         {
             Commands.RequestAdvanceFromRoundResult();
@@ -147,6 +152,8 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
         public string TurnPhaseName => Query.TurnPhaseName;
 
         public string RoundResultTypeName => Query.RoundResultTypeName;
+
+        public string RoundResultWinnerSeatName => Query.RoundResultWinnerSeatNameOrNull;
 
         public bool IsInteractionLocked => Query.IsInteractionLocked;
 

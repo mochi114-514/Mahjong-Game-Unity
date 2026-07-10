@@ -17,12 +17,31 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Turn
 
         public static CpuTurnGameFlowTestDriver Create()
         {
+            return Create(
+                "CpuTurnGameFlowTest",
+                initialHandTileCount: 1,
+                enableAutoDraw: true);
+        }
+
+        public static CpuTurnGameFlowTestDriver CreateForCpuWinningTsumo(bool enableAutoDraw)
+        {
+            return Create(
+                "CpuWinningTsumoGameFlowTest",
+                initialHandTileCount: 0,
+                enableAutoDraw: enableAutoDraw);
+        }
+
+        private static CpuTurnGameFlowTestDriver Create(
+            string rootName,
+            int initialHandTileCount,
+            bool enableAutoDraw)
+        {
             CpuTurnGameFlowTestDriver driver = new CpuTurnGameFlowTestDriver(
                 TurnGameFlowTestSupport.Create(
-                    "CpuTurnGameFlowTest",
+                    rootName,
                     participantCount: 2,
-                    initialHandTileCount: 1,
-                    enableAutoDraw: true,
+                    initialHandTileCount: initialHandTileCount,
+                    enableAutoDraw: enableAutoDraw,
                     addEventNotifier: true));
             driver.support.SetCpuDiscardDelay(0f);
             return driver;
@@ -45,6 +64,23 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Turn
                 "BeginWinDecision",
                 support.DataFactory.ParseSeat(Player2SeatName),
                 support.TurnIndex);
+        }
+
+        public void PreparePlayer2WinningTsumoOnNextDraw()
+        {
+            support.AddHandTilesForPlayerId(
+                "Player2",
+                "1m", "2m", "3m",
+                "1p", "2p", "3p",
+                "1s", "2s", "3s",
+                "E", "E", "E",
+                "C");
+            support.RequestForceDrawSkillForSeat(Player2SeatName, "C");
+        }
+
+        public void SetSelfDrawnTile(string tileCode)
+        {
+            support.SetDrawnTile(support.SelfSeatName, tileCode);
         }
 
         public void SubscribeCpuTurnEventTrace()
@@ -90,6 +126,11 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Turn
         public int TurnIndex => support.TurnIndex;
         public bool Player2HasDrawnTile => support.HasDrawnTileForPlayerId("Player2");
         public int DiscardCount => support.DiscardCount;
+        public bool IsRoundEnded => support.IsRoundEnded;
+        public bool IsRoundResultPending => support.IsRoundResultPending;
+        public string TurnPhaseName => support.TurnPhaseName;
+        public string RoundResultTypeName => support.RoundResultTypeName;
+        public string RoundResultWinnerSeatName => support.RoundResultWinnerSeatName;
         public bool HasCpuDiscardRecord => cpuDiscardRecord != null;
         public string CpuDiscardActorSeatName =>
             support.Reflection.GetProperty(cpuDiscardRecord, "ActorSeat").ToString();

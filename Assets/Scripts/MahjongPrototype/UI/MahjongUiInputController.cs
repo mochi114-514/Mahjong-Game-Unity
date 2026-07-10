@@ -281,6 +281,12 @@ namespace MahjongPrototype.UI
                 targetTileInput.interactable = interactable;
         }
 
+        public void SetAutoSortInteractable(bool interactable)
+        {
+            if (autoSortToggle != null)
+                autoSortToggle.interactable = interactable;
+        }
+
         private void WarnMissingOnce(ref bool warned, string message)
         {
             if (warned)

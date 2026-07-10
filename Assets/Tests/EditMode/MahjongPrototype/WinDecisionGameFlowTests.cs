@@ -60,6 +60,7 @@ namespace MahjongPrototype.Tests
                 Assert.That(driver.IsRoundResultPending, Is.True);
                 Assert.That(driver.TurnPhaseName, Is.EqualTo("RoundResult"));
                 Assert.That(driver.RoundResultTypeName, Is.EqualTo("Win"));
+                Assert.That(driver.RoundResultWinnerSeatName, Is.EqualTo(driver.SelfSeatName));
                 Assert.That(driver.IsInteractionLocked, Is.True);
 
                 driver.RequestAdvanceFromRoundResult();
@@ -69,6 +70,25 @@ namespace MahjongPrototype.Tests
                 Assert.That(driver.IsRoundEnded, Is.False);
                 Assert.That(driver.IsRoundResultPending, Is.False);
                 Assert.That(driver.IsInteractionLocked, Is.False);
+            }
+        }
+
+        [Test]
+        public void TryRequestDeclareWinForSeat_RejectsSeatOtherThanDecisionSeat()
+        {
+            using (WinDecisionGameFlowTestDriver driver =
+                WinDecisionGameFlowTestDriver.Create(participantCount: 2))
+            {
+                driver.StartNewRound();
+                driver.SetWinDecisionPendingForCurrentTurn();
+
+                bool declared = driver.TryRequestDeclareWinForSeat(driver.CpuSeatName);
+
+                Assert.That(declared, Is.False);
+                Assert.That(driver.IsWinDecisionPending, Is.True);
+                Assert.That(driver.WinDecisionSeatName, Is.EqualTo(driver.SelfSeatName));
+                Assert.That(driver.IsRoundEnded, Is.False);
+                Assert.That(driver.IsRoundResultPending, Is.False);
             }
         }
 
