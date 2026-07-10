@@ -67,9 +67,10 @@ namespace MahjongPrototype
         private NoYakuTenpaiEvaluator noYakuTenpaiEvaluator;
         private FuritenEvaluator furitenEvaluator;
         private YakuDefinitionCatalog initializedYakuDefinitionCatalog;
+        private RoundSetupService roundSetupService;
+        private MahjongFlowEventPublisher eventPublisher;
         private MahjongGameState gameState;
         private WindProgress currentWindProgress = WindProgress.East1;
-        private bool warnedMissingNotifier;
         private Coroutine pendingAutoDiscardDrawnTileCoroutine;
         private int autoDiscardDrawnTileOperationVersion;
         private bool autoSortDeferredUntilReachDecisionResolved;
@@ -99,6 +100,9 @@ namespace MahjongPrototype
         public bool IsWinDecisionPending => gameState != null && gameState.IsWinDecisionPending;
         public bool IsAutoSortEnabled => autoSortEnabled;
         public bool IsInteractionLocked => gameState != null && gameState.IsInteractionLocked;
+
+        private MahjongFlowEventPublisher EventPublisher =>
+            eventPublisher ??= new MahjongFlowEventPublisher(() => eventNotifier, Warn);
 
         public FuritenEvaluationResultSet EvaluateAllFuriten()
         {
@@ -196,6 +200,7 @@ namespace MahjongPrototype
             EnsureCpuTurnController();
             InitializeEvaluators();
             NormalizeParticipantCount();
+            EnsureRoundSetupService();
             cpuTurnController?.CancelPendingTurn();
             CancelPendingAutoDiscardDrawnTile();
             autoSortDeferredUntilReachDecisionResolved = false;
@@ -203,20 +208,21 @@ namespace MahjongPrototype
             ClearWinDecision();
             skillReservationService.Clear();
             if (notifyRunStarted)
-                NotifyRunStarted();
+                EventPublisher.NotifyRunStarted();
 
             int? seed = useFixedRandomSeed ? fixedRandomSeed : (int?)null;
-            gameState = new MahjongGameState(Wall.CreateStandardShuffled(seed), windProgress);
-            AssignParticipantsToSeats(selfSeat);
-            gameState.RebuildActiveTurnSeatsFromSeatSlots();
-            SeatId startingSeat = roundStartingSeatResolver.Resolve(gameState.ActiveTurnSeats);
-            playerTurnManager.InitializeRound(gameState, startingSeat);
+            RoundSetupResult setupResult = roundSetupService.SetupRound(
+                windProgress,
+                seed,
+                selfSeat,
+                participantCount);
+            gameState = setupResult.GameState;
 
-            NotifySeatSlotsAssigned();
-            NotifyRoundStarted();
+            EventPublisher.NotifySeatSlotsAssigned();
+            EventPublisher.NotifyRoundStarted(gameState.TurnIndex, gameState.Wall.Count);
 
             DealInitialHands();
-            NotifyRoundSetupCompleted();
+            EventPublisher.NotifyRoundSetupCompleted();
             StartTurn(gameState.CurrentTurn, gameState.TurnIndex);
         }
 
@@ -236,17 +242,17 @@ namespace MahjongPrototype
             }
 
             RoundResult result = gameState.CurrentRoundResult;
-            NotifyRoundResultConfirmed(result);
+            EventPublisher.NotifyRoundResultConfirmed(result);
 
             if (result.IsFinalRound)
             {
                 gameState.CompleteRoundResult(true);
-                NotifyTurnDebug(
+                EventPublisher.NotifyTurnDebug(
                     "GameEnded",
                     $"windProgress={result.WindProgress}",
                     seat: gameState.CurrentTurn,
                     turnIndex: gameState.TurnIndex);
-                NotifyGameEnded(result);
+                EventPublisher.NotifyGameEnded(result);
                 return;
             }
 
@@ -338,14 +344,14 @@ namespace MahjongPrototype
             RecordTurnDrawIfNeeded(result);
             playerSeat.SetDrawnTile(result.Tile);
             playerSeat.ClearTemporaryFuriten();
-            NotifyTurnDebug(
+            EventPublisher.NotifyTurnDebug(
                 completedEventName,
                 $"phase={gameState.TurnPhase}; drawnTile={result.Tile}",
                 seat: seat,
                 tile: result.Tile,
                 turnIndex: gameState.TurnIndex);
             NotifySkillResolutionEvents(result);
-            NotifyTileDrawn(result);
+            EventPublisher.NotifyTileDrawn(result);
             ResolveAfterDraw(seat);
 
             return true;
@@ -410,13 +416,13 @@ namespace MahjongPrototype
             CommitDrawnTileToHandIfPresent(selfSeat);
             bool declaredReachNow = CompleteReachDeclarationIfPending(result.Record);
             ExpireIppatsuAfterDiscard(result.Record, declaredReachNow);
-            NotifyTurnDebug(
+            EventPublisher.NotifyTurnDebug(
                 "DiscardCompleted",
                 $"phase={gameState.TurnPhase}; discardTile={result.Record.Tile}",
                 seat: result.Record.ActorSeat,
                 tile: result.Record.Tile,
                 turnIndex: result.Record.TurnIndex);
-            NotifyTileDiscarded(result.Record);
+            EventPublisher.NotifyTileDiscarded(result.Record);
             if (!TryBeginRonDecision(result.Record))
                 AdvanceOrEndAfterDiscard(result.Record);
         }
@@ -498,13 +504,13 @@ namespace MahjongPrototype
 
             bool declaredReachNow = CompleteReachDeclarationIfPending(result.Record);
             ExpireIppatsuAfterDiscard(result.Record, declaredReachNow);
-            NotifyTurnDebug(
+            EventPublisher.NotifyTurnDebug(
                 "DiscardCompleted",
                 $"phase={gameState.TurnPhase}; discardTile={result.Record.Tile}",
                 seat: result.Record.ActorSeat,
                 tile: result.Record.Tile,
                 turnIndex: result.Record.TurnIndex);
-            NotifyTileDiscarded(result.Record);
+            EventPublisher.NotifyTileDiscarded(result.Record);
             if (!TryBeginRonDecision(result.Record))
                 AdvanceOrEndAfterDiscard(result.Record);
             return true;
@@ -562,7 +568,7 @@ namespace MahjongPrototype
             {
                 string reason = "Owner seat is not active.";
                 Warn(reason);
-                NotifySkillReservationRejected(ownerSeat, SkillEffectKind.ForceDrawTile, targetTile, reason);
+                EventPublisher.NotifySkillReservationRejected(ownerSeat, SkillEffectKind.ForceDrawTile, targetTile, reason);
                 return;
             }
 
@@ -570,7 +576,7 @@ namespace MahjongPrototype
             {
                 string reason = "Force draw skill is already active.";
                 Warn(reason);
-                NotifySkillReservationRejected(ownerSeat, SkillEffectKind.ForceDrawTile, targetTile, reason);
+                EventPublisher.NotifySkillReservationRejected(ownerSeat, SkillEffectKind.ForceDrawTile, targetTile, reason);
                 return;
             }
 
@@ -584,11 +590,11 @@ namespace MahjongPrototype
             if (!skillReservationService.Reserve(reservation, out string reserveReason))
             {
                 Warn(reserveReason);
-                NotifySkillReservationRejected(ownerSeat, SkillEffectKind.ForceDrawTile, targetTile, reserveReason);
+                EventPublisher.NotifySkillReservationRejected(ownerSeat, SkillEffectKind.ForceDrawTile, targetTile, reserveReason);
                 return;
             }
 
-            NotifySkillReserved(reservation);
+            EventPublisher.NotifySkillReserved(reservation);
         }
 
         private bool ActivateForceDrawSkill(SeatId actorSeat, Tile targetTile, bool beforeDraw)
@@ -602,14 +608,14 @@ namespace MahjongPrototype
             {
                 Warn(result.Reason);
                 if (beforeDraw)
-                    NotifySkillReservationRejected(actorSeat, SkillEffectKind.ForceDrawTile, targetTile, result.Reason);
+                    EventPublisher.NotifySkillReservationRejected(actorSeat, SkillEffectKind.ForceDrawTile, targetTile, result.Reason);
 
                 return false;
             }
 
-            NotifySkillActivated(actorSeat, result.Effect);
-            NotifySkillActivatedDetailed(actorSeat, result.Effect, beforeDraw);
-            NotifySkillEffectRegistered(result.Effect);
+            EventPublisher.NotifySkillActivated(actorSeat, result.Effect);
+            EventPublisher.NotifySkillActivatedDetailed(actorSeat, result.Effect, beforeDraw);
+            EventPublisher.NotifySkillEffectRegistered(result.Effect);
             return true;
         }
 
@@ -622,7 +628,7 @@ namespace MahjongPrototype
             if (!enabled)
                 autoSortDeferredUntilReachDecisionResolved = false;
 
-            NotifyAutoSortChanged(enabled);
+            EventPublisher.NotifyAutoSortChanged(enabled);
 
             if (enabled && gameState != null)
                 ApplyAutoSort(gameState.SelfSeat, "ToggleEnabled", true);
@@ -666,9 +672,9 @@ namespace MahjongPrototype
                 RoundEndReasonWin,
                 () =>
                 {
-                    NotifyWinDeclared(seat, turnIndex);
-                    NotifyWinDeclaredDetailed(seat, winType, turnIndex);
-                    NotifyWinDeclaredEvaluated(
+                    EventPublisher.NotifyWinDeclared(seat, turnIndex);
+                    EventPublisher.NotifyWinDeclaredDetailed(seat, winType, turnIndex);
+                    EventPublisher.NotifyWinDeclaredEvaluated(
                         seat,
                         winType,
                         winningTile,
@@ -698,8 +704,8 @@ namespace MahjongPrototype
             MarkDeclinedRonFuriten(seat, winType);
             ClearWinDecision();
 
-            NotifyWinDeclined(seat, turnIndex);
-            NotifyWinDeclinedDetailed(seat, winType, turnIndex);
+            EventPublisher.NotifyWinDeclined(seat, turnIndex);
+            EventPublisher.NotifyWinDeclinedDetailed(seat, winType, turnIndex);
 
             if (winType == WinType.Tsumo && ShouldAutoDiscardDrawnTileAfterDraw(seat))
             {
@@ -745,12 +751,12 @@ namespace MahjongPrototype
                 return;
             }
 
-            NotifyTurnDebug(
+            EventPublisher.NotifyTurnDebug(
                 "ReachDiscardSelection",
                 $"phase={gameState.TurnPhase}; candidates={gameState.ReachDiscardCandidates.Count}",
                 seat: seat,
                 turnIndex: turnIndex);
-            NotifyReachDiscardSelectionStarted(seat, turnIndex);
+            EventPublisher.NotifyReachDiscardSelectionStarted(seat, turnIndex);
         }
 
         public void RequestCancelReachDiscardSelection()
@@ -781,12 +787,12 @@ namespace MahjongPrototype
                 return;
             }
 
-            NotifyTurnDebug(
+            EventPublisher.NotifyTurnDebug(
                 "ReachDiscardSelectionCanceled",
                 $"phase={gameState.TurnPhase}; candidates={gameState.ReachDiscardCandidates.Count}",
                 seat: seat,
                 turnIndex: turnIndex);
-            NotifyReachDiscardSelectionCanceled(seat, turnIndex);
+            EventPublisher.NotifyReachDiscardSelectionCanceled(seat, turnIndex);
         }
 
         public void RequestDeclineReach()
@@ -805,32 +811,25 @@ namespace MahjongPrototype
             int turnIndex = gameState.ReachDecisionTurnIndex;
             gameState.ClearReachDecision();
             ApplyDeferredAutoSortAfterReachDecisionIfNeeded("ReachDeclined");
-            NotifyTurnDebug(
+            EventPublisher.NotifyTurnDebug(
                 "ReachDeclined",
                 $"phase={gameState.TurnPhase}",
                 seat: seat,
                 turnIndex: turnIndex);
-            NotifyReachDeclined(seat, turnIndex);
+            EventPublisher.NotifyReachDeclined(seat, turnIndex);
         }
 
         private void DealInitialHands()
         {
-            // PROTOTYPE: Deal a fixed starting hand only to active turn seats.
-            for (int seatIndex = 0; seatIndex < gameState.ActiveTurnSeats.Count; seatIndex++)
+            EnsureRoundSetupService();
+            InitialDealResult result = roundSetupService.DealInitialHands(
+                gameState,
+                initialHandTileCount,
+                EventPublisher.NotifyTileDrawn);
+            if (!result.Success)
             {
-                SeatId seat = gameState.ActiveTurnSeats[seatIndex];
-                for (int i = 0; i < initialHandTileCount; i++)
-                {
-                    DrawResult result = drawService.DrawTile(seat, gameState, DrawPurpose.InitialDeal);
-                    if (!result.Success)
-                    {
-                        EndRound("WallEmptyDuringInitialDeal");
-                        return;
-                    }
-
-                    gameState.GetPlayerSeat(seat).Hand.Add(result.Tile);
-                    NotifyTileDrawn(result);
-                }
+                EndRound("WallEmptyDuringInitialDeal");
+                return;
             }
 
             ApplyAutoSortToSelfHandIfEnabled("InitialDeal");
@@ -840,7 +839,7 @@ namespace MahjongPrototype
         {
             SeatId fromSeat = gameState.CurrentTurn;
             SeatId nextSeat = playerTurnManager.EndTurnAndSelectNext(gameState, gameState.ActiveTurnSeats);
-            NotifyTurnDebug(
+            EventPublisher.NotifyTurnDebug(
                 "EndTurn",
                 $"from={fromSeat}; to={nextSeat}; phase={gameState.TurnPhase}",
                 seat: nextSeat,
@@ -881,8 +880,8 @@ namespace MahjongPrototype
 
         private void StartTurn(SeatId seat, int turnIndex)
         {
-            NotifyTurnStarted(seat, turnIndex);
-            NotifyTurnDebug(
+            EventPublisher.NotifyTurnStarted(seat, turnIndex);
+            EventPublisher.NotifyTurnDebug(
                 "BeginTurn",
                 $"phase={gameState.TurnPhase}; hasDrawnTile={gameState.GetPlayerSeat(seat).HasDrawnTile}",
                 seat: seat,
@@ -947,7 +946,7 @@ namespace MahjongPrototype
             if (!skillReservationService.TryConsumeForTurn(seat, out PendingSkillReservation reservation))
                 return;
 
-            NotifySkillReservationConsumed(reservation);
+            EventPublisher.NotifySkillReservationConsumed(reservation);
 
             switch (reservation.SkillEffectKind)
             {
@@ -955,7 +954,7 @@ namespace MahjongPrototype
                     ActivateForceDrawSkill(reservation.OwnerSeat, reservation.TargetTile, true);
                     break;
                 default:
-                    NotifySkillReservationRejected(
+                    EventPublisher.NotifySkillReservationRejected(
                         reservation.OwnerSeat,
                         reservation.SkillEffectKind,
                         reservation.TargetTile,
@@ -986,7 +985,7 @@ namespace MahjongPrototype
             string blockedEventName = playerSeat.IsReachDeclared
                 ? "ReachAutoDrawSkipped"
                 : "AutoDrawSkipped";
-            NotifyTurnDebug(
+            EventPublisher.NotifyTurnDebug(
                 startedEventName,
                 $"phase={gameState.TurnPhase}; hasDrawnTile={playerSeat.HasDrawnTile}",
                 seat: seat,
@@ -1028,8 +1027,8 @@ namespace MahjongPrototype
                 ClearWinDecision();
             }
 
-            eventNotifier?.NotifyWinChecked(candidateSeat, gameState.TurnIndex, canDeclareWin);
-            NotifyWinCheckedDetailed(
+            EventPublisher.NotifyWinChecked(candidateSeat, gameState.TurnIndex, canDeclareWin);
+            EventPublisher.NotifyWinCheckedDetailed(
                 candidateSeat,
                 WinType.Tsumo,
                 winningTile,
@@ -1106,7 +1105,7 @@ namespace MahjongPrototype
 
             PlayerSeat playerSeat = gameState.GetPlayerSeat(seat);
             Tile? drawnTile = playerSeat != null ? playerSeat.DrawnTile : null;
-            NotifyTurnDebug(
+            EventPublisher.NotifyTurnDebug(
                 "AutoDiscardDrawnTileStarted",
                 $"seat={seat}; tile={drawnTile}",
                 seat: seat,
@@ -1184,13 +1183,13 @@ namespace MahjongPrototype
             if (!gameState.IsReachDecisionPending)
                 return;
 
-            NotifyTurnDebug(
+            EventPublisher.NotifyTurnDebug(
                 "ReachDecision",
                 $"phase={gameState.TurnPhase}; candidates={gameState.ReachDiscardCandidates.Count}",
                 seat: seat,
                 tile: playerSeat.DrawnTile,
                 turnIndex: gameState.TurnIndex);
-            NotifyReachDecisionStarted(seat, gameState.TurnIndex);
+            EventPublisher.NotifyReachDecisionStarted(seat, gameState.TurnIndex);
         }
 
         private bool TryBeginRonDecision(DiscardRecord discard)
@@ -1244,8 +1243,8 @@ namespace MahjongPrototype
                         evaluationResult);
                 }
 
-                eventNotifier?.NotifyWinChecked(candidateSeat, discard.TurnIndex, canDeclareWin);
-                NotifyWinCheckedDetailed(
+                EventPublisher.NotifyWinChecked(candidateSeat, discard.TurnIndex, canDeclareWin);
+                EventPublisher.NotifyWinCheckedDetailed(
                     candidateSeat,
                     WinType.Ron,
                     discard.Tile,
@@ -1353,8 +1352,8 @@ namespace MahjongPrototype
             playerSeat.DeclareReach(turnIndex, isDoubleReachDeclared);
             gameState.ClearReachDecision();
             ApplyDeferredAutoSortAfterReachDecisionIfNeeded("ReachDeclared");
-            NotifyReachDeclared(seat, turnIndex);
-            NotifyTurnDebug(
+            EventPublisher.NotifyReachDeclared(seat, turnIndex);
+            EventPublisher.NotifyTurnDebug(
                 "ReachDeclared",
                 $"phase={gameState.TurnPhase}; discardTile={record.Tile}",
                 seat: seat,
@@ -1480,7 +1479,7 @@ namespace MahjongPrototype
             if (isPending)
             {
                 gameState.BeginWinDecision(seat, turnIndex);
-                NotifyTurnDebug(
+                EventPublisher.NotifyTurnDebug(
                     "WinDecision",
                     $"phase={gameState.TurnPhase}",
                     seat: seat,
@@ -1509,7 +1508,7 @@ namespace MahjongPrototype
                 sourceSeat,
                 turnIndex,
                 evaluationResult);
-            NotifyTurnDebug(
+            EventPublisher.NotifyTurnDebug(
                 "WinDecision",
                 $"phase={gameState.TurnPhase}; winType={winType}; sourceSeat={sourceSeat}",
                 seat: seat,
@@ -1539,15 +1538,15 @@ namespace MahjongPrototype
             else
                 gameState.IsRoundEnded = true;
 
-            NotifyTurnDebug(
+            EventPublisher.NotifyTurnDebug(
                 "RoundEnded",
                 $"phase={gameState.TurnPhase}; reason={reason}; windProgress={gameState.WindProgress}",
                 seat: gameState.CurrentTurn,
                 turnIndex: gameState.TurnIndex);
             afterRoundMarkedEnded?.Invoke();
-            eventNotifier?.NotifyRoundEnded(reason);
+            EventPublisher.NotifyRoundEnded(reason);
             if (roundResult != null)
-                NotifyRoundResultReady(roundResult);
+                EventPublisher.NotifyRoundResultReady(roundResult);
         }
 
         private RoundResult CreateRoundResultForRoundEnd(string reason)
@@ -1599,8 +1598,8 @@ namespace MahjongPrototype
                 return;
 
             ActiveSkillEffect effect = result.ResolvedSkillEffect;
-            NotifySkillEffectResolved(result);
-            NotifySkillEffectExpired(effect, "ConsumedByDraw");
+            EventPublisher.NotifySkillEffectResolved(result);
+            EventPublisher.NotifySkillEffectExpired(effect, "ConsumedByDraw");
         }
 
         private void CacheReferences()
@@ -1610,6 +1609,17 @@ namespace MahjongPrototype
 
             if (cpuTurnController == null)
                 cpuTurnController = GetComponent<CpuTurnController>();
+        }
+
+        private void EnsureRoundSetupService()
+        {
+            if (roundSetupService != null)
+                return;
+
+            roundSetupService = new RoundSetupService(
+                roundStartingSeatResolver,
+                playerTurnManager,
+                drawService);
         }
 
         private void InitializeEvaluators()
@@ -1643,26 +1653,6 @@ namespace MahjongPrototype
         private void NormalizeParticipantCount()
         {
             participantCount = Mathf.Clamp(participantCount, 1, 4);
-        }
-
-        private void AssignParticipantsToSeats(SeatId selfSeat)
-        {
-            gameState.SetSelfSeat(selfSeat);
-
-            if (participantCount <= 1)
-                return;
-
-            if (participantCount == 2)
-            {
-                gameState.AssignPlayerToSeat(PlayerId.Player2, GetRelativeSeat(selfSeat, 2));
-                return;
-            }
-
-            gameState.AssignPlayerToSeat(PlayerId.Player2, GetRelativeSeat(selfSeat, 1));
-            gameState.AssignPlayerToSeat(PlayerId.Player3, GetRelativeSeat(selfSeat, 2));
-
-            if (participantCount >= 4)
-                gameState.AssignPlayerToSeat(PlayerId.Player4, GetRelativeSeat(selfSeat, 3));
         }
 
         private static SeatId GetRelativeSeat(SeatId originSeat, int offset)
@@ -1725,212 +1715,11 @@ namespace MahjongPrototype
                 return;
 
             PlayerSeat currentPlayerSeat = gameState.GetPlayerSeat(gameState.CurrentTurn);
-            NotifyTurnDebug(
+            EventPublisher.NotifyTurnDebug(
                 eventName,
                 $"reason={reason}; phase={gameState.TurnPhase}; hasDrawnTile={currentPlayerSeat.HasDrawnTile}",
                 seat: gameState.CurrentTurn,
                 turnIndex: gameState.TurnIndex);
-        }
-
-        private void NotifyTurnDebug(
-            string eventName,
-            string message,
-            SeatId? seat = null,
-            Tile? tile = null,
-            int? turnIndex = null)
-        {
-            eventNotifier?.NotifyTurnDebug(eventName, message, seat, tile, turnIndex);
-        }
-
-        private void NotifyRunStarted()
-        {
-            if (eventNotifier == null)
-            {
-                WarnMissingOnce(ref warnedMissingNotifier, "MahjongEventNotifier is not assigned.");
-                return;
-            }
-
-            eventNotifier.NotifyRunStarted();
-        }
-
-        private void NotifyRoundStarted()
-        {
-            eventNotifier?.NotifyRoundStarted(gameState.TurnIndex, gameState.Wall.Count);
-        }
-
-        private void NotifyRoundResultReady(RoundResult result)
-        {
-            eventNotifier?.NotifyRoundResultReady(result);
-        }
-
-        private void NotifyRoundResultConfirmed(RoundResult result)
-        {
-            eventNotifier?.NotifyRoundResultConfirmed(result);
-        }
-
-        private void NotifyGameEnded(RoundResult result)
-        {
-            eventNotifier?.NotifyGameEnded(result);
-        }
-
-        private void NotifyRoundSetupCompleted()
-        {
-            eventNotifier?.NotifyRoundSetupCompleted();
-        }
-
-        private void NotifyTurnStarted(SeatId seat, int turnIndex)
-        {
-            eventNotifier?.NotifyTurnStarted(seat, turnIndex);
-        }
-
-        private void NotifyTileDrawn(DrawResult result)
-        {
-            eventNotifier?.NotifyTileDrawn(result);
-        }
-
-        private void NotifyTileDiscarded(DiscardRecord record)
-        {
-            eventNotifier?.NotifyTileDiscarded(record);
-        }
-
-        private void NotifySkillActivated(SeatId actorSeat, ActiveSkillEffect effect)
-        {
-            eventNotifier?.NotifySkillActivated(actorSeat, effect);
-        }
-
-        private void NotifySkillActivatedDetailed(
-            SeatId actorSeat,
-            ActiveSkillEffect effect,
-            bool beforeDraw)
-        {
-            eventNotifier?.NotifySkillActivatedDetailed(actorSeat, effect, beforeDraw);
-        }
-
-        private void NotifySkillEffectRegistered(ActiveSkillEffect effect)
-        {
-            eventNotifier?.NotifySkillEffectRegistered(effect);
-        }
-
-        private void NotifySkillEffectResolved(DrawResult result)
-        {
-            eventNotifier?.NotifySkillEffectResolved(result);
-        }
-
-        private void NotifySkillEffectExpired(ActiveSkillEffect effect, string reason)
-        {
-            eventNotifier?.NotifySkillEffectExpired(effect, reason);
-        }
-
-        private void NotifyWinDeclared(SeatId seat, int turnIndex)
-        {
-            eventNotifier?.NotifyWinDeclared(seat, turnIndex);
-        }
-
-        private void NotifyWinDeclined(SeatId seat, int turnIndex)
-        {
-            eventNotifier?.NotifyWinDeclined(seat, turnIndex);
-        }
-
-        private void NotifyReachDecisionStarted(SeatId seat, int turnIndex)
-        {
-            eventNotifier?.NotifyReachDecisionStarted(seat, turnIndex);
-        }
-
-        private void NotifyReachDiscardSelectionStarted(SeatId seat, int turnIndex)
-        {
-            eventNotifier?.NotifyReachDiscardSelectionStarted(seat, turnIndex);
-        }
-
-        private void NotifyReachDiscardSelectionCanceled(SeatId seat, int turnIndex)
-        {
-            eventNotifier?.NotifyReachDiscardSelectionCanceled(seat, turnIndex);
-        }
-
-        private void NotifyReachDeclared(SeatId seat, int turnIndex)
-        {
-            eventNotifier?.NotifyReachDeclared(seat, turnIndex);
-        }
-
-        private void NotifyReachDeclined(SeatId seat, int turnIndex)
-        {
-            eventNotifier?.NotifyReachDeclined(seat, turnIndex);
-        }
-
-        private void NotifyHandAutoSorted(SeatId seat, int turnIndex)
-        {
-            eventNotifier?.NotifyHandAutoSorted(seat, turnIndex);
-        }
-
-        private void NotifySeatSlotsAssigned()
-        {
-            eventNotifier?.NotifySeatSlotsAssigned();
-        }
-
-        private void NotifySkillReserved(PendingSkillReservation reservation)
-        {
-            eventNotifier?.NotifySkillReserved(reservation);
-        }
-
-        private void NotifySkillReservationConsumed(PendingSkillReservation reservation)
-        {
-            eventNotifier?.NotifySkillReservationConsumed(reservation);
-        }
-
-        private void NotifySkillReservationRejected(
-            SeatId ownerSeat,
-            SkillEffectKind skillEffectKind,
-            Tile targetTile,
-            string reason)
-        {
-            eventNotifier?.NotifySkillReservationRejected(ownerSeat, skillEffectKind, targetTile, reason);
-        }
-
-        private void NotifyWinCheckedDetailed(
-            SeatId seat,
-            WinType winType,
-            Tile? winningTile,
-            SeatId? sourceSeat,
-            int turnIndex,
-            bool isWin)
-        {
-            eventNotifier?.NotifyWinCheckedDetailed(seat, winType, winningTile, sourceSeat, turnIndex, isWin);
-        }
-
-        private void NotifyWinDeclaredDetailed(SeatId seat, WinType? winType, int turnIndex)
-        {
-            eventNotifier?.NotifyWinDeclaredDetailed(seat, winType, turnIndex);
-        }
-
-        private void NotifyWinDeclaredEvaluated(
-            SeatId seat,
-            WinType? winType,
-            Tile? winningTile,
-            SeatId? sourceSeat,
-            int turnIndex,
-            WinDeclarationEvaluationResult evaluationResult)
-        {
-            eventNotifier?.NotifyWinDeclaredEvaluated(
-                seat,
-                winType,
-                winningTile,
-                sourceSeat,
-                turnIndex,
-                evaluationResult);
-        }
-
-        private void NotifyWinDeclinedDetailed(SeatId seat, WinType? winType, int turnIndex)
-        {
-            eventNotifier?.NotifyWinDeclinedDetailed(seat, winType, turnIndex);
-        }
-
-        private void NotifyHandAutoSortedDetailed(SeatId seat, int turnIndex, string reason)
-        {
-            eventNotifier?.NotifyHandAutoSortedDetailed(seat, turnIndex, reason);
-        }
-
-        private void NotifyAutoSortChanged(bool enabled)
-        {
-            eventNotifier?.NotifyAutoSortChanged(enabled);
         }
 
         private void ApplyAutoSortToSelfHandIfEnabled(string reason)
@@ -1958,10 +1747,10 @@ namespace MahjongPrototype
             }
 
             gameState.GetPlayerSeat(seat).Hand.SortByTypeIndex();
-            NotifyHandAutoSortedDetailed(seat, gameState.TurnIndex, reason);
+            EventPublisher.NotifyHandAutoSortedDetailed(seat, gameState.TurnIndex, reason);
 
             if (notify)
-                NotifyHandAutoSorted(seat, gameState.TurnIndex);
+                EventPublisher.NotifyHandAutoSorted(seat, gameState.TurnIndex);
         }
 
         private bool ShouldDeferAutoSortUntilReachDecisionResolved(SeatId seat)
@@ -1994,13 +1783,5 @@ namespace MahjongPrototype
             Debug.LogWarning($"{nameof(MahjongGameFlow)}: {message}", this);
         }
 
-        private void WarnMissingOnce(ref bool warned, string message)
-        {
-            if (warned)
-                return;
-
-            warned = true;
-            Warn(message);
-        }
     }
 }
