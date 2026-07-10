@@ -181,9 +181,12 @@ namespace MahjongPrototype.Tests
 
                 driver.AdvanceFromRoundResult();
 
+                Assert.That(driver.WindProgressRoundWindName, Is.EqualTo("East"));
                 Assert.That(driver.WindProgressHandNumber, Is.EqualTo(2));
                 Assert.That(driver.DiscardCount, Is.EqualTo(0));
-                Assert.That(driver.HasLastTurnDraw, Is.False);
+                Assert.That(driver.HasLastTurnDraw, Is.True);
+                Assert.That(driver.LastTurnDrawActorSeatName, Is.EqualTo("South"));
+                Assert.That(driver.LastTurnDrawIsLastLiveWallDraw, Is.False);
             }
         }
 
@@ -212,9 +215,12 @@ namespace MahjongPrototype.Tests
 
                 driver.AdvanceFromRoundResult();
 
+                Assert.That(driver.WindProgressRoundWindName, Is.EqualTo("East"));
                 Assert.That(driver.WindProgressHandNumber, Is.EqualTo(2));
                 Assert.That(driver.DiscardCount, Is.EqualTo(0));
-                Assert.That(driver.HasLastTurnDraw, Is.False);
+                Assert.That(driver.HasLastTurnDraw, Is.True);
+                Assert.That(driver.LastTurnDrawActorSeatName, Is.EqualTo("South"));
+                Assert.That(driver.LastTurnDrawIsLastLiveWallDraw, Is.False);
             }
         }
 
@@ -296,6 +302,7 @@ namespace MahjongPrototype.Tests
             public bool LastDiscardIsLastLiveWallDiscard =>
                 session.Query.LastDiscardIsLastLiveWallDiscard;
             public string LastDiscardSourceName => session.Query.LastDiscardSourceName;
+            public string WindProgressRoundWindName => session.Query.WindProgressRoundWindName;
             public int WindProgressHandNumber => session.Query.WindProgressHandNumber;
             public int DiscardCount => session.Query.DiscardCount;
 
