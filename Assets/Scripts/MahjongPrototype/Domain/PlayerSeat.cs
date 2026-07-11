@@ -1,10 +1,12 @@
 using System;
+using System.Collections.Generic;
 
 namespace MahjongPrototype.Domain
 {
     public sealed class PlayerSeat
     {
         private Tile? drawnTile;
+        private readonly List<OpenMeld> openMelds = new List<OpenMeld>();
 
         public PlayerSeat(SeatId seatId)
         {
@@ -22,6 +24,8 @@ namespace MahjongPrototype.Domain
         public bool IsIppatsuEligible { get; private set; }
         public bool IsTemporaryFuriten { get; private set; }
         public bool IsReachPassFuriten { get; private set; }
+        public IReadOnlyList<OpenMeld> OpenMelds => openMelds;
+        public bool IsClosed => openMelds.Count == 0;
 
         public void SetDrawnTile(Tile tile)
         {
@@ -96,6 +100,16 @@ namespace MahjongPrototype.Domain
         public void ClearTemporaryFuriten()
         {
             IsTemporaryFuriten = false;
+        }
+
+        public void AddOpenMeld(OpenMeld openMeld)
+        {
+            if (openMeld == null)
+                throw new ArgumentNullException(nameof(openMeld));
+            if (openMeld.CallerSeat != SeatId)
+                throw new InvalidOperationException("Open meld caller seat must match its owner.");
+
+            openMelds.Add(openMeld);
         }
     }
 }

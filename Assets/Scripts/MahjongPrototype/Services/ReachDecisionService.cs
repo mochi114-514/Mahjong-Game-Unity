@@ -23,7 +23,7 @@ namespace MahjongPrototype.Services
             }
 
             PlayerSeat playerSeat = gameState.GetPlayerSeat(seat);
-            if (playerSeat.IsReachDeclared || !playerSeat.HasDrawnTile ||
+            if (!playerSeat.IsClosed || playerSeat.IsReachDeclared || !playerSeat.HasDrawnTile ||
                 !playerSeat.DrawnTile.HasValue || playerSeat.Hand.Count != 13)
             {
                 return ReachDecisionResult.None;

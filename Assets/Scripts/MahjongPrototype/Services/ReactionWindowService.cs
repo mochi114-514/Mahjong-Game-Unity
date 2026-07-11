@@ -7,11 +7,20 @@ namespace MahjongPrototype.Services
     public sealed class ReactionWindowService
     {
         private readonly WinDecisionService winDecisionService;
+        private readonly PonService ponService;
 
         public ReactionWindowService(WinDecisionService winDecisionService)
+            : this(winDecisionService, new PonService())
+        {
+        }
+
+        public ReactionWindowService(
+            WinDecisionService winDecisionService,
+            PonService ponService)
         {
             this.winDecisionService = winDecisionService ??
                 throw new ArgumentNullException(nameof(winDecisionService));
+            this.ponService = ponService ?? throw new ArgumentNullException(nameof(ponService));
         }
 
         public ReactionWindowStartResult Begin(
@@ -34,6 +43,11 @@ namespace MahjongPrototype.Services
                     ronCandidate.EvaluationResult));
             }
 
+            IReadOnlyList<ReactionWindowCandidate> ponCandidates =
+                ponService.CollectCandidates(gameState, sourceDiscard);
+            for (int i = 0; i < ponCandidates.Count; i++)
+                candidates.Add(ponCandidates[i]);
+
             ReactionWindow reactionWindow =
                 gameState.BeginReactionWindow(sourceDiscard, candidates);
             ReactionWindowResolution resolution = candidates.Count <= 0
@@ -50,10 +64,11 @@ namespace MahjongPrototype.Services
             SeatId seat,
             int windowId)
         {
-            if (!TryGetPendingRonCandidate(
+            if (!TryGetPendingCandidate(
                     gameState,
                     seat,
                     windowId,
+                    ReactionKind.Ron,
                     out ReactionWindow reactionWindow,
                     out ReactionWindowCandidate candidate,
                     out string reason))
@@ -75,10 +90,11 @@ namespace MahjongPrototype.Services
             SeatId seat,
             int windowId)
         {
-            if (!TryGetPendingRonCandidate(
+            if (!TryGetPendingCandidate(
                     gameState,
                     seat,
                     windowId,
+                    ReactionKind.Ron,
                     out ReactionWindow reactionWindow,
                     out ReactionWindowCandidate candidate,
                     out string reason))
@@ -91,13 +107,80 @@ namespace MahjongPrototype.Services
             return ReactionWindowAnswerResult.AcceptedAnswer(
                 reactionWindow.WindowId,
                 candidate,
-                ReactionWindowResolution.NoReaction(reactionWindow.SourceDiscard));
+                ResolveIfNoPendingCandidates(reactionWindow));
         }
 
-        private static bool TryGetPendingRonCandidate(
+        public ReactionWindowAnswerResult DeclarePon(
+            MahjongGameState gameState,
+            SeatId seat,
+            int windowId)
+        {
+            if (!TryGetPendingCandidate(
+                    gameState,
+                    seat,
+                    windowId,
+                    ReactionKind.Pon,
+                    out ReactionWindow reactionWindow,
+                    out ReactionWindowCandidate candidate,
+                    out string reason))
+            {
+                return ReactionWindowAnswerResult.Rejected(reason);
+            }
+
+            PonDeclarationResult result = ponService.TryDeclare(
+                gameState,
+                reactionWindow,
+                candidate);
+            if (!result.Declared)
+                return ReactionWindowAnswerResult.Rejected(result.Reason);
+
+            candidate.Declare();
+            return ReactionWindowAnswerResult.AcceptedAnswer(
+                reactionWindow.WindowId,
+                candidate,
+                ReactionWindowResolution.PonDeclared(
+                    reactionWindow.SourceDiscard,
+                    candidate,
+                    result.OpenMeld));
+        }
+
+        public ReactionWindowAnswerResult DeclinePon(
+            MahjongGameState gameState,
+            SeatId seat,
+            int windowId)
+        {
+            if (!TryGetPendingCandidate(
+                    gameState,
+                    seat,
+                    windowId,
+                    ReactionKind.Pon,
+                    out ReactionWindow reactionWindow,
+                    out ReactionWindowCandidate candidate,
+                    out string reason))
+            {
+                return ReactionWindowAnswerResult.Rejected(reason);
+            }
+
+            candidate.Decline();
+            return ReactionWindowAnswerResult.AcceptedAnswer(
+                reactionWindow.WindowId,
+                candidate,
+                ResolveIfNoPendingCandidates(reactionWindow));
+        }
+
+        private static ReactionWindowResolution ResolveIfNoPendingCandidates(
+            ReactionWindow reactionWindow)
+        {
+            return reactionWindow.PendingCandidate == null
+                ? ReactionWindowResolution.NoReaction(reactionWindow.SourceDiscard)
+                : ReactionWindowResolution.Pending(reactionWindow.SourceDiscard);
+        }
+
+        private static bool TryGetPendingCandidate(
             MahjongGameState gameState,
             SeatId seat,
             int windowId,
+            ReactionKind expectedKind,
             out ReactionWindow reactionWindow,
             out ReactionWindowCandidate candidate,
             out string reason)
@@ -121,10 +204,16 @@ namespace MahjongPrototype.Services
                 return false;
             }
 
-            candidate = reactionWindow.PendingRonCandidate;
+            candidate = reactionWindow.PendingCandidate;
             if (candidate == null)
             {
-                reason = "RonCandidateMissing";
+                reason = "ReactionCandidateMissing";
+                return false;
+            }
+
+            if (candidate.Kind != expectedKind)
+            {
+                reason = "ReactionKindMismatch";
                 return false;
             }
 

@@ -23,6 +23,14 @@ namespace MahjongPrototype.Services
                 gameState.ActiveTurnSeats);
         }
 
+        public void BeginTurnAfterCall(MahjongGameState gameState, SeatId seat)
+        {
+            if (gameState == null)
+                throw new ArgumentNullException(nameof(gameState));
+
+            playerTurnManager.BeginTurnAfterCall(gameState, seat);
+        }
+
         public bool IsSameCurrentTurn(
             MahjongGameState gameState,
             SeatId seat,

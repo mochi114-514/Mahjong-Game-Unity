@@ -361,6 +361,19 @@ namespace MahjongPrototype.Services
                     return false;
             }
 
+            for (int i = 0; context.OpenMelds != null && i < context.OpenMelds.Count; i++)
+            {
+                OpenMeld openMeld = context.OpenMelds[i];
+                if (openMeld == null)
+                    return false;
+
+                for (int j = 0; j < openMeld.Tiles.Count; j++)
+                {
+                    if (!IsSimpleNumberTile(openMeld.Tiles[j]))
+                        return false;
+                }
+            }
+
             return true;
         }
 
@@ -404,6 +417,28 @@ namespace MahjongPrototype.Services
                         ref allTilesAreTerminalOrHonors))
                 {
                     return false;
+                }
+            }
+
+            for (int i = 0; context.OpenMelds != null && i < context.OpenMelds.Count; i++)
+            {
+                OpenMeld openMeld = context.OpenMelds[i];
+                if (openMeld == null)
+                    return false;
+
+                for (int j = 0; j < openMeld.Tiles.Count; j++)
+                {
+                    if (!TryAnalyzeTileCompositionTile(
+                            openMeld.Tiles[j],
+                            ref numberSuitMask,
+                            ref hasHonor,
+                            ref allTilesAreGreen,
+                            ref allTilesAreHonors,
+                            ref allTilesAreTerminalNumbers,
+                            ref allTilesAreTerminalOrHonors))
+                    {
+                        return false;
+                    }
                 }
             }
 

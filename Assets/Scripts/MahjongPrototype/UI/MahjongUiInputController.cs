@@ -21,6 +21,9 @@ namespace MahjongPrototype.UI
         [Header("Win Decision")]
         [SerializeField] private Button winButton;
         [SerializeField] private Button declineWinButton;
+        [Header("Pon Decision")]
+        [SerializeField] private Button ponButton;
+        [SerializeField] private Button declinePonButton;
         [Header("Reach Decision")]
         [SerializeField] private Button reachButton;
         [SerializeField] private Button declineReachButton;
@@ -38,6 +41,8 @@ namespace MahjongPrototype.UI
         private bool warnedMissingRetryButton;
         private bool warnedMissingWinButton;
         private bool warnedMissingDeclineWinButton;
+        private bool warnedMissingPonButton;
+        private bool warnedMissingDeclinePonButton;
         private bool warnedMissingReachButton;
         private bool warnedMissingDeclineReachButton;
         private bool warnedMissingCancelReachButton;
@@ -49,6 +54,8 @@ namespace MahjongPrototype.UI
         public event Action RetryRequested;
         public event Action WinRequested;
         public event Action DeclineWinRequested;
+        public event Action PonRequested;
+        public event Action DeclinePonRequested;
         public event Action ReachRequested;
         public event Action DeclineReachRequested;
         public event Action CancelReachRequested;
@@ -123,6 +130,24 @@ namespace MahjongPrototype.UI
                 WarnMissingOnce(ref warnedMissingDeclineWinButton, "DeclineWinButton is not assigned.");
             }
 
+            if (ponButton != null)
+            {
+                ponButton.onClick.AddListener(HandlePonClicked);
+            }
+            else
+            {
+                WarnMissingOnce(ref warnedMissingPonButton, "PonButton is not assigned.");
+            }
+
+            if (declinePonButton != null)
+            {
+                declinePonButton.onClick.AddListener(HandleDeclinePonClicked);
+            }
+            else
+            {
+                WarnMissingOnce(ref warnedMissingDeclinePonButton, "DeclinePonButton is not assigned.");
+            }
+
             if (reachButton != null)
             {
                 reachButton.onClick.AddListener(HandleReachClicked);
@@ -187,6 +212,12 @@ namespace MahjongPrototype.UI
             if (declineWinButton != null)
                 declineWinButton.onClick.RemoveListener(HandleDeclineWinClicked);
 
+            if (ponButton != null)
+                ponButton.onClick.RemoveListener(HandlePonClicked);
+
+            if (declinePonButton != null)
+                declinePonButton.onClick.RemoveListener(HandleDeclinePonClicked);
+
             if (reachButton != null)
                 reachButton.onClick.RemoveListener(HandleReachClicked);
 
@@ -236,6 +267,16 @@ namespace MahjongPrototype.UI
         private void HandleDeclineWinClicked()
         {
             DeclineWinRequested?.Invoke();
+        }
+
+        private void HandlePonClicked()
+        {
+            PonRequested?.Invoke();
+        }
+
+        private void HandleDeclinePonClicked()
+        {
+            DeclinePonRequested?.Invoke();
         }
 
         private void HandleReachClicked()

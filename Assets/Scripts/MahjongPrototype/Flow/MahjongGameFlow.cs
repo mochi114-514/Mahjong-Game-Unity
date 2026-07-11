@@ -371,7 +371,9 @@ namespace MahjongPrototype
 
             SeatId selfSeat = gameState.SelfSeat;
             PlayerSeat selfPlayerSeat = gameState.GetPlayerSeat(selfSeat);
-            if (!selfPlayerSeat.HasDrawnTile)
+            bool isPostCallDiscard =
+                gameState.TurnPhase == TurnPhase.WaitingForDiscardAfterCall;
+            if (!selfPlayerSeat.HasDrawnTile && !isPostCallDiscard)
             {
                 Warn("Draw before discarding.");
                 NotifyTurnBlocked("DiscardBlocked", "DrawnTileMissing");
@@ -393,7 +395,8 @@ namespace MahjongPrototype
             }
 
             if (gameState.TurnPhase != TurnPhase.WaitingForDiscard &&
-                gameState.TurnPhase != TurnPhase.ReachDiscardSelection)
+                gameState.TurnPhase != TurnPhase.ReachDiscardSelection &&
+                !isPostCallDiscard)
             {
                 Warn("Discard is not available in the current turn phase.");
                 NotifyTurnBlocked("DiscardBlocked", "InvalidTurnPhase");
@@ -659,6 +662,48 @@ namespace MahjongPrototype
             return true;
         }
 
+        public bool TryRequestDeclarePonForSeat(SeatId actorSeat, int reactionWindowId)
+        {
+            if (!CanUseGameState())
+                return false;
+
+            EnsureReactionWindowService();
+            ReactionWindowAnswerResult answer = reactionWindowService.DeclarePon(
+                gameState,
+                actorSeat,
+                reactionWindowId);
+            if (!answer.Accepted)
+            {
+                NotifyTurnBlocked("ReactionBlocked", answer.Reason);
+                return false;
+            }
+
+            EventPublisher.NotifyReactionWindowAnswered(answer);
+            ResolveReactionWindow(answer.Resolution);
+            return true;
+        }
+
+        public bool TryRequestDeclinePonForSeat(SeatId actorSeat, int reactionWindowId)
+        {
+            if (!CanUseGameState())
+                return false;
+
+            EnsureReactionWindowService();
+            ReactionWindowAnswerResult answer = reactionWindowService.DeclinePon(
+                gameState,
+                actorSeat,
+                reactionWindowId);
+            if (!answer.Accepted)
+            {
+                NotifyTurnBlocked("ReactionBlocked", answer.Reason);
+                return false;
+            }
+
+            EventPublisher.NotifyReactionWindowAnswered(answer);
+            ResolveReactionWindow(answer.Resolution);
+            return true;
+        }
+
         public void RequestDeclineWin()
         {
             if (!CanUseGameState())
@@ -907,7 +952,29 @@ namespace MahjongPrototype
                         () => NotifyDeclaredReactionRon(resolution),
                         resolution);
                     return;
+                case ReactionWindowResolutionType.PonDeclared:
+                    BeginTurnAfterPon(resolution);
+                    return;
             }
+        }
+
+        private void BeginTurnAfterPon(ReactionWindowResolution resolution)
+        {
+            if (resolution.Candidate == null || resolution.OpenMeld == null)
+                return;
+
+            EnsureTurnFlowService();
+            gameState.ClearIppatsuEligibilityForAllPlayers();
+            turnFlowService.BeginTurnAfterCall(gameState, resolution.Candidate.Seat);
+            EventPublisher.NotifyTurnStarted(
+                resolution.Candidate.Seat,
+                gameState.TurnIndex);
+            EventPublisher.NotifyTurnDebug(
+                "PonDeclared",
+                $"windowSourceDiscardId={resolution.SourceDiscard.Id}; caller={resolution.Candidate.Seat}; source={resolution.SourceDiscard.ActorSeat}; phase={gameState.TurnPhase}",
+                seat: resolution.Candidate.Seat,
+                tile: resolution.SourceDiscard.Tile,
+                turnIndex: gameState.TurnIndex);
         }
 
         private void NotifyDeclaredReactionRon(ReactionWindowResolution resolution)

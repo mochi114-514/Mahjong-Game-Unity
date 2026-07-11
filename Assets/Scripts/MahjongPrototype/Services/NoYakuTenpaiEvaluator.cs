@@ -5,7 +5,7 @@ namespace MahjongPrototype.Services
 {
     public sealed class NoYakuTenpaiEvaluator
     {
-        private const int RequiredHandTileCount = 13;
+        private const int BaseHandTileCount = 13;
         private const int TileTypeCount = 34;
         private const int FirstPinTypeIndex = 9;
         private const int FirstSouTypeIndex = 18;
@@ -26,10 +26,29 @@ namespace MahjongPrototype.Services
             bool isReachDeclared,
             bool isClosed)
         {
+            return Evaluate(
+                handTiles,
+                winnerSeat,
+                roundWind,
+                seatWind,
+                isReachDeclared,
+                isClosed,
+                null);
+        }
+
+        public NoYakuTenpaiEvaluationResult Evaluate(
+            IReadOnlyList<Tile> handTiles,
+            SeatId winnerSeat,
+            RoundWind roundWind,
+            SeatId seatWind,
+            bool isReachDeclared,
+            bool isClosed,
+            IReadOnlyList<OpenMeld> openMelds)
+        {
             if (winDeclarationEvaluator == null)
                 return NoYakuTenpaiEvaluationResult.NotEvaluated;
 
-            if (!TryBuildTypeCounts(handTiles, out int[] typeCounts))
+            if (!TryBuildTypeCounts(handTiles, openMelds, out int[] typeCounts))
                 return NoYakuTenpaiEvaluationResult.NotTenpai;
 
             bool hasWinningShapeWait = false;
@@ -50,7 +69,13 @@ namespace MahjongPrototype.Services
                             roundWind,
                             seatWind,
                             isReachDeclared,
-                            isClosed));
+                            isClosed,
+                            false,
+                            false,
+                            false,
+                            false,
+                            false,
+                            openMelds));
 
                 if (!result.IsWinningShape)
                     continue;
@@ -65,11 +90,15 @@ namespace MahjongPrototype.Services
                 : NoYakuTenpaiEvaluationResult.NotTenpai;
         }
 
-        private static bool TryBuildTypeCounts(IReadOnlyList<Tile> handTiles, out int[] typeCounts)
+        private static bool TryBuildTypeCounts(
+            IReadOnlyList<Tile> handTiles,
+            IReadOnlyList<OpenMeld> openMelds,
+            out int[] typeCounts)
         {
             typeCounts = new int[TileTypeCount];
 
-            if (handTiles == null || handTiles.Count != RequiredHandTileCount)
+            int openMeldCount = openMelds != null ? openMelds.Count : 0;
+            if (handTiles == null || handTiles.Count != BaseHandTileCount - openMeldCount * 3)
                 return false;
 
             for (int i = 0; i < handTiles.Count; i++)
@@ -82,6 +111,28 @@ namespace MahjongPrototype.Services
                 typeCounts[typeIndex]++;
                 if (typeCounts[typeIndex] > 4)
                     return false;
+            }
+
+            if (openMelds != null)
+            {
+                for (int i = 0; i < openMelds.Count; i++)
+                {
+                    OpenMeld openMeld = openMelds[i];
+                    if (openMeld == null)
+                        return false;
+
+                    for (int j = 0; j < openMeld.Tiles.Count; j++)
+                    {
+                        Tile tile = openMeld.Tiles[j];
+                        int typeIndex = tile.TypeIndex;
+                        if (!tile.IsValid || typeIndex < 0 || typeIndex >= TileTypeCount)
+                            return false;
+
+                        typeCounts[typeIndex]++;
+                        if (typeCounts[typeIndex] > 4)
+                            return false;
+                    }
+                }
             }
 
             return true;

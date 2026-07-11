@@ -5,7 +5,7 @@ namespace MahjongPrototype.Services
 {
     public sealed class FuritenEvaluator
     {
-        private const int RequiredHandTileCount = 13;
+        private const int BaseHandTileCount = 13;
         private const int TileTypeCount = 34;
         private const int FirstPinTypeIndex = 9;
         private const int FirstSouTypeIndex = 18;
@@ -55,7 +55,7 @@ namespace MahjongPrototype.Services
                 return FuritenSeatEvaluationResult.NotEvaluated(seat);
 
             IReadOnlyList<Tile> handTiles = playerSeat.Hand.GetTiles();
-            if (!TryBuildTypeCounts(handTiles, out int[] typeCounts))
+            if (!TryBuildTypeCounts(handTiles, playerSeat.OpenMelds, out int[] typeCounts))
                 return FuritenSeatEvaluationResult.NotEvaluated(seat);
 
             bool[] selfDiscardedTypeIndices = BuildSelfDiscardedTypeIndices(
@@ -70,7 +70,10 @@ namespace MahjongPrototype.Services
                     continue;
 
                 Tile winningTile = CreateTileFromTypeIndex(typeIndex);
-                if (!winChecker.CanWinWithTile(handTiles, winningTile))
+                if (!winChecker.CanWinWithTile(
+                        handTiles,
+                        winningTile,
+                        playerSeat.OpenMelds))
                     continue;
 
                 isTenpai = true;
@@ -88,11 +91,13 @@ namespace MahjongPrototype.Services
 
         private static bool TryBuildTypeCounts(
             IReadOnlyList<Tile> handTiles,
+            IReadOnlyList<OpenMeld> openMelds,
             out int[] typeCounts)
         {
             typeCounts = new int[TileTypeCount];
 
-            if (handTiles == null || handTiles.Count != RequiredHandTileCount)
+            int openMeldCount = openMelds != null ? openMelds.Count : 0;
+            if (handTiles == null || handTiles.Count != BaseHandTileCount - openMeldCount * 3)
                 return false;
 
             for (int i = 0; i < handTiles.Count; i++)
@@ -105,6 +110,28 @@ namespace MahjongPrototype.Services
                 typeCounts[typeIndex]++;
                 if (typeCounts[typeIndex] > 4)
                     return false;
+            }
+
+            if (openMelds != null)
+            {
+                for (int i = 0; i < openMelds.Count; i++)
+                {
+                    OpenMeld openMeld = openMelds[i];
+                    if (openMeld == null)
+                        return false;
+
+                    for (int j = 0; j < openMeld.Tiles.Count; j++)
+                    {
+                        Tile tile = openMeld.Tiles[j];
+                        int typeIndex = tile.TypeIndex;
+                        if (!tile.IsValid || typeIndex < 0 || typeIndex >= TileTypeCount)
+                            return false;
+
+                        typeCounts[typeIndex]++;
+                        if (typeCounts[typeIndex] > 4)
+                            return false;
+                    }
+                }
             }
 
             return true;

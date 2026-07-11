@@ -20,12 +20,15 @@ namespace MahjongPrototype.Domain
         private readonly List<SeatId> activeSeats = new List<SeatId>();
         private readonly List<SeatSlot> seatSlots = new List<SeatSlot>();
         private readonly List<DiscardRecord> discards = new List<DiscardRecord>();
+        private readonly Dictionary<int, DiscardClaim> discardClaims =
+            new Dictionary<int, DiscardClaim>();
         private readonly List<ActiveSkillEffect> activeSkillEffects = new List<ActiveSkillEffect>();
         private readonly List<ReachDiscardCandidate> reachDiscardCandidates =
             new List<ReachDiscardCandidate>();
         private TurnDrawRecord? lastTurnDraw;
         private TurnPhaseType turnPhase = TurnPhaseType.WaitingForDraw;
         private static int nextReactionWindowId = 1;
+        private int nextDiscardId = 1;
         private ReactionWindow reactionWindow;
         private SeatId winDecisionSeat;
         private WinType? winDecisionType;
@@ -123,6 +126,7 @@ namespace MahjongPrototype.Domain
         public IReadOnlyList<SeatId> OccupiedSeats => GetOccupiedSeats();
         public IReadOnlyList<SeatSlot> SeatSlots => seatSlots;
         public IReadOnlyList<DiscardRecord> Discards => discards;
+        public IReadOnlyDictionary<int, DiscardClaim> DiscardClaims => discardClaims;
         public IReadOnlyList<ActiveSkillEffect> ActiveSkillEffects => activeSkillEffects;
         public IReadOnlyList<ReachDiscardCandidate> ReachDiscardCandidates => reachDiscardCandidates;
 
@@ -146,6 +150,17 @@ namespace MahjongPrototype.Domain
             }
 
             TransitionTo(TurnPhaseType.WaitingForDiscard);
+        }
+
+        public void EnterWaitingForDiscardAfterCall()
+        {
+            if (GetPlayerSeat(CurrentTurn).HasDrawnTile)
+            {
+                throw new InvalidOperationException(
+                    "Cannot wait for a post-call discard while the current seat has a drawn tile.");
+            }
+
+            TransitionTo(TurnPhaseType.WaitingForDiscardAfterCall);
         }
 
         public void SetSelfWind(SeatId selfWind)
@@ -264,9 +279,57 @@ namespace MahjongPrototype.Domain
             return playerSeat;
         }
 
-        public void AddDiscard(DiscardRecord record)
+        public DiscardRecord AddDiscard(DiscardRecord record)
         {
+            if (record.Id <= 0)
+                record = record.WithId(nextDiscardId++);
+            else
+                nextDiscardId = Math.Max(nextDiscardId, record.Id + 1);
+
             discards.Add(record);
+            return record;
+        }
+
+        public bool CanClaimDiscard(int discardId, SeatId callerSeat, SeatId sourceSeat, Tile calledTile)
+        {
+            if (discardId <= 0 || callerSeat == sourceSeat || !calledTile.IsValid ||
+                discardClaims.ContainsKey(discardId))
+            {
+                return false;
+            }
+
+            for (int i = 0; i < discards.Count; i++)
+            {
+                DiscardRecord record = discards[i];
+                if (record.Id != discardId)
+                    continue;
+
+                return record.ActorSeat == sourceSeat && record.Tile == calledTile;
+            }
+
+            return false;
+        }
+
+        public bool TryClaimDiscard(OpenMeld openMeld)
+        {
+            if (openMeld == null || !CanClaimDiscard(
+                    openMeld.SourceDiscardId,
+                    openMeld.CallerSeat,
+                    openMeld.SourceSeat,
+                    openMeld.CalledTile))
+            {
+                return false;
+            }
+
+            discardClaims.Add(
+                openMeld.SourceDiscardId,
+                new DiscardClaim(openMeld.SourceDiscardId, openMeld.CallerSeat, openMeld));
+            return true;
+        }
+
+        public bool TryGetDiscardClaim(int discardId, out DiscardClaim discardClaim)
+        {
+            return discardClaims.TryGetValue(discardId, out discardClaim);
         }
 
         public void RecordTurnDraw(

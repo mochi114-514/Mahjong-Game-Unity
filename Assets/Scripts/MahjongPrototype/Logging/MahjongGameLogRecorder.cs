@@ -174,7 +174,7 @@ namespace MahjongPrototype.Logging
             DevLog.Record(
                 "Reaction",
                 "ReactionWindowStarted",
-                $"windowId={reactionWindow.WindowId}; candidates={reactionWindow.Candidates.Count}",
+                $"windowId={reactionWindow.WindowId}; sourceDiscardId={reactionWindow.SourceDiscard.Id}; candidates={reactionWindow.Candidates.Count}",
                 seat: reactionWindow.SourceDiscard.ActorSeat,
                 tile: reactionWindow.SourceDiscard.Tile,
                 wallCount: GetWallCount(),
@@ -189,7 +189,7 @@ namespace MahjongPrototype.Logging
             DevLog.Record(
                 "Reaction",
                 "ReactionWindowAnswered",
-                $"windowId={result.WindowId}; reaction={result.Candidate.Kind}; answer={result.Candidate.ResponseState}",
+                $"windowId={result.WindowId}; sourceDiscardId={result.Resolution.SourceDiscard.Id}; reaction={result.Candidate.Kind}; answer={result.Candidate.ResponseState}",
                 seat: result.Candidate.Seat,
                 tile: result.Resolution.SourceDiscard.Tile,
                 wallCount: GetWallCount(),
@@ -204,7 +204,7 @@ namespace MahjongPrototype.Logging
             DevLog.Record(
                 "Reaction",
                 "ReactionWindowResolved",
-                $"resolution={resolution.Type}",
+                $"resolution={resolution.Type}; sourceDiscardId={resolution.SourceDiscard.Id}; caller={resolution.Candidate?.Seat}; openMeld={resolution.OpenMeld?.Type}",
                 seat: resolution.SourceDiscard.ActorSeat,
                 tile: resolution.SourceDiscard.Tile,
                 wallCount: GetWallCount(),

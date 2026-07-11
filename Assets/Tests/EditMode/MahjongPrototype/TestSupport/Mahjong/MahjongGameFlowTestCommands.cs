@@ -106,6 +106,24 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
                 reactionWindowId);
         }
 
+        public bool TryRequestDeclarePonForSeat(string seatName, int reactionWindowId)
+        {
+            return (bool)reflection.Invoke(
+                GameFlow,
+                "TryRequestDeclarePonForSeat",
+                dataFactory.ParseSeat(seatName),
+                reactionWindowId);
+        }
+
+        public bool TryRequestDeclinePonForSeat(string seatName, int reactionWindowId)
+        {
+            return (bool)reflection.Invoke(
+                GameFlow,
+                "TryRequestDeclinePonForSeat",
+                dataFactory.ParseSeat(seatName),
+                reactionWindowId);
+        }
+
         public void RequestAdvanceFromRoundResult()
         {
             reflection.Invoke(GameFlow, "RequestAdvanceFromRoundResult");

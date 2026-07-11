@@ -97,6 +97,8 @@ namespace MahjongPrototype.UI
             inputController.RetryRequested += HandleRetryRequested;
             inputController.WinRequested += HandleWinRequested;
             inputController.DeclineWinRequested += HandleDeclineWinRequested;
+            inputController.PonRequested += HandlePonRequested;
+            inputController.DeclinePonRequested += HandleDeclinePonRequested;
             inputController.ReachRequested += HandleReachRequested;
             inputController.DeclineReachRequested += HandleDeclineReachRequested;
             inputController.CancelReachRequested += HandleCancelReachRequested;
@@ -115,6 +117,8 @@ namespace MahjongPrototype.UI
             subscribedInputController.RetryRequested -= HandleRetryRequested;
             subscribedInputController.WinRequested -= HandleWinRequested;
             subscribedInputController.DeclineWinRequested -= HandleDeclineWinRequested;
+            subscribedInputController.PonRequested -= HandlePonRequested;
+            subscribedInputController.DeclinePonRequested -= HandleDeclinePonRequested;
             subscribedInputController.ReachRequested -= HandleReachRequested;
             subscribedInputController.DeclineReachRequested -= HandleDeclineReachRequested;
             subscribedInputController.CancelReachRequested -= HandleCancelReachRequested;
@@ -192,6 +196,35 @@ namespace MahjongPrototype.UI
                 return;
 
             gameFlow.RequestDeclineWin();
+        }
+
+        private void HandlePonRequested()
+        {
+            RequestPonDeclaration(false);
+        }
+
+        private void HandleDeclinePonRequested()
+        {
+            RequestPonDeclaration(true);
+        }
+
+        private void RequestPonDeclaration(bool decline)
+        {
+            if (!TryGetGameFlow("Cannot respond to pon because MahjongGameFlow is not assigned."))
+                return;
+
+            MahjongGameState state = gameFlow.CurrentState;
+            ReactionWindow reactionWindow = state != null ? state.CurrentReactionWindow : null;
+            ReactionWindowCandidate candidate = reactionWindow != null
+                ? reactionWindow.PendingPonCandidate
+                : null;
+            if (candidate == null || candidate.Seat != state.SelfSeat)
+                return;
+
+            if (decline)
+                gameFlow.TryRequestDeclinePonForSeat(candidate.Seat, reactionWindow.WindowId);
+            else
+                gameFlow.TryRequestDeclarePonForSeat(candidate.Seat, reactionWindow.WindowId);
         }
 
         private void HandleReachRequested()

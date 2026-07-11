@@ -81,6 +81,9 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
             (int)reflection.GetProperty(CurrentReactionWindow, "WindowId");
         public int ReactionWindowCandidateCount => collections.Count(
             reflection.GetProperty(CurrentReactionWindow, "Candidates"));
+        public string ReactionWindowCandidateKindAt(int index) => reflection.GetProperty(
+            collections.Item(reflection.GetProperty(CurrentReactionWindow, "Candidates"), index),
+            "Kind").ToString();
         public string ReactionWindowSourceSeatName => reflection.GetProperty(
             reflection.GetProperty(CurrentReactionWindow, "SourceDiscard"),
             "ActorSeat").ToString();
@@ -201,6 +204,37 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
             return (bool)reflection.GetProperty(GetPlayerSeat(seatName), "HasDrawnTile");
         }
 
+        public int HandCount(string seatName)
+        {
+            return (int)reflection.GetProperty(
+                reflection.GetProperty(GetPlayerSeat(seatName), "Hand"),
+                "Count");
+        }
+
+        public int OpenMeldCount(string seatName)
+        {
+            return collections.Count(reflection.GetProperty(GetPlayerSeat(seatName), "OpenMelds"));
+        }
+
+        public bool IsClosed(string seatName)
+        {
+            return (bool)reflection.GetProperty(GetPlayerSeat(seatName), "IsClosed");
+        }
+
+        public bool IsTemporaryFuriten(string seatName)
+        {
+            return (bool)reflection.GetProperty(
+                GetPlayerSeat(seatName),
+                "IsTemporaryFuriten");
+        }
+
+        public object OpenMeldAt(string seatName, int index)
+        {
+            return collections.Item(
+                reflection.GetProperty(GetPlayerSeat(seatName), "OpenMelds"),
+                index);
+        }
+
         public bool HasDrawnTileForPlayerId(string playerIdName)
         {
             return (bool)reflection.GetProperty(GetPlayerSeatByPlayerId(playerIdName), "HasDrawnTile");
@@ -275,6 +309,15 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
             reflection.GetProperty(LastDiscard(), "Source").ToString();
         public bool LastDiscardIsLastLiveWallDiscard =>
             (bool)reflection.GetProperty(LastDiscard(), "IsLastLiveWallDiscard");
+        public int LastDiscardId => (int)reflection.GetProperty(LastDiscard(), "Id");
+
+        public bool TryGetDiscardClaim(int discardId, out object discardClaim)
+        {
+            object[] arguments = { discardId, null };
+            bool found = (bool)reflection.Invoke(State, "TryGetDiscardClaim", arguments);
+            discardClaim = arguments[1];
+            return found;
+        }
 
         public object ActiveSkillEffectAt(int index)
         {

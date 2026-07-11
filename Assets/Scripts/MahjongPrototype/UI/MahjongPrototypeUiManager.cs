@@ -42,6 +42,9 @@ namespace MahjongPrototype.UI
         [Header("Win Decision")]
         [SerializeField] private MahjongWinDecisionController winDecisionController;
 
+        [Header("Pon Decision")]
+        [SerializeField] private MahjongPonDecisionController ponDecisionController;
+
         [Header("Reach Decision")]
         [SerializeField] private MahjongReachDecisionController reachDecisionController;
 
@@ -64,6 +67,7 @@ namespace MahjongPrototype.UI
         private bool warnedMissingInputController;
         private bool warnedMissingCommandRouter;
         private bool warnedMissingWinDecisionController;
+        private bool warnedMissingPonDecisionController;
         private bool warnedMissingReachDecisionController;
         private bool warnedMissingRoundResultController;
         private bool warnedMissingLogPreviewController;
@@ -88,6 +92,7 @@ namespace MahjongPrototype.UI
             EnsureCommandRouter();
             SyncAutoSortToggleFromFlow();
             EnsureWinDecisionController();
+            EnsurePonDecisionController();
             EnsureReachDecisionController();
             EnsureRoundResultController();
             EnsureLogPreviewController();
@@ -105,6 +110,7 @@ namespace MahjongPrototype.UI
             EnsureCommandRouter();
             SyncAutoSortToggleFromFlow();
             EnsureWinDecisionController();
+            EnsurePonDecisionController();
             EnsureReachDecisionController();
             EnsureRoundResultController();
             EnsureLogPreviewController();
@@ -139,6 +145,7 @@ namespace MahjongPrototype.UI
             RefreshTableCenterUi(state);
             RefreshPlayerArea3D(state);
             RefreshWinDecision(state);
+            RefreshPonDecision(state);
             RefreshReachDecision(state);
             RefreshRoundResult(state);
             RefreshInteractionState(state);
@@ -358,6 +365,16 @@ namespace MahjongPrototype.UI
                 "MahjongWinDecisionController is not assigned. Add it to the UI GameObject and assign WinDecisionArea and its buttons.");
         }
 
+        private void EnsurePonDecisionController()
+        {
+            if (ponDecisionController != null)
+                return;
+
+            WarnMissingOnce(
+                ref warnedMissingPonDecisionController,
+                "MahjongPonDecisionController is not assigned. Assign its dedicated pon decision area in the Inspector.");
+        }
+
         private void EnsureReachDecisionController()
         {
             if (reachDecisionController != null)
@@ -392,6 +409,7 @@ namespace MahjongPrototype.UI
         {
             RefreshGlobalStatus();
             RefreshWinDecisionUi();
+            RefreshPonDecisionUi();
             RefreshReachDecisionUi();
             RefreshInteractionUi();
         }
@@ -432,6 +450,7 @@ namespace MahjongPrototype.UI
         {
             RefreshGlobalStatus();
             RefreshWinDecisionUi();
+            RefreshPonDecisionUi();
             RefreshReachDecisionUi();
             RefreshInteractionUi();
         }
@@ -440,13 +459,22 @@ namespace MahjongPrototype.UI
         {
             RefreshGlobalStatus();
             RefreshWinDecisionUi();
+            RefreshPonDecisionUi();
             RefreshInteractionUi();
         }
 
-        private void HandleReactionWindowResolved(ReactionWindowResolution _)
+        private void HandleReactionWindowResolved(ReactionWindowResolution resolution)
         {
+            if (resolution.Type == ReactionWindowResolutionType.PonDeclared &&
+                resolution.Candidate != null)
+            {
+                RefreshPlayerHandForSeat(resolution.Candidate.Seat);
+                RefreshPlayerDiscardRiverForSeat(resolution.SourceDiscard.ActorSeat);
+            }
+
             RefreshGlobalStatus();
             RefreshWinDecisionUi();
+            RefreshPonDecisionUi();
             RefreshInteractionUi();
         }
 
@@ -454,6 +482,7 @@ namespace MahjongPrototype.UI
         {
             RefreshGlobalStatus();
             RefreshWinDecisionUi();
+            RefreshPonDecisionUi();
             RefreshReachDecisionUi();
             RefreshInteractionUi();
         }
@@ -680,6 +709,33 @@ namespace MahjongPrototype.UI
             MahjongGameState state = gameFlow != null ? gameFlow.CurrentState : null;
             if (state != null)
                 RefreshWinDecision(state);
+        }
+
+        private void RefreshPonDecision(MahjongGameState state)
+        {
+            if (ponDecisionController == null)
+                EnsurePonDecisionController();
+
+            if (ponDecisionController == null)
+                return;
+
+            ReactionWindow reactionWindow = state != null
+                ? state.CurrentReactionWindow
+                : null;
+            ReactionWindowCandidate candidate = reactionWindow != null
+                ? reactionWindow.PendingPonCandidate
+                : null;
+            bool showSelfPonDecision = candidate != null && state != null &&
+                candidate.Seat == state.SelfSeat;
+            ponDecisionController.SetPonDecision(
+                showSelfPonDecision,
+                showSelfPonDecision ? reactionWindow.SourceDiscard.Tile : (Tile?)null);
+        }
+
+        private void RefreshPonDecisionUi()
+        {
+            MahjongGameState state = gameFlow != null ? gameFlow.CurrentState : null;
+            RefreshPonDecision(state);
         }
 
         private void RefreshReachDecision(MahjongGameState state)

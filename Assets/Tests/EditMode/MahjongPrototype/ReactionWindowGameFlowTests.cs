@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -134,6 +135,133 @@ namespace MahjongPrototype.Tests
             }
         }
 
+        [Test]
+        public void PonCandidate_RequiresTwoMatchingTiles_AndPonCreatesPersistentClaimedMeld()
+        {
+            using (MahjongGameFlowTestSession session = CreatePonSession(false))
+            {
+                int windowId = session.Query.ReactionWindowId;
+                int turnIndex = session.Query.TurnIndex;
+                int sourceDiscardId = session.Query.LastDiscardId;
+
+                Assert.That(session.Query.ReactionWindowCandidateCount, Is.EqualTo(1));
+                Assert.That(session.Query.ReactionWindowCandidateKindAt(0), Is.EqualTo("Pon"));
+                Assert.That(session.Commands.TryRequestDeclareRonForSeat("East", windowId), Is.False);
+                Assert.That(session.Commands.TryRequestDeclarePonForSeat("West", windowId), Is.False);
+                Assert.That(session.Commands.TryRequestDeclarePonForSeat("East", windowId + 1), Is.False);
+
+                Assert.That(session.Commands.TryRequestDeclarePonForSeat("East", windowId), Is.True);
+
+                Assert.That(session.Query.IsReactionWindowPending, Is.False);
+                Assert.That(session.Query.CurrentTurnName, Is.EqualTo("East"));
+                Assert.That(session.Query.TurnIndex, Is.EqualTo(turnIndex + 1));
+                Assert.That(session.Query.TurnPhaseName, Is.EqualTo("WaitingForDiscardAfterCall"));
+                Assert.That(session.Query.HasDrawnTile("East"), Is.False);
+                Assert.That(session.Query.HandCount("East"), Is.EqualTo(11));
+                Assert.That(session.Query.OpenMeldCount("East"), Is.EqualTo(1));
+                Assert.That(session.Query.IsClosed("East"), Is.False);
+                Assert.That(session.Query.DiscardCount, Is.EqualTo(1));
+                Assert.That(session.Query.TryGetDiscardClaim(sourceDiscardId, out object claim), Is.True);
+                Assert.That(session.Reflection.GetProperty(claim, "CallerSeat").ToString(), Is.EqualTo("East"));
+
+                object openMeld = session.Query.OpenMeldAt("East", 0);
+                Assert.That(session.Reflection.GetProperty(openMeld, "Type").ToString(), Is.EqualTo("Pon"));
+                Assert.That(session.Collections.Count(session.Reflection.GetProperty(openMeld, "Tiles")), Is.EqualTo(3));
+                Assert.That(session.Reflection.GetProperty(openMeld, "SourceSeat").ToString(), Is.EqualTo("West"));
+                Assert.That((int)session.Reflection.GetProperty(openMeld, "SourceDiscardId"), Is.EqualTo(sourceDiscardId));
+
+                Assert.That(session.Commands.TryRequestDrawForSeat("East"), Is.False);
+                session.Commands.RequestForceDrawSkillForSeat("East", "1m");
+                Assert.That(session.Query.ActiveSkillEffectCount, Is.EqualTo(0));
+                session.Commands.RequestDiscard(0);
+
+                Assert.That(session.Query.DiscardCount, Is.EqualTo(2));
+                Assert.That(session.Query.CurrentTurnName, Is.EqualTo("West"));
+                Assert.That(session.Query.TurnIndex, Is.EqualTo(turnIndex + 2));
+                Assert.That(session.Query.TurnPhaseName, Is.EqualTo("WaitingForDraw"));
+            }
+        }
+
+        [Test]
+        public void RonDecline_LeavesPonCandidateAndAppliesOnlyRonFuriten()
+        {
+            using (MahjongGameFlowTestSession session = CreatePonSession(true))
+            {
+                int windowId = session.Query.ReactionWindowId;
+
+                Assert.That(session.Query.ReactionWindowCandidateCount, Is.EqualTo(2));
+                Assert.That(session.Query.ReactionWindowCandidateKindAt(0), Is.EqualTo("Ron"));
+                Assert.That(session.Query.ReactionWindowCandidateKindAt(1), Is.EqualTo("Pon"));
+                Assert.That(session.Commands.TryRequestDeclarePonForSeat("East", windowId), Is.False);
+
+                Assert.That(session.Commands.TryRequestDeclineRonForSeat("East", windowId), Is.True);
+                Assert.That(session.Query.IsReactionWindowPending, Is.True);
+                Assert.That(session.Query.IsTemporaryFuriten("East"), Is.True);
+                Assert.That(session.Commands.TryRequestDeclineRonForSeat("East", windowId), Is.False);
+
+                Assert.That(session.Commands.TryRequestDeclinePonForSeat("East", windowId), Is.True);
+                Assert.That(session.Query.IsReactionWindowPending, Is.False);
+                Assert.That(session.Query.OpenMeldCount("East"), Is.EqualTo(0));
+                Assert.That(session.Query.IsTemporaryFuriten("East"), Is.True);
+            }
+        }
+
+        [Test]
+        public void PonCandidate_DoesNotAppearWithOnlyOneMatchingTile()
+        {
+            using (MahjongGameFlowTestSession session = CreateSession(2))
+            {
+                session.Commands.StartNewRound();
+                session.DataFactory.AddHandTiles(
+                    session.Query.GetPlayerSeat("East"),
+                    "5m", "1m", "2m", "3m", "4m", "5p", "6p", "7p", "2s", "3s", "4s", "E", "S");
+                session.DataFactory.SetCurrentTurn(session.CurrentState, "West");
+                session.DataFactory.SetDrawnTile(session.CurrentState, "West", "5m");
+
+                Assert.That(session.Commands.TryRequestDiscardDrawnTileForSeat("West"), Is.True);
+                Assert.That(session.Query.IsReactionWindowPending, Is.False);
+                Assert.That(session.Query.CurrentTurnName, Is.EqualTo("East"));
+            }
+        }
+
+        [Test]
+        public void OpenPonHand_CanUseReducedConcealedTilesForStandardWin()
+        {
+            using (MahjongGameFlowTestSession session = CreateSession(1))
+            {
+                Type openMeldType = session.Reflection.RequireType(
+                    "MahjongPrototype.Domain.OpenMeld, Assembly-CSharp");
+                Type openMeldKindType = session.Reflection.RequireType(
+                    "MahjongPrototype.Domain.OpenMeldType, Assembly-CSharp");
+                IList openMelds = (IList)Activator.CreateInstance(
+                    typeof(List<>).MakeGenericType(openMeldType));
+                object openMeld = session.Reflection.CreateInstance(
+                    openMeldType,
+                    Enum.Parse(openMeldKindType, "Pon"),
+                    session.DataFactory.CreateTileArray("5m", "5m", "5m"),
+                    session.DataFactory.ParseSeat("East"),
+                    session.DataFactory.ParseSeat("West"),
+                    session.DataFactory.CreateTile("5m"),
+                    1);
+                openMelds.Add(openMeld);
+
+                object winChecker = session.Reflection.CreateInstance(
+                    session.Reflection.RequireType("MahjongPrototype.Services.WinChecker, Assembly-CSharp"));
+                bool canWin = (bool)session.Reflection.Invoke(
+                    winChecker,
+                    "CanWinWithTile",
+                    session.DataFactory.CreateTileArray(
+                        "2m", "3m", "4m",
+                        "3p", "4p", "5p",
+                        "6s", "6s",
+                        "6p", "6p"),
+                    session.DataFactory.CreateTile("6s"),
+                    openMelds);
+
+                Assert.That(canWin, Is.True);
+            }
+        }
+
         private static string CaptureReactionSourceAfterDiscard(bool discardDrawnTile)
         {
             using (MahjongGameFlowTestSession session = CreateSession(1))
@@ -173,6 +301,29 @@ namespace MahjongPrototype.Tests
                 "2s", "3s", "4s",
                 "6m", "7m", "8m",
                 "5m");
+            session.DataFactory.SetCurrentTurn(session.CurrentState, "West");
+            session.DataFactory.SetDrawnTile(session.CurrentState, "West", "5m");
+
+            Assert.That(session.Commands.TryRequestDiscardDrawnTileForSeat("West"), Is.True);
+            return session;
+        }
+
+        private static MahjongGameFlowTestSession CreatePonSession(bool includeRonCandidate)
+        {
+            MahjongGameFlowTestSession session = CreateSession(2);
+            session.Commands.StartNewRound();
+            string[] handTiles = includeRonCandidate
+                ? new[]
+                {
+                    "5m", "5m", "2m", "3m", "4m", "3p", "4p", "5p", "4s", "5s", "6s", "6p", "6p"
+                }
+                : new[]
+                {
+                    "5m", "5m", "1m", "2m", "3m", "4p", "5p", "6p", "2s", "3s", "4s", "E", "S"
+                };
+            session.DataFactory.AddHandTiles(
+                session.Query.GetPlayerSeat("East"),
+                handTiles);
             session.DataFactory.SetCurrentTurn(session.CurrentState, "West");
             session.DataFactory.SetDrawnTile(session.CurrentState, "West", "5m");
 

@@ -14,6 +14,40 @@ namespace MahjongPrototype.Domain
             RoundWind roundWind,
             SeatId seatWind,
             bool isReachDeclared,
+            bool isClosed,
+            bool isIppatsuEligible,
+            bool isDoubleReachDeclared,
+            bool isFirstTurnTsumoEligible,
+            bool isLastLiveWallDraw,
+            bool isLastLiveWallDiscard)
+            : this(
+                handTiles,
+                winningTile,
+                winType,
+                winnerSeat,
+                sourceSeat,
+                roundWind,
+                seatWind,
+                isReachDeclared,
+                isClosed,
+                isIppatsuEligible,
+                isDoubleReachDeclared,
+                isFirstTurnTsumoEligible,
+                isLastLiveWallDraw,
+                isLastLiveWallDiscard,
+                null)
+        {
+        }
+
+        public WinDeclarationEvaluationContext(
+            IReadOnlyList<Tile> handTiles,
+            Tile winningTile,
+            WinType winType,
+            SeatId winnerSeat,
+            SeatId? sourceSeat,
+            RoundWind roundWind,
+            SeatId seatWind,
+            bool isReachDeclared,
             bool isClosed)
             : this(
                 handTiles,
@@ -133,7 +167,8 @@ namespace MahjongPrototype.Domain
             bool isDoubleReachDeclared,
             bool isFirstTurnTsumoEligible,
             bool isLastLiveWallDraw,
-            bool isLastLiveWallDiscard)
+            bool isLastLiveWallDiscard,
+            IReadOnlyList<OpenMeld> openMelds)
         {
             HandTiles = handTiles ?? throw new ArgumentNullException(nameof(handTiles));
             WinningTile = winningTile;
@@ -149,6 +184,7 @@ namespace MahjongPrototype.Domain
             IsFirstTurnTsumoEligible = isFirstTurnTsumoEligible;
             IsLastLiveWallDraw = isLastLiveWallDraw;
             IsLastLiveWallDiscard = isLastLiveWallDiscard;
+            OpenMelds = openMelds ?? Array.Empty<OpenMeld>();
         }
 
         public IReadOnlyList<Tile> HandTiles { get; }
@@ -165,5 +201,6 @@ namespace MahjongPrototype.Domain
         public bool IsFirstTurnTsumoEligible { get; }
         public bool IsLastLiveWallDraw { get; }
         public bool IsLastLiveWallDiscard { get; }
+        public IReadOnlyList<OpenMeld> OpenMelds { get; }
     }
 }

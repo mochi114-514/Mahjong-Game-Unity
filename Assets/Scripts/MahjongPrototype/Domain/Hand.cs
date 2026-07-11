@@ -27,6 +27,34 @@ namespace MahjongPrototype.Domain
             return true;
         }
 
+        public bool TryRemoveTilesByValue(Tile tile, int requiredCount)
+        {
+            if (!tile.IsValid || requiredCount <= 0)
+                return false;
+
+            int matchingCount = 0;
+            for (int i = 0; i < tiles.Count; i++)
+            {
+                if (tiles[i] == tile)
+                    matchingCount++;
+            }
+
+            if (matchingCount < requiredCount)
+                return false;
+
+            int removedCount = 0;
+            for (int i = tiles.Count - 1; i >= 0 && removedCount < requiredCount; i--)
+            {
+                if (tiles[i] != tile)
+                    continue;
+
+                tiles.RemoveAt(i);
+                removedCount++;
+            }
+
+            return true;
+        }
+
         public void SortByTypeIndex()
         {
             tiles.Sort(CompareByTypeIndex);

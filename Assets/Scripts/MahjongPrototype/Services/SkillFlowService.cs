@@ -29,6 +29,11 @@ namespace MahjongPrototype.Services
                 return SkillFlowResult.Rejected("Declare or decline win before activating another skill.");
             if (gameState.IsReactionWindowPending)
                 return SkillFlowResult.Rejected("Resolve reactions before activating another skill.");
+            if (gameState.TurnPhase == TurnPhase.WaitingForDiscardAfterCall)
+            {
+                return SkillFlowResult.Rejected(
+                    "Skills cannot be activated before the mandatory post-call discard.");
+            }
             if (gameState.IsReachDiscardSelectionPending)
                 return SkillFlowResult.Rejected("Resolve reach discard selection before activating another skill.");
             if (!Tile.TryParse(targetTileCode, out Tile targetTile))
@@ -64,6 +69,7 @@ namespace MahjongPrototype.Services
         {
             if (gameState == null || gameState.IsRoundEnded || gameState.IsWinDecisionPending ||
                 gameState.IsReactionWindowPending ||
+                gameState.TurnPhase == TurnPhase.WaitingForDiscardAfterCall ||
                 !reservationService.TryConsumeForTurn(seat, out PendingSkillReservation reservation))
             {
                 return SkillFlowResult.None;
