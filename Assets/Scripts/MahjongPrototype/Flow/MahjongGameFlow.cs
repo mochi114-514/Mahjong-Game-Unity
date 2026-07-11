@@ -65,10 +65,13 @@ namespace MahjongPrototype
         private RoundSetupService roundSetupService;
         private RoundLifecycleService roundLifecycleService;
         private TurnFlowService turnFlowService;
+        private WinDecisionService winDecisionService;
+        private ReachDecisionService reachDecisionService;
+        private SkillFlowService skillFlowService;
+        private HandAutoSortService handAutoSortService;
         private MahjongFlowEventPublisher eventPublisher;
         private MahjongGameState gameState;
         private AutoDiscardDrawnTileController autoDiscardDrawnTileController;
-        private bool autoSortDeferredUntilReachDecisionResolved;
 
         public MahjongGameState CurrentState => gameState;
         public MahjongEventNotifier EventNotifier => eventNotifier;
@@ -108,34 +111,19 @@ namespace MahjongPrototype
         public FuritenEvaluationResultSet EvaluateAllFuriten()
         {
             InitializeEvaluators();
-            return furitenEvaluator.EvaluateAll(gameState);
+            return winDecisionService.EvaluateAllFuriten(gameState);
         }
 
         public NoYakuTenpaiEvaluationResult EvaluateSelfNoYakuTenpai()
         {
             InitializeEvaluators();
 
-            if (gameState == null ||
-                yakuDefinitionCatalog == null ||
+            if (gameState == null || yakuDefinitionCatalog == null ||
                 noYakuTenpaiEvaluator == null)
             {
                 return NoYakuTenpaiEvaluationResult.NotEvaluated;
             }
-
-            if (gameState.IsRoundEnded)
-                return NoYakuTenpaiEvaluationResult.NotTenpai;
-
-            PlayerSeat selfPlayerSeat = gameState.GetPlayerSeat(gameState.SelfSeat);
-            if (selfPlayerSeat.Hand.Count != 13 || selfPlayerSeat.HasDrawnTile)
-                return NoYakuTenpaiEvaluationResult.NotTenpai;
-
-            return noYakuTenpaiEvaluator.Evaluate(
-                selfPlayerSeat.Hand.GetTiles(),
-                gameState.SelfSeat,
-                gameState.WindProgress.RoundWind,
-                gameState.SelfSeat,
-                selfPlayerSeat.IsReachDeclared,
-                true);
+            return winDecisionService.EvaluateSelfNoYakuTenpai(gameState);
         }
 
         private void Reset()
@@ -150,6 +138,9 @@ namespace MahjongPrototype
             EnsureCpuTurnController();
             EnsureAutoDiscardDrawnTileController();
             EnsureTurnFlowService();
+            EnsureDecisionServices();
+            EnsureSkillFlowService();
+            EnsureHandAutoSortService();
             InitializeEvaluators();
             NormalizeParticipantCount();
         }
@@ -193,12 +184,14 @@ namespace MahjongPrototype
             NormalizeParticipantCount();
             EnsureRoundSetupService();
             EnsureTurnFlowService();
+            EnsureDecisionServices();
+            EnsureSkillFlowService();
+            EnsureHandAutoSortService();
             EnsureAutoDiscardDrawnTileController();
             cpuTurnController?.CancelPendingTurn();
             CancelPendingAutoDiscardDrawnTile();
-            autoSortDeferredUntilReachDecisionResolved = false;
-
-            skillReservationService.Clear();
+            handAutoSortService.ClearDeferred();
+            skillFlowService.ClearReservations();
             if (notifyRunStarted)
                 EventPublisher.NotifyRunStarted();
 
@@ -523,95 +516,11 @@ namespace MahjongPrototype
         {
             if (!CanUseGameState())
                 return;
-
-            if (gameState.IsRoundEnded)
-            {
-                Warn("Round already ended. Press Retry.");
-                return;
-            }
-
-            if (gameState.IsWinDecisionPending)
-            {
-                Warn("Declare or decline win before activating another skill.");
-                return;
-            }
-
-            if (gameState.IsReachDiscardSelectionPending)
-            {
-                Warn("Resolve reach discard selection before activating another skill.");
-                return;
-            }
-
-            if (!Tile.TryParse(targetTileCode, out Tile targetTile))
-            {
-                Warn("Invalid target tile. Use 1m-9m, 1p-9p, 1s-9s, E/S/W/N/P/F/C.");
-                return;
-            }
-
-            if (ownerSeat != gameState.CurrentTurn)
-            {
-                ReserveForceDrawSkill(ownerSeat, targetTile);
-                return;
-            }
-
-            ActivateForceDrawSkill(ownerSeat, targetTile, false);
-        }
-
-        private void ReserveForceDrawSkill(SeatId ownerSeat, Tile targetTile)
-        {
-            if (!IsActiveSeat(ownerSeat))
-            {
-                string reason = "Owner seat is not active.";
-                Warn(reason);
-                EventPublisher.NotifySkillReservationRejected(ownerSeat, SkillEffectKind.ForceDrawTile, targetTile, reason);
-                return;
-            }
-
-            if (gameState.HasActiveSkillEffect(ownerSeat, SkillEffectKind.ForceDrawTile))
-            {
-                string reason = "Force draw skill is already active.";
-                Warn(reason);
-                EventPublisher.NotifySkillReservationRejected(ownerSeat, SkillEffectKind.ForceDrawTile, targetTile, reason);
-                return;
-            }
-
-            PendingSkillReservation reservation = new PendingSkillReservation(
-                ownerSeat,
-                SkillEffectKind.ForceDrawTile,
-                targetTile,
-                gameState.CurrentTurn,
-                gameState.TurnIndex);
-
-            if (!skillReservationService.Reserve(reservation, out string reserveReason))
-            {
-                Warn(reserveReason);
-                EventPublisher.NotifySkillReservationRejected(ownerSeat, SkillEffectKind.ForceDrawTile, targetTile, reserveReason);
-                return;
-            }
-
-            EventPublisher.NotifySkillReserved(reservation);
-        }
-
-        private bool ActivateForceDrawSkill(SeatId actorSeat, Tile targetTile, bool beforeDraw)
-        {
-            SkillActivationResult result = skillSystem.ActivateForceDrawTile(
+            EnsureSkillFlowService();
+            NotifySkillFlowResult(skillFlowService.RequestForceDraw(
                 gameState,
-                actorSeat,
-                targetTile);
-
-            if (!result.Success)
-            {
-                Warn(result.Reason);
-                if (beforeDraw)
-                    EventPublisher.NotifySkillReservationRejected(actorSeat, SkillEffectKind.ForceDrawTile, targetTile, result.Reason);
-
-                return false;
-            }
-
-            EventPublisher.NotifySkillActivated(actorSeat, result.Effect);
-            EventPublisher.NotifySkillActivatedDetailed(actorSeat, result.Effect, beforeDraw);
-            EventPublisher.NotifySkillEffectRegistered(result.Effect);
-            return true;
+                ownerSeat,
+                targetTileCode));
         }
 
         public void RequestSetAutoSortEnabled(bool enabled)
@@ -621,7 +530,7 @@ namespace MahjongPrototype
 
             autoSortEnabled = enabled;
             if (!enabled)
-                autoSortDeferredUntilReachDecisionResolved = false;
+                handAutoSortService?.ClearDeferred();
 
             EventPublisher.NotifyAutoSortChanged(enabled);
 
@@ -691,26 +600,25 @@ namespace MahjongPrototype
                 return;
             }
 
-            SeatId seat = gameState.WinDecisionSeat;
-            WinType? winType = gameState.WinDecisionType;
-            int turnIndex = gameState.WinDecisionTurnIndex;
-            bool shouldEndAfterDeclinedLastLiveWallRon =
-                winType == WinType.Ron && IsLastDiscardLastLiveWallDiscard();
-            MarkDeclinedRonFuriten(seat, winType);
-            ClearWinDecision();
+            EnsureDecisionServices();
+            WinDecisionDeclineResult result = winDecisionService.Decline(gameState);
 
-            EventPublisher.NotifyWinDeclined(seat, turnIndex);
-            EventPublisher.NotifyWinDeclinedDetailed(seat, winType, turnIndex);
+            EventPublisher.NotifyWinDeclined(result.Seat, result.TurnIndex);
+            EventPublisher.NotifyWinDeclinedDetailed(
+                result.Seat,
+                result.WinType,
+                result.TurnIndex);
 
-            if (winType == WinType.Tsumo && ShouldAutoDiscardDrawnTileAfterDraw(seat))
+            if (result.WinType == WinType.Tsumo &&
+                ShouldAutoDiscardDrawnTileAfterDraw(result.Seat))
             {
-                TryAutoDiscardDrawnTileAfterDraw(seat);
+                TryAutoDiscardDrawnTileAfterDraw(result.Seat);
                 return;
             }
 
-            if (winType == WinType.Ron && !gameState.IsRoundEnded)
+            if (result.WinType == WinType.Ron && !gameState.IsRoundEnded)
             {
-                if (shouldEndAfterDeclinedLastLiveWallRon)
+                if (result.ShouldEndAfterLastRon)
                     EndRound(RoundLifecycleService.RoundEndReasonWallEmpty);
                 else
                     AdvanceTurn();
@@ -736,10 +644,11 @@ namespace MahjongPrototype
                 return;
             }
 
-            SeatId seat = gameState.SelfSeat;
-            int turnIndex = gameState.ReachDecisionTurnIndex;
-            gameState.BeginReachDiscardSelection(seat);
-            if (!gameState.IsReachDiscardSelectionPending)
+            EnsureDecisionServices();
+            ReachDecisionResult result = reachDecisionService.BeginDiscardSelection(
+                gameState,
+                gameState.SelfSeat);
+            if (!result.Success)
             {
                 Warn("Reach discard candidates are not available.");
                 NotifyTurnBlocked("ReachBlocked", "ReachCandidatesMissing");
@@ -749,9 +658,9 @@ namespace MahjongPrototype
             EventPublisher.NotifyTurnDebug(
                 "ReachDiscardSelection",
                 $"phase={gameState.TurnPhase}; candidates={gameState.ReachDiscardCandidates.Count}",
-                seat: seat,
-                turnIndex: turnIndex);
-            EventPublisher.NotifyReachDiscardSelectionStarted(seat, turnIndex);
+                seat: result.Seat,
+                turnIndex: result.TurnIndex);
+            EventPublisher.NotifyReachDiscardSelectionStarted(result.Seat, result.TurnIndex);
         }
 
         public void RequestCancelReachDiscardSelection()
@@ -773,9 +682,11 @@ namespace MahjongPrototype
                 return;
             }
 
-            SeatId seat = gameState.ReachDecisionSeat;
-            int turnIndex = gameState.ReachDecisionTurnIndex;
-            if (!gameState.CancelReachDiscardSelection())
+            EnsureDecisionServices();
+            ReachDecisionResult result = reachDecisionService.CancelDiscardSelection(
+                gameState,
+                gameState.SelfSeat);
+            if (!result.Success)
             {
                 Warn("Reach discard selection could not be canceled.");
                 NotifyTurnBlocked("ReachBlocked", "ReachCandidatesMissing");
@@ -785,9 +696,9 @@ namespace MahjongPrototype
             EventPublisher.NotifyTurnDebug(
                 "ReachDiscardSelectionCanceled",
                 $"phase={gameState.TurnPhase}; candidates={gameState.ReachDiscardCandidates.Count}",
-                seat: seat,
-                turnIndex: turnIndex);
-            EventPublisher.NotifyReachDiscardSelectionCanceled(seat, turnIndex);
+                seat: result.Seat,
+                turnIndex: result.TurnIndex);
+            EventPublisher.NotifyReachDiscardSelectionCanceled(result.Seat, result.TurnIndex);
         }
 
         public void RequestDeclineReach()
@@ -802,16 +713,15 @@ namespace MahjongPrototype
                 return;
             }
 
-            SeatId seat = gameState.ReachDecisionSeat;
-            int turnIndex = gameState.ReachDecisionTurnIndex;
-            gameState.ClearReachDecision();
+            EnsureDecisionServices();
+            ReachDecisionResult result = reachDecisionService.Decline(gameState);
             ApplyDeferredAutoSortAfterReachDecisionIfNeeded("ReachDeclined");
             EventPublisher.NotifyTurnDebug(
                 "ReachDeclined",
                 $"phase={gameState.TurnPhase}",
-                seat: seat,
-                turnIndex: turnIndex);
-            EventPublisher.NotifyReachDeclined(seat, turnIndex);
+                seat: result.Seat,
+                turnIndex: result.TurnIndex);
+            EventPublisher.NotifyReachDeclined(result.Seat, result.TurnIndex);
         }
 
         private void DealInitialHands()
@@ -852,14 +762,6 @@ namespace MahjongPrototype
             }
 
             AdvanceTurn();
-        }
-
-        private bool IsLastDiscardLastLiveWallDiscard()
-        {
-            if (gameState == null || gameState.Discards.Count <= 0)
-                return false;
-
-            return gameState.Discards[gameState.Discards.Count - 1].IsLastLiveWallDiscard;
         }
 
         private void RecordTurnDrawIfNeeded(DrawResult result)
@@ -925,27 +827,8 @@ namespace MahjongPrototype
 
         private void ResolveReservedSkillBeforeDraw(SeatId seat)
         {
-            if (gameState.IsRoundEnded || gameState.IsWinDecisionPending)
-                return;
-
-            if (!skillReservationService.TryConsumeForTurn(seat, out PendingSkillReservation reservation))
-                return;
-
-            EventPublisher.NotifySkillReservationConsumed(reservation);
-
-            switch (reservation.SkillEffectKind)
-            {
-                case SkillEffectKind.ForceDrawTile:
-                    ActivateForceDrawSkill(reservation.OwnerSeat, reservation.TargetTile, true);
-                    break;
-                default:
-                    EventPublisher.NotifySkillReservationRejected(
-                        reservation.OwnerSeat,
-                        reservation.SkillEffectKind,
-                        reservation.TargetTile,
-                        "Unsupported skill reservation.");
-                    break;
-            }
+            EnsureSkillFlowService();
+            NotifySkillFlowResult(skillFlowService.ResolveReservedBeforeDraw(gameState, seat));
         }
 
         private bool TryAutoDrawAtTurnStart(SeatId seat, int turnIndex)
@@ -984,42 +867,9 @@ namespace MahjongPrototype
         {
             // PROTOTYPE: Check only a closed-hand self-draw declaration candidate.
             InitializeEvaluators();
-            SeatId candidateSeat = gameState.CurrentTurn;
-            PlayerSeat playerSeat = gameState.GetPlayerSeat(candidateSeat);
-            Tile? winningTile = playerSeat.DrawnTile;
-            WinDeclarationEvaluationResult evaluationResult =
-                winningTile.HasValue
-                    ? winDeclarationEvaluator.EvaluateWithTile(CreateWinDeclarationContext(
-                        playerSeat,
-                        WinType.Tsumo,
-                        winningTile.Value,
-                        null))
-                    : WinDeclarationEvaluationResult.NotWinningShape(WinCheckResult.NotWin);
-            bool canDeclareWin = evaluationResult.CanDeclareWin;
-
-            if (canDeclareWin)
-            {
-                SetWinDecisionPendingDetailed(
-                    candidateSeat,
-                    WinType.Tsumo,
-                    winningTile.Value,
-                    null,
-                    gameState.TurnIndex,
-                    evaluationResult);
-            }
-            else
-            {
-                ClearWinDecision();
-            }
-
-            EventPublisher.NotifyWinChecked(candidateSeat, gameState.TurnIndex, canDeclareWin);
-            EventPublisher.NotifyWinCheckedDetailed(
-                candidateSeat,
-                WinType.Tsumo,
-                winningTile,
-                null,
-                gameState.TurnIndex,
-                canDeclareWin);
+            WinDecisionEvaluation evaluation = winDecisionService.EvaluateTsumo(gameState);
+            NotifyWinDecisionStartedIfNeeded(evaluation);
+            NotifyWinCheckResults(evaluation);
         }
 
         private void ResolveAfterDraw(SeatId seat)
@@ -1118,139 +968,27 @@ namespace MahjongPrototype
 
         private void TryBeginReachDecisionAfterDraw(SeatId seat)
         {
-            if (gameState == null ||
-                gameState.IsRoundEnded ||
-                gameState.IsWinDecisionPending ||
-                gameState.IsReachDecisionPending ||
-                gameState.IsReachDiscardSelectionPending)
-            {
-                return;
-            }
-
-            if (!gameState.IsSelfTurn || !gameState.IsSelfSeat(seat))
-                return;
-
-            PlayerSeat playerSeat = gameState.GetPlayerSeat(seat);
-            if (playerSeat.IsReachDeclared ||
-                !playerSeat.HasDrawnTile ||
-                !playerSeat.DrawnTile.HasValue ||
-                playerSeat.Hand.Count != 13)
-            {
-                return;
-            }
-
-            ReachCheckResult result = reachChecker.CheckReach(
-                playerSeat.Hand.GetTiles(),
-                playerSeat.DrawnTile.Value);
-            if (!result.CanReach)
-                return;
-
-            gameState.BeginReachDecision(seat, result.Candidates, gameState.TurnIndex);
-            if (!gameState.IsReachDecisionPending)
+            EnsureDecisionServices();
+            ReachDecisionResult result = reachDecisionService.TryBeginAfterDraw(gameState, seat);
+            if (!result.Success)
                 return;
 
             EventPublisher.NotifyTurnDebug(
                 "ReachDecision",
                 $"phase={gameState.TurnPhase}; candidates={gameState.ReachDiscardCandidates.Count}",
-                seat: seat,
-                tile: playerSeat.DrawnTile,
-                turnIndex: gameState.TurnIndex);
-            EventPublisher.NotifyReachDecisionStarted(seat, gameState.TurnIndex);
+                seat: result.Seat,
+                tile: result.DrawnTile,
+                turnIndex: result.TurnIndex);
+            EventPublisher.NotifyReachDecisionStarted(result.Seat, result.TurnIndex);
         }
 
         private bool TryBeginRonDecision(DiscardRecord discard)
         {
             InitializeEvaluators();
-            FuritenEvaluationResultSet furitenResults =
-                furitenEvaluator.EvaluateAll(gameState);
-
-            // PROTOTYPE: Only locally-operated seats can answer the current single win decision.
-            // CPU/RemoteHuman ron decisions will be introduced with a reaction window.
-            for (int i = 0; i < gameState.SeatSlots.Count; i++)
-            {
-                SeatSlot candidateSlot = gameState.SeatSlots[i];
-                if (!candidateSlot.HasPlayer)
-                    continue;
-
-                SeatId candidateSeat = candidateSlot.Wind;
-                if (candidateSeat == discard.ActorSeat)
-                    continue;
-
-                if (candidateSlot.ParticipantType != ParticipantType.LocalHuman)
-                    continue;
-
-                PlayerSeat candidatePlayerSeat = gameState.GetPlayerSeat(candidateSeat);
-                WinDeclarationEvaluationResult evaluationResult =
-                    winDeclarationEvaluator.EvaluateWithTile(CreateWinDeclarationContext(
-                        candidatePlayerSeat,
-                        WinType.Ron,
-                        discard.Tile,
-                        discard.ActorSeat,
-                        discard));
-                if (IsNoYakuWinningShape(evaluationResult, candidatePlayerSeat))
-                    candidatePlayerSeat.MarkTemporaryFuriten();
-
-                bool passesFuritenCheck =
-                    furitenResults.TryGet(
-                        candidateSeat,
-                        out FuritenSeatEvaluationResult furitenResult) &&
-                    furitenResult.IsEvaluated &&
-                    !furitenResult.IsFuriten;
-                bool canDeclareWin = evaluationResult.CanDeclareWin && passesFuritenCheck;
-
-                if (canDeclareWin)
-                {
-                    SetWinDecisionPendingDetailed(
-                        candidateSeat,
-                        WinType.Ron,
-                        discard.Tile,
-                        discard.ActorSeat,
-                        discard.TurnIndex,
-                        evaluationResult);
-                }
-
-                EventPublisher.NotifyWinChecked(candidateSeat, discard.TurnIndex, canDeclareWin);
-                EventPublisher.NotifyWinCheckedDetailed(
-                    candidateSeat,
-                    WinType.Ron,
-                    discard.Tile,
-                    discard.ActorSeat,
-                    discard.TurnIndex,
-                    canDeclareWin);
-
-                if (!canDeclareWin)
-                    continue;
-
-                return true;
-            }
-
-            return false;
-        }
-
-        private static bool IsNoYakuWinningShape(
-            WinDeclarationEvaluationResult evaluationResult,
-            PlayerSeat playerSeat)
-        {
-            return evaluationResult != null &&
-                evaluationResult.IsWinningShape &&
-                !evaluationResult.HasYaku &&
-                playerSeat != null &&
-                !playerSeat.IsReachDeclared;
-        }
-
-        private void MarkDeclinedRonFuriten(SeatId seat, WinType? winType)
-        {
-            if (winType != WinType.Ron)
-                return;
-
-            PlayerSeat playerSeat = gameState.GetPlayerSeat(seat);
-            if (playerSeat.IsReachDeclared)
-            {
-                playerSeat.MarkReachPassFuriten();
-                return;
-            }
-
-            playerSeat.MarkTemporaryFuriten();
+            WinDecisionEvaluation evaluation = winDecisionService.EvaluateRon(gameState, discard);
+            NotifyWinDecisionStartedIfNeeded(evaluation);
+            NotifyWinCheckResults(evaluation);
+            return evaluation.DecisionStarted;
         }
 
         private void CommitDrawnTileToHandIfPresent(SeatId seat)
@@ -1264,187 +1002,52 @@ namespace MahjongPrototype
 
         private bool IsValidReachDiscardCandidate(SeatId seat, DiscardSource source, int handIndex)
         {
-            if (gameState == null || !gameState.IsReachDiscardSelectionPending)
-                return true;
-
-            if (seat != gameState.ReachDecisionSeat)
-                return false;
-
-            PlayerSeat playerSeat = gameState.GetPlayerSeat(seat);
-            if (playerSeat == null)
-                return false;
-
-            for (int i = 0; i < gameState.ReachDiscardCandidates.Count; i++)
-            {
-                ReachDiscardCandidate candidate = gameState.ReachDiscardCandidates[i];
-                if (candidate.Source != source || candidate.HandIndex != handIndex)
-                    continue;
-
-                if (source == DiscardSource.DrawnTile)
-                {
-                    if (playerSeat.HasDrawnTile &&
-                        playerSeat.DrawnTile.HasValue &&
-                        candidate.Tile == playerSeat.DrawnTile.Value)
-                    {
-                        return true;
-                    }
-
-                    continue;
-                }
-
-                if (handIndex < 0 || handIndex >= playerSeat.Hand.Count)
-                    continue;
-
-                if (candidate.Tile == playerSeat.Hand.GetTiles()[handIndex])
-                    return true;
-            }
-
-            return false;
+            EnsureDecisionServices();
+            return reachDecisionService.IsValidDiscardCandidate(
+                gameState,
+                seat,
+                source,
+                handIndex);
         }
 
         private bool CompleteReachDeclarationIfPending(DiscardRecord record)
         {
-            if (gameState == null ||
-                !gameState.IsReachDiscardSelectionPending ||
-                record.ActorSeat != gameState.ReachDecisionSeat)
-            {
+            EnsureDecisionServices();
+            ReachDeclarationResult result = reachDecisionService.CompleteDeclarationIfPending(
+                gameState,
+                record);
+            if (!result.Declared)
                 return false;
-            }
-
-            SeatId seat = record.ActorSeat;
-            int turnIndex = gameState.TurnIndex;
-            PlayerSeat playerSeat = gameState.GetPlayerSeat(seat);
-            bool isDoubleReachDeclared = IsFirstDiscardBySeat(gameState, seat);
-            playerSeat.DeclareReach(turnIndex, isDoubleReachDeclared);
-            gameState.ClearReachDecision();
             ApplyDeferredAutoSortAfterReachDecisionIfNeeded("ReachDeclared");
-            EventPublisher.NotifyReachDeclared(seat, turnIndex);
+            EventPublisher.NotifyReachDeclared(result.Seat, result.TurnIndex);
             EventPublisher.NotifyTurnDebug(
                 "ReachDeclared",
                 $"phase={gameState.TurnPhase}; discardTile={record.Tile}",
-                seat: seat,
+                seat: result.Seat,
                 tile: record.Tile,
-                turnIndex: turnIndex);
+                turnIndex: result.TurnIndex);
             return true;
-        }
-
-        private static bool IsFirstDiscardBySeat(
-            MahjongGameState gameState,
-            SeatId seat)
-        {
-            if (gameState == null || gameState.Discards == null)
-                return false;
-
-            int discardCount = 0;
-            for (int i = 0; i < gameState.Discards.Count; i++)
-            {
-                if (gameState.Discards[i].ActorSeat != seat)
-                    continue;
-
-                discardCount++;
-                if (discardCount > 1)
-                    return false;
-            }
-
-            return discardCount == 1;
-        }
-
-        private static bool IsFirstTurnTsumoEligible(
-            MahjongGameState gameState,
-            SeatId seat,
-            WinType winType)
-        {
-            if (winType != WinType.Tsumo ||
-                gameState == null ||
-                gameState.Discards == null)
-            {
-                return false;
-            }
-
-            bool hasAnyDiscard = false;
-            for (int i = 0; i < gameState.Discards.Count; i++)
-            {
-                hasAnyDiscard = true;
-                if (gameState.Discards[i].ActorSeat == seat)
-                    return false;
-            }
-
-            return seat != SeatId.East || !hasAnyDiscard;
-        }
-
-        private static bool IsLastLiveWallDraw(
-            MahjongGameState gameState,
-            SeatId seat,
-            Tile winningTile,
-            WinType winType)
-        {
-            if (winType != WinType.Tsumo || gameState == null)
-                return false;
-
-            TurnDrawRecord? lastTurnDraw = gameState.LastTurnDraw;
-            if (!lastTurnDraw.HasValue)
-                return false;
-
-            TurnDrawRecord record = lastTurnDraw.Value;
-            return record.IsLastLiveWallDraw &&
-                record.ActorSeat == seat &&
-                record.TurnIndex == gameState.TurnIndex &&
-                record.Tile.Equals(winningTile);
         }
 
         private void ExpireIppatsuAfterDiscard(
             DiscardRecord record,
             bool declaredReachNow)
         {
-            if (gameState == null || declaredReachNow)
-                return;
-
-            PlayerSeat playerSeat = gameState.GetPlayerSeat(record.ActorSeat);
-            if (playerSeat.IsIppatsuEligible)
-                playerSeat.ClearIppatsuEligibility();
-        }
-
-        private WinDeclarationEvaluationContext CreateWinDeclarationContext(
-            PlayerSeat playerSeat,
-            WinType winType,
-            Tile winningTile,
-            SeatId? sourceSeat,
-            DiscardRecord? sourceDiscard = null)
-        {
-            SeatId winnerSeat = playerSeat.SeatId;
-            bool isFirstTurnTsumoEligible =
-                IsFirstTurnTsumoEligible(gameState, winnerSeat, winType);
-            bool isLastLiveWallDraw =
-                IsLastLiveWallDraw(gameState, winnerSeat, winningTile, winType);
-            bool isLastLiveWallDiscard =
-                winType == WinType.Ron &&
-                sourceDiscard.HasValue &&
-                sourceDiscard.Value.IsLastLiveWallDiscard;
-            return new WinDeclarationEvaluationContext(
-                playerSeat.Hand.GetTiles(),
-                winningTile,
-                winType,
-                winnerSeat,
-                sourceSeat,
-                gameState.WindProgress.RoundWind,
-                winnerSeat,
-                playerSeat.IsReachDeclared,
-                true,
-                playerSeat.IsIppatsuEligible,
-                playerSeat.IsDoubleReachDeclared,
-                isFirstTurnTsumoEligible,
-                isLastLiveWallDraw,
-                isLastLiveWallDiscard);
+            EnsureDecisionServices();
+            reachDecisionService.ExpireIppatsuAfterDiscard(
+                gameState,
+                record,
+                declaredReachNow);
         }
 
         private void SetWinDecisionPending(bool isPending, SeatId seat, int turnIndex)
         {
             if (gameState == null)
                 return;
-
+            EnsureDecisionServices();
+            winDecisionService.SetPending(gameState, isPending, seat, turnIndex);
             if (isPending)
             {
-                gameState.BeginWinDecision(seat, turnIndex);
                 EventPublisher.NotifyTurnDebug(
                     "WinDecision",
                     $"phase={gameState.TurnPhase}",
@@ -1453,38 +1056,12 @@ namespace MahjongPrototype
                 return;
             }
 
-            gameState.ClearWinDecision();
-        }
-
-        private void SetWinDecisionPendingDetailed(
-            SeatId seat,
-            WinType winType,
-            Tile winningTile,
-            SeatId? sourceSeat,
-            int turnIndex,
-            WinDeclarationEvaluationResult evaluationResult)
-        {
-            if (gameState == null)
-                return;
-
-            gameState.BeginWinDecisionDetailed(
-                seat,
-                winType,
-                winningTile,
-                sourceSeat,
-                turnIndex,
-                evaluationResult);
-            EventPublisher.NotifyTurnDebug(
-                "WinDecision",
-                $"phase={gameState.TurnPhase}; winType={winType}; sourceSeat={sourceSeat}",
-                seat: seat,
-                tile: winningTile,
-                turnIndex: turnIndex);
         }
 
         private void ClearWinDecision()
         {
-            SetWinDecisionPending(false, default, 0);
+            EnsureDecisionServices();
+            winDecisionService.SetPending(gameState, false, default, 0);
         }
 
         private void EndRound(string reason)
@@ -1497,7 +1074,7 @@ namespace MahjongPrototype
             EnsureRoundLifecycleService();
             cpuTurnController?.CancelPendingTurn();
             CancelPendingAutoDiscardDrawnTile();
-            autoSortDeferredUntilReachDecisionResolved = false;
+            handAutoSortService?.ClearDeferred();
             RoundLifecycleEndResult endResult = roundLifecycleService.EndRound(gameState, reason);
             RoundResult roundResult = endResult.RoundResult;
 
@@ -1514,12 +1091,85 @@ namespace MahjongPrototype
 
         private void NotifySkillResolutionEvents(DrawResult result)
         {
-            if (!result.SkillWasPresent || result.ResolvedSkillEffect == null)
+            EnsureSkillFlowService();
+            SkillDrawResolutionResult resolution = skillFlowService.ResolveDrawResult(result);
+            if (!resolution.Resolved)
                 return;
 
-            ActiveSkillEffect effect = result.ResolvedSkillEffect;
+            ActiveSkillEffect effect = resolution.Effect;
             EventPublisher.NotifySkillEffectResolved(result);
             EventPublisher.NotifySkillEffectExpired(effect, "ConsumedByDraw");
+        }
+
+        private void NotifySkillFlowResult(SkillFlowResult result)
+        {
+            if (result.Type == SkillFlowResultType.None)
+                return;
+
+            if (result.HasReservation && result.Type != SkillFlowResultType.Reserved)
+                EventPublisher.NotifySkillReservationConsumed(result.Reservation);
+
+            switch (result.Type)
+            {
+                case SkillFlowResultType.Reserved:
+                    EventPublisher.NotifySkillReserved(result.Reservation);
+                    break;
+                case SkillFlowResultType.Activated:
+                    EventPublisher.NotifySkillActivated(result.Seat, result.Effect);
+                    EventPublisher.NotifySkillActivatedDetailed(
+                        result.Seat,
+                        result.Effect,
+                        result.BeforeDraw);
+                    EventPublisher.NotifySkillEffectRegistered(result.Effect);
+                    break;
+                case SkillFlowResultType.Rejected:
+                case SkillFlowResultType.UnsupportedReservation:
+                    Warn(result.Reason);
+                    if (result.BeforeDraw || result.HasReservation ||
+                        !result.TargetTile.Equals(default(Tile)))
+                    {
+                        EventPublisher.NotifySkillReservationRejected(
+                            result.Seat,
+                            result.HasReservation
+                                ? result.Reservation.SkillEffectKind
+                                : SkillEffectKind.ForceDrawTile,
+                            result.TargetTile,
+                            result.Reason);
+                    }
+                    break;
+            }
+        }
+
+        private void NotifyWinCheckResults(WinDecisionEvaluation evaluation)
+        {
+            for (int i = 0; i < evaluation.Notifications.Count; i++)
+            {
+                WinCheckNotification notification = evaluation.Notifications[i];
+                EventPublisher.NotifyWinChecked(
+                    notification.Seat,
+                    notification.TurnIndex,
+                    notification.CanDeclareWin);
+                EventPublisher.NotifyWinCheckedDetailed(
+                    notification.Seat,
+                    notification.WinType,
+                    notification.Tile,
+                    notification.SourceSeat,
+                    notification.TurnIndex,
+                    notification.CanDeclareWin);
+            }
+        }
+
+        private void NotifyWinDecisionStartedIfNeeded(WinDecisionEvaluation evaluation)
+        {
+            if (!evaluation.DecisionStarted || gameState == null)
+                return;
+
+            EventPublisher.NotifyTurnDebug(
+                "WinDecision",
+                $"phase={gameState.TurnPhase}; winType={gameState.WinDecisionType}; sourceSeat={gameState.WinSourceSeat}",
+                seat: gameState.WinDecisionSeat,
+                tile: gameState.WinningTile,
+                turnIndex: gameState.WinDecisionTurnIndex);
         }
 
         private void CacheReferences()
@@ -1582,6 +1232,27 @@ namespace MahjongPrototype
                 ? new NoYakuTenpaiEvaluator(winDeclarationEvaluator)
                 : null;
             initializedYakuDefinitionCatalog = yakuDefinitionCatalog;
+            winDecisionService = new WinDecisionService(
+                winDeclarationEvaluator,
+                furitenEvaluator,
+                noYakuTenpaiEvaluator);
+        }
+
+        private void EnsureDecisionServices()
+        {
+            InitializeEvaluators();
+            if (reachDecisionService == null)
+                reachDecisionService = new ReachDecisionService(reachChecker);
+        }
+
+        private void EnsureSkillFlowService()
+        {
+            skillFlowService ??= new SkillFlowService(skillSystem, skillReservationService);
+        }
+
+        private void EnsureHandAutoSortService()
+        {
+            handAutoSortService ??= new HandAutoSortService();
         }
 
         private void EnsureCpuTurnController()
@@ -1618,20 +1289,6 @@ namespace MahjongPrototype
                 return fixedSelfSeat;
 
             return (SeatId)Random.Range(0, 4);
-        }
-
-        private bool IsActiveSeat(SeatId seat)
-        {
-            if (gameState == null)
-                return false;
-
-            for (int i = 0; i < gameState.ActiveTurnSeats.Count; i++)
-            {
-                if (gameState.ActiveTurnSeats[i] == seat)
-                    return true;
-            }
-
-            return false;
         }
 
         private bool CanUseGameState()
@@ -1687,39 +1344,33 @@ namespace MahjongPrototype
 
         private void ApplyAutoSort(SeatId seat, string reason, bool notify)
         {
-            if (ShouldDeferAutoSortUntilReachDecisionResolved(seat))
-            {
-                autoSortDeferredUntilReachDecisionResolved = true;
+            EnsureHandAutoSortService();
+            HandAutoSortResult result = handAutoSortService.Apply(
+                gameState,
+                autoSortEnabled,
+                seat,
+                reason);
+            if (!result.WasApplied)
                 return;
-            }
 
-            gameState.GetPlayerSeat(seat).Hand.SortByTypeIndex();
-            EventPublisher.NotifyHandAutoSortedDetailed(seat, gameState.TurnIndex, reason);
+            EventPublisher.NotifyHandAutoSortedDetailed(result.Seat, result.TurnIndex, result.Reason);
 
             if (notify)
-                EventPublisher.NotifyHandAutoSorted(seat, gameState.TurnIndex);
-        }
-
-        private bool ShouldDeferAutoSortUntilReachDecisionResolved(SeatId seat)
-        {
-            return gameState != null &&
-                gameState.IsSelfSeat(seat) &&
-                (gameState.IsReachDecisionPending || gameState.IsReachDiscardSelectionPending);
+                EventPublisher.NotifyHandAutoSorted(result.Seat, result.TurnIndex);
         }
 
         private void ApplyDeferredAutoSortAfterReachDecisionIfNeeded(string reason)
         {
-            if (!autoSortDeferredUntilReachDecisionResolved ||
-                gameState == null ||
-                gameState.IsReachDecisionPending ||
-                gameState.IsReachDiscardSelectionPending)
-            {
+            EnsureHandAutoSortService();
+            HandAutoSortResult result = handAutoSortService.ApplyDeferredIfReady(
+                gameState,
+                autoSortEnabled,
+                reason);
+            if (!result.WasApplied)
                 return;
-            }
 
-            autoSortDeferredUntilReachDecisionResolved = false;
-            if (autoSortEnabled)
-                ApplyAutoSort(gameState.SelfSeat, reason, true);
+            EventPublisher.NotifyHandAutoSortedDetailed(result.Seat, result.TurnIndex, result.Reason);
+            EventPublisher.NotifyHandAutoSorted(result.Seat, result.TurnIndex);
         }
 
         private void Warn(string message)
