@@ -27,6 +27,8 @@ namespace MahjongPrototype.Services
                 return SkillFlowResult.Rejected("Round already ended. Press Retry.");
             if (gameState.IsWinDecisionPending)
                 return SkillFlowResult.Rejected("Declare or decline win before activating another skill.");
+            if (gameState.IsReactionWindowPending)
+                return SkillFlowResult.Rejected("Resolve reactions before activating another skill.");
             if (gameState.IsReachDiscardSelectionPending)
                 return SkillFlowResult.Rejected("Resolve reach discard selection before activating another skill.");
             if (!Tile.TryParse(targetTileCode, out Tile targetTile))
@@ -61,6 +63,7 @@ namespace MahjongPrototype.Services
         public SkillFlowResult ResolveReservedBeforeDraw(MahjongGameState gameState, SeatId seat)
         {
             if (gameState == null || gameState.IsRoundEnded || gameState.IsWinDecisionPending ||
+                gameState.IsReactionWindowPending ||
                 !reservationService.TryConsumeForTurn(seat, out PendingSkillReservation reservation))
             {
                 return SkillFlowResult.None;

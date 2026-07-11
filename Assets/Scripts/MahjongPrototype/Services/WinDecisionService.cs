@@ -90,7 +90,7 @@ namespace MahjongPrototype.Services
 
             FuritenEvaluationResultSet furitenResults = furitenEvaluator.EvaluateAll(gameState);
             List<WinCheckNotification> notifications = new List<WinCheckNotification>();
-            bool decisionStarted = false;
+            RonWinCandidate? candidate = null;
 
             // PROTOTYPE: only local participants currently receive the single ron decision.
             for (int i = 0; i < gameState.SeatSlots.Count; i++)
@@ -130,23 +130,16 @@ namespace MahjongPrototype.Services
                 if (!canDeclareWin)
                     continue;
 
-                gameState.BeginWinDecisionDetailed(
-                    slot.Wind,
-                    WinType.Ron,
-                    discard.Tile,
-                    discard.ActorSeat,
-                    discard.TurnIndex,
-                    evaluationResult);
-                decisionStarted = true;
+                candidate = new RonWinCandidate(slot.Wind, evaluationResult);
                 break;
             }
 
-            return new WinDecisionEvaluation(notifications, decisionStarted);
+            return new WinDecisionEvaluation(notifications, candidate.HasValue, candidate);
         }
 
         public WinDecisionDeclineResult Decline(MahjongGameState gameState)
         {
-            if (gameState == null || !gameState.IsWinDecisionPending)
+            if (gameState == null || gameState.TurnPhase != TurnPhase.WinDecision)
                 return WinDecisionDeclineResult.None;
 
             SeatId seat = gameState.WinDecisionSeat;
@@ -162,6 +155,18 @@ namespace MahjongPrototype.Services
                 winType,
                 turnIndex,
                 shouldEndAfterLastRon);
+        }
+
+        public void MarkDeclinedRonFuriten(MahjongGameState gameState, SeatId seat)
+        {
+            if (gameState == null)
+                return;
+
+            PlayerSeat playerSeat = gameState.GetPlayerSeat(seat);
+            if (playerSeat.IsReachDeclared)
+                playerSeat.MarkReachPassFuriten();
+            else
+                playerSeat.MarkTemporaryFuriten();
         }
 
         public void SetPending(MahjongGameState gameState, bool isPending, SeatId seat, int turnIndex)
@@ -227,7 +232,7 @@ namespace MahjongPrototype.Services
                 !playerSeat.IsReachDeclared;
         }
 
-        private static void MarkDeclinedRonFuriten(
+        private void MarkDeclinedRonFuriten(
             MahjongGameState gameState,
             SeatId seat,
             WinType? winType)
@@ -235,11 +240,7 @@ namespace MahjongPrototype.Services
             if (winType != WinType.Ron)
                 return;
 
-            PlayerSeat playerSeat = gameState.GetPlayerSeat(seat);
-            if (playerSeat.IsReachDeclared)
-                playerSeat.MarkReachPassFuriten();
-            else
-                playerSeat.MarkTemporaryFuriten();
+            MarkDeclinedRonFuriten(gameState, seat);
         }
 
         private static bool IsLastDiscardLastLiveWallDiscard(MahjongGameState gameState)
@@ -300,11 +301,31 @@ namespace MahjongPrototype.Services
     public readonly struct WinDecisionEvaluation
     {
         public static WinDecisionEvaluation None => new WinDecisionEvaluation(
-            Array.Empty<WinCheckNotification>(), false);
-        public WinDecisionEvaluation(IReadOnlyList<WinCheckNotification> notifications, bool decisionStarted)
-        { Notifications = notifications ?? Array.Empty<WinCheckNotification>(); DecisionStarted = decisionStarted; }
+            Array.Empty<WinCheckNotification>(), false, null);
+        public WinDecisionEvaluation(
+            IReadOnlyList<WinCheckNotification> notifications,
+            bool decisionStarted,
+            RonWinCandidate? ronCandidate = null)
+        {
+            Notifications = notifications ?? Array.Empty<WinCheckNotification>();
+            DecisionStarted = decisionStarted;
+            RonCandidate = ronCandidate;
+        }
         public IReadOnlyList<WinCheckNotification> Notifications { get; }
         public bool DecisionStarted { get; }
+        public RonWinCandidate? RonCandidate { get; }
+    }
+
+    public readonly struct RonWinCandidate
+    {
+        public RonWinCandidate(SeatId seat, WinDeclarationEvaluationResult evaluationResult)
+        {
+            Seat = seat;
+            EvaluationResult = evaluationResult;
+        }
+
+        public SeatId Seat { get; }
+        public WinDeclarationEvaluationResult EvaluationResult { get; }
     }
 
     public readonly struct WinDecisionDeclineResult

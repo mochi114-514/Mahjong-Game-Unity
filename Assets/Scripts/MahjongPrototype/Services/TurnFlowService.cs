@@ -31,6 +31,7 @@ namespace MahjongPrototype.Services
             return gameState != null &&
                 !gameState.IsRoundEnded &&
                 !gameState.IsWinDecisionPending &&
+                !gameState.IsReactionWindowPending &&
                 gameState.CurrentTurn == seat &&
                 gameState.TurnIndex == turnIndex;
         }
@@ -72,6 +73,7 @@ namespace MahjongPrototype.Services
             if (gameState == null ||
                 gameState.IsRoundEnded ||
                 gameState.IsWinDecisionPending ||
+                gameState.IsReactionWindowPending ||
                 gameState.IsReachDecisionPending ||
                 gameState.IsReachDiscardSelectionPending ||
                 gameState.CurrentTurn != seat ||

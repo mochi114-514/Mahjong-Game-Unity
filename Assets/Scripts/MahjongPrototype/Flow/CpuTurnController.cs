@@ -56,6 +56,7 @@ namespace MahjongPrototype
                 gameState == null ||
                 !gateway.IsSameGameStateAndTurn(gameState, seat, turnIndex) ||
                 gameState.IsRoundEnded ||
+                gameState.TurnPhase != TurnPhase.WinDecision ||
                 !gameState.IsWinDecisionPending ||
                 gameState.WinDecisionSeat != seat ||
                 gameState.WinDecisionTurnIndex != turnIndex)

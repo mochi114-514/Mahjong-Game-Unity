@@ -53,6 +53,10 @@ namespace MahjongPrototype.Logging
             eventNotifier.TurnStarted += HandleTurnStarted;
             eventNotifier.TileDrawn += HandleTileDrawn;
             eventNotifier.TileDiscarded += HandleTileDiscarded;
+            eventNotifier.ReactionWindowStarted += HandleReactionWindowStarted;
+            eventNotifier.ReactionWindowAnswered += HandleReactionWindowAnswered;
+            eventNotifier.ReactionWindowResolved += HandleReactionWindowResolved;
+            eventNotifier.ReactionWindowClosed += HandleReactionWindowClosed;
             eventNotifier.RoundEnded += HandleRoundEnded;
             eventNotifier.SeatSlotsAssigned += HandleSeatSlotsAssigned;
             eventNotifier.TurnDebug += HandleTurnDebug;
@@ -81,6 +85,10 @@ namespace MahjongPrototype.Logging
             eventNotifier.TurnStarted -= HandleTurnStarted;
             eventNotifier.TileDrawn -= HandleTileDrawn;
             eventNotifier.TileDiscarded -= HandleTileDiscarded;
+            eventNotifier.ReactionWindowStarted -= HandleReactionWindowStarted;
+            eventNotifier.ReactionWindowAnswered -= HandleReactionWindowAnswered;
+            eventNotifier.ReactionWindowResolved -= HandleReactionWindowResolved;
+            eventNotifier.ReactionWindowClosed -= HandleReactionWindowClosed;
             eventNotifier.RoundEnded -= HandleRoundEnded;
             eventNotifier.SeatSlotsAssigned -= HandleSeatSlotsAssigned;
             eventNotifier.TurnDebug -= HandleTurnDebug;
@@ -156,6 +164,61 @@ namespace MahjongPrototype.Logging
                 hand: GetHandText(record.ActorSeat),
                 wallCount: GetWallCount(),
                 turnIndex: record.TurnIndex);
+        }
+
+        private void HandleReactionWindowStarted(ReactionWindow reactionWindow)
+        {
+            if (reactionWindow == null)
+                return;
+
+            DevLog.Record(
+                "Reaction",
+                "ReactionWindowStarted",
+                $"windowId={reactionWindow.WindowId}; candidates={reactionWindow.Candidates.Count}",
+                seat: reactionWindow.SourceDiscard.ActorSeat,
+                tile: reactionWindow.SourceDiscard.Tile,
+                wallCount: GetWallCount(),
+                turnIndex: reactionWindow.TurnIndex);
+        }
+
+        private void HandleReactionWindowAnswered(ReactionWindowAnswerResult result)
+        {
+            if (!result.Accepted || result.Candidate == null)
+                return;
+
+            DevLog.Record(
+                "Reaction",
+                "ReactionWindowAnswered",
+                $"windowId={result.WindowId}; reaction={result.Candidate.Kind}; answer={result.Candidate.ResponseState}",
+                seat: result.Candidate.Seat,
+                tile: result.Resolution.SourceDiscard.Tile,
+                wallCount: GetWallCount(),
+                turnIndex: result.Resolution.SourceDiscard.TurnIndex);
+        }
+
+        private void HandleReactionWindowResolved(ReactionWindowResolution resolution)
+        {
+            if (!resolution.IsResolved)
+                return;
+
+            DevLog.Record(
+                "Reaction",
+                "ReactionWindowResolved",
+                $"resolution={resolution.Type}",
+                seat: resolution.SourceDiscard.ActorSeat,
+                tile: resolution.SourceDiscard.Tile,
+                wallCount: GetWallCount(),
+                turnIndex: resolution.SourceDiscard.TurnIndex);
+        }
+
+        private void HandleReactionWindowClosed(int windowId)
+        {
+            DevLog.Record(
+                "Reaction",
+                "ReactionWindowClosed",
+                $"windowId={windowId}",
+                wallCount: GetWallCount(),
+                turnIndex: GetTurnIndex());
         }
 
         private void HandleRoundEnded(string reason)

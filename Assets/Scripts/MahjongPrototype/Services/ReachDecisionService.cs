@@ -15,6 +15,7 @@ namespace MahjongPrototype.Services
         public ReachDecisionResult TryBeginAfterDraw(MahjongGameState gameState, SeatId seat)
         {
             if (gameState == null || gameState.IsRoundEnded || gameState.IsWinDecisionPending ||
+                gameState.IsReactionWindowPending ||
                 gameState.IsReachDecisionPending || gameState.IsReachDiscardSelectionPending ||
                 !gameState.IsSelfTurn || !gameState.IsSelfSeat(seat))
             {

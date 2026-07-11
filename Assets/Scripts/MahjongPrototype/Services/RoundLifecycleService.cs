@@ -23,10 +23,21 @@ namespace MahjongPrototype.Services
 
         public RoundLifecycleEndResult EndRound(MahjongGameState gameState, string reason)
         {
+            return EndRound(gameState, reason, ReactionWindowResolution.None);
+        }
+
+        public RoundLifecycleEndResult EndRound(
+            MahjongGameState gameState,
+            string reason,
+            ReactionWindowResolution reactionResolution)
+        {
             if (gameState == null)
                 throw new ArgumentNullException(nameof(gameState));
 
-            RoundResult roundResult = CreateRoundResultForRoundEnd(gameState, reason);
+            RoundResult roundResult = CreateRoundResultForRoundEnd(
+                gameState,
+                reason,
+                reactionResolution);
             gameState.ClearWinDecision();
             gameState.ClearReachDecision();
             if (roundResult != null)
@@ -70,12 +81,15 @@ namespace MahjongPrototype.Services
             return (SeatId)(((int)currentSeat + 3) % 4);
         }
 
-        private RoundResult CreateRoundResultForRoundEnd(MahjongGameState gameState, string reason)
+        private RoundResult CreateRoundResultForRoundEnd(
+            MahjongGameState gameState,
+            string reason,
+            ReactionWindowResolution reactionResolution)
         {
             switch (reason)
             {
                 case RoundEndReasonWin:
-                    return CreateWinRoundResult(gameState);
+                    return CreateWinRoundResult(gameState, reactionResolution);
                 case RoundEndReasonWallEmpty:
                     return RoundResult.CreateExhaustiveDraw(
                         gameState.WindProgress,
@@ -86,8 +100,28 @@ namespace MahjongPrototype.Services
             }
         }
 
-        private RoundResult CreateWinRoundResult(MahjongGameState gameState)
+        private RoundResult CreateWinRoundResult(
+            MahjongGameState gameState,
+            ReactionWindowResolution reactionResolution)
         {
+            if (reactionResolution.Type == ReactionWindowResolutionType.RonDeclared &&
+                reactionResolution.Candidate != null)
+            {
+                ReactionWindowCandidate candidate = reactionResolution.Candidate;
+                HandEvaluationCandidateResult selectedRonCandidate =
+                    winningCandidateSelector.Select(
+                        candidate.WinDeclarationEvaluation?.HandEvaluationResult);
+                return RoundResult.CreateWin(
+                    gameState.WindProgress,
+                    reactionResolution.SourceDiscard.TurnIndex,
+                    candidate.Seat,
+                    WinType.Ron,
+                    reactionResolution.SourceDiscard.ActorSeat,
+                    reactionResolution.SourceDiscard.Tile,
+                    selectedRonCandidate,
+                    IsFinalRound(gameState.WindProgress));
+            }
+
             WinType winType = gameState.WinDecisionType ?? WinType.Tsumo;
             WinDeclarationEvaluationResult evaluationResult =
                 gameState.PendingWinDeclarationEvaluation;

@@ -74,6 +74,19 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
         public string CurrentTurnSlotWindName =>
             reflection.GetProperty(GetStateProperty("CurrentTurnSlot"), "Wind").ToString();
         public bool IsWinDecisionPending => (bool)GetStateProperty("IsWinDecisionPending");
+        public bool IsReactionWindowPending =>
+            (bool)GetStateProperty("IsReactionWindowPending");
+        public object CurrentReactionWindow => GetStateProperty("CurrentReactionWindow");
+        public int ReactionWindowId =>
+            (int)reflection.GetProperty(CurrentReactionWindow, "WindowId");
+        public int ReactionWindowCandidateCount => collections.Count(
+            reflection.GetProperty(CurrentReactionWindow, "Candidates"));
+        public string ReactionWindowSourceSeatName => reflection.GetProperty(
+            reflection.GetProperty(CurrentReactionWindow, "SourceDiscard"),
+            "ActorSeat").ToString();
+        public string ReactionWindowSourceTileCode => reflection.GetProperty(
+            reflection.GetProperty(CurrentReactionWindow, "SourceDiscard"),
+            "Tile").ToString();
         public string WinDecisionSeatName => GetStateProperty("WinDecisionSeat").ToString();
         public string WinDecisionSeatNameOrNull => NullablePropertyString(State, "WinDecisionSeat");
         public string WinDecisionTypeName => GetStateProperty("WinDecisionType").ToString();

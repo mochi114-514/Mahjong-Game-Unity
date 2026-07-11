@@ -16,6 +16,10 @@ namespace MahjongPrototype.Notifications
         public event Action<SeatId, int> TurnStarted;
         public event Action<DrawResult> TileDrawn;
         public event Action<DiscardRecord> TileDiscarded;
+        public event Action<ReactionWindow> ReactionWindowStarted;
+        public event Action<ReactionWindowAnswerResult> ReactionWindowAnswered;
+        public event Action<ReactionWindowResolution> ReactionWindowResolved;
+        public event Action<int> ReactionWindowClosed;
         public event Action<SeatId, ActiveSkillEffect> SkillActivated;
         public event Action<ActiveSkillEffect> SkillEffectRegistered;
         public event Action<DrawResult> SkillEffectResolved;
@@ -86,6 +90,30 @@ namespace MahjongPrototype.Notifications
         public void NotifyTileDiscarded(DiscardRecord discardRecord)
         {
             TileDiscarded?.Invoke(discardRecord);
+            NotifyAny();
+        }
+
+        public void NotifyReactionWindowStarted(ReactionWindow reactionWindow)
+        {
+            ReactionWindowStarted?.Invoke(reactionWindow);
+            NotifyAny();
+        }
+
+        public void NotifyReactionWindowAnswered(ReactionWindowAnswerResult result)
+        {
+            ReactionWindowAnswered?.Invoke(result);
+            NotifyAny();
+        }
+
+        public void NotifyReactionWindowResolved(ReactionWindowResolution resolution)
+        {
+            ReactionWindowResolved?.Invoke(resolution);
+            NotifyAny();
+        }
+
+        public void NotifyReactionWindowClosed(int windowId)
+        {
+            ReactionWindowClosed?.Invoke(windowId);
             NotifyAny();
         }
 

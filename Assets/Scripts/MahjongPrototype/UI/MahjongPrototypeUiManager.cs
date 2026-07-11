@@ -220,6 +220,10 @@ namespace MahjongPrototype.UI
             eventNotifier.TurnStarted += HandleTurnStarted;
             eventNotifier.TileDrawn += HandleTileDrawn;
             eventNotifier.TileDiscarded += HandleTileDiscarded;
+            eventNotifier.ReactionWindowStarted += HandleReactionWindowChanged;
+            eventNotifier.ReactionWindowAnswered += HandleReactionWindowAnswered;
+            eventNotifier.ReactionWindowResolved += HandleReactionWindowResolved;
+            eventNotifier.ReactionWindowClosed += HandleReactionWindowClosed;
             eventNotifier.SkillActivated += HandleSkillActivated;
             eventNotifier.SkillEffectRegistered += HandleSkillEffectRegistered;
             eventNotifier.SkillEffectResolved += HandleSkillEffectResolved;
@@ -249,6 +253,10 @@ namespace MahjongPrototype.UI
             eventNotifier.TurnStarted -= HandleTurnStarted;
             eventNotifier.TileDrawn -= HandleTileDrawn;
             eventNotifier.TileDiscarded -= HandleTileDiscarded;
+            eventNotifier.ReactionWindowStarted -= HandleReactionWindowChanged;
+            eventNotifier.ReactionWindowAnswered -= HandleReactionWindowAnswered;
+            eventNotifier.ReactionWindowResolved -= HandleReactionWindowResolved;
+            eventNotifier.ReactionWindowClosed -= HandleReactionWindowClosed;
             eventNotifier.SkillActivated -= HandleSkillActivated;
             eventNotifier.SkillEffectRegistered -= HandleSkillEffectRegistered;
             eventNotifier.SkillEffectResolved -= HandleSkillEffectResolved;
@@ -418,6 +426,36 @@ namespace MahjongPrototype.UI
                 RefreshZeroHanTenpaiUi();
                 RefreshFuritenUi();
             }
+        }
+
+        private void HandleReactionWindowChanged(ReactionWindow _)
+        {
+            RefreshGlobalStatus();
+            RefreshWinDecisionUi();
+            RefreshReachDecisionUi();
+            RefreshInteractionUi();
+        }
+
+        private void HandleReactionWindowAnswered(ReactionWindowAnswerResult _)
+        {
+            RefreshGlobalStatus();
+            RefreshWinDecisionUi();
+            RefreshInteractionUi();
+        }
+
+        private void HandleReactionWindowResolved(ReactionWindowResolution _)
+        {
+            RefreshGlobalStatus();
+            RefreshWinDecisionUi();
+            RefreshInteractionUi();
+        }
+
+        private void HandleReactionWindowClosed(int _)
+        {
+            RefreshGlobalStatus();
+            RefreshWinDecisionUi();
+            RefreshReachDecisionUi();
+            RefreshInteractionUi();
         }
 
         private void HandleSkillActivated(SeatId _, ActiveSkillEffect __)
@@ -747,6 +785,7 @@ namespace MahjongPrototype.UI
             return gameFlow != null &&
                 state != null &&
                 !state.IsWinDecisionPending &&
+                !state.IsReactionWindowPending &&
                 !state.IsRoundEnded &&
                 !state.IsReachDiscardSelectionPending &&
                 !IsDeclaredReachWaitingForDraw(state);

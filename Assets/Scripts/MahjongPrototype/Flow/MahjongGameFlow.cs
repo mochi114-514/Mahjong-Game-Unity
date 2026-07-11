@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using MahjongPrototype.Definitions;
 using MahjongPrototype.Domain;
 using MahjongPrototype.Notifications;
@@ -66,6 +67,7 @@ namespace MahjongPrototype
         private RoundLifecycleService roundLifecycleService;
         private TurnFlowService turnFlowService;
         private WinDecisionService winDecisionService;
+        private ReactionWindowService reactionWindowService;
         private ReachDecisionService reachDecisionService;
         private SkillFlowService skillFlowService;
         private HandAutoSortService handAutoSortService;
@@ -423,15 +425,7 @@ namespace MahjongPrototype
             bool declaredReachNow = CompleteReachDeclarationIfPending(result.Record);
             gameState.EnterWaitingForDraw();
             ExpireIppatsuAfterDiscard(result.Record, declaredReachNow);
-            EventPublisher.NotifyTurnDebug(
-                "DiscardCompleted",
-                $"phase={gameState.TurnPhase}; discardTile={result.Record.Tile}",
-                seat: result.Record.ActorSeat,
-                tile: result.Record.Tile,
-                turnIndex: result.Record.TurnIndex);
-            EventPublisher.NotifyTileDiscarded(result.Record);
-            if (!TryBeginRonDecision(result.Record))
-                AdvanceOrEndAfterDiscard(result.Record);
+            CompleteDiscard(result.Record);
         }
 
         public void RequestDiscardDrawnTile()
@@ -522,15 +516,7 @@ namespace MahjongPrototype
             bool declaredReachNow = CompleteReachDeclarationIfPending(result.Record);
             gameState.EnterWaitingForDraw();
             ExpireIppatsuAfterDiscard(result.Record, declaredReachNow);
-            EventPublisher.NotifyTurnDebug(
-                "DiscardCompleted",
-                $"phase={gameState.TurnPhase}; discardTile={result.Record.Tile}",
-                seat: result.Record.ActorSeat,
-                tile: result.Record.Tile,
-                turnIndex: result.Record.TurnIndex);
-            EventPublisher.NotifyTileDiscarded(result.Record);
-            if (!TryBeginRonDecision(result.Record))
-                AdvanceOrEndAfterDiscard(result.Record);
+            CompleteDiscard(result.Record);
             return true;
         }
 
@@ -581,6 +567,13 @@ namespace MahjongPrototype
             if (!CanUseGameState())
                 return false;
 
+            if (gameState.IsReactionWindowPending)
+            {
+                ReactionWindow reactionWindow = gameState.CurrentReactionWindow;
+                return reactionWindow != null &&
+                    TryRequestDeclareRonForSeat(actorSeat, reactionWindow.WindowId);
+            }
+
             if (!gameState.IsWinDecisionPending)
             {
                 Warn("No winning hand decision is pending.");
@@ -619,10 +612,72 @@ namespace MahjongPrototype
             return true;
         }
 
+        public bool TryRequestDeclareRonForSeat(SeatId actorSeat, int reactionWindowId)
+        {
+            if (!CanUseGameState())
+                return false;
+
+            EnsureReactionWindowService();
+            ReactionWindowAnswerResult answer = reactionWindowService.DeclareRon(
+                gameState,
+                actorSeat,
+                reactionWindowId);
+            if (!answer.Accepted)
+            {
+                NotifyTurnBlocked("ReactionBlocked", answer.Reason);
+                return false;
+            }
+
+            EventPublisher.NotifyReactionWindowAnswered(answer);
+            ResolveReactionWindow(answer.Resolution);
+            return true;
+        }
+
+        public bool TryRequestDeclineRonForSeat(SeatId actorSeat, int reactionWindowId)
+        {
+            if (!CanUseGameState())
+                return false;
+
+            EnsureReactionWindowService();
+            ReactionWindowAnswerResult answer = reactionWindowService.DeclineRon(
+                gameState,
+                actorSeat,
+                reactionWindowId);
+            if (!answer.Accepted)
+            {
+                NotifyTurnBlocked("ReactionBlocked", answer.Reason);
+                return false;
+            }
+
+            EventPublisher.NotifyReactionWindowAnswered(answer);
+            EventPublisher.NotifyWinDeclined(answer.Candidate.Seat, answer.Resolution.SourceDiscard.TurnIndex);
+            EventPublisher.NotifyWinDeclinedDetailed(
+                answer.Candidate.Seat,
+                WinType.Ron,
+                answer.Resolution.SourceDiscard.TurnIndex);
+            ResolveReactionWindow(answer.Resolution);
+            return true;
+        }
+
         public void RequestDeclineWin()
         {
             if (!CanUseGameState())
                 return;
+
+            if (gameState.IsReactionWindowPending)
+            {
+                ReactionWindow reactionWindow = gameState.CurrentReactionWindow;
+                ReactionWindowCandidate candidate = reactionWindow != null
+                    ? reactionWindow.PendingRonCandidate
+                    : null;
+                if (candidate == null ||
+                    !TryRequestDeclineRonForSeat(candidate.Seat, reactionWindow.WindowId))
+                {
+                    Warn("No winning hand decision is pending.");
+                }
+
+                return;
+            }
 
             if (!gameState.IsWinDecisionPending)
             {
@@ -646,13 +701,6 @@ namespace MahjongPrototype
                 return;
             }
 
-            if (result.WinType == WinType.Ron && !gameState.IsRoundEnded)
-            {
-                if (result.ShouldEndAfterLastRon)
-                    EndRound(RoundLifecycleService.RoundEndReasonWallEmpty);
-                else
-                    AdvanceTurn();
-            }
         }
 
         public void RequestDeclareReach()
@@ -792,6 +840,94 @@ namespace MahjongPrototype
             }
 
             AdvanceTurn();
+        }
+
+        private void CompleteDiscard(DiscardRecord record)
+        {
+            EnsureReactionWindowService();
+            ReactionWindowStartResult start = reactionWindowService.Begin(gameState, record);
+            cpuTurnController?.CancelPendingTurn();
+            CancelPendingAutoDiscardDrawnTile();
+
+            EventPublisher.NotifyTurnDebug(
+                "DiscardCompleted",
+                $"phase={gameState.TurnPhase}; discardTile={record.Tile}",
+                seat: record.ActorSeat,
+                tile: record.Tile,
+                turnIndex: record.TurnIndex);
+            EventPublisher.NotifyTileDiscarded(record);
+
+            if (start.ReactionWindow != null)
+            {
+                EventPublisher.NotifyTurnDebug(
+                    "ReactionWindowStarted",
+                    $"windowId={start.ReactionWindow.WindowId}; candidates={start.ReactionWindow.Candidates.Count}; sourceSeat={record.ActorSeat}",
+                    seat: record.ActorSeat,
+                    tile: record.Tile,
+                    turnIndex: record.TurnIndex);
+                EventPublisher.NotifyReactionWindowStarted(start.ReactionWindow);
+            }
+
+            NotifyWinDecisionStartedIfNeeded(
+                start.ReactionWindow != null &&
+                start.ReactionWindow.PendingRonCandidate != null);
+            NotifyWinCheckResults(start.WinCheckNotifications);
+
+            if (start.Resolution.IsResolved)
+                ResolveReactionWindow(start.Resolution);
+        }
+
+        private void ResolveReactionWindow(ReactionWindowResolution resolution)
+        {
+            if (!resolution.IsResolved || gameState == null)
+                return;
+
+            int windowId = gameState.CurrentReactionWindow != null
+                ? gameState.CurrentReactionWindow.WindowId
+                : 0;
+            EventPublisher.NotifyTurnDebug(
+                "ReactionWindowResolved",
+                $"windowId={windowId}; resolution={resolution.Type}; sourceSeat={resolution.SourceDiscard.ActorSeat}",
+                seat: resolution.SourceDiscard.ActorSeat,
+                tile: resolution.SourceDiscard.Tile,
+                turnIndex: resolution.SourceDiscard.TurnIndex);
+            EventPublisher.NotifyReactionWindowResolved(resolution);
+            if (windowId > 0)
+                gameState.CloseReactionWindow(windowId);
+            EventPublisher.NotifyReactionWindowClosed(windowId);
+
+            switch (resolution.Type)
+            {
+                case ReactionWindowResolutionType.NoReaction:
+                    AdvanceOrEndAfterDiscard(resolution.SourceDiscard);
+                    return;
+                case ReactionWindowResolutionType.RonDeclared:
+                    EndRound(
+                        RoundLifecycleService.RoundEndReasonWin,
+                        () => NotifyDeclaredReactionRon(resolution),
+                        resolution);
+                    return;
+            }
+        }
+
+        private void NotifyDeclaredReactionRon(ReactionWindowResolution resolution)
+        {
+            ReactionWindowCandidate candidate = resolution.Candidate;
+            if (candidate == null)
+                return;
+
+            EventPublisher.NotifyWinDeclared(candidate.Seat, resolution.SourceDiscard.TurnIndex);
+            EventPublisher.NotifyWinDeclaredDetailed(
+                candidate.Seat,
+                WinType.Ron,
+                resolution.SourceDiscard.TurnIndex);
+            EventPublisher.NotifyWinDeclaredEvaluated(
+                candidate.Seat,
+                WinType.Ron,
+                resolution.SourceDiscard.Tile,
+                resolution.SourceDiscard.ActorSeat,
+                resolution.SourceDiscard.TurnIndex,
+                candidate.WinDeclarationEvaluation);
         }
 
         private void RecordTurnDrawIfNeeded(DrawResult result)
@@ -1012,15 +1148,6 @@ namespace MahjongPrototype
             EventPublisher.NotifyReachDecisionStarted(result.Seat, result.TurnIndex);
         }
 
-        private bool TryBeginRonDecision(DiscardRecord discard)
-        {
-            InitializeEvaluators();
-            WinDecisionEvaluation evaluation = winDecisionService.EvaluateRon(gameState, discard);
-            NotifyWinDecisionStartedIfNeeded(evaluation);
-            NotifyWinCheckResults(evaluation);
-            return evaluation.DecisionStarted;
-        }
-
         private void CommitDrawnTileToHandIfPresent(SeatId seat)
         {
             PlayerSeat playerSeat = gameState.GetPlayerSeat(seat);
@@ -1096,16 +1223,27 @@ namespace MahjongPrototype
 
         private void EndRound(string reason)
         {
-            EndRound(reason, null);
+            EndRound(reason, null, ReactionWindowResolution.None);
         }
 
         private void EndRound(string reason, System.Action afterRoundMarkedEnded)
+        {
+            EndRound(reason, afterRoundMarkedEnded, ReactionWindowResolution.None);
+        }
+
+        private void EndRound(
+            string reason,
+            System.Action afterRoundMarkedEnded,
+            ReactionWindowResolution reactionResolution)
         {
             EnsureRoundLifecycleService();
             cpuTurnController?.CancelPendingTurn();
             CancelPendingAutoDiscardDrawnTile();
             handAutoSortService?.ClearDeferred();
-            RoundLifecycleEndResult endResult = roundLifecycleService.EndRound(gameState, reason);
+            RoundLifecycleEndResult endResult = roundLifecycleService.EndRound(
+                gameState,
+                reason,
+                reactionResolution);
             RoundResult roundResult = endResult.RoundResult;
 
             EventPublisher.NotifyTurnDebug(
@@ -1172,9 +1310,17 @@ namespace MahjongPrototype
 
         private void NotifyWinCheckResults(WinDecisionEvaluation evaluation)
         {
-            for (int i = 0; i < evaluation.Notifications.Count; i++)
+            NotifyWinCheckResults(evaluation.Notifications);
+        }
+
+        private void NotifyWinCheckResults(IReadOnlyList<WinCheckNotification> notifications)
+        {
+            if (notifications == null)
+                return;
+
+            for (int i = 0; i < notifications.Count; i++)
             {
-                WinCheckNotification notification = evaluation.Notifications[i];
+                WinCheckNotification notification = notifications[i];
                 EventPublisher.NotifyWinChecked(
                     notification.Seat,
                     notification.TurnIndex,
@@ -1191,7 +1337,12 @@ namespace MahjongPrototype
 
         private void NotifyWinDecisionStartedIfNeeded(WinDecisionEvaluation evaluation)
         {
-            if (!evaluation.DecisionStarted || gameState == null)
+            NotifyWinDecisionStartedIfNeeded(evaluation.DecisionStarted);
+        }
+
+        private void NotifyWinDecisionStartedIfNeeded(bool decisionStarted)
+        {
+            if (!decisionStarted || gameState == null)
                 return;
 
             EventPublisher.NotifyTurnDebug(
@@ -1266,13 +1417,21 @@ namespace MahjongPrototype
                 winDeclarationEvaluator,
                 furitenEvaluator,
                 noYakuTenpaiEvaluator);
+            reactionWindowService = null;
         }
 
         private void EnsureDecisionServices()
         {
             InitializeEvaluators();
+            EnsureReactionWindowService();
             if (reachDecisionService == null)
                 reachDecisionService = new ReachDecisionService(reachChecker);
+        }
+
+        private void EnsureReactionWindowService()
+        {
+            InitializeEvaluators();
+            reactionWindowService ??= new ReactionWindowService(winDecisionService);
         }
 
         private void EnsureSkillFlowService()
