@@ -75,6 +75,11 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
             Commands.RequestDeclineWin();
         }
 
+        public void RequestForceDrawSkill(string tileCode)
+        {
+            Commands.RequestForceDrawSkill(tileCode);
+        }
+
         public void SetWinDecisionPendingForCurrentTurn()
         {
             Commands.SetWinDecisionPending(CurrentTurnName, TurnIndex);
@@ -103,7 +108,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
                 "C");
             Reflection.Invoke(SelfPlayerSeat, "DeclareReach", 1);
             Reflection.Invoke(CpuPlayerSeat, "SetDrawnTile", DataFactory.CreateTile("C"));
-            Reflection.SetProperty(session.CurrentState, "CurrentTurn", CpuSeat);
+            DataFactory.SetCurrentTurn(session.CurrentState, CpuSeatName);
         }
 
         public void SetupSelfCannotRonFromCpuDrawnTile()
@@ -116,7 +121,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
                 "E", "E", "E",
                 "P");
             Reflection.Invoke(CpuPlayerSeat, "SetDrawnTile", DataFactory.CreateTile("C"));
-            Reflection.SetProperty(session.CurrentState, "CurrentTurn", CpuSeat);
+            DataFactory.SetCurrentTurn(session.CurrentState, CpuSeatName);
         }
 
         public bool TryDiscardCpuDrawnTile()
@@ -156,6 +161,8 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
         public string RoundResultWinnerSeatName => Query.RoundResultWinnerSeatNameOrNull;
 
         public bool IsInteractionLocked => Query.IsInteractionLocked;
+
+        public int ActiveSkillEffectCount => Query.ActiveSkillEffectCount;
 
         public string CurrentTurnName => Query.CurrentTurnName;
         public int TurnIndex => Query.TurnIndex;

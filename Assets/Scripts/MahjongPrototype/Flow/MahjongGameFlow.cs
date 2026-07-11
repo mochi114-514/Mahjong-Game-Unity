@@ -320,6 +320,15 @@ namespace MahjongPrototype
                 return false;
             }
 
+            if (gameState.TurnPhase != TurnPhase.WaitingForDraw)
+            {
+                if (warnOnBlocked)
+                    Warn("Draw is not available in the current turn phase.");
+
+                NotifyTurnBlocked(blockedEventName, "InvalidTurnPhase");
+                return false;
+            }
+
             DrawResult result = drawService.DrawTile(seat, gameState, DrawPurpose.TurnDraw);
 
             if (!result.Success)
@@ -331,6 +340,7 @@ namespace MahjongPrototype
 
             RecordTurnDrawIfNeeded(result);
             playerSeat.SetDrawnTile(result.Tile);
+            gameState.EnterWaitingForDiscard();
             playerSeat.ClearTemporaryFuriten();
             EventPublisher.NotifyTurnDebug(
                 completedEventName,
@@ -380,6 +390,14 @@ namespace MahjongPrototype
                 return;
             }
 
+            if (gameState.TurnPhase != TurnPhase.WaitingForDiscard &&
+                gameState.TurnPhase != TurnPhase.ReachDiscardSelection)
+            {
+                Warn("Discard is not available in the current turn phase.");
+                NotifyTurnBlocked("DiscardBlocked", "InvalidTurnPhase");
+                return;
+            }
+
             if (!IsValidReachDiscardCandidate(selfSeat, DiscardSource.Hand, handIndex))
             {
                 Warn("Only reach discard candidates can be discarded.");
@@ -403,6 +421,7 @@ namespace MahjongPrototype
 
             CommitDrawnTileToHandIfPresent(selfSeat);
             bool declaredReachNow = CompleteReachDeclarationIfPending(result.Record);
+            gameState.EnterWaitingForDraw();
             ExpireIppatsuAfterDiscard(result.Record, declaredReachNow);
             EventPublisher.NotifyTurnDebug(
                 "DiscardCompleted",
@@ -472,6 +491,16 @@ namespace MahjongPrototype
                 return false;
             }
 
+            if (gameState.TurnPhase != TurnPhase.WaitingForDiscard &&
+                gameState.TurnPhase != TurnPhase.ReachDiscardSelection)
+            {
+                if (warnOnBlocked)
+                    Warn("Discard is not available in the current turn phase.");
+
+                NotifyTurnBlocked("DiscardBlocked", "InvalidTurnPhase");
+                return false;
+            }
+
             if (!IsValidReachDiscardCandidate(actorSeat, DiscardSource.DrawnTile, -1))
             {
                 if (warnOnBlocked)
@@ -491,6 +520,7 @@ namespace MahjongPrototype
             }
 
             bool declaredReachNow = CompleteReachDeclarationIfPending(result.Record);
+            gameState.EnterWaitingForDraw();
             ExpireIppatsuAfterDiscard(result.Record, declaredReachNow);
             EventPublisher.NotifyTurnDebug(
                 "DiscardCompleted",

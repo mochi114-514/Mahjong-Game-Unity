@@ -154,6 +154,7 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
         public void SetCurrentTurn(object gameState, string seatName)
         {
             reflection.SetProperty(gameState, "CurrentTurn", ParseSeat(seatName));
+            SynchronizeNormalTurnPhase(gameState);
         }
 
         public void AddHandTiles(object playerSeat, params string[] tileCodes)
@@ -171,6 +172,29 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
         public void SetDrawnTile(object gameState, string seatName, string tileCode)
         {
             reflection.Invoke(GetPlayerSeat(gameState, seatName), "SetDrawnTile", CreateTile(tileCode));
+            if (reflection.GetProperty(gameState, "CurrentTurn").Equals(ParseSeat(seatName)))
+                SynchronizeNormalTurnPhase(gameState);
+        }
+
+        public void ClearDrawnTile(object gameState, string seatName)
+        {
+            reflection.Invoke(GetPlayerSeat(gameState, seatName), "ClearDrawnTile");
+            if (reflection.GetProperty(gameState, "CurrentTurn").Equals(ParseSeat(seatName)))
+                SynchronizeNormalTurnPhase(gameState);
+        }
+
+        private void SynchronizeNormalTurnPhase(object gameState)
+        {
+            string phaseName = reflection.GetProperty(gameState, "TurnPhase").ToString();
+            if (phaseName != "WaitingForDraw" && phaseName != "WaitingForDiscard")
+                return;
+
+            object currentTurn = reflection.GetProperty(gameState, "CurrentTurn");
+            object currentPlayerSeat = reflection.Invoke(gameState, "GetPlayerSeat", currentTurn);
+            bool hasDrawnTile = (bool)reflection.GetProperty(currentPlayerSeat, "HasDrawnTile");
+            reflection.Invoke(
+                gameState,
+                hasDrawnTile ? "EnterWaitingForDiscard" : "EnterWaitingForDraw");
         }
 
         public object CreateDiscardRecord(string seatName, string tileCode, int turnIndex)

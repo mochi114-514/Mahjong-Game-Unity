@@ -32,7 +32,7 @@ namespace MahjongPrototype.Services
             if (roundResult != null)
                 gameState.BeginRoundResult(roundResult);
             else
-                gameState.IsRoundEnded = true;
+                gameState.EndRoundWithoutResult();
 
             return new RoundLifecycleEndResult(roundResult);
         }

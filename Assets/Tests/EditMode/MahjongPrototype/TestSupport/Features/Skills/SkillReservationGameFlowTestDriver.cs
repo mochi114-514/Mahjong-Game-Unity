@@ -71,7 +71,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Skills
 
         public void ClearDrawnTile(string seatName)
         {
-            session.Reflection.Invoke(Query.GetPlayerSeat(seatName), "ClearDrawnTile");
+            session.DataFactory.ClearDrawnTile(session.CurrentState, seatName);
         }
 
         public object ActiveSkillEffectAt(int index)

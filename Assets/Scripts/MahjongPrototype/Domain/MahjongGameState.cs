@@ -24,6 +24,7 @@ namespace MahjongPrototype.Domain
         private readonly List<ReachDiscardCandidate> reachDiscardCandidates =
             new List<ReachDiscardCandidate>();
         private TurnDrawRecord? lastTurnDraw;
+        private TurnPhaseType turnPhase = TurnPhaseType.WaitingForDraw;
 
         public MahjongGameState(Wall wall)
             : this(wall, WindProgress.East1)
@@ -51,11 +52,28 @@ namespace MahjongPrototype.Domain
         public PlayerId? CurrentTurnPlayerId => CurrentTurnSlot.PlayerId;
         public bool IsSelfTurn => CurrentTurnPlayerId == SelfPlayerId;
         public int TurnIndex { get; set; }
-        public bool IsRoundEnded { get; set; }
+        public bool IsRoundEnded
+        {
+            get =>
+                turnPhase == TurnPhaseType.RoundEnded ||
+                turnPhase == TurnPhaseType.RoundResult ||
+                turnPhase == TurnPhaseType.GameEnded;
+            set
+            {
+                if (value && !IsRoundEnded)
+                {
+                    EndRoundWithoutResult();
+                }
+                else if (IsRoundEnded)
+                {
+                    TransitionTo(ResolveNormalTurnPhase());
+                }
+            }
+        }
         public RoundResult CurrentRoundResult { get; private set; }
-        public bool IsRoundResultPending { get; private set; }
-        public bool IsGameEnded { get; private set; }
-        public bool IsWinDecisionPending { get; private set; }
+        public bool IsRoundResultPending => turnPhase == TurnPhaseType.RoundResult;
+        public bool IsGameEnded => turnPhase == TurnPhaseType.GameEnded;
+        public bool IsWinDecisionPending => turnPhase == TurnPhaseType.WinDecision;
         public SeatId WinDecisionSeat { get; private set; }
         public WinType? WinDecisionType { get; private set; }
         public Tile? WinningTile { get; private set; }
@@ -63,26 +81,12 @@ namespace MahjongPrototype.Domain
         public int WinDecisionTurnIndex { get; private set; }
         public WinDeclarationEvaluationResult PendingWinDeclarationEvaluation { get; private set; }
         public TurnDrawRecord? LastTurnDraw => lastTurnDraw;
-        public bool IsReachDecisionPending { get; private set; }
-        public bool IsReachDiscardSelectionPending { get; private set; }
+        public bool IsReachDecisionPending => turnPhase == TurnPhaseType.ReachDecision;
+        public bool IsReachDiscardSelectionPending =>
+            turnPhase == TurnPhaseType.ReachDiscardSelection;
         public SeatId ReachDecisionSeat { get; private set; }
         public int ReachDecisionTurnIndex { get; private set; }
-        public TurnPhaseType TurnPhase =>
-            IsGameEnded
-                ? TurnPhaseType.GameEnded
-                : IsRoundResultPending
-                    ? TurnPhaseType.RoundResult
-                    : IsRoundEnded
-                        ? TurnPhaseType.RoundEnded
-                        : IsWinDecisionPending
-                            ? TurnPhaseType.WinDecision
-                            : IsReachDecisionPending
-                                ? TurnPhaseType.ReachDecision
-                                : IsReachDiscardSelectionPending
-                                    ? TurnPhaseType.ReachDiscardSelection
-                                    : GetPlayerSeat(CurrentTurn).HasDrawnTile
-                                        ? TurnPhaseType.WaitingForDiscard
-                                        : TurnPhaseType.WaitingForDraw;
+        public TurnPhaseType TurnPhase => turnPhase;
         public bool IsInteractionLocked =>
             TurnPhase == TurnPhaseType.WinDecision ||
             TurnPhase == TurnPhaseType.ReachDecision ||
@@ -96,6 +100,28 @@ namespace MahjongPrototype.Domain
         public IReadOnlyList<DiscardRecord> Discards => discards;
         public IReadOnlyList<ActiveSkillEffect> ActiveSkillEffects => activeSkillEffects;
         public IReadOnlyList<ReachDiscardCandidate> ReachDiscardCandidates => reachDiscardCandidates;
+
+        public void EnterWaitingForDraw()
+        {
+            if (GetPlayerSeat(CurrentTurn).HasDrawnTile)
+            {
+                throw new InvalidOperationException(
+                    $"Cannot wait for draw while the current seat {CurrentTurn} has a drawn tile.");
+            }
+
+            TransitionTo(TurnPhaseType.WaitingForDraw);
+        }
+
+        public void EnterWaitingForDiscard()
+        {
+            if (!GetPlayerSeat(CurrentTurn).HasDrawnTile)
+            {
+                throw new InvalidOperationException(
+                    "Cannot wait for discard while the current seat has no drawn tile.");
+            }
+
+            TransitionTo(TurnPhaseType.WaitingForDiscard);
+        }
 
         public void SetSelfWind(SeatId selfWind)
         {
@@ -265,8 +291,8 @@ namespace MahjongPrototype.Domain
             int turnIndex,
             WinDeclarationEvaluationResult evaluationResult)
         {
-            ClearReachDecision();
-            IsWinDecisionPending = true;
+            ClearWinDecisionData();
+            TransitionTo(TurnPhaseType.WinDecision);
             WinDecisionSeat = seat;
             WinDecisionType = winType;
             WinningTile = winningTile;
@@ -277,13 +303,18 @@ namespace MahjongPrototype.Domain
 
         public void ClearWinDecision()
         {
-            IsWinDecisionPending = false;
-            WinDecisionSeat = default;
-            WinDecisionType = null;
-            WinningTile = null;
-            WinSourceSeat = null;
-            WinDecisionTurnIndex = 0;
-            PendingWinDeclarationEvaluation = null;
+            if (turnPhase == TurnPhaseType.WinDecision)
+            {
+                TurnPhaseType nextPhase =
+                    WinDecisionType == WinType.Tsumo &&
+                    GetPlayerSeat(CurrentTurn).HasDrawnTile
+                        ? TurnPhaseType.WaitingForDiscard
+                        : TurnPhaseType.WaitingForDraw;
+                TransitionTo(nextPhase);
+                return;
+            }
+
+            ClearWinDecisionData();
         }
 
         public void BeginRoundResult(RoundResult result)
@@ -292,17 +323,19 @@ namespace MahjongPrototype.Domain
                 throw new ArgumentNullException(nameof(result));
 
             CurrentRoundResult = result;
-            IsRoundResultPending = true;
-            IsGameEnded = false;
-            IsRoundEnded = true;
+            TransitionTo(TurnPhaseType.RoundResult);
         }
 
         public void CompleteRoundResult(bool gameEnded)
         {
-            IsRoundResultPending = false;
-            IsGameEnded = gameEnded;
-            if (!gameEnded)
-                CurrentRoundResult = null;
+            TransitionTo(gameEnded
+                ? TurnPhaseType.GameEnded
+                : TurnPhaseType.RoundEnded);
+        }
+
+        public void EndRoundWithoutResult()
+        {
+            TransitionTo(TurnPhaseType.RoundEnded);
         }
 
         public void BeginReachDecision(
@@ -327,8 +360,7 @@ namespace MahjongPrototype.Domain
                 return;
             }
 
-            IsReachDecisionPending = true;
-            IsReachDiscardSelectionPending = false;
+            TransitionTo(TurnPhaseType.ReachDecision);
             ReachDecisionSeat = seat;
             ReachDecisionTurnIndex = turnIndex;
         }
@@ -338,8 +370,7 @@ namespace MahjongPrototype.Domain
             if (!IsReachDecisionPending || ReachDecisionSeat != seat || reachDiscardCandidates.Count <= 0)
                 return;
 
-            IsReachDecisionPending = false;
-            IsReachDiscardSelectionPending = true;
+            TransitionTo(TurnPhaseType.ReachDiscardSelection);
         }
 
         public bool CancelReachDiscardSelection()
@@ -347,15 +378,59 @@ namespace MahjongPrototype.Domain
             if (!IsReachDiscardSelectionPending || reachDiscardCandidates.Count <= 0)
                 return false;
 
-            IsReachDecisionPending = true;
-            IsReachDiscardSelectionPending = false;
+            TransitionTo(TurnPhaseType.ReachDecision);
             return true;
         }
 
         public void ClearReachDecision()
         {
-            IsReachDecisionPending = false;
-            IsReachDiscardSelectionPending = false;
+            if (turnPhase == TurnPhaseType.ReachDecision ||
+                turnPhase == TurnPhaseType.ReachDiscardSelection)
+            {
+                TransitionTo(ResolveNormalTurnPhase());
+                return;
+            }
+
+            ClearReachDecisionData();
+        }
+
+        private TurnPhaseType ResolveNormalTurnPhase()
+        {
+            return GetPlayerSeat(CurrentTurn).HasDrawnTile
+                ? TurnPhaseType.WaitingForDiscard
+                : TurnPhaseType.WaitingForDraw;
+        }
+
+        private void TransitionTo(TurnPhaseType nextPhase)
+        {
+            if (nextPhase != TurnPhaseType.WinDecision)
+                ClearWinDecisionData();
+            if (nextPhase != TurnPhaseType.ReachDecision &&
+                nextPhase != TurnPhaseType.ReachDiscardSelection)
+            {
+                ClearReachDecisionData();
+            }
+            if (nextPhase != TurnPhaseType.RoundResult &&
+                nextPhase != TurnPhaseType.GameEnded)
+            {
+                CurrentRoundResult = null;
+            }
+
+            turnPhase = nextPhase;
+        }
+
+        private void ClearWinDecisionData()
+        {
+            WinDecisionSeat = default;
+            WinDecisionType = null;
+            WinningTile = null;
+            WinSourceSeat = null;
+            WinDecisionTurnIndex = 0;
+            PendingWinDeclarationEvaluation = null;
+        }
+
+        private void ClearReachDecisionData()
+        {
             ReachDecisionSeat = default;
             ReachDecisionTurnIndex = 0;
             reachDiscardCandidates.Clear();

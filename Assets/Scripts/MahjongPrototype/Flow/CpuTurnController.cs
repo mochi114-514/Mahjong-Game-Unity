@@ -139,8 +139,8 @@ namespace MahjongPrototype
                 gameState == null ||
                 startedOperationVersion != operationVersion ||
                 !gateway.IsSameGameStateAndTurn(gameState, seat, turnIndex) ||
-                gameState.IsRoundEnded ||
-                gameState.IsWinDecisionPending)
+                (gameState.TurnPhase != TurnPhase.WaitingForDraw &&
+                    gameState.TurnPhase != TurnPhase.WaitingForDiscard))
             {
                 return false;
             }

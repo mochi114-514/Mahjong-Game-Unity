@@ -106,7 +106,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Furiten
 
         public void ClearDrawnTile(string seatName)
         {
-            session.Reflection.Invoke(GetPlayerSeat(seatName), "ClearDrawnTile");
+            session.DataFactory.ClearDrawnTile(CurrentState, seatName);
         }
 
         public void RequestDeclineWin()

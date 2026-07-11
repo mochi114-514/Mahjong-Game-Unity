@@ -44,6 +44,22 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
+        public void RequestForceDrawSkill_DuringWinDecision_IsRejectedAndKeepsExclusivePhase()
+        {
+            using (WinDecisionGameFlowTestDriver driver = WinDecisionGameFlowTestDriver.Create())
+            {
+                driver.StartNewRound();
+                driver.SetWinDecisionPendingForCurrentTurn();
+
+                driver.RequestForceDrawSkill("5m");
+
+                Assert.That(driver.ActiveSkillEffectCount, Is.EqualTo(0));
+                Assert.That(driver.IsWinDecisionPending, Is.True);
+                Assert.That(driver.TurnPhaseName, Is.EqualTo("WinDecision"));
+            }
+        }
+
+        [Test]
         public void RequestDeclareWin_ClearsDecisionAndWaitsForRoundResultAdvance()
         {
             using (WinDecisionGameFlowTestDriver driver = WinDecisionGameFlowTestDriver.Create())

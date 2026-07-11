@@ -122,15 +122,13 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Turn
 
         public void SetCurrentTurnToPlayerId(string playerIdName)
         {
-            Reflection.SetProperty(
-                CurrentState,
-                "CurrentTurn",
-                DataFactory.ParseSeat(Query.SeatByPlayerIdName(playerIdName)));
+            DataFactory.SetCurrentTurn(CurrentState, Query.SeatByPlayerIdName(playerIdName));
         }
 
         public void SetRoundEnded(bool value)
         {
-            Reflection.SetProperty(CurrentState, "IsRoundEnded", value);
+            if (value)
+                Reflection.Invoke(CurrentState, "EndRoundWithoutResult");
         }
 
         public void SetParticipantType(string seatName, string participantTypeName)
@@ -172,7 +170,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Turn
 
         public void ClearCurrentPlayerDrawnTile()
         {
-            Reflection.Invoke(Query.GetPlayerSeat(CurrentTurnName), "ClearDrawnTile");
+            DataFactory.ClearDrawnTile(CurrentState, CurrentTurnName);
         }
 
         public void DeclareReach(string seatName, int turnIndex)

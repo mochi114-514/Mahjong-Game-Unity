@@ -35,32 +35,36 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void TurnPhase_RoundEndedTakesPriorityOverWinDecision()
+        public void EndRoundWithoutResult_ClearsWinDecisionAndUsesExclusiveRoundEndedPhase()
         {
             MahjongGameStateTurnTestDriver driver = MahjongGameStateTurnTestDriver.Create("East");
             driver.BeginWinDecision(driver.CurrentTurnName, driver.TurnIndex);
 
-            driver.SetRoundEnded(true);
+            driver.EndRoundWithoutResult();
 
             Assert.That(driver.TurnPhaseName, Is.EqualTo("RoundEnded"));
+            Assert.That(driver.IsWinDecisionPending, Is.False);
+            Assert.That(driver.WinDecisionTypeName, Is.Null);
+            Assert.That(driver.WinDecisionTurnIndex, Is.EqualTo(0));
             Assert.That(driver.IsInteractionLocked, Is.True);
         }
 
         [Test]
-        public void TurnPhase_RoundResultTakesPriorityOverRoundEndedAndWinDecision()
+        public void BeginRoundResult_ClearsWinDecisionAndUsesExclusiveRoundResultPhase()
         {
             MahjongGameStateTurnTestDriver driver = MahjongGameStateTurnTestDriver.Create("East");
             driver.BeginWinDecision(driver.CurrentTurnName, driver.TurnIndex);
 
             driver.BeginExhaustiveDrawRoundResult();
 
+            Assert.That(driver.IsWinDecisionPending, Is.False);
             Assert.That(driver.IsRoundResultPending, Is.True);
             Assert.That(driver.TurnPhaseName, Is.EqualTo("RoundResult"));
             Assert.That(driver.IsInteractionLocked, Is.True);
         }
 
         [Test]
-        public void TurnPhase_GameEndedTakesPriorityAfterRoundResultCompletion()
+        public void CompleteRoundResult_MovesToExclusiveGameEndedPhase()
         {
             MahjongGameStateTurnTestDriver driver = MahjongGameStateTurnTestDriver.Create("East");
             driver.BeginExhaustiveDrawRoundResult(isFinalRound: true);
@@ -68,22 +72,36 @@ namespace MahjongPrototype.Tests
             driver.CompleteRoundResult(gameEnded: true);
 
             Assert.That(driver.IsGameEnded, Is.True);
+            Assert.That(driver.IsRoundEnded, Is.True);
             Assert.That(driver.IsRoundResultPending, Is.False);
+            Assert.That(driver.IsWinDecisionPending, Is.False);
             Assert.That(driver.CurrentRoundResultIsNull, Is.False);
             Assert.That(driver.TurnPhaseName, Is.EqualTo("GameEnded"));
             Assert.That(driver.IsInteractionLocked, Is.True);
         }
 
         [Test]
-        public void TurnPhase_UsesDrawnTileAsPhaseSource()
+        public void TurnPhase_ChangesOnlyAfterExplicitNormalProgressionTransition()
         {
             MahjongGameStateTurnTestDriver driver = MahjongGameStateTurnTestDriver.Create("East");
 
             Assert.That(driver.TurnPhaseName, Is.EqualTo("WaitingForDraw"));
 
-            driver.SetDrawnTile("East", "E");
+            driver.SetDrawnTileWithoutPhaseTransition("East", "E");
+
+            Assert.That(driver.TurnPhaseName, Is.EqualTo("WaitingForDraw"));
+
+            driver.EnterWaitingForDiscard();
 
             Assert.That(driver.TurnPhaseName, Is.EqualTo("WaitingForDiscard"));
+
+            driver.ClearDrawnTileWithoutPhaseTransition("East");
+
+            Assert.That(driver.TurnPhaseName, Is.EqualTo("WaitingForDiscard"));
+
+            driver.EnterWaitingForDraw();
+
+            Assert.That(driver.TurnPhaseName, Is.EqualTo("WaitingForDraw"));
         }
 
         [Test]

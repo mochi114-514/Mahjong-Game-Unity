@@ -41,8 +41,8 @@ namespace MahjongPrototype.Services
             int turnIndex)
         {
             return IsSameCurrentTurn(gameState, seat, turnIndex) &&
-                !gameState.IsReachDecisionPending &&
-                !gameState.IsReachDiscardSelectionPending;
+                (gameState.TurnPhase == TurnPhase.WaitingForDraw ||
+                    gameState.TurnPhase == TurnPhase.WaitingForDiscard);
         }
 
         public TurnAutomationPolicy BuildAutomationPolicy(

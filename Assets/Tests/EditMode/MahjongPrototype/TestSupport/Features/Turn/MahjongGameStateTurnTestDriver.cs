@@ -78,9 +78,38 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Turn
             dataFactory.SetDrawnTile(gameState, seatName, tileCode);
         }
 
+        public void SetDrawnTileWithoutPhaseTransition(string seatName, string tileCode)
+        {
+            reflection.Invoke(
+                dataFactory.GetPlayerSeat(gameState, seatName),
+                "SetDrawnTile",
+                dataFactory.CreateTile(tileCode));
+        }
+
+        public void EnterWaitingForDiscard()
+        {
+            reflection.Invoke(gameState, "EnterWaitingForDiscard");
+        }
+
+        public void ClearDrawnTileWithoutPhaseTransition(string seatName)
+        {
+            reflection.Invoke(dataFactory.GetPlayerSeat(gameState, seatName), "ClearDrawnTile");
+        }
+
+        public void EnterWaitingForDraw()
+        {
+            reflection.Invoke(gameState, "EnterWaitingForDraw");
+        }
+
         public void SetRoundEnded(bool value)
         {
-            reflection.SetProperty(gameState, "IsRoundEnded", value);
+            if (value)
+                reflection.Invoke(gameState, "EndRoundWithoutResult");
+        }
+
+        public void EndRoundWithoutResult()
+        {
+            reflection.Invoke(gameState, "EndRoundWithoutResult");
         }
 
         public void SetSelfSeat(string seatName)
@@ -120,6 +149,8 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Turn
         public string WinningTileCodeOrNull => query.WinningTileCodeOrNull;
 
         public bool IsRoundResultPending => query.IsRoundResultPending;
+
+        public bool IsRoundEnded => query.IsRoundEnded;
 
         public bool IsGameEnded => query.IsGameEnded;
 

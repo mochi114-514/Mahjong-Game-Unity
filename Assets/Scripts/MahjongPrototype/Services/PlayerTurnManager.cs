@@ -18,7 +18,6 @@ namespace MahjongPrototype.Services
             if (gameState == null)
                 throw new ArgumentNullException(nameof(gameState));
 
-            gameState.CurrentTurn = firstSeat;
             gameState.TurnIndex = 1;
             BeginTurn(gameState, firstSeat);
         }
@@ -29,6 +28,7 @@ namespace MahjongPrototype.Services
                 throw new ArgumentNullException(nameof(gameState));
 
             gameState.CurrentTurn = seat;
+            gameState.EnterWaitingForDraw();
         }
 
         public SeatId EndTurnAndSelectNext(
@@ -39,7 +39,6 @@ namespace MahjongPrototype.Services
                 throw new ArgumentNullException(nameof(gameState));
 
             SeatId nextSeat = turnOrderService.GetNextSeat(activeSeats, gameState.CurrentTurn);
-            gameState.CurrentTurn = nextSeat;
             gameState.TurnIndex++;
             BeginTurn(gameState, nextSeat);
             return nextSeat;
