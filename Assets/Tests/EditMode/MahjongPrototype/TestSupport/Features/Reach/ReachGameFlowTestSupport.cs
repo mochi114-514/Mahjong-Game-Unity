@@ -196,13 +196,16 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
 
         public object BeginAutoDiscardRoutine(string seatName)
         {
+            object controller = Reflection.GetPrivateField(
+                GameFlow,
+                "autoDiscardDrawnTileController");
             return Reflection.InvokeWithSignature(
                 GameFlow,
                 "RunAutoDiscardDrawnTileAfterDraw",
                 new[] { Types.SeatId, typeof(int), typeof(int) },
                 DataFactory.ParseSeat(seatName),
                 Query.TurnIndex,
-                Reflection.GetPrivateField(GameFlow, "autoDiscardDrawnTileOperationVersion"));
+                Reflection.GetProperty(controller, "OperationVersion"));
         }
 
         public bool MoveNext(object routine)

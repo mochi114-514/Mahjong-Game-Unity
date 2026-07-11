@@ -21,19 +21,19 @@ namespace MahjongPrototype
         }
 
         public void TryStartCpuTurn(
-            MahjongGameFlow gameFlow,
+            ICpuTurnGateway gateway,
             MahjongGameState gameState,
             SeatId seat,
             int turnIndex)
         {
             CancelPendingTurn();
 
-            if (!IsSameCpuTurn(gameFlow, gameState, seat, turnIndex))
+            if (!IsSameCpuTurn(gateway, gameState, seat, turnIndex))
                 return;
 
             int startedOperationVersion = operationVersion;
             StartCoroutine(RunCpuTurn(
-                gameFlow,
+                gateway,
                 gameState,
                 seat,
                 turnIndex,
@@ -47,14 +47,14 @@ namespace MahjongPrototype
         }
 
         public bool TryRespondToWinDecision(
-            MahjongGameFlow gameFlow,
+            ICpuTurnGateway gateway,
             MahjongGameState gameState,
             SeatId seat,
             int turnIndex)
         {
-            if (gameFlow == null ||
+            if (gateway == null ||
                 gameState == null ||
-                !ReferenceEquals(gameFlow.CurrentState, gameState) ||
+                !gateway.IsSameGameStateAndTurn(gameState, seat, turnIndex) ||
                 gameState.IsRoundEnded ||
                 !gameState.IsWinDecisionPending ||
                 gameState.WinDecisionSeat != seat ||
@@ -63,16 +63,12 @@ namespace MahjongPrototype
                 return false;
             }
 
-            SeatSlot slot = gameState.GetSeatSlot(seat);
-            if (!slot.HasPlayer || slot.ParticipantType != ParticipantType.Cpu)
-                return false;
-
             // PROTOTYPE: CPU declares every legal self-draw win decision.
-            return gameFlow.TryRequestDeclareWinForSeat(seat);
+            return gateway.RequestDeclareWinForCpu(seat);
         }
 
         private IEnumerator RunCpuTurn(
-            MahjongGameFlow gameFlow,
+            ICpuTurnGateway gateway,
             MahjongGameState gameState,
             SeatId seat,
             int turnIndex,
@@ -81,12 +77,12 @@ namespace MahjongPrototype
             PlayerSeat playerSeat = gameState.GetPlayerSeat(seat);
             if (!playerSeat.HasDrawnTile)
             {
-                if (!gameFlow.TryRequestDrawForSeat(seat))
+                if (!gateway.RequestDrawForCpu(seat))
                     yield break;
             }
 
             if (!IsSameCpuTurn(
-                    gameFlow,
+                    gateway,
                     gameState,
                     seat,
                     turnIndex,
@@ -102,7 +98,7 @@ namespace MahjongPrototype
                 yield return null;
 
             if (!IsSameCpuTurn(
-                    gameFlow,
+                    gateway,
                     gameState,
                     seat,
                     turnIndex,
@@ -115,17 +111,17 @@ namespace MahjongPrototype
                 yield break;
 
             // PROTOTYPE: The first CPU implementation always discards its drawn tile.
-            gameFlow.TryRequestDiscardDrawnTileForSeat(seat);
+            gateway.RequestDiscardDrawnTileForCpu(seat);
         }
 
         private bool IsSameCpuTurn(
-            MahjongGameFlow gameFlow,
+            ICpuTurnGateway gateway,
             MahjongGameState gameState,
             SeatId seat,
             int turnIndex)
         {
             return IsSameCpuTurn(
-                gameFlow,
+                gateway,
                 gameState,
                 seat,
                 turnIndex,
@@ -133,26 +129,23 @@ namespace MahjongPrototype
         }
 
         private bool IsSameCpuTurn(
-            MahjongGameFlow gameFlow,
+            ICpuTurnGateway gateway,
             MahjongGameState gameState,
             SeatId seat,
             int turnIndex,
             int startedOperationVersion)
         {
-            if (gameFlow == null ||
+            if (gateway == null ||
                 gameState == null ||
                 startedOperationVersion != operationVersion ||
-                !ReferenceEquals(gameFlow.CurrentState, gameState) ||
+                !gateway.IsSameGameStateAndTurn(gameState, seat, turnIndex) ||
                 gameState.IsRoundEnded ||
-                gameState.IsWinDecisionPending ||
-                gameState.CurrentTurn != seat ||
-                gameState.TurnIndex != turnIndex)
+                gameState.IsWinDecisionPending)
             {
                 return false;
             }
 
-            SeatSlot slot = gameState.GetSeatSlot(seat);
-            return slot.HasPlayer && slot.ParticipantType == ParticipantType.Cpu;
+            return true;
         }
 
         private static void LogPausedWinDecision(

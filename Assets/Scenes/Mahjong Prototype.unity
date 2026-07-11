@@ -1479,6 +1479,7 @@ GameObject:
   - component: {fileID: 508243329}
   - component: {fileID: 508243330}
   - component: {fileID: 508243331}
+  - component: {fileID: 508243332}
   m_Layer: 0
   m_Name: Game Flow
   m_TagString: Untagged
@@ -1557,6 +1558,18 @@ MonoBehaviour:
   enableDevLog: 1
   enableReleaseBuildLogging: 0
   enableTurnDebugLog: 1
+--- !u!114 &508243332
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 508243327}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3f9a902adbc141a29f2bc1887d22d8e0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.AutoDiscardDrawnTileController
 --- !u!1 &519420028
 GameObject:
   m_ObjectHideFlags: 0

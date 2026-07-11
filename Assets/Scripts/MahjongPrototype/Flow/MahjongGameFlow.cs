@@ -11,7 +11,7 @@ namespace MahjongPrototype
 {
     [DisallowMultipleComponent]
     [AddComponentMenu("Mahjong Prototype/Mahjong Game Flow")]
-    public sealed class MahjongGameFlow : MonoBehaviour
+    public sealed class MahjongGameFlow : MonoBehaviour, ICpuTurnGateway
     {
         [Header("Prototype Players")]
         [SerializeField, Range(1, 4)] private int participantCount = 1;
@@ -64,31 +64,11 @@ namespace MahjongPrototype
         private YakuDefinitionCatalog initializedYakuDefinitionCatalog;
         private RoundSetupService roundSetupService;
         private RoundLifecycleService roundLifecycleService;
+        private TurnFlowService turnFlowService;
         private MahjongFlowEventPublisher eventPublisher;
         private MahjongGameState gameState;
-        private Coroutine pendingAutoDiscardDrawnTileCoroutine;
-        private int autoDiscardDrawnTileOperationVersion;
+        private AutoDiscardDrawnTileController autoDiscardDrawnTileController;
         private bool autoSortDeferredUntilReachDecisionResolved;
-
-        private readonly struct TurnAutomationPolicy
-        {
-            public TurnAutomationPolicy(
-                bool isCpu,
-                bool autoDrawAtTurnStart,
-                bool autoDiscardDrawnTileAfterDraw,
-                bool useCpuController)
-            {
-                IsCpu = isCpu;
-                AutoDrawAtTurnStart = autoDrawAtTurnStart;
-                AutoDiscardDrawnTileAfterDraw = autoDiscardDrawnTileAfterDraw;
-                UseCpuController = useCpuController;
-            }
-
-            public bool IsCpu { get; }
-            public bool AutoDrawAtTurnStart { get; }
-            public bool AutoDiscardDrawnTileAfterDraw { get; }
-            public bool UseCpuController { get; }
-        }
 
         public MahjongGameState CurrentState => gameState;
         public MahjongEventNotifier EventNotifier => eventNotifier;
@@ -98,6 +78,32 @@ namespace MahjongPrototype
 
         private MahjongFlowEventPublisher EventPublisher =>
             eventPublisher ??= new MahjongFlowEventPublisher(() => eventNotifier, Warn);
+
+        bool ICpuTurnGateway.RequestDrawForCpu(SeatId seat)
+        {
+            return TryRequestDrawForSeat(seat);
+        }
+
+        bool ICpuTurnGateway.RequestDiscardDrawnTileForCpu(SeatId seat)
+        {
+            return TryRequestDiscardDrawnTileForSeat(seat);
+        }
+
+        bool ICpuTurnGateway.RequestDeclareWinForCpu(SeatId seat)
+        {
+            return TryRequestDeclareWinForSeat(seat);
+        }
+
+        bool ICpuTurnGateway.IsSameGameStateAndTurn(
+            MahjongGameState expectedGameState,
+            SeatId seat,
+            int turnIndex)
+        {
+            return ReferenceEquals(gameState, expectedGameState) &&
+                expectedGameState != null &&
+                expectedGameState.CurrentTurn == seat &&
+                expectedGameState.TurnIndex == turnIndex;
+        }
 
         public FuritenEvaluationResultSet EvaluateAllFuriten()
         {
@@ -142,6 +148,8 @@ namespace MahjongPrototype
         {
             CacheReferences();
             EnsureCpuTurnController();
+            EnsureAutoDiscardDrawnTileController();
+            EnsureTurnFlowService();
             InitializeEvaluators();
             NormalizeParticipantCount();
         }
@@ -184,6 +192,8 @@ namespace MahjongPrototype
             InitializeEvaluators();
             NormalizeParticipantCount();
             EnsureRoundSetupService();
+            EnsureTurnFlowService();
+            EnsureAutoDiscardDrawnTileController();
             cpuTurnController?.CancelPendingTurn();
             CancelPendingAutoDiscardDrawnTile();
             autoSortDeferredUntilReachDecisionResolved = false;
@@ -822,8 +832,9 @@ namespace MahjongPrototype
 
         private void AdvanceTurn()
         {
+            EnsureTurnFlowService();
             SeatId fromSeat = gameState.CurrentTurn;
-            SeatId nextSeat = playerTurnManager.EndTurnAndSelectNext(gameState, gameState.ActiveTurnSeats);
+            SeatId nextSeat = turnFlowService.AdvanceTurn(gameState);
             EventPublisher.NotifyTurnDebug(
                 "EndTurn",
                 $"from={fromSeat}; to={nextSeat}; phase={gameState.TurnPhase}",
@@ -865,6 +876,7 @@ namespace MahjongPrototype
 
         private void StartTurn(SeatId seat, int turnIndex)
         {
+            EnsureTurnFlowService();
             EventPublisher.NotifyTurnStarted(seat, turnIndex);
             EventPublisher.NotifyTurnDebug(
                 "BeginTurn",
@@ -874,53 +886,41 @@ namespace MahjongPrototype
 
             ResolveReservedSkillBeforeDraw(seat);
 
-            if (!IsStillCurrentTurn(seat, turnIndex))
+            if (!turnFlowService.IsSameCurrentTurn(gameState, seat, turnIndex))
                 return;
 
             TryAutoDrawAtTurnStart(seat, turnIndex);
 
-            if (!CanEvaluateTurnAutomation(seat, turnIndex))
+            if (!turnFlowService.CanContinueAutomaticProcessing(gameState, seat, turnIndex))
                 return;
 
             TurnAutomationPolicy policy = BuildTurnAutomationPolicy(seat);
             if (policy.UseCpuController)
-                cpuTurnController?.TryStartCpuTurn(this, gameState, seat, turnIndex);
+            {
+                cpuTurnController?.TryStartCpuTurn(
+                    this,
+                    gameState,
+                    seat,
+                    turnIndex);
+            }
         }
 
         private bool IsStillCurrentTurn(SeatId seat, int turnIndex)
         {
-            return gameState != null &&
-                !gameState.IsRoundEnded &&
-                !gameState.IsWinDecisionPending &&
-                gameState.CurrentTurn == seat &&
-                gameState.TurnIndex == turnIndex;
+            EnsureTurnFlowService();
+            return turnFlowService.IsSameCurrentTurn(gameState, seat, turnIndex);
         }
 
         private bool CanEvaluateTurnAutomation(SeatId seat, int turnIndex)
         {
-            return IsStillCurrentTurn(seat, turnIndex) &&
-                !gameState.IsReachDecisionPending &&
-                !gameState.IsReachDiscardSelectionPending;
+            EnsureTurnFlowService();
+            return turnFlowService.CanContinueAutomaticProcessing(gameState, seat, turnIndex);
         }
 
         private TurnAutomationPolicy BuildTurnAutomationPolicy(SeatId seat)
         {
-            if (gameState == null)
-                return new TurnAutomationPolicy(false, false, false, false);
-
-            SeatSlot slot = gameState.GetSeatSlot(seat);
-            PlayerSeat playerSeat = gameState.GetPlayerSeat(seat);
-            bool isCpu = slot.HasPlayer && slot.ParticipantType == ParticipantType.Cpu;
-            bool isReachDeclared = playerSeat != null && playerSeat.IsReachDeclared;
-            bool autoDrawAtTurnStart = enableAutoDraw || isReachDeclared;
-            bool autoDiscardDrawnTileAfterDraw = isReachDeclared;
-            bool useCpuController = isCpu;
-
-            return new TurnAutomationPolicy(
-                isCpu,
-                autoDrawAtTurnStart,
-                autoDiscardDrawnTileAfterDraw,
-                useCpuController);
+            EnsureTurnFlowService();
+            return turnFlowService.BuildAutomationPolicy(gameState, seat, enableAutoDraw);
         }
 
         private void ResolveReservedSkillBeforeDraw(SeatId seat)
@@ -1028,11 +1028,16 @@ namespace MahjongPrototype
 
             if (gameState.IsWinDecisionPending)
             {
-                cpuTurnController?.TryRespondToWinDecision(
-                    this,
-                    gameState,
-                    gameState.WinDecisionSeat,
-                    gameState.WinDecisionTurnIndex);
+                EnsureTurnFlowService();
+                if (turnFlowService.IsCpu(gameState, gameState.WinDecisionSeat))
+                {
+                    cpuTurnController?.TryRespondToWinDecision(
+                        this,
+                        gameState,
+                        gameState.WinDecisionSeat,
+                        gameState.WinDecisionTurnIndex);
+                }
+
                 return;
             }
 
@@ -1047,23 +1052,11 @@ namespace MahjongPrototype
 
         private bool ShouldAutoDiscardDrawnTileAfterDraw(SeatId seat)
         {
-            if (gameState == null ||
-                gameState.IsRoundEnded ||
-                gameState.IsWinDecisionPending ||
-                gameState.IsReachDecisionPending ||
-                gameState.IsReachDiscardSelectionPending ||
-                gameState.CurrentTurn != seat ||
-                gameState.TurnPhase != TurnPhase.WaitingForDiscard)
-            {
-                return false;
-            }
-
-            PlayerSeat playerSeat = gameState.GetPlayerSeat(seat);
-            if (playerSeat == null || !playerSeat.HasDrawnTile)
-                return false;
-
-            TurnAutomationPolicy policy = BuildTurnAutomationPolicy(seat);
-            return policy.AutoDiscardDrawnTileAfterDraw;
+            EnsureTurnFlowService();
+            return turnFlowService.ShouldAutoDiscardDrawnTileAfterDraw(
+                gameState,
+                seat,
+                enableAutoDraw);
         }
 
         private bool TryAutoDiscardDrawnTileAfterDraw(SeatId seat)
@@ -1071,16 +1064,13 @@ namespace MahjongPrototype
             if (!ShouldAutoDiscardDrawnTileAfterDraw(seat))
                 return false;
 
-            CancelPendingAutoDiscardDrawnTile();
-
-            if (autoDiscardDrawnTileDelaySeconds <= 0f)
-                return TryAutoDiscardDrawnTileAfterDrawImmediate(seat);
-
-            int operationVersion = autoDiscardDrawnTileOperationVersion;
-            int turnIndex = gameState.TurnIndex;
-            pendingAutoDiscardDrawnTileCoroutine = StartCoroutine(
-                RunAutoDiscardDrawnTileAfterDraw(seat, turnIndex, operationVersion));
-            return true;
+            EnsureAutoDiscardDrawnTileController();
+            return autoDiscardDrawnTileController.TryStart(
+                seat,
+                gameState.TurnIndex,
+                autoDiscardDrawnTileDelaySeconds,
+                CanExecuteAutoDiscardDrawnTile,
+                TryAutoDiscardDrawnTileAfterDrawImmediate);
         }
 
         private bool TryAutoDiscardDrawnTileAfterDrawImmediate(SeatId seat)
@@ -1105,34 +1095,25 @@ namespace MahjongPrototype
             int turnIndex,
             int operationVersion)
         {
-            if (autoDiscardDrawnTileDelaySeconds > 0f)
-                yield return new WaitForSeconds(autoDiscardDrawnTileDelaySeconds);
-            else
-                yield return null;
-
-            if (operationVersion != autoDiscardDrawnTileOperationVersion)
-                yield break;
-
-            if (!CanEvaluateTurnAutomation(seat, turnIndex) ||
-                !ShouldAutoDiscardDrawnTileAfterDraw(seat))
-            {
-                pendingAutoDiscardDrawnTileCoroutine = null;
-                yield break;
-            }
-
-            pendingAutoDiscardDrawnTileCoroutine = null;
-            TryAutoDiscardDrawnTileAfterDrawImmediate(seat);
+            EnsureAutoDiscardDrawnTileController();
+            return autoDiscardDrawnTileController.CreateRoutine(
+                seat,
+                turnIndex,
+                operationVersion,
+                autoDiscardDrawnTileDelaySeconds,
+                CanExecuteAutoDiscardDrawnTile,
+                TryAutoDiscardDrawnTileAfterDrawImmediate);
         }
 
         private void CancelPendingAutoDiscardDrawnTile()
         {
-            autoDiscardDrawnTileOperationVersion++;
+            autoDiscardDrawnTileController?.CancelPending();
+        }
 
-            if (pendingAutoDiscardDrawnTileCoroutine == null)
-                return;
-
-            StopCoroutine(pendingAutoDiscardDrawnTileCoroutine);
-            pendingAutoDiscardDrawnTileCoroutine = null;
+        private bool CanExecuteAutoDiscardDrawnTile(SeatId seat, int turnIndex)
+        {
+            return CanEvaluateTurnAutomation(seat, turnIndex) &&
+                ShouldAutoDiscardDrawnTileAfterDraw(seat);
         }
 
         private void TryBeginReachDecisionAfterDraw(SeatId seat)
@@ -1548,6 +1529,12 @@ namespace MahjongPrototype
 
             if (cpuTurnController == null)
                 cpuTurnController = GetComponent<CpuTurnController>();
+
+            if (autoDiscardDrawnTileController == null)
+            {
+                autoDiscardDrawnTileController =
+                    GetComponent<AutoDiscardDrawnTileController>();
+            }
         }
 
         private void EnsureRoundSetupService()
@@ -1568,6 +1555,14 @@ namespace MahjongPrototype
 
             roundLifecycleService = new RoundLifecycleService(
                 new WinningCandidateSelector());
+        }
+
+        private void EnsureTurnFlowService()
+        {
+            if (turnFlowService != null)
+                return;
+
+            turnFlowService = new TurnFlowService(playerTurnManager);
         }
 
         private void InitializeEvaluators()
@@ -1596,6 +1591,15 @@ namespace MahjongPrototype
 
             // PROTOTYPE: Ensure the local prototype can run CPU turns without scene migration.
             cpuTurnController = gameObject.AddComponent<CpuTurnController>();
+        }
+
+        private void EnsureAutoDiscardDrawnTileController()
+        {
+            if (autoDiscardDrawnTileController != null)
+                return;
+
+            // PROTOTYPE: Keep the reach auto-discard coroutine separate from game progression.
+            autoDiscardDrawnTileController = gameObject.AddComponent<AutoDiscardDrawnTileController>();
         }
 
         private void NormalizeParticipantCount()
