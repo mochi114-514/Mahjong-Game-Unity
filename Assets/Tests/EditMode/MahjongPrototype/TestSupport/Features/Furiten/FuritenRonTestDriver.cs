@@ -171,6 +171,10 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Furiten
 
         public string CurrentTurn => Query.CurrentTurnName;
 
+        public string TurnPhase => Query.TurnPhaseName;
+
+        public bool HasDrawnTile(string seatName) => Query.HasDrawnTile(seatName);
+
         public int TurnIndex => Query.TurnIndex;
 
         public string GameStateSnapshot()
