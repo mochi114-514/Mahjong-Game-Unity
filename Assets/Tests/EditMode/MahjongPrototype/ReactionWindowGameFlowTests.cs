@@ -173,6 +173,10 @@ namespace MahjongPrototype.Tests
                 Assert.That(session.Commands.TryRequestDrawForSeat("East"), Is.False);
                 session.Commands.RequestForceDrawSkillForSeat("East", "1m");
                 Assert.That(session.Query.ActiveSkillEffectCount, Is.EqualTo(0));
+                session.DataFactory.SetParticipantType(
+                    session.CurrentState,
+                    "West",
+                    "RemoteHuman");
                 session.Commands.RequestDiscard(0);
 
                 Assert.That(session.Query.DiscardCount, Is.EqualTo(2));
