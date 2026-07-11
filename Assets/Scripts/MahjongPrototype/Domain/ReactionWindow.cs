@@ -5,21 +5,21 @@ namespace MahjongPrototype.Domain
 {
     public enum ReactionKind
     {
-        Ron = 1
+        Ron
     }
 
     public enum ReactionResponseState
     {
-        Pending = 0,
-        Declined = 1,
-        Declared = 2
+        Pending,
+        Declined,
+        Declared
     }
 
     public enum ReactionWindowResolutionType
     {
-        None = 0,
-        NoReaction = 1,
-        RonDeclared = 2
+        None,
+        NoReaction,
+        RonDeclared
     }
 
     public sealed class ReactionWindowCandidate
@@ -32,6 +32,7 @@ namespace MahjongPrototype.Domain
             Seat = seat;
             Kind = kind;
             WinDeclarationEvaluation = winDeclarationEvaluation;
+            ResponseState = ReactionResponseState.Pending;
         }
 
         public SeatId Seat { get; }
@@ -143,6 +144,8 @@ namespace MahjongPrototype.Domain
 
     public readonly struct ReactionWindowAnswerResult
     {
+        private const int NoWindowId = 0;
+
         private ReactionWindowAnswerResult(
             bool accepted,
             int windowId,
@@ -161,7 +164,7 @@ namespace MahjongPrototype.Domain
         {
             return new ReactionWindowAnswerResult(
                 false,
-                0,
+                NoWindowId,
                 null,
                 ReactionWindowResolution.None,
                 reason);
