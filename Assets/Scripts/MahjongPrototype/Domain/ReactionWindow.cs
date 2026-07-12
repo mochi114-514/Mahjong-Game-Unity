@@ -6,7 +6,8 @@ namespace MahjongPrototype.Domain
     public enum ReactionKind
     {
         Ron,
-        Pon
+        Pon,
+        Chi
     }
 
     public enum ReactionResponseState
@@ -26,6 +27,122 @@ namespace MahjongPrototype.Domain
 
     public abstract class ReactionWindowCandidateDetail
     {
+    }
+
+    public sealed class ChiOption
+    {
+        private readonly IReadOnlyList<Tile> handTiles;
+        private readonly IReadOnlyList<Tile> meldTiles;
+
+        public ChiOption(
+            int optionId,
+            Tile calledTile,
+            IReadOnlyList<Tile> handTiles,
+            IReadOnlyList<Tile> meldTiles)
+        {
+            if (!calledTile.IsNumberTile)
+                throw new ArgumentException("Called tile must be a valid number tile.", nameof(calledTile));
+            if (handTiles == null)
+                throw new ArgumentNullException(nameof(handTiles));
+            if (meldTiles == null)
+                throw new ArgumentNullException(nameof(meldTiles));
+            if (handTiles.Count != 2)
+                throw new ArgumentException("Chi hand tiles must contain exactly two tiles.", nameof(handTiles));
+            if (meldTiles.Count != 3)
+                throw new ArgumentException("Chi meld tiles must contain exactly three tiles.", nameof(meldTiles));
+
+            Tile[] copiedHandTiles = CopyTiles(handTiles);
+            Tile[] copiedMeldTiles = CopyTiles(meldTiles);
+            ValidateTiles(calledTile, copiedHandTiles, copiedMeldTiles, optionId);
+
+            OptionId = optionId;
+            CalledTile = calledTile;
+            this.handTiles = Array.AsReadOnly(copiedHandTiles);
+            this.meldTiles = Array.AsReadOnly(copiedMeldTiles);
+        }
+
+        public int OptionId { get; }
+        public Tile CalledTile { get; }
+        public IReadOnlyList<Tile> HandTiles => handTiles;
+        public IReadOnlyList<Tile> MeldTiles => meldTiles;
+
+        private static Tile[] CopyTiles(IReadOnlyList<Tile> tiles)
+        {
+            Tile[] copiedTiles = new Tile[tiles.Count];
+            for (int i = 0; i < tiles.Count; i++)
+                copiedTiles[i] = tiles[i];
+
+            return copiedTiles;
+        }
+
+        private static void ValidateTiles(
+            Tile calledTile,
+            Tile[] handTiles,
+            Tile[] meldTiles,
+            int optionId)
+        {
+            for (int i = 0; i < meldTiles.Length; i++)
+            {
+                Tile tile = meldTiles[i];
+                if (!tile.IsNumberTile || tile.Suit != calledTile.Suit)
+                {
+                    throw new ArgumentException(
+                        "Chi meld tiles must be number tiles of the called tile suit.",
+                        nameof(meldTiles));
+                }
+
+                if (tile.Rank != meldTiles[0].Rank + i)
+                {
+                    throw new ArgumentException(
+                        "Chi meld tiles must be an ascending consecutive sequence.",
+                        nameof(meldTiles));
+                }
+            }
+
+            if (optionId != meldTiles[0].Rank)
+            {
+                throw new ArgumentException(
+                    "Chi option id must match the meld starting rank.",
+                    nameof(optionId));
+            }
+
+            int calledTileIndex = -1;
+            for (int i = 0; i < meldTiles.Length; i++)
+            {
+                if (meldTiles[i] == calledTile)
+                {
+                    calledTileIndex = i;
+                    break;
+                }
+            }
+
+            if (calledTileIndex < 0)
+            {
+                throw new ArgumentException(
+                    "Chi meld tiles must include the called tile.",
+                    nameof(meldTiles));
+            }
+
+            Tile[] expectedHandTiles = new Tile[2];
+            int expectedHandTileIndex = 0;
+            for (int i = 0; i < meldTiles.Length; i++)
+            {
+                if (i == calledTileIndex)
+                    continue;
+
+                expectedHandTiles[expectedHandTileIndex++] = meldTiles[i];
+            }
+
+            bool matchesMeldTiles =
+                (handTiles[0] == expectedHandTiles[0] && handTiles[1] == expectedHandTiles[1]) ||
+                (handTiles[0] == expectedHandTiles[1] && handTiles[1] == expectedHandTiles[0]);
+            if (!matchesMeldTiles)
+            {
+                throw new ArgumentException(
+                    "Chi hand tiles must match the non-called meld tiles.",
+                    nameof(handTiles));
+            }
+        }
     }
 
     public sealed class RonReactionWindowCandidateDetail : ReactionWindowCandidateDetail
@@ -49,6 +166,48 @@ namespace MahjongPrototype.Domain
         }
 
         public Tile CalledTile { get; }
+    }
+
+    public sealed class ChiReactionWindowCandidateDetail : ReactionWindowCandidateDetail
+    {
+        private readonly IReadOnlyList<ChiOption> options;
+
+        public ChiReactionWindowCandidateDetail(
+            Tile calledTile,
+            IReadOnlyList<ChiOption> options)
+        {
+            if (!calledTile.IsNumberTile)
+                throw new ArgumentException("Called tile must be a valid number tile.", nameof(calledTile));
+            if (options == null)
+                throw new ArgumentNullException(nameof(options));
+            if (options.Count <= 0)
+                throw new ArgumentException("Chi options must not be empty.", nameof(options));
+
+            List<ChiOption> copiedOptions = new List<ChiOption>(options.Count);
+            HashSet<int> optionIds = new HashSet<int>();
+            for (int i = 0; i < options.Count; i++)
+            {
+                ChiOption option = options[i];
+                if (option == null)
+                    throw new ArgumentException("Chi options must not contain null.", nameof(options));
+                if (option.CalledTile != calledTile)
+                {
+                    throw new ArgumentException(
+                        "All chi options must use the called tile.",
+                        nameof(options));
+                }
+                if (!optionIds.Add(option.OptionId))
+                    throw new ArgumentException("Chi option ids must be unique.", nameof(options));
+
+                copiedOptions.Add(option);
+            }
+
+            CalledTile = calledTile;
+            this.options = copiedOptions.AsReadOnly();
+        }
+
+        public Tile CalledTile { get; }
+        public IReadOnlyList<ChiOption> Options => options;
     }
 
     public sealed class ReactionWindowCandidate
@@ -75,7 +234,8 @@ namespace MahjongPrototype.Domain
             if (detail == null)
                 throw new ArgumentNullException(nameof(detail));
             if ((kind == ReactionKind.Ron && !(detail is RonReactionWindowCandidateDetail)) ||
-                (kind == ReactionKind.Pon && !(detail is PonReactionWindowCandidateDetail)))
+                (kind == ReactionKind.Pon && !(detail is PonReactionWindowCandidateDetail)) ||
+                (kind == ReactionKind.Chi && !(detail is ChiReactionWindowCandidateDetail)))
             {
                 throw new ArgumentException("Candidate detail does not match reaction kind.", nameof(detail));
             }
@@ -94,6 +254,17 @@ namespace MahjongPrototype.Domain
                 new PonReactionWindowCandidateDetail(calledTile));
         }
 
+        public static ReactionWindowCandidate CreateChi(
+            SeatId seat,
+            Tile calledTile,
+            IReadOnlyList<ChiOption> options)
+        {
+            return new ReactionWindowCandidate(
+                seat,
+                ReactionKind.Chi,
+                new ChiReactionWindowCandidateDetail(calledTile, options));
+        }
+
         public SeatId Seat { get; }
         public ReactionKind Kind { get; }
         public ReactionWindowCandidateDetail Detail { get; }
@@ -101,6 +272,8 @@ namespace MahjongPrototype.Domain
             Detail as RonReactionWindowCandidateDetail;
         public PonReactionWindowCandidateDetail PonDetail =>
             Detail as PonReactionWindowCandidateDetail;
+        public ChiReactionWindowCandidateDetail ChiDetail =>
+            Detail as ChiReactionWindowCandidateDetail;
         // Compatibility projection for the existing win declaration and result paths.
         public WinDeclarationEvaluationResult WinDeclarationEvaluation => RonDetail?.Evaluation;
         public ReactionResponseState ResponseState { get; private set; }
@@ -148,7 +321,9 @@ namespace MahjongPrototype.Domain
         public IReadOnlyList<ReactionWindowCandidate> Candidates => candidates;
 
         public ReactionWindowCandidate PendingCandidate =>
-            FindPendingCandidate(ReactionKind.Ron) ?? FindPendingCandidate(ReactionKind.Pon);
+            FindPendingCandidate(ReactionKind.Ron) ??
+            FindPendingCandidate(ReactionKind.Pon) ??
+            FindPendingCandidate(ReactionKind.Chi);
 
         public ReactionWindowCandidate PendingRonCandidate =>
             FindPendingCandidate(ReactionKind.Ron);
@@ -156,6 +331,11 @@ namespace MahjongPrototype.Domain
         public ReactionWindowCandidate PendingPonCandidate =>
             PendingRonCandidate == null
                 ? FindPendingCandidate(ReactionKind.Pon)
+                : null;
+
+        public ReactionWindowCandidate PendingChiCandidate =>
+            PendingRonCandidate == null && PendingPonCandidate == null
+                ? FindPendingCandidate(ReactionKind.Chi)
                 : null;
 
         private ReactionWindowCandidate FindPendingCandidate(ReactionKind kind)
