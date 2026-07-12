@@ -177,9 +177,9 @@ namespace MahjongPrototype.Tests
                 Assert.That(session.Query.HandCount("East"), Is.EqualTo(11));
                 Assert.That(session.Query.OpenMeldCount("East"), Is.EqualTo(1));
                 Assert.That(session.Query.IsClosed("East"), Is.False);
-                Assert.That(session.Query.DiscardCount, Is.EqualTo(1));
                 Assert.That(session.Query.TryGetDiscardClaim(sourceDiscardId, out object claim), Is.True);
                 Assert.That(session.Reflection.GetProperty(claim, "CallerSeat").ToString(), Is.EqualTo("East"));
+                Assert.That(CountDiscardsWithId(session, sourceDiscardId), Is.EqualTo(1));
 
                 object openMeld = session.Query.OpenMeldAt("East", 0);
                 Assert.That(session.Reflection.GetProperty(openMeld, "Type").ToString(), Is.EqualTo("Pon"));
@@ -194,9 +194,13 @@ namespace MahjongPrototype.Tests
                     session.CurrentState,
                     "West",
                     "RemoteHuman");
+                int discardCountBeforePostCallDiscard = session.Query.DiscardCount;
                 session.Commands.RequestDiscard(0);
 
-                Assert.That(session.Query.DiscardCount, Is.EqualTo(2));
+                Assert.That(
+                    session.Query.DiscardCount,
+                    Is.EqualTo(discardCountBeforePostCallDiscard + 1));
+                Assert.That(CountDiscardsWithId(session, sourceDiscardId), Is.EqualTo(1));
                 Assert.That(session.Query.CurrentTurnName, Is.EqualTo("West"));
                 Assert.That(session.Query.TurnIndex, Is.EqualTo(turnIndex + 2));
                 Assert.That(session.Query.TurnPhaseName, Is.EqualTo("WaitingForDraw"));
@@ -437,6 +441,23 @@ namespace MahjongPrototype.Tests
             return (bool)session.Reflection.GetProperty(
                 session.CurrentState,
                 "HasCallOccurred");
+        }
+
+        private static int CountDiscardsWithId(
+            MahjongGameFlowTestSession session,
+            int discardId)
+        {
+            int count = 0;
+            for (int i = 0; i < session.Query.DiscardCount; i++)
+            {
+                int currentDiscardId = (int)session.Reflection.GetProperty(
+                    session.Query.DiscardAt(i),
+                    "Id");
+                if (currentDiscardId == discardId)
+                    count++;
+            }
+
+            return count;
         }
 
         private static MahjongGameFlowTestSession CreateSession(int participantCount)
