@@ -113,6 +113,23 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
+        public void TryDecline_DeclinesAllMeldKindsForTheSelectedSeat()
+        {
+            Fixture fixture = CreateFixture("East", "West");
+            AddHandTiles(fixture, "East", "3m", "4m", "5m", "5m");
+            object reactionWindow = BeginMeldCallWindow(fixture, "West", "5m");
+
+            object result = TryDecline(fixture, reactionWindow, "East");
+
+            Assert.That((bool)fixture.Reflection.GetProperty(result, "Declined"), Is.True);
+            Assert.That(CandidateResponseState(fixture, reactionWindow, "Pon"), Is.EqualTo("Declined"));
+            Assert.That(CandidateResponseState(fixture, reactionWindow, "Chi"), Is.EqualTo("Declined"));
+            Assert.That(HandCount(fixture, "East"), Is.EqualTo(4));
+            Assert.That(OpenMeldCount(fixture, "East"), Is.EqualTo(0));
+            Assert.That((bool)fixture.Reflection.GetProperty(fixture.GameState, "HasCallOccurred"), Is.False);
+        }
+
+        [Test]
         public void TryDeclare_RejectsUnavailableKindsInvalidOptionsAndStaleWindowsWithoutMutation()
         {
             Fixture fixture = CreateFixture("East", "West");
@@ -236,6 +253,20 @@ namespace MahjongPrototype.Tests
                 fixture.DataFactory.ParseSeat(seatName),
                 Enum.Parse(fixture.MeldCallKindType, kindName),
                 optionId);
+        }
+
+        private static object TryDecline(
+            Fixture fixture,
+            object reactionWindow,
+            string seatName)
+        {
+            object service = fixture.Reflection.CreateInstance(fixture.MeldCallServiceType);
+            return fixture.Reflection.Invoke(
+                service,
+                "TryDecline",
+                fixture.GameState,
+                reactionWindow,
+                fixture.DataFactory.ParseSeat(seatName));
         }
 
         private static string AvailableKinds(Fixture fixture, object reactionWindow, string seatName)

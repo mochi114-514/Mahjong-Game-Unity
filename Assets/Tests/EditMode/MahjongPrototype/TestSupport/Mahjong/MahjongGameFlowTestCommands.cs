@@ -137,6 +137,15 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
                 reactionWindowId);
         }
 
+        public bool TryRequestDeclineMeldCallsForSeat(string seatName, int reactionWindowId)
+        {
+            return (bool)reflection.Invoke(
+                GameFlow,
+                "TryRequestDeclineMeldCallsForSeat",
+                dataFactory.ParseSeat(seatName),
+                reactionWindowId);
+        }
+
         public void RequestAdvanceFromRoundResult()
         {
             reflection.Invoke(GameFlow, "RequestAdvanceFromRoundResult");

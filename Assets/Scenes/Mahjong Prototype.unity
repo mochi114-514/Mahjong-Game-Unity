@@ -8268,7 +8268,7 @@ RectTransform:
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 180, y: 60}
+  m_SizeDelta: {x: 480, y: 60}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &6100000402
 MonoBehaviour:
@@ -8826,6 +8826,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI.MahjongPonDecisionController
   ponDecisionRoot: {fileID: 6100000400}
   decisionLabel: {fileID: 0}
+  ponButton: {fileID: 6100000407}
+  declineButton: {fileID: 6100000416}
+  inputController: {fileID: 45752830}
 --- !u!4 &2263956389251206368 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 5200779170243697936, guid: 6da48b3d801ed9c48a3efa7f41a6cb27, type: 3}

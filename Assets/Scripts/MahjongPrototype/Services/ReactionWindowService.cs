@@ -55,10 +55,10 @@ namespace MahjongPrototype.Services
                     ronCandidate.EvaluationResult));
             }
 
-            IReadOnlyList<ReactionWindowCandidate> ponCandidates =
-                ponService.CollectCandidates(gameState, sourceDiscard);
-            for (int i = 0; i < ponCandidates.Count; i++)
-                candidates.Add(ponCandidates[i]);
+            IReadOnlyList<ReactionWindowCandidate> meldCallCandidates =
+                meldCallService.CollectCandidates(gameState, sourceDiscard);
+            for (int i = 0; i < meldCallCandidates.Count; i++)
+                candidates.Add(meldCallCandidates[i]);
 
             ReactionWindow reactionWindow =
                 gameState.BeginReactionWindow(sourceDiscard, candidates);
@@ -213,6 +213,36 @@ namespace MahjongPrototype.Services
             return ReactionWindowAnswerResult.AcceptedAnswer(
                 reactionWindow.WindowId,
                 candidate,
+                ResolveIfNoPendingCandidates(reactionWindow));
+        }
+
+        public ReactionWindowAnswerResult DeclineMeldCalls(
+            MahjongGameState gameState,
+            SeatId seat,
+            int windowId)
+        {
+            ReactionWindow reactionWindow = gameState != null
+                ? gameState.CurrentReactionWindow
+                : null;
+            if (gameState == null || !gameState.IsReactionWindowPending ||
+                reactionWindow == null)
+            {
+                return ReactionWindowAnswerResult.Rejected("ReactionWindowMissing");
+            }
+
+            if (reactionWindow.WindowId != windowId)
+                return ReactionWindowAnswerResult.Rejected("ReactionWindowStale");
+
+            MeldCallDeclineResult result = meldCallService.TryDecline(
+                gameState,
+                reactionWindow,
+                seat);
+            if (!result.Declined)
+                return ReactionWindowAnswerResult.Rejected(result.Reason);
+
+            return ReactionWindowAnswerResult.AcceptedAnswer(
+                reactionWindow.WindowId,
+                result.Candidate,
                 ResolveIfNoPendingCandidates(reactionWindow));
         }
 

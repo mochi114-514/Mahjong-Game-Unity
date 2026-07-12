@@ -1,5 +1,8 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.Linq.Expressions;
+using System.Reflection;
 using MahjongPrototype.Tests.TestSupport.Features.UiInput;
 using MahjongPrototype.Tests.TestSupport.Core;
 using MahjongPrototype.Tests.TestSupport.Mahjong;
@@ -177,6 +180,182 @@ namespace MahjongPrototype.Tests
                 Assert.That(driver.AutoSortIsOn, Is.True);
                 Assert.That(driver.AutoSortEventCount, Is.EqualTo(0));
             }
+        }
+    }
+
+    public sealed class MahjongMeldCallDecisionControllerTests
+    {
+        private const string ControllerTypeName =
+            "MahjongPrototype.UI.MahjongPonDecisionController, Assembly-CSharp";
+        private const string InputControllerTypeName =
+            "MahjongPrototype.UI.MahjongUiInputController, Assembly-CSharp";
+        private const string ChiOptionTypeName =
+            "MahjongPrototype.Domain.ChiOption, Assembly-CSharp";
+        private const string TmpTextTypeName =
+            "TMPro.TextMeshProUGUI, Unity.TextMeshPro";
+
+        [Test]
+        public void SetMeldCallDecision_ShowsPonAndEveryChiOption_AndRoutesTheSelectedOptionId()
+        {
+            ReflectionTestAccess reflection = new ReflectionTestAccess();
+            MahjongTestTypes types = new MahjongTestTypes(reflection);
+            MahjongTestDataFactory dataFactory = new MahjongTestDataFactory(reflection, types);
+            GameObject root = new GameObject("MeldCallDecisionTestRoot");
+            root.SetActive(false);
+            try
+            {
+                Component inputController = root.AddComponent(
+                    reflection.RequireType(InputControllerTypeName));
+                Component controller = root.AddComponent(
+                    reflection.RequireType(ControllerTypeName));
+                Type tmpTextType = reflection.RequireType(TmpTextTypeName);
+                GameObject decisionRoot = new GameObject(
+                    "MeldCallDecisionRoot",
+                    typeof(RectTransform));
+                decisionRoot.transform.SetParent(root.transform);
+                Button ponButton = CreateButton(
+                    reflection,
+                    tmpTextType,
+                    decisionRoot.transform,
+                    "PonButton",
+                    "ポン");
+                Button declineButton = CreateButton(
+                    reflection,
+                    tmpTextType,
+                    decisionRoot.transform,
+                    "DeclineButton",
+                    "拒否");
+                reflection.SetPrivateField(controller, "ponDecisionRoot", decisionRoot);
+                reflection.SetPrivateField(controller, "ponButton", ponButton);
+                reflection.SetPrivateField(controller, "declineButton", declineButton);
+                reflection.SetPrivateField(controller, "inputController", inputController);
+
+                string requestedKind = null;
+                int requestedOptionId = 0;
+                EventInfo eventInfo = inputController.GetType().GetEvent("MeldCallRequested");
+                Assert.That(eventInfo, Is.Not.Null);
+                Delegate handler = CreateMeldCallHandler(
+                    eventInfo.EventHandlerType,
+                    (kind, optionId) =>
+                    {
+                        requestedKind = kind;
+                        requestedOptionId = optionId;
+                    });
+                eventInfo.AddEventHandler(inputController, handler);
+
+                object calledTile = dataFactory.CreateTile("5m");
+                IList options = CreateChiOptions(reflection, dataFactory, calledTile);
+                reflection.Invoke(
+                    controller,
+                    "SetMeldCallDecision",
+                    false,
+                    options,
+                    calledTile);
+
+                Assert.That(decisionRoot.activeSelf, Is.True);
+                Assert.That(ponButton.gameObject.activeSelf, Is.False);
+                Assert.That(declineButton.gameObject.activeSelf, Is.True);
+
+                reflection.Invoke(
+                    controller,
+                    "SetMeldCallDecision",
+                    true,
+                    options,
+                    calledTile);
+                Assert.That(ponButton.gameObject.activeSelf, Is.True);
+                Button secondChiButton = FindButton(decisionRoot.transform, "ChiOption_4");
+                Assert.That(secondChiButton, Is.Not.Null);
+                Component label = secondChiButton.transform.Find("Text").GetComponent(tmpTextType);
+                Assert.That(
+                    reflection.GetProperty(label, "text"),
+                    Is.EqualTo("チー 4m 5m 6m"));
+
+                secondChiButton.onClick.Invoke();
+
+                Assert.That(requestedKind, Is.EqualTo("Chi"));
+                Assert.That(requestedOptionId, Is.EqualTo(4));
+
+                reflection.Invoke(controller, "SetMeldCallDecision", false, null, null);
+                Assert.That(decisionRoot.activeSelf, Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        private static IList CreateChiOptions(
+            ReflectionTestAccess reflection,
+            MahjongTestDataFactory dataFactory,
+            object calledTile)
+        {
+            Type chiOptionType = reflection.RequireType(ChiOptionTypeName);
+            IList options = (IList)Activator.CreateInstance(
+                typeof(List<>).MakeGenericType(chiOptionType));
+            options.Add(reflection.CreateInstance(
+                chiOptionType,
+                3,
+                calledTile,
+                dataFactory.CreateTileArrayFromText("3m 4m"),
+                dataFactory.CreateTileArrayFromText("3m 4m 5m")));
+            options.Add(reflection.CreateInstance(
+                chiOptionType,
+                4,
+                calledTile,
+                dataFactory.CreateTileArrayFromText("4m 6m"),
+                dataFactory.CreateTileArrayFromText("4m 5m 6m")));
+            return options;
+        }
+
+        private static Delegate CreateMeldCallHandler(
+            Type handlerType,
+            Action<string, int> recorder)
+        {
+            ParameterInfo[] parameters = handlerType.GetMethod("Invoke").GetParameters();
+            ParameterExpression kind = Expression.Parameter(parameters[0].ParameterType, "kind");
+            ParameterExpression optionId = Expression.Parameter(parameters[1].ParameterType, "optionId");
+            MethodInfo record = typeof(MahjongMeldCallDecisionControllerTests).GetMethod(
+                nameof(RecordMeldCall),
+                BindingFlags.Static | BindingFlags.NonPublic);
+            MethodCallExpression body = Expression.Call(
+                record,
+                Expression.Constant(recorder),
+                Expression.Convert(kind, typeof(object)),
+                optionId);
+            return Expression.Lambda(handlerType, body, kind, optionId).Compile();
+        }
+
+        private static void RecordMeldCall(Action<string, int> recorder, object kind, int optionId)
+        {
+            recorder(kind.ToString(), optionId);
+        }
+
+        private static Button CreateButton(
+            ReflectionTestAccess reflection,
+            Type tmpTextType,
+            Transform parent,
+            string name,
+            string label)
+        {
+            GameObject buttonObject = new GameObject(
+                name,
+                typeof(RectTransform),
+                typeof(Image),
+                typeof(Button));
+            buttonObject.transform.SetParent(parent);
+            GameObject textObject = new GameObject(
+                "Text",
+                typeof(RectTransform),
+                tmpTextType);
+            textObject.transform.SetParent(buttonObject.transform);
+            reflection.SetProperty(textObject.GetComponent(tmpTextType), "text", label);
+            return buttonObject.GetComponent<Button>();
+        }
+
+        private static Button FindButton(Transform parent, string name)
+        {
+            Transform child = parent.Find(name);
+            return child != null ? child.GetComponent<Button>() : null;
         }
     }
 

@@ -97,8 +97,8 @@ namespace MahjongPrototype.UI
             inputController.RetryRequested += HandleRetryRequested;
             inputController.WinRequested += HandleWinRequested;
             inputController.DeclineWinRequested += HandleDeclineWinRequested;
-            inputController.PonRequested += HandlePonRequested;
-            inputController.DeclinePonRequested += HandleDeclinePonRequested;
+            inputController.MeldCallRequested += HandleMeldCallRequested;
+            inputController.DeclineMeldCallsRequested += HandleDeclineMeldCallsRequested;
             inputController.ReachRequested += HandleReachRequested;
             inputController.DeclineReachRequested += HandleDeclineReachRequested;
             inputController.CancelReachRequested += HandleCancelReachRequested;
@@ -117,8 +117,8 @@ namespace MahjongPrototype.UI
             subscribedInputController.RetryRequested -= HandleRetryRequested;
             subscribedInputController.WinRequested -= HandleWinRequested;
             subscribedInputController.DeclineWinRequested -= HandleDeclineWinRequested;
-            subscribedInputController.PonRequested -= HandlePonRequested;
-            subscribedInputController.DeclinePonRequested -= HandleDeclinePonRequested;
+            subscribedInputController.MeldCallRequested -= HandleMeldCallRequested;
+            subscribedInputController.DeclineMeldCallsRequested -= HandleDeclineMeldCallsRequested;
             subscribedInputController.ReachRequested -= HandleReachRequested;
             subscribedInputController.DeclineReachRequested -= HandleDeclineReachRequested;
             subscribedInputController.CancelReachRequested -= HandleCancelReachRequested;
@@ -198,33 +198,36 @@ namespace MahjongPrototype.UI
             gameFlow.RequestDeclineWin();
         }
 
-        private void HandlePonRequested()
+        private void HandleMeldCallRequested(MeldCallKind kind, int chiOptionId)
         {
-            RequestPonDeclaration(false);
-        }
-
-        private void HandleDeclinePonRequested()
-        {
-            RequestPonDeclaration(true);
-        }
-
-        private void RequestPonDeclaration(bool decline)
-        {
-            if (!TryGetGameFlow("Cannot respond to pon because MahjongGameFlow is not assigned."))
+            if (!TryGetGameFlow("Cannot respond to a meld call because MahjongGameFlow is not assigned."))
                 return;
 
             MahjongGameState state = gameFlow.CurrentState;
             ReactionWindow reactionWindow = state != null ? state.CurrentReactionWindow : null;
-            ReactionWindowCandidate candidate = reactionWindow != null
-                ? reactionWindow.PendingPonCandidate
-                : null;
-            if (candidate == null || candidate.Seat != state.SelfSeat)
+            if (state == null || reactionWindow == null)
                 return;
 
-            if (decline)
-                gameFlow.TryRequestDeclinePonForSeat(candidate.Seat, reactionWindow.WindowId);
-            else
-                gameFlow.TryRequestDeclarePonForSeat(candidate.Seat, reactionWindow.WindowId);
+            gameFlow.TryRequestDeclareMeldCallForSeat(
+                state.SelfSeat,
+                reactionWindow.WindowId,
+                kind,
+                chiOptionId);
+        }
+
+        private void HandleDeclineMeldCallsRequested()
+        {
+            if (!TryGetGameFlow("Cannot decline meld calls because MahjongGameFlow is not assigned."))
+                return;
+
+            MahjongGameState state = gameFlow.CurrentState;
+            ReactionWindow reactionWindow = state != null ? state.CurrentReactionWindow : null;
+            if (state == null || reactionWindow == null)
+                return;
+
+            gameFlow.TryRequestDeclineMeldCallsForSeat(
+                state.SelfSeat,
+                reactionWindow.WindowId);
         }
 
         private void HandleReachRequested()

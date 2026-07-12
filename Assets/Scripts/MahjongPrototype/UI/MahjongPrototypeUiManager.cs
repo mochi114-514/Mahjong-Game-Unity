@@ -73,6 +73,7 @@ namespace MahjongPrototype.UI
         private bool warnedMissingLogPreviewController;
         private bool warnedMissingZeroHanTenpaiController;
         private bool warnedMissingFuritenController;
+        private readonly MeldCallService meldCallService = new MeldCallService();
 
         private void Reset()
         {
@@ -136,6 +137,7 @@ namespace MahjongPrototype.UI
             {
                 ClearRoundResultUi();
                 RefreshTableCenterUi(null);
+                RefreshPonDecision(null);
                 ClearZeroHanTenpaiUi();
                 ClearFuritenUi();
                 return;
@@ -168,6 +170,7 @@ namespace MahjongPrototype.UI
             {
                 WarnMissingOnce(ref warnedMissingFlow, "MahjongGameFlow is not assigned.");
                 ClearRoundResultUi();
+                RefreshPonDecision(null);
                 ClearZeroHanTenpaiUi();
                 ClearFuritenUi();
                 return;
@@ -465,7 +468,8 @@ namespace MahjongPrototype.UI
 
         private void HandleReactionWindowResolved(ReactionWindowResolution resolution)
         {
-            if (resolution.Type == ReactionWindowResolutionType.PonDeclared &&
+            if ((resolution.Type == ReactionWindowResolutionType.PonDeclared ||
+                 resolution.Type == ReactionWindowResolutionType.ChiDeclared) &&
                 resolution.Candidate != null)
             {
                 RefreshPlayerHandForSeat(resolution.Candidate.Seat);
@@ -722,14 +726,57 @@ namespace MahjongPrototype.UI
             ReactionWindow reactionWindow = state != null
                 ? state.CurrentReactionWindow
                 : null;
-            ReactionWindowCandidate candidate = reactionWindow != null
-                ? reactionWindow.PendingPonCandidate
+            if (state == null || reactionWindow == null)
+            {
+                ponDecisionController.SetMeldCallDecision(false, null, null);
+                return;
+            }
+
+            IReadOnlyList<MeldCallKind> availableKinds =
+                meldCallService.GetAvailableKinds(reactionWindow, state.SelfSeat);
+            bool showPon = ContainsMeldCallKind(availableKinds, MeldCallKind.Pon);
+            IReadOnlyList<ChiOption> chiOptions = ContainsMeldCallKind(
+                    availableKinds,
+                    MeldCallKind.Chi)
+                ? FindSelfChiOptions(reactionWindow, state.SelfSeat)
                 : null;
-            bool showSelfPonDecision = candidate != null && state != null &&
-                candidate.Seat == state.SelfSeat;
-            ponDecisionController.SetPonDecision(
-                showSelfPonDecision,
-                showSelfPonDecision ? reactionWindow.SourceDiscard.Tile : (Tile?)null);
+            ponDecisionController.SetMeldCallDecision(
+                showPon,
+                chiOptions,
+                reactionWindow.SourceDiscard.Tile);
+        }
+
+        private static bool ContainsMeldCallKind(
+            IReadOnlyList<MeldCallKind> kinds,
+            MeldCallKind expectedKind)
+        {
+            if (kinds == null)
+                return false;
+
+            for (int i = 0; i < kinds.Count; i++)
+            {
+                if (kinds[i] == expectedKind)
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static IReadOnlyList<ChiOption> FindSelfChiOptions(
+            ReactionWindow reactionWindow,
+            SeatId selfSeat)
+        {
+            for (int i = 0; i < reactionWindow.Candidates.Count; i++)
+            {
+                ReactionWindowCandidate candidate = reactionWindow.Candidates[i];
+                if (candidate.Seat == selfSeat && candidate.Kind == ReactionKind.Chi &&
+                    candidate.IsPending && candidate.ChiDetail != null)
+                {
+                    return candidate.ChiDetail.Options;
+                }
+            }
+
+            return null;
         }
 
         private void RefreshPonDecisionUi()

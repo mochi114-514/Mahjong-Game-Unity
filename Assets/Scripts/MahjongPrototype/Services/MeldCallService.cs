@@ -126,6 +126,44 @@ namespace MahjongPrototype.Services
             return MeldCallDeclarationResult.Succeeded(kind, candidate, preparedCall.OpenMeld);
         }
 
+        public MeldCallDeclineResult TryDecline(
+            MahjongGameState gameState,
+            ReactionWindow reactionWindow,
+            SeatId seat)
+        {
+            if (gameState == null || reactionWindow == null ||
+                !gameState.IsReactionWindowPending ||
+                gameState.CurrentReactionWindow != reactionWindow)
+            {
+                return MeldCallDeclineResult.Rejected("MeldCallWindowMissing");
+            }
+
+            IReadOnlyList<MeldCallKind> availableKinds = GetAvailableKinds(
+                reactionWindow,
+                seat);
+            if (availableKinds.Count <= 0)
+                return MeldCallDeclineResult.Rejected("MeldCallKindUnavailable");
+
+            ReactionWindowCandidate declinedCandidate = null;
+            for (int i = 0; i < reactionWindow.Candidates.Count; i++)
+            {
+                ReactionWindowCandidate candidate = reactionWindow.Candidates[i];
+                if (candidate.Seat != seat || !candidate.IsPending ||
+                    !TryGetMeldCallKind(candidate.Kind, out MeldCallKind kind) ||
+                    !ContainsKind(availableKinds, kind))
+                {
+                    continue;
+                }
+
+                candidate.Decline();
+                declinedCandidate ??= candidate;
+            }
+
+            return declinedCandidate != null
+                ? MeldCallDeclineResult.Succeeded(declinedCandidate)
+                : MeldCallDeclineResult.Rejected("MeldCallCandidateMissing");
+        }
+
         internal static bool TryCommitPreparedCall(
             MahjongGameState gameState,
             PreparedMeldCall preparedCall,
@@ -229,6 +267,24 @@ namespace MahjongPrototype.Services
 
             return null;
         }
+
+        private static bool TryGetMeldCallKind(
+            ReactionKind reactionKind,
+            out MeldCallKind kind)
+        {
+            switch (reactionKind)
+            {
+                case ReactionKind.Pon:
+                    kind = MeldCallKind.Pon;
+                    return true;
+                case ReactionKind.Chi:
+                    kind = MeldCallKind.Chi;
+                    return true;
+                default:
+                    kind = default;
+                    return false;
+            }
+        }
     }
 
     internal sealed class PreparedMeldCall
@@ -293,6 +349,33 @@ namespace MahjongPrototype.Services
         public MeldCallKind Kind { get; }
         public ReactionWindowCandidate Candidate { get; }
         public OpenMeld OpenMeld { get; }
+        public string Reason { get; }
+    }
+
+    public readonly struct MeldCallDeclineResult
+    {
+        private MeldCallDeclineResult(
+            bool declined,
+            ReactionWindowCandidate candidate,
+            string reason)
+        {
+            Declined = declined;
+            Candidate = candidate;
+            Reason = reason ?? string.Empty;
+        }
+
+        public static MeldCallDeclineResult Succeeded(ReactionWindowCandidate candidate)
+        {
+            return new MeldCallDeclineResult(true, candidate, string.Empty);
+        }
+
+        public static MeldCallDeclineResult Rejected(string reason)
+        {
+            return new MeldCallDeclineResult(false, null, reason);
+        }
+
+        public bool Declined { get; }
+        public ReactionWindowCandidate Candidate { get; }
         public string Reason { get; }
     }
 }

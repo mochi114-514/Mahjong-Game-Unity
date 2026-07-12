@@ -731,6 +731,27 @@ namespace MahjongPrototype
             return true;
         }
 
+        public bool TryRequestDeclineMeldCallsForSeat(SeatId actorSeat, int reactionWindowId)
+        {
+            if (!CanUseGameState())
+                return false;
+
+            EnsureReactionWindowService();
+            ReactionWindowAnswerResult answer = reactionWindowService.DeclineMeldCalls(
+                gameState,
+                actorSeat,
+                reactionWindowId);
+            if (!answer.Accepted)
+            {
+                NotifyTurnBlocked("ReactionBlocked", answer.Reason);
+                return false;
+            }
+
+            EventPublisher.NotifyReactionWindowAnswered(answer);
+            ResolveReactionWindow(answer.Resolution);
+            return true;
+        }
+
         public void RequestDeclineWin()
         {
             if (!CanUseGameState())

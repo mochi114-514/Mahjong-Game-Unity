@@ -1,4 +1,5 @@
 using System;
+using MahjongPrototype.Domain;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -56,6 +57,8 @@ namespace MahjongPrototype.UI
         public event Action DeclineWinRequested;
         public event Action PonRequested;
         public event Action DeclinePonRequested;
+        public event Action<MeldCallKind, int> MeldCallRequested;
+        public event Action DeclineMeldCallsRequested;
         public event Action ReachRequested;
         public event Action DeclineReachRequested;
         public event Action CancelReachRequested;
@@ -272,11 +275,23 @@ namespace MahjongPrototype.UI
         private void HandlePonClicked()
         {
             PonRequested?.Invoke();
+            RequestMeldCall(MeldCallKind.Pon, 0);
         }
 
         private void HandleDeclinePonClicked()
         {
             DeclinePonRequested?.Invoke();
+            RequestDeclineMeldCalls();
+        }
+
+        public void RequestMeldCall(MeldCallKind kind, int chiOptionId)
+        {
+            MeldCallRequested?.Invoke(kind, chiOptionId);
+        }
+
+        public void RequestDeclineMeldCalls()
+        {
+            DeclineMeldCallsRequested?.Invoke();
         }
 
         private void HandleReachClicked()
