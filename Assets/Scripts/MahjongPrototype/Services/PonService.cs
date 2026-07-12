@@ -35,24 +35,56 @@ namespace MahjongPrototype.Services
             ReactionWindow reactionWindow,
             ReactionWindowCandidate candidate)
         {
+            if (!TryPrepareDeclaration(
+                    gameState,
+                    reactionWindow,
+                    candidate,
+                    out PreparedMeldCall preparedCall,
+                    out string reason))
+            {
+                return PonDeclarationResult.Rejected(reason);
+            }
+
+            if (!MeldCallService.TryCommitPreparedCall(
+                    gameState,
+                    preparedCall,
+                    out reason))
+            {
+                return PonDeclarationResult.Rejected(reason);
+            }
+
+            return PonDeclarationResult.Succeeded(preparedCall.OpenMeld);
+        }
+
+        internal bool TryPrepareDeclaration(
+            MahjongGameState gameState,
+            ReactionWindow reactionWindow,
+            ReactionWindowCandidate candidate,
+            out PreparedMeldCall preparedCall,
+            out string reason)
+        {
+            preparedCall = null;
+            reason = string.Empty;
             if (gameState == null || reactionWindow == null || candidate == null ||
                 candidate.Kind != ReactionKind.Pon || candidate.PonDetail == null)
             {
-                return PonDeclarationResult.Rejected("PonCandidateMissing");
+                reason = "PonCandidateMissing";
+                return false;
             }
 
             DiscardRecord sourceDiscard = reactionWindow.SourceDiscard;
             if (candidate.PonDetail.CalledTile != sourceDiscard.Tile ||
-                !CanPon(gameState, candidate.Seat, sourceDiscard) ||
-                !gameState.CanClaimDiscard(
-                    sourceDiscard.Id,
-                    candidate.Seat,
-                    sourceDiscard.ActorSeat,
-                    sourceDiscard.Tile))
+                !CanPon(gameState, candidate.Seat, sourceDiscard))
             {
-                return PonDeclarationResult.Rejected("PonStateChanged");
+                reason = "PonStateChanged";
+                return false;
             }
 
+            Tile[] handTiles =
+            {
+                sourceDiscard.Tile,
+                sourceDiscard.Tile
+            };
             OpenMeld openMeld = new OpenMeld(
                 OpenMeldType.Pon,
                 new[] { sourceDiscard.Tile, sourceDiscard.Tile, sourceDiscard.Tile },
@@ -60,23 +92,8 @@ namespace MahjongPrototype.Services
                 sourceDiscard.ActorSeat,
                 sourceDiscard.Tile,
                 sourceDiscard.Id);
-            PlayerSeat playerSeat = gameState.GetPlayerSeat(candidate.Seat);
-            if (!playerSeat.Hand.TryRemoveTilesByValue(
-                    sourceDiscard.Tile,
-                    RequiredMatchingTileCount))
-            {
-                return PonDeclarationResult.Rejected("PonTilesMissing");
-            }
-
-            playerSeat.AddOpenMeld(openMeld);
-            if (!gameState.TryClaimDiscard(openMeld))
-            {
-                throw new InvalidOperationException(
-                    "A validated pon discard claim could not be recorded.");
-            }
-
-            gameState.MarkCallOccurred();
-            return PonDeclarationResult.Succeeded(openMeld);
+            preparedCall = new PreparedMeldCall(candidate, handTiles, openMeld);
+            return true;
         }
 
         private static bool CanPon(

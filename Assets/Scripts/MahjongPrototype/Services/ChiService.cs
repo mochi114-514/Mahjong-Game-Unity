@@ -60,6 +60,61 @@ namespace MahjongPrototype.Services
             return candidates;
         }
 
+        internal bool TryPrepareDeclaration(
+            MahjongGameState gameState,
+            ReactionWindow reactionWindow,
+            ReactionWindowCandidate candidate,
+            int optionId,
+            out PreparedMeldCall preparedCall,
+            out string reason)
+        {
+            preparedCall = null;
+            reason = string.Empty;
+            if (gameState == null || reactionWindow == null || candidate == null ||
+                candidate.Kind != ReactionKind.Chi || candidate.ChiDetail == null)
+            {
+                reason = "ChiCandidateMissing";
+                return false;
+            }
+
+            DiscardRecord sourceDiscard = reactionWindow.SourceDiscard;
+            if (candidate.ChiDetail.CalledTile != sourceDiscard.Tile)
+            {
+                reason = "ChiStateChanged";
+                return false;
+            }
+
+            ReactionWindowCandidate currentCandidate = FindCurrentCandidate(
+                gameState,
+                sourceDiscard,
+                candidate.Seat);
+            if (currentCandidate == null || currentCandidate.ChiDetail == null)
+            {
+                reason = "ChiStateChanged";
+                return false;
+            }
+
+            ChiOption option = FindOption(candidate.ChiDetail.Options, optionId);
+            ChiOption currentOption = FindOption(currentCandidate.ChiDetail.Options, optionId);
+            if (option == null || currentOption == null ||
+                !HasSameTiles(option.HandTiles, currentOption.HandTiles) ||
+                !HasSameTiles(option.MeldTiles, currentOption.MeldTiles))
+            {
+                reason = "ChiOptionMissing";
+                return false;
+            }
+
+            OpenMeld openMeld = new OpenMeld(
+                OpenMeldType.Chi,
+                option.MeldTiles,
+                candidate.Seat,
+                sourceDiscard.ActorSeat,
+                sourceDiscard.Tile,
+                sourceDiscard.Id);
+            preparedCall = new PreparedMeldCall(candidate, option.HandTiles, openMeld);
+            return true;
+        }
+
         private static bool CanChi(MahjongGameState gameState, SeatId seat)
         {
             SeatSlot slot = gameState.GetSeatSlot(seat);
@@ -132,6 +187,54 @@ namespace MahjongPrototype.Services
             }
 
             return false;
+        }
+
+        private ReactionWindowCandidate FindCurrentCandidate(
+            MahjongGameState gameState,
+            DiscardRecord sourceDiscard,
+            SeatId seat)
+        {
+            IReadOnlyList<ReactionWindowCandidate> candidates =
+                CollectCandidates(gameState, sourceDiscard);
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                ReactionWindowCandidate candidate = candidates[i];
+                if (candidate.Seat == seat)
+                    return candidate;
+            }
+
+            return null;
+        }
+
+        private static ChiOption FindOption(IReadOnlyList<ChiOption> options, int optionId)
+        {
+            if (options == null)
+                return null;
+
+            for (int i = 0; i < options.Count; i++)
+            {
+                ChiOption option = options[i];
+                if (option != null && option.OptionId == optionId)
+                    return option;
+            }
+
+            return null;
+        }
+
+        private static bool HasSameTiles(
+            IReadOnlyList<Tile> firstTiles,
+            IReadOnlyList<Tile> secondTiles)
+        {
+            if (firstTiles == null || secondTiles == null || firstTiles.Count != secondTiles.Count)
+                return false;
+
+            for (int i = 0; i < firstTiles.Count; i++)
+            {
+                if (firstTiles[i] != secondTiles[i])
+                    return false;
+            }
+
+            return true;
         }
     }
 }

@@ -488,7 +488,9 @@ namespace MahjongPrototype.Services
             for (int i = 0; i < openMelds.Count; i++)
             {
                 OpenMeld openMeld = openMelds[i];
-                if (openMeld == null || openMeld.Type != OpenMeldType.Pon ||
+                if (openMeld == null ||
+                    (openMeld.Type != OpenMeldType.Pon &&
+                     openMeld.Type != OpenMeldType.Chi) ||
                     openMeld.Tiles.Count != 3)
                 {
                     return false;
@@ -511,7 +513,10 @@ namespace MahjongPrototype.Services
             for (int i = 0; i < openMelds.Count; i++)
             {
                 OpenMeld openMeld = openMelds[i];
-                fixedMelds.Add(new HandMeld(MeldType.Triplet, openMeld.Tiles));
+                MeldType meldType = openMeld.Type == OpenMeldType.Pon
+                    ? MeldType.Triplet
+                    : MeldType.Sequence;
+                fixedMelds.Add(new HandMeld(meldType, openMeld.Tiles));
             }
 
             return true;

@@ -11,6 +11,9 @@ namespace MahjongPrototype.Tests
 {
     public sealed class ReactionWindowGameFlowTests
     {
+        private const string MeldCallServiceTypeName =
+            "MahjongPrototype.Services.MeldCallService, Assembly-CSharp";
+
         [Test]
         public void HandDiscardAndDrawnTileDiscard_BothStartReactionWindowBeforeResolution()
         {
@@ -146,8 +149,13 @@ namespace MahjongPrototype.Tests
                 int windowId = session.Query.ReactionWindowId;
                 int turnIndex = session.Query.TurnIndex;
                 int sourceDiscardId = session.Query.LastDiscardId;
+                object sourcePlayerSeat = session.Query.GetPlayerSeat("West");
+                session.Reflection.Invoke(sourcePlayerSeat, "DeclareReach", turnIndex);
 
                 Assert.That(HasCallOccurred(session), Is.False);
+                Assert.That(
+                    (bool)session.Reflection.GetProperty(sourcePlayerSeat, "IsIppatsuEligible"),
+                    Is.True);
                 Assert.That(session.Query.ReactionWindowCandidateCount, Is.EqualTo(1));
                 Assert.That(session.Query.ReactionWindowCandidateKindAt(0), Is.EqualTo("Pon"));
                 Assert.That(session.Commands.TryRequestDeclareRonForSeat("East", windowId), Is.False);
@@ -159,6 +167,9 @@ namespace MahjongPrototype.Tests
 
                 Assert.That(session.Query.IsReactionWindowPending, Is.False);
                 Assert.That(HasCallOccurred(session), Is.True);
+                Assert.That(
+                    (bool)session.Reflection.GetProperty(sourcePlayerSeat, "IsIppatsuEligible"),
+                    Is.False);
                 Assert.That(session.Query.CurrentTurnName, Is.EqualTo("East"));
                 Assert.That(session.Query.TurnIndex, Is.EqualTo(turnIndex + 1));
                 Assert.That(session.Query.TurnPhaseName, Is.EqualTo("WaitingForDiscardAfterCall"));
@@ -189,6 +200,56 @@ namespace MahjongPrototype.Tests
                 Assert.That(session.Query.CurrentTurnName, Is.EqualTo("West"));
                 Assert.That(session.Query.TurnIndex, Is.EqualTo(turnIndex + 2));
                 Assert.That(session.Query.TurnPhaseName, Is.EqualTo("WaitingForDraw"));
+            }
+        }
+
+        [Test]
+        public void ChiCandidate_UsesCommonGameFlowAndEntersPostCallDiscard()
+        {
+            using (MahjongGameFlowTestSession session = CreatePonSession(false))
+            {
+                int turnIndex = session.Query.TurnIndex;
+                object sourceDiscard = session.Reflection.GetProperty(
+                    session.Query.CurrentReactionWindow,
+                    "SourceDiscard");
+                object eastPlayerSeat = session.Query.GetPlayerSeat("East");
+                session.DataFactory.AddHandTiles(eastPlayerSeat, "3m", "4m");
+                object meldCallService = session.Reflection.CreateInstance(
+                    session.Reflection.RequireType(MeldCallServiceTypeName));
+                object candidates = session.Reflection.Invoke(
+                    meldCallService,
+                    "CollectCandidates",
+                    session.CurrentState,
+                    sourceDiscard);
+                session.Reflection.Invoke(
+                    session.CurrentState,
+                    "BeginReactionWindow",
+                    sourceDiscard,
+                    candidates);
+
+                object sourcePlayerSeat = session.Query.GetPlayerSeat("West");
+                session.Reflection.Invoke(sourcePlayerSeat, "DeclareReach", turnIndex);
+                int windowId = session.Query.ReactionWindowId;
+
+                Assert.That(session.Commands.TryRequestDeclareChiForSeat("East", windowId, 3), Is.True);
+
+                Assert.That(session.Query.IsReactionWindowPending, Is.False);
+                Assert.That(HasCallOccurred(session), Is.True);
+                Assert.That(
+                    (bool)session.Reflection.GetProperty(sourcePlayerSeat, "IsIppatsuEligible"),
+                    Is.False);
+                Assert.That(session.Query.CurrentTurnName, Is.EqualTo("East"));
+                Assert.That(session.Query.TurnIndex, Is.EqualTo(turnIndex + 1));
+                Assert.That(session.Query.TurnPhaseName, Is.EqualTo("WaitingForDiscardAfterCall"));
+                Assert.That(session.Query.HasDrawnTile("East"), Is.False);
+                Assert.That(session.Query.HandCount("East"), Is.EqualTo(13));
+                Assert.That(session.Query.OpenMeldCount("East"), Is.EqualTo(1));
+
+                object openMeld = session.Query.OpenMeldAt("East", 0);
+                Assert.That(session.Reflection.GetProperty(openMeld, "Type").ToString(), Is.EqualTo("Chi"));
+                Assert.That(
+                    session.Collections.Count(session.Reflection.GetProperty(openMeld, "Tiles")),
+                    Is.EqualTo(3));
             }
         }
 

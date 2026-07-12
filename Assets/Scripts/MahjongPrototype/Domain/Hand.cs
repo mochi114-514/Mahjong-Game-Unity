@@ -55,6 +55,51 @@ namespace MahjongPrototype.Domain
             return true;
         }
 
+        public bool TryRemoveTilesByValue(IReadOnlyList<Tile> requiredTiles)
+        {
+            if (requiredTiles == null || requiredTiles.Count <= 0)
+                return false;
+
+            for (int requiredIndex = 0; requiredIndex < requiredTiles.Count; requiredIndex++)
+            {
+                Tile requiredTile = requiredTiles[requiredIndex];
+                if (!requiredTile.IsValid)
+                    return false;
+
+                int requiredCount = 0;
+                for (int i = 0; i < requiredTiles.Count; i++)
+                {
+                    if (requiredTiles[i] == requiredTile)
+                        requiredCount++;
+                }
+
+                int matchingCount = 0;
+                for (int i = 0; i < tiles.Count; i++)
+                {
+                    if (tiles[i] == requiredTile)
+                        matchingCount++;
+                }
+
+                if (matchingCount < requiredCount)
+                    return false;
+            }
+
+            for (int requiredIndex = 0; requiredIndex < requiredTiles.Count; requiredIndex++)
+            {
+                Tile requiredTile = requiredTiles[requiredIndex];
+                for (int tileIndex = tiles.Count - 1; tileIndex >= 0; tileIndex--)
+                {
+                    if (tiles[tileIndex] != requiredTile)
+                        continue;
+
+                    tiles.RemoveAt(tileIndex);
+                    break;
+                }
+            }
+
+            return true;
+        }
+
         public void SortByTypeIndex()
         {
             tiles.Sort(CompareByTypeIndex);

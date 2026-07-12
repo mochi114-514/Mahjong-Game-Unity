@@ -169,6 +169,29 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
             return openMelds;
         }
 
+        public object CreateOpenChiMelds(
+            string meldTileText,
+            string calledTileCode,
+            string callerSeatName = "East",
+            string sourceSeatName = "West",
+            int sourceDiscardId = 1)
+        {
+            Type openMeldType = Reflection.RequireType(OpenMeldTypeName);
+            Type openMeldListType = typeof(List<>).MakeGenericType(openMeldType);
+            IList openMelds = (IList)Reflection.CreateInstance(openMeldListType);
+            object openMeld = Reflection.CreateInstance(
+                openMeldType,
+                Enum.Parse(Reflection.RequireType(OpenMeldKindTypeName), "Chi"),
+                DataFactory.CreateTileArrayFromText(meldTileText),
+                DataFactory.ParseSeat(callerSeatName),
+                DataFactory.ParseSeat(sourceSeatName),
+                DataFactory.CreateTile(calledTileCode),
+                sourceDiscardId);
+
+            openMelds.Add(openMeld);
+            return openMelds;
+        }
+
         public object CreateYakuDefinition(
             string yakuKindName,
             string closedHanName,

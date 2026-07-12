@@ -8,19 +8,31 @@ namespace MahjongPrototype.Services
     {
         private readonly WinDecisionService winDecisionService;
         private readonly PonService ponService;
+        private readonly MeldCallService meldCallService;
 
         public ReactionWindowService(WinDecisionService winDecisionService)
-            : this(winDecisionService, new PonService())
+            : this(winDecisionService, new PonService(), new ChiService())
         {
         }
 
         public ReactionWindowService(
             WinDecisionService winDecisionService,
             PonService ponService)
+            : this(winDecisionService, ponService, new ChiService())
+        {
+        }
+
+        public ReactionWindowService(
+            WinDecisionService winDecisionService,
+            PonService ponService,
+            ChiService chiService)
         {
             this.winDecisionService = winDecisionService ??
                 throw new ArgumentNullException(nameof(winDecisionService));
             this.ponService = ponService ?? throw new ArgumentNullException(nameof(ponService));
+            meldCallService = new MeldCallService(
+                this.ponService,
+                chiService ?? throw new ArgumentNullException(nameof(chiService)));
         }
 
         public ReactionWindowStartResult Begin(
@@ -115,33 +127,69 @@ namespace MahjongPrototype.Services
             SeatId seat,
             int windowId)
         {
-            if (!TryGetPendingCandidate(
-                    gameState,
-                    seat,
-                    windowId,
-                    ReactionKind.Pon,
-                    out ReactionWindow reactionWindow,
-                    out ReactionWindowCandidate candidate,
-                    out string reason))
+            return DeclareCall(
+                gameState,
+                seat,
+                windowId,
+                MeldCallKind.Pon,
+                0);
+        }
+
+        public ReactionWindowAnswerResult DeclareChi(
+            MahjongGameState gameState,
+            SeatId seat,
+            int windowId,
+            int optionId)
+        {
+            return DeclareCall(
+                gameState,
+                seat,
+                windowId,
+                MeldCallKind.Chi,
+                optionId);
+        }
+
+        public ReactionWindowAnswerResult DeclareCall(
+            MahjongGameState gameState,
+            SeatId seat,
+            int windowId,
+            MeldCallKind kind,
+            int chiOptionId)
+        {
+            ReactionWindow reactionWindow = gameState != null
+                ? gameState.CurrentReactionWindow
+                : null;
+            if (gameState == null || !gameState.IsReactionWindowPending ||
+                reactionWindow == null)
             {
-                return ReactionWindowAnswerResult.Rejected(reason);
+                return ReactionWindowAnswerResult.Rejected("ReactionWindowMissing");
             }
 
-            PonDeclarationResult result = ponService.TryDeclare(
+            if (reactionWindow.WindowId != windowId)
+                return ReactionWindowAnswerResult.Rejected("ReactionWindowStale");
+
+            MeldCallDeclarationResult result = meldCallService.TryDeclare(
                 gameState,
                 reactionWindow,
-                candidate);
+                seat,
+                kind,
+                chiOptionId);
             if (!result.Declared)
                 return ReactionWindowAnswerResult.Rejected(result.Reason);
 
-            candidate.Declare();
+            ReactionWindowResolution resolution = kind == MeldCallKind.Pon
+                ? ReactionWindowResolution.PonDeclared(
+                    reactionWindow.SourceDiscard,
+                    result.Candidate,
+                    result.OpenMeld)
+                : ReactionWindowResolution.ChiDeclared(
+                    reactionWindow.SourceDiscard,
+                    result.Candidate,
+                    result.OpenMeld);
             return ReactionWindowAnswerResult.AcceptedAnswer(
                 reactionWindow.WindowId,
-                candidate,
-                ReactionWindowResolution.PonDeclared(
-                    reactionWindow.SourceDiscard,
-                    candidate,
-                    result.OpenMeld));
+                result.Candidate,
+                resolution);
         }
 
         public ReactionWindowAnswerResult DeclinePon(

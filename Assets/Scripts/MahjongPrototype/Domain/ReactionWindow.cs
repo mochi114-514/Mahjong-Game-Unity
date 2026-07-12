@@ -22,7 +22,8 @@ namespace MahjongPrototype.Domain
         None,
         NoReaction,
         RonDeclared,
-        PonDeclared
+        PonDeclared,
+        ChiDeclared
     }
 
     public abstract class ReactionWindowCandidateDetail
@@ -338,6 +339,24 @@ namespace MahjongPrototype.Domain
                 ? FindPendingCandidate(ReactionKind.Chi)
                 : null;
 
+        internal void CloseMeldCallsExcept(ReactionWindowCandidate declaredCandidate)
+        {
+            if (declaredCandidate == null)
+                throw new ArgumentNullException(nameof(declaredCandidate));
+
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                ReactionWindowCandidate candidate = candidates[i];
+                if (candidate == declaredCandidate || !candidate.IsPending ||
+                    (candidate.Kind != ReactionKind.Pon && candidate.Kind != ReactionKind.Chi))
+                {
+                    continue;
+                }
+
+                candidate.Decline();
+            }
+        }
+
         private ReactionWindowCandidate FindPendingCandidate(ReactionKind kind)
         {
             for (int i = 0; i < candidates.Count; i++)
@@ -421,6 +440,23 @@ namespace MahjongPrototype.Domain
 
             return new ReactionWindowResolution(
                 ReactionWindowResolutionType.PonDeclared,
+                sourceDiscard,
+                candidate,
+                openMeld);
+        }
+
+        public static ReactionWindowResolution ChiDeclared(
+            DiscardRecord sourceDiscard,
+            ReactionWindowCandidate candidate,
+            OpenMeld openMeld)
+        {
+            if (candidate == null || candidate.Kind != ReactionKind.Chi)
+                throw new ArgumentException("A chi resolution requires a chi candidate.", nameof(candidate));
+            if (openMeld == null || openMeld.Type != OpenMeldType.Chi)
+                throw new ArgumentException("A chi resolution requires a chi open meld.", nameof(openMeld));
+
+            return new ReactionWindowResolution(
+                ReactionWindowResolutionType.ChiDeclared,
                 sourceDiscard,
                 candidate,
                 openMeld);

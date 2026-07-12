@@ -8,6 +8,30 @@ namespace MahjongPrototype.Tests
     public sealed class WinDeclarationEvaluatorTests
     {
         [Test]
+        public void EvaluateWithTile_OpenChiHand_RemainsWinningAndEvaluatesOpenYaku()
+        {
+            using (WinDeclarationEvaluatorTestDriver driver =
+                   WinDeclarationEvaluatorTestDriver.Create())
+            {
+                object catalog = driver.CreateCatalog(
+                    driver.CreateDefinition("Tanyao", "One", "One"));
+                object openMelds = driver.CreateOpenChiMelds("3m 4m 5m", "5m");
+
+                object result = driver.EvaluateWithTile(
+                    catalog,
+                    "2m 3m 4m 3p 4p 5p 6p 6p 6s 6s",
+                    "6s",
+                    "Ron",
+                    isClosed: false,
+                    openMelds: openMelds);
+
+                Assert.That(driver.IsWinningShape(result), Is.True);
+                Assert.That(driver.CanDeclareWin(result), Is.True);
+                Assert.That(driver.CountCandidatesContainingYaku(result, "Tanyao"), Is.GreaterThan(0));
+            }
+        }
+
+        [Test]
         public void WinCheckerCanWinWithTile_RemainsShapeOnlyWithoutYakuCatalog()
         {
             using (WinDeclarationEvaluatorTestDriver driver =

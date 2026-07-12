@@ -115,6 +115,19 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
                 reactionWindowId);
         }
 
+        public bool TryRequestDeclareChiForSeat(
+            string seatName,
+            int reactionWindowId,
+            int optionId)
+        {
+            return (bool)reflection.Invoke(
+                GameFlow,
+                "TryRequestDeclareChiForSeat",
+                dataFactory.ParseSeat(seatName),
+                reactionWindowId,
+                optionId);
+        }
+
         public bool TryRequestDeclinePonForSeat(string seatName, int reactionWindowId)
         {
             return (bool)reflection.Invoke(

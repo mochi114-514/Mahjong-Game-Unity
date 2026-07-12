@@ -129,6 +129,21 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
                 sourceDiscardId);
         }
 
+        public object CreateOpenChiMelds(
+            string meldTileText,
+            string calledTileCode,
+            string callerSeatName = "East",
+            string sourceSeatName = "West",
+            int sourceDiscardId = 1)
+        {
+            return support.CreateOpenChiMelds(
+                meldTileText,
+                calledTileCode,
+                callerSeatName,
+                sourceSeatName,
+                sourceDiscardId);
+        }
+
         public bool IsWinningShape(object result)
         {
             return (bool)support.Reflection.GetProperty(result, "IsWinningShape");

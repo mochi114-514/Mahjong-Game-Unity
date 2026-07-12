@@ -664,14 +664,41 @@ namespace MahjongPrototype
 
         public bool TryRequestDeclarePonForSeat(SeatId actorSeat, int reactionWindowId)
         {
+            return TryRequestDeclareMeldCallForSeat(
+                actorSeat,
+                reactionWindowId,
+                MeldCallKind.Pon,
+                0);
+        }
+
+        public bool TryRequestDeclareChiForSeat(
+            SeatId actorSeat,
+            int reactionWindowId,
+            int optionId)
+        {
+            return TryRequestDeclareMeldCallForSeat(
+                actorSeat,
+                reactionWindowId,
+                MeldCallKind.Chi,
+                optionId);
+        }
+
+        public bool TryRequestDeclareMeldCallForSeat(
+            SeatId actorSeat,
+            int reactionWindowId,
+            MeldCallKind kind,
+            int chiOptionId)
+        {
             if (!CanUseGameState())
                 return false;
 
             EnsureReactionWindowService();
-            ReactionWindowAnswerResult answer = reactionWindowService.DeclarePon(
+            ReactionWindowAnswerResult answer = reactionWindowService.DeclareCall(
                 gameState,
                 actorSeat,
-                reactionWindowId);
+                reactionWindowId,
+                kind,
+                chiOptionId);
             if (!answer.Accepted)
             {
                 NotifyTurnBlocked("ReactionBlocked", answer.Reason);
@@ -953,12 +980,13 @@ namespace MahjongPrototype
                         resolution);
                     return;
                 case ReactionWindowResolutionType.PonDeclared:
-                    BeginTurnAfterPon(resolution);
+                case ReactionWindowResolutionType.ChiDeclared:
+                    BeginTurnAfterMeldCall(resolution);
                     return;
             }
         }
 
-        private void BeginTurnAfterPon(ReactionWindowResolution resolution)
+        private void BeginTurnAfterMeldCall(ReactionWindowResolution resolution)
         {
             if (resolution.Candidate == null || resolution.OpenMeld == null)
                 return;
@@ -970,7 +998,7 @@ namespace MahjongPrototype
                 resolution.Candidate.Seat,
                 gameState.TurnIndex);
             EventPublisher.NotifyTurnDebug(
-                "PonDeclared",
+                $"{resolution.OpenMeld.Type}Declared",
                 $"windowSourceDiscardId={resolution.SourceDiscard.Id}; caller={resolution.Candidate.Seat}; source={resolution.SourceDiscard.ActorSeat}; phase={gameState.TurnPhase}",
                 seat: resolution.Candidate.Seat,
                 tile: resolution.SourceDiscard.Tile,
