@@ -202,6 +202,10 @@ namespace MahjongPrototype.Tests
                 Assert.That(session.Query.TurnPhaseName, Is.EqualTo("WaitingForDiscardAfterCall"));
                 Assert.That(CountDiscardsWithId(session, sourceDiscardId), Is.EqualTo(1));
 
+                session.DataFactory.SetParticipantType(
+                    session.CurrentState,
+                    "West",
+                    "RemoteHuman");
                 int discardCountBeforePostCallDiscard = session.Query.DiscardCount;
                 session.Commands.RequestDiscard(0);
 
