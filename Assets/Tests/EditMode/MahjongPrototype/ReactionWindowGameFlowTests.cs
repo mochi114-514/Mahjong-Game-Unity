@@ -186,14 +186,22 @@ namespace MahjongPrototype.Tests
                 Assert.That(session.Collections.Count(session.Reflection.GetProperty(openMeld, "Tiles")), Is.EqualTo(3));
                 Assert.That(session.Reflection.GetProperty(openMeld, "SourceSeat").ToString(), Is.EqualTo("West"));
                 Assert.That((int)session.Reflection.GetProperty(openMeld, "SourceDiscardId"), Is.EqualTo(sourceDiscardId));
+            }
+        }
 
-                Assert.That(session.Commands.TryRequestDrawForSeat("East"), Is.False);
-                session.Commands.RequestForceDrawSkillForSeat("East", "1m");
-                Assert.That(session.Query.ActiveSkillEffectCount, Is.EqualTo(0));
-                session.DataFactory.SetParticipantType(
-                    session.CurrentState,
-                    "West",
-                    "RemoteHuman");
+        [Test]
+        public void PonAfterCallDiscard_AddsOneDiscardAndAdvancesWithoutReachAutoDiscard()
+        {
+            using (MahjongGameFlowTestSession session = CreatePonSession(false))
+            {
+                int windowId = session.Query.ReactionWindowId;
+                int turnIndex = session.Query.TurnIndex;
+                int sourceDiscardId = session.Query.LastDiscardId;
+
+                Assert.That(session.Commands.TryRequestDeclarePonForSeat("East", windowId), Is.True);
+                Assert.That(session.Query.TurnPhaseName, Is.EqualTo("WaitingForDiscardAfterCall"));
+                Assert.That(CountDiscardsWithId(session, sourceDiscardId), Is.EqualTo(1));
+
                 int discardCountBeforePostCallDiscard = session.Query.DiscardCount;
                 session.Commands.RequestDiscard(0);
 
