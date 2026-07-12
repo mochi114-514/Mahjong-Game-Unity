@@ -293,21 +293,31 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void RonDecline_LeavesMeldCallCandidatesAndAppliesOnlyRonFuriten()
+        public void RonDecline_LeavesChiCandidateUntilItIsDeclined_AndAppliesOnlyRonFuriten()
         {
-            using (MahjongGameFlowTestSession session = CreatePonSession(true))
+            using (MahjongGameFlowTestSession session = CreateRonAndChiSession())
             {
+                int turnIndex = session.Query.TurnIndex;
                 int windowId = session.Query.ReactionWindowId;
 
-                Assert.That(session.Query.ReactionWindowCandidateCount, Is.EqualTo(3));
+                Assert.That(session.Query.ReactionWindowCandidateCount, Is.EqualTo(2));
                 Assert.That(session.Query.ReactionWindowCandidateKindAt(0), Is.EqualTo("Ron"));
-                Assert.That(session.Query.ReactionWindowCandidateKindAt(1), Is.EqualTo("Pon"));
-                Assert.That(session.Query.ReactionWindowCandidateKindAt(2), Is.EqualTo("Chi"));
-                Assert.That(session.Commands.TryRequestDeclarePonForSeat("East", windowId), Is.False);
+                Assert.That(session.Query.ReactionWindowCandidateKindAt(1), Is.EqualTo("Chi"));
 
                 Assert.That(session.Commands.TryRequestDeclineRonForSeat("East", windowId), Is.True);
                 Assert.That(session.Query.IsReactionWindowPending, Is.True);
                 Assert.That(session.Query.IsTemporaryFuriten("East"), Is.True);
+                Assert.That(session.Query.CurrentTurnName, Is.EqualTo("West"));
+                Assert.That(session.Query.TurnIndex, Is.EqualTo(turnIndex));
+                Assert.That(
+                    session.Reflection.GetProperty(
+                        session.Collections.Item(
+                            session.Reflection.GetProperty(
+                                session.Query.CurrentReactionWindow,
+                                "Candidates"),
+                            1),
+                        "ResponseState").ToString(),
+                    Is.EqualTo("Pending"));
                 Assert.That(session.Commands.TryRequestDeclineRonForSeat("East", windowId), Is.False);
 
                 Assert.That(
@@ -317,6 +327,30 @@ namespace MahjongPrototype.Tests
                 Assert.That(session.Query.OpenMeldCount("East"), Is.EqualTo(0));
                 Assert.That(session.Query.IsTemporaryFuriten("East"), Is.True);
                 Assert.That(HasCallOccurred(session), Is.False);
+                Assert.That(session.Query.CurrentTurnName, Is.EqualTo("East"));
+                Assert.That(session.Query.TurnIndex, Is.EqualTo(turnIndex + 1));
+                Assert.That(session.Query.TurnPhaseName, Is.EqualTo("WaitingForDraw"));
+            }
+        }
+
+        [Test]
+        public void RonAndChi_RonDeclarationResolvesTheWinWithoutDecliningChi()
+        {
+            using (MahjongGameFlowTestSession session = CreateRonAndChiSession())
+            {
+                int windowId = session.Query.ReactionWindowId;
+
+                Assert.That(session.Query.ReactionWindowCandidateCount, Is.EqualTo(2));
+                Assert.That(session.Query.ReactionWindowCandidateKindAt(0), Is.EqualTo("Ron"));
+                Assert.That(session.Query.ReactionWindowCandidateKindAt(1), Is.EqualTo("Chi"));
+
+                Assert.That(session.Commands.TryRequestDeclareRonForSeat("East", windowId), Is.True);
+
+                Assert.That(session.Query.IsReactionWindowPending, Is.False);
+                Assert.That(session.Query.IsRoundResultPending, Is.True);
+                Assert.That(session.Query.RoundResultTypeName, Is.EqualTo("Win"));
+                Assert.That(session.Query.RoundResultWinnerSeatNameOrNull, Is.EqualTo("East"));
+                Assert.That(session.Query.RoundResultWinTypeNameOrNull, Is.EqualTo("Ron"));
             }
         }
 
@@ -357,7 +391,7 @@ namespace MahjongPrototype.Tests
                 session.Commands.StartNewRound();
                 session.DataFactory.AddHandTiles(
                     session.Query.GetPlayerSeat("East"),
-                    "5m", "1m", "2m", "3m", "4m", "5p", "6p", "7p", "2s", "3s", "4s", "E", "S");
+                    "5m", "1m", "1m", "1m", "9m", "5p", "6p", "7p", "2s", "3s", "4s", "E", "S");
                 session.DataFactory.SetCurrentTurn(session.CurrentState, "West");
                 session.DataFactory.SetDrawnTile(session.CurrentState, "West", "5m");
 
@@ -439,10 +473,10 @@ namespace MahjongPrototype.Tests
             session.Commands.StartNewRound();
             session.DataFactory.AddHandTiles(
                 session.Query.GetPlayerSeat("East"),
-                "1m", "2m", "3m",
                 "2p", "3p", "4p",
+                "5p", "6p", "7p",
                 "2s", "3s", "4s",
-                "6m", "7m", "8m",
+                "6s", "7s", "8s",
                 "5m");
             session.DataFactory.SetCurrentTurn(session.CurrentState, "West");
             session.DataFactory.SetDrawnTile(session.CurrentState, "West", "5m");
@@ -467,6 +501,24 @@ namespace MahjongPrototype.Tests
             session.DataFactory.AddHandTiles(
                 session.Query.GetPlayerSeat("East"),
                 handTiles);
+            session.DataFactory.SetCurrentTurn(session.CurrentState, "West");
+            session.DataFactory.SetDrawnTile(session.CurrentState, "West", "5m");
+
+            Assert.That(session.Commands.TryRequestDiscardDrawnTileForSeat("West"), Is.True);
+            return session;
+        }
+
+        private static MahjongGameFlowTestSession CreateRonAndChiSession()
+        {
+            MahjongGameFlowTestSession session = CreateSession(2);
+            session.Commands.StartNewRound();
+            session.DataFactory.AddHandTiles(
+                session.Query.GetPlayerSeat("East"),
+                "2m", "3m", "4m",
+                "2p", "3p", "4p",
+                "5p", "6p", "7p",
+                "2s", "3s", "4s",
+                "5m");
             session.DataFactory.SetCurrentTurn(session.CurrentState, "West");
             session.DataFactory.SetDrawnTile(session.CurrentState, "West", "5m");
 

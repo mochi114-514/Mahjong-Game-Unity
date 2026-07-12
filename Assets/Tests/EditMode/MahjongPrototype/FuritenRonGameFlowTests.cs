@@ -72,10 +72,10 @@ namespace MahjongPrototype.Tests
             {
                 driver.StartRound();
                 driver.SetHand("East", FuritenTestHands.RonMultiWait());
-                driver.AddDiscard("East", "3m", 0);
+                driver.AddDiscard("East", "6m", 0);
                 Assert.That(driver.IsSeatDiscardFuriten("East"), Is.True);
                 Assert.That(driver.IsSeatFuriten("East"), Is.True);
-                driver.SetDrawnTile("West", "6m");
+                driver.SetDrawnTile("West", "7m");
                 driver.SetCurrentTurn("West");
 
                 bool discarded = driver.DiscardDrawnTile("West");
