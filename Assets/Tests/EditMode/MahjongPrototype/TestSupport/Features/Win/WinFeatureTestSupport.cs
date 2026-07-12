@@ -1,4 +1,6 @@
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using MahjongPrototype.Tests.TestSupport.Core;
 using MahjongPrototype.Tests.TestSupport.Mahjong;
 using MahjongPrototype.Tests.TestSupport.Unity;
@@ -17,6 +19,10 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
             "MahjongPrototype.Services.NoYakuTenpaiEvaluator, Assembly-CSharp";
         private const string WinDeclarationEvaluationContextTypeName =
             "MahjongPrototype.Domain.WinDeclarationEvaluationContext, Assembly-CSharp";
+        private const string OpenMeldTypeName =
+            "MahjongPrototype.Domain.OpenMeld, Assembly-CSharp";
+        private const string OpenMeldKindTypeName =
+            "MahjongPrototype.Domain.OpenMeldType, Assembly-CSharp";
 
         private readonly UnityObjectTestOwner owner = new UnityObjectTestOwner();
         private bool disposed;
@@ -96,10 +102,33 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
             bool isDoubleReachDeclared = false,
             bool isFirstTurnTsumoEligible = false,
             bool isLastLiveWallDraw = false,
-            bool isLastLiveWallDiscard = false)
+            bool isLastLiveWallDiscard = false,
+            object openMelds = null)
         {
+            Type contextType = Reflection.RequireType(WinDeclarationEvaluationContextTypeName);
+            if (openMelds != null)
+            {
+                return Reflection.CreateInstance(
+                    contextType,
+                    CreateTiles(handText),
+                    DataFactory.CreateTile(winningTileCode),
+                    DataFactory.ParseWinType(winTypeName),
+                    DataFactory.ParseSeat("East"),
+                    null,
+                    DataFactory.ParseRoundWind(roundWindName),
+                    DataFactory.ParseSeat(seatWindName),
+                    isReachDeclared,
+                    isClosed,
+                    isIppatsuEligible,
+                    isDoubleReachDeclared,
+                    isFirstTurnTsumoEligible,
+                    isLastLiveWallDraw,
+                    isLastLiveWallDiscard,
+                    openMelds);
+            }
+
             return Reflection.CreateInstance(
-                Reflection.RequireType(WinDeclarationEvaluationContextTypeName),
+                contextType,
                 CreateTiles(handText),
                 DataFactory.CreateTile(winningTileCode),
                 DataFactory.ParseWinType(winTypeName),
@@ -114,6 +143,30 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
                 isFirstTurnTsumoEligible,
                 isLastLiveWallDraw,
                 isLastLiveWallDiscard);
+        }
+
+        public object CreateOpenPonMelds(
+            string tileCode,
+            string callerSeatName = "East",
+            string sourceSeatName = "West",
+            int sourceDiscardId = 1)
+        {
+            Type openMeldType = Reflection.RequireType(OpenMeldTypeName);
+            Type openMeldListType = typeof(List<>).MakeGenericType(openMeldType);
+            IList openMelds = (IList)Reflection.CreateInstance(openMeldListType);
+            object calledTile = DataFactory.CreateTile(tileCode);
+            object openMeld = Reflection.CreateInstance(
+                openMeldType,
+                Enum.Parse(Reflection.RequireType(OpenMeldKindTypeName), "Pon"),
+                DataFactory.CreateTileArrayFromText(
+                    string.Join(" ", tileCode, tileCode, tileCode)),
+                DataFactory.ParseSeat(callerSeatName),
+                DataFactory.ParseSeat(sourceSeatName),
+                calledTile,
+                sourceDiscardId);
+
+            openMelds.Add(openMeld);
+            return openMelds;
         }
 
         public object CreateYakuDefinition(

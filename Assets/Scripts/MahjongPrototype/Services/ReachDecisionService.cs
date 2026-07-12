@@ -117,7 +117,9 @@ namespace MahjongPrototype.Services
 
             SeatId seat = record.ActorSeat;
             int turnIndex = gameState.TurnIndex;
-            bool isDoubleReach = IsFirstDiscardBySeat(gameState, seat);
+            bool isDoubleReach =
+                !gameState.HasCallOccurred &&
+                IsFirstDiscardBySeat(gameState, seat);
             gameState.GetPlayerSeat(seat).DeclareReach(turnIndex, isDoubleReach);
             gameState.ClearReachDecision();
             return new ReachDeclarationResult(true, seat, turnIndex, isDoubleReach);

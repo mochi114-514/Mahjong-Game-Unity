@@ -75,6 +75,7 @@ namespace MahjongPrototype.Services
                     "A validated pon discard claim could not be recorded.");
             }
 
+            gameState.MarkCallOccurred();
             return PonDeclarationResult.Succeeded(openMeld);
         }
 

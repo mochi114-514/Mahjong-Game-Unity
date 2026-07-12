@@ -94,7 +94,8 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
             bool isDoubleReachDeclared = false,
             bool isFirstTurnTsumoEligible = false,
             bool isLastLiveWallDraw = false,
-            bool isLastLiveWallDiscard = false)
+            bool isLastLiveWallDiscard = false,
+            object openMelds = null)
         {
             object evaluator = support.CreateWinDeclarationEvaluator(catalog);
             object context = support.CreateWinDeclarationEvaluationContext(
@@ -109,9 +110,23 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
                 isDoubleReachDeclared,
                 isFirstTurnTsumoEligible,
                 isLastLiveWallDraw,
-                isLastLiveWallDiscard);
+                isLastLiveWallDiscard,
+                openMelds);
 
             return support.Reflection.Invoke(evaluator, "EvaluateWithTile", context);
+        }
+
+        public object CreateOpenPonMelds(
+            string tileCode,
+            string callerSeatName = "East",
+            string sourceSeatName = "West",
+            int sourceDiscardId = 1)
+        {
+            return support.CreateOpenPonMelds(
+                tileCode,
+                callerSeatName,
+                sourceSeatName,
+                sourceDiscardId);
         }
 
         public bool IsWinningShape(object result)

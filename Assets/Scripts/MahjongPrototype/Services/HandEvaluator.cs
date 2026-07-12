@@ -941,7 +941,9 @@ namespace MahjongPrototype.Services
 
             StandardWinningInterpretation interpretation =
                 candidate.StandardInterpretation;
-            if (concealedTripletCount != 4 || interpretation == null)
+            if (!context.IsClosed ||
+                concealedTripletCount != 4 ||
+                interpretation == null)
                 return;
 
             if (interpretation.WaitType == WaitType.Tanki)
@@ -980,10 +982,8 @@ namespace MahjongPrototype.Services
         {
             concealedTripletCount = 0;
 
-            // PROTOTYPE: open meld visibility is not modeled yet.
             if (context == null ||
                 candidate == null ||
-                !context.IsClosed ||
                 candidate.Type != HandEvaluationCandidateType.Standard)
             {
                 return false;
@@ -1001,7 +1001,13 @@ namespace MahjongPrototype.Services
                 return false;
             }
 
-            for (int i = 0; i < decomposition.Melds.Count; i++)
+            int openMeldCount = context.OpenMelds != null
+                ? context.OpenMelds.Count
+                : 0;
+            if (openMeldCount > decomposition.Melds.Count)
+                return false;
+
+            for (int i = openMeldCount; i < decomposition.Melds.Count; i++)
             {
                 HandMeld meld = decomposition.Melds[i];
                 if (meld == null || meld.Type != MeldType.Triplet)

@@ -74,6 +74,7 @@ namespace MahjongPrototype.Tests
                 Assert.That(session.Query.TurnPhaseName, Is.EqualTo("ReactionWindow"));
                 Assert.That(session.Query.CurrentTurnName, Is.EqualTo("West"));
                 Assert.That(session.Query.TurnIndex, Is.EqualTo(turnIndex));
+                Assert.That(HasCallOccurred(session), Is.False);
                 Assert.That(session.Query.ReactionWindowCandidateCount, Is.EqualTo(1));
                 Assert.That(session.Query.ReactionWindowSourceSeatName, Is.EqualTo("West"));
                 Assert.That(session.Query.ReactionWindowSourceTileCode, Is.EqualTo("5m"));
@@ -87,6 +88,7 @@ namespace MahjongPrototype.Tests
                 Assert.That(session.Query.IsReactionWindowPending, Is.False);
                 Assert.That(session.Query.CurrentTurnName, Is.EqualTo("East"));
                 Assert.That(session.Query.TurnIndex, Is.EqualTo(turnIndex + 1));
+                Assert.That(HasCallOccurred(session), Is.False);
                 Assert.That(session.Commands.TryRequestDeclineRonForSeat("East", windowId), Is.False);
                 Assert.That(session.Query.TurnIndex, Is.EqualTo(turnIndex + 1));
                 Assert.That(events.Count("ReactionWindowAnswered"), Is.EqualTo(1));
@@ -112,6 +114,7 @@ namespace MahjongPrototype.Tests
                 Assert.That(session.Commands.TryRequestDeclareRonForSeat("East", windowId), Is.True);
 
                 Assert.That(session.Query.IsReactionWindowPending, Is.False);
+                Assert.That(HasCallOccurred(session), Is.False);
                 Assert.That(session.Query.IsRoundResultPending, Is.True);
                 Assert.That(session.Query.RoundResultTypeName, Is.EqualTo("Win"));
                 Assert.That(session.Query.RoundResultWinnerSeatNameOrNull, Is.EqualTo("East"));
@@ -144,15 +147,18 @@ namespace MahjongPrototype.Tests
                 int turnIndex = session.Query.TurnIndex;
                 int sourceDiscardId = session.Query.LastDiscardId;
 
+                Assert.That(HasCallOccurred(session), Is.False);
                 Assert.That(session.Query.ReactionWindowCandidateCount, Is.EqualTo(1));
                 Assert.That(session.Query.ReactionWindowCandidateKindAt(0), Is.EqualTo("Pon"));
                 Assert.That(session.Commands.TryRequestDeclareRonForSeat("East", windowId), Is.False);
                 Assert.That(session.Commands.TryRequestDeclarePonForSeat("West", windowId), Is.False);
                 Assert.That(session.Commands.TryRequestDeclarePonForSeat("East", windowId + 1), Is.False);
+                Assert.That(HasCallOccurred(session), Is.False);
 
                 Assert.That(session.Commands.TryRequestDeclarePonForSeat("East", windowId), Is.True);
 
                 Assert.That(session.Query.IsReactionWindowPending, Is.False);
+                Assert.That(HasCallOccurred(session), Is.True);
                 Assert.That(session.Query.CurrentTurnName, Is.EqualTo("East"));
                 Assert.That(session.Query.TurnIndex, Is.EqualTo(turnIndex + 1));
                 Assert.That(session.Query.TurnPhaseName, Is.EqualTo("WaitingForDiscardAfterCall"));
@@ -207,6 +213,36 @@ namespace MahjongPrototype.Tests
                 Assert.That(session.Query.IsReactionWindowPending, Is.False);
                 Assert.That(session.Query.OpenMeldCount("East"), Is.EqualTo(0));
                 Assert.That(session.Query.IsTemporaryFuriten("East"), Is.True);
+                Assert.That(HasCallOccurred(session), Is.False);
+            }
+        }
+
+        [Test]
+        public void PonSuccess_NewRoundAndRetryResetHasCallOccurred()
+        {
+            using (MahjongGameFlowTestSession session = CreatePonSession(false))
+            {
+                Assert.That(session.Commands.TryRequestDeclarePonForSeat(
+                    "East",
+                    session.Query.ReactionWindowId), Is.True);
+                Assert.That(HasCallOccurred(session), Is.True);
+
+                session.Commands.StartNewRound();
+                Assert.That(HasCallOccurred(session), Is.False);
+
+                session.DataFactory.AddHandTiles(
+                    session.Query.GetPlayerSeat("East"),
+                    "5m", "5m", "1m", "2m", "3m", "4p", "5p", "6p", "2s", "3s", "4s", "E", "S");
+                session.DataFactory.SetCurrentTurn(session.CurrentState, "West");
+                session.DataFactory.SetDrawnTile(session.CurrentState, "West", "5m");
+                Assert.That(session.Commands.TryRequestDiscardDrawnTileForSeat("West"), Is.True);
+                Assert.That(session.Commands.TryRequestDeclarePonForSeat(
+                    "East",
+                    session.Query.ReactionWindowId), Is.True);
+                Assert.That(HasCallOccurred(session), Is.True);
+
+                session.Commands.RetryPrototype();
+                Assert.That(HasCallOccurred(session), Is.False);
             }
         }
 
@@ -333,6 +369,13 @@ namespace MahjongPrototype.Tests
 
             Assert.That(session.Commands.TryRequestDiscardDrawnTileForSeat("West"), Is.True);
             return session;
+        }
+
+        private static bool HasCallOccurred(MahjongGameFlowTestSession session)
+        {
+            return (bool)session.Reflection.GetProperty(
+                session.CurrentState,
+                "HasCallOccurred");
         }
 
         private static MahjongGameFlowTestSession CreateSession(int participantCount)

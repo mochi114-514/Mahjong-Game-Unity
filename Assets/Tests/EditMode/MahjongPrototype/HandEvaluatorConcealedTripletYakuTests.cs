@@ -15,6 +15,10 @@ namespace MahjongPrototype.Tests
             "1m 1m 1m 2p 2p 2p 3s 3s 4m 5m 6m 7p 7p";
         private const string TwoTripletTwoSequenceHand =
             "1m 1m 1m 2p 2p 2p 3m 4m 5m 6s 7s 8s 9p";
+        private const string OpenPonThreeConcealedTripletTankiHand =
+            "2m 2m 2m 3p 3p 3p 4s 4s 4s 5s";
+        private const string OpenPonTwoConcealedTripletShanponHand =
+            "2m 2m 2m 3p 3p 3p 4s 4s 5s 5s";
         private const string DaisuushiiTankiHand =
             "E E E S S S W W W N N N 5m";
 
@@ -147,25 +151,92 @@ namespace MahjongPrototype.Tests
             }
         }
 
-        [TestCase(FourTripletTankiHand, "5s", "Ron")]
-        [TestCase(FourTripletShanponHand, "4s", "Tsumo")]
-        [TestCase(ThreeTripletTankiHand, "7p", "Ron")]
-        public void EvaluateWithTile_OpenEvaluation_AddsNoConcealedTripletYaku(
-            string handText,
-            string winningTileCode,
-            string winTypeName)
+        [Test]
+        public void EvaluateWithTile_OpenPonAndThreeConcealedTriplets_AddsSanankou()
         {
             using (WinDeclarationEvaluatorTestDriver driver =
                 WinDeclarationEvaluatorTestDriver.Create())
             {
+                object openMelds = driver.CreateOpenPonMelds("1m");
                 object result = driver.EvaluateWithTile(
                     CreateConcealedTripletCatalog(driver),
-                    handText,
-                    winningTileCode,
-                    winTypeName,
-                    isClosed: false);
+                    OpenPonThreeConcealedTripletTankiHand,
+                    "5s",
+                    "Tsumo",
+                    isClosed: false,
+                    openMelds: openMelds);
+                object candidate =
+                    driver.FindCandidateContainingYaku(result, "Sanankou");
 
-                AssertNoConcealedTripletYakuInResult(driver, result);
+                Assert.That(driver.CanDeclareWin(result), Is.True);
+                AssertSanankouOnly(driver, candidate, "Tanki");
+            }
+        }
+
+        [Test]
+        public void EvaluateWithTile_OpenPonAndShanponTsumo_AddsSanankou()
+        {
+            using (WinDeclarationEvaluatorTestDriver driver =
+                WinDeclarationEvaluatorTestDriver.Create())
+            {
+                object openMelds = driver.CreateOpenPonMelds("1m");
+                object result = driver.EvaluateWithTile(
+                    CreateConcealedTripletCatalog(driver),
+                    OpenPonTwoConcealedTripletShanponHand,
+                    "4s",
+                    "Tsumo",
+                    isClosed: false,
+                    openMelds: openMelds);
+                object candidate =
+                    driver.FindCandidateContainingYaku(result, "Sanankou");
+
+                AssertSanankouOnly(driver, candidate, "Shanpon");
+            }
+        }
+
+        [Test]
+        public void EvaluateWithTile_OpenPonAndShanponRon_DoesNotCountRonCompletedTriplet()
+        {
+            using (WinDeclarationEvaluatorTestDriver driver =
+                WinDeclarationEvaluatorTestDriver.Create())
+            {
+                object openMelds = driver.CreateOpenPonMelds("1m");
+                object result = driver.EvaluateWithTile(
+                    CreateConcealedTripletCatalog(driver),
+                    OpenPonTwoConcealedTripletShanponHand,
+                    "4s",
+                    "Ron",
+                    isClosed: false,
+                    openMelds: openMelds);
+                object candidate =
+                    driver.FindStandardCandidateWithWaitType(result, "Shanpon");
+
+                Assert.That(candidate, Is.Not.Null);
+                AssertNoConcealedTripletYaku(driver, candidate);
+            }
+        }
+
+        [Test]
+        public void EvaluateWithTile_OpenPon_DoesNotAddSuuankouOrSuuankouTanki()
+        {
+            using (WinDeclarationEvaluatorTestDriver driver =
+                WinDeclarationEvaluatorTestDriver.Create())
+            {
+                object openMelds = driver.CreateOpenPonMelds("1m");
+                object result = driver.EvaluateWithTile(
+                    CreateConcealedTripletCatalog(driver),
+                    OpenPonThreeConcealedTripletTankiHand,
+                    "5s",
+                    "Tsumo",
+                    isClosed: false,
+                    openMelds: openMelds);
+                object candidate =
+                    driver.FindStandardCandidateWithWaitType(result, "Tanki");
+
+                Assert.That(candidate, Is.Not.Null);
+                Assert.That(driver.CandidateContainsYaku(candidate, "Sanankou"), Is.True);
+                Assert.That(driver.CandidateContainsYaku(candidate, "Suuankou"), Is.False);
+                Assert.That(driver.CandidateContainsYaku(candidate, "SuuankouTanki"), Is.False);
             }
         }
 

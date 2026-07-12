@@ -258,7 +258,7 @@ namespace MahjongPrototype.Services
             SeatId seat,
             WinType winType)
         {
-            if (winType != WinType.Tsumo)
+            if (winType != WinType.Tsumo || gameState.HasCallOccurred)
                 return false;
 
             bool hasAnyDiscard = false;

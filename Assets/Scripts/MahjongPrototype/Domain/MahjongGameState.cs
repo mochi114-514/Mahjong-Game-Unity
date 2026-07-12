@@ -63,6 +63,7 @@ namespace MahjongPrototype.Domain
         public PlayerId? CurrentTurnPlayerId => CurrentTurnSlot.PlayerId;
         public bool IsSelfTurn => CurrentTurnPlayerId == SelfPlayerId;
         public int TurnIndex { get; set; }
+        public bool HasCallOccurred { get; private set; }
         public bool IsRoundEnded
         {
             get =>
@@ -325,6 +326,11 @@ namespace MahjongPrototype.Domain
                 openMeld.SourceDiscardId,
                 new DiscardClaim(openMeld.SourceDiscardId, openMeld.CallerSeat, openMeld));
             return true;
+        }
+
+        public void MarkCallOccurred()
+        {
+            HasCallOccurred = true;
         }
 
         public bool TryGetDiscardClaim(int discardId, out DiscardClaim discardClaim)
