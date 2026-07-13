@@ -31,7 +31,7 @@ namespace MahjongPrototype.UI3D
             }
 
             Transform root = spawnRoot != null ? spawnRoot : transform;
-            float x = 0f;
+            float rightEdgeX = 0f;
             int tileIndex = 0;
             for (int meldIndex = 0; meldIndex < openMelds.Count; meldIndex++)
             {
@@ -40,18 +40,21 @@ namespace MahjongPrototype.UI3D
                     continue;
 
                 IReadOnlyList<Tile> tiles = openMeld.Tiles;
+                float meldLeftX = rightEdgeX - ((tiles.Count - 1) * tileSpacing);
                 for (int tileOffset = 0; tileOffset < tiles.Count; tileOffset++)
                 {
                     Mahjong3DTileView tile = Instantiate(tilePrefab, root);
-                    tile.transform.localPosition = new Vector3(x, 0f, 0f);
+                    tile.transform.localPosition = new Vector3(
+                        meldLeftX + (tileOffset * tileSpacing),
+                        0f,
+                        0f);
                     tile.transform.localRotation = Quaternion.identity;
                     tile.transform.localScale = Vector3.one;
                     tile.Initialize(tileIndex++, tiles[tileOffset], true, false);
                     activeTiles.Add(tile);
-                    x += tileSpacing;
                 }
 
-                x += meldSpacing;
+                rightEdgeX = meldLeftX - meldSpacing;
             }
         }
 

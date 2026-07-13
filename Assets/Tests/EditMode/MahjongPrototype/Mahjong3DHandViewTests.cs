@@ -123,6 +123,45 @@ namespace MahjongPrototype.Tests
             }
         }
 
+        [Test]
+        public void RenderHandAndSpawnTestTiles_KeepFirstTileAtSpawnRootOrigin()
+        {
+            GameObject root = new GameObject("Hand3DViewLeftAnchoredLayoutTest");
+            GameObject prefab = new GameObject("Tile3DPrefab");
+            try
+            {
+                object view = root.AddComponent(Type.GetType(Mahjong3DHandViewTypeName, true));
+                object tilePrefab = prefab.AddComponent(Type.GetType(Mahjong3DTileViewTypeName, true));
+                SetPrivateField(view, "tilePrefab", tilePrefab);
+                SetPrivateField(view, "spacing", 2f);
+                SetPrivateField(view, "testTileCount", 3);
+
+                Invoke(
+                    view,
+                    "RenderHand",
+                    CreateTileList(CreateTile("1m"), CreateTile("2m"), CreateTile("3m")),
+                    true,
+                    true);
+                AssertTileLocalXPositions(root, 0f, 2f, 4f);
+
+                Invoke(
+                    view,
+                    "RenderHand",
+                    CreateTileList(CreateTile("1m"), CreateTile("2m")),
+                    true,
+                    true);
+                AssertTileLocalXPositions(root, 0f, 2f);
+
+                Invoke(view, "SpawnTestTiles");
+                AssertTileLocalXPositions(root, 0f, 2f, 4f);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(prefab);
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
         private static object CreateTileList(params object[] tiles)
         {
             Type tileType = Type.GetType(TileTypeName, true);
@@ -141,6 +180,16 @@ namespace MahjongPrototype.Tests
             ConstructorInfo constructor = tileType.GetConstructor(new[] { typeof(string) });
             Assert.That(constructor, Is.Not.Null);
             return constructor.Invoke(new object[] { code });
+        }
+
+        private static void AssertTileLocalXPositions(GameObject root, params float[] expectedPositions)
+        {
+            Component[] tileViews = root.GetComponentsInChildren(Type.GetType(Mahjong3DTileViewTypeName, true));
+            Assert.That(tileViews.Length, Is.EqualTo(expectedPositions.Length));
+            for (int i = 0; i < expectedPositions.Length; i++)
+            {
+                Assert.That(tileViews[i].transform.localPosition.x, Is.EqualTo(expectedPositions[i]).Within(0.0001f));
+            }
         }
 
         private static object Invoke(object target, string methodName, params object[] args)
@@ -258,7 +307,14 @@ namespace MahjongPrototype.Tests
                 Assert.That(tileViews.Length, Is.EqualTo(6));
                 Assert.That(GetProperty(tileViews[0], "Tile").ToString(), Is.EqualTo("5m"));
                 Assert.That(GetProperty(tileViews[3], "Tile").ToString(), Is.EqualTo("3m"));
+                Assert.That(GetProperty(tileViews[4], "Tile").ToString(), Is.EqualTo("4m"));
                 Assert.That(GetProperty(tileViews[5], "Tile").ToString(), Is.EqualTo("5m"));
+                Assert.That(tileViews[0].transform.localPosition.x, Is.EqualTo(-3.2f).Within(0.0001f));
+                Assert.That(tileViews[1].transform.localPosition.x, Is.EqualTo(-1.6f).Within(0.0001f));
+                Assert.That(tileViews[2].transform.localPosition.x, Is.EqualTo(0f).Within(0.0001f));
+                Assert.That(tileViews[3].transform.localPosition.x, Is.EqualTo(-7.4f).Within(0.0001f));
+                Assert.That(tileViews[4].transform.localPosition.x, Is.EqualTo(-5.8f).Within(0.0001f));
+                Assert.That(tileViews[5].transform.localPosition.x, Is.EqualTo(-4.2f).Within(0.0001f));
 
                 Invoke(view, "RenderOpenMelds", CreateList(openMeldType));
                 Assert.That(GetTileViews(root).Length, Is.EqualTo(0));

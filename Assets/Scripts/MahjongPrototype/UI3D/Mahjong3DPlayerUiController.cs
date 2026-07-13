@@ -68,6 +68,7 @@ namespace MahjongPrototype.UI3D
             }
 
             handView.RenderHand(handTiles, faceUp, interactable);
+            RepositionDrawnTileAtHandEnd();
         }
 
         public void ClearHand()
@@ -122,7 +123,17 @@ namespace MahjongPrototype.UI3D
                 return;
             }
 
-            drawnTileView.Render(drawnTile, faceUp, interactable);
+            if (handView == null)
+            {
+                drawnTileView.Render(drawnTile, faceUp, interactable);
+                return;
+            }
+
+            drawnTileView.RenderAtWorldPosition(
+                drawnTile,
+                faceUp,
+                interactable,
+                handView.GetTrailingTileWorldPosition(drawnTileView.HandGap));
         }
 
         public void ClearDrawnTile()
@@ -264,6 +275,15 @@ namespace MahjongPrototype.UI3D
         private void HandleDrawnTileClicked()
         {
             DrawnTileClicked?.Invoke();
+        }
+
+        private void RepositionDrawnTileAtHandEnd()
+        {
+            if (handView == null || drawnTileView == null)
+                return;
+
+            drawnTileView.SetWorldPosition(
+                handView.GetTrailingTileWorldPosition(drawnTileView.HandGap));
         }
 
         private void WarnMissingOnce(ref bool warned, string message)

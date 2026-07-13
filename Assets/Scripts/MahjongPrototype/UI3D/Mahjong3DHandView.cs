@@ -32,12 +32,11 @@ namespace MahjongPrototype.UI3D
                 return;
             }
 
-            Transform root = spawnRoot != null ? spawnRoot : transform;
-            float startX = -((handTiles.Count - 1) * spacing) * 0.5f;
+            Transform root = GetSpawnRoot();
 
             for (int i = 0; i < handTiles.Count; i++)
             {
-                Mahjong3DTileView tile = InstantiateTile(root, i, startX);
+                Mahjong3DTileView tile = InstantiateTile(root, i);
                 tile.Initialize(i, handTiles[i], faceUp, interactable);
                 tile.Clicked += HandleTileClicked;
                 activeTiles.Add(tile);
@@ -57,12 +56,11 @@ namespace MahjongPrototype.UI3D
             if (testTileCount <= 0)
                 return;
 
-            Transform root = spawnRoot != null ? spawnRoot : transform;
-            float startX = -((testTileCount - 1) * spacing) * 0.5f;
+            Transform root = GetSpawnRoot();
 
             for (int i = 0; i < testTileCount; i++)
             {
-                Mahjong3DTileView tile = InstantiateTile(root, i, startX);
+                Mahjong3DTileView tile = InstantiateTile(root, i);
                 tile.Initialize(i);
                 activeTiles.Add(tile);
             }
@@ -134,6 +132,14 @@ namespace MahjongPrototype.UI3D
             activeTiles.Clear();
         }
 
+        public Vector3 GetTrailingTileWorldPosition(float gap)
+        {
+            Transform root = GetSpawnRoot();
+            int lastTileIndex = activeTiles.Count - 1;
+            float x = lastTileIndex >= 0 ? (lastTileIndex * spacing) + gap : 0f;
+            return root.TransformPoint(new Vector3(x, 0f, 0f));
+        }
+
         private void HandleTileClicked(int handIndex)
         {
             TileClicked?.Invoke(handIndex);
@@ -153,10 +159,15 @@ namespace MahjongPrototype.UI3D
             return false;
         }
 
-        private Mahjong3DTileView InstantiateTile(Transform root, int index, float startX)
+        private Transform GetSpawnRoot()
+        {
+            return spawnRoot != null ? spawnRoot : transform;
+        }
+
+        private Mahjong3DTileView InstantiateTile(Transform root, int index)
         {
             Mahjong3DTileView tile = Instantiate(tilePrefab, root);
-            tile.transform.localPosition = new Vector3(startX + (index * spacing), 0f, 0f);
+            tile.transform.localPosition = new Vector3(index * spacing, 0f, 0f);
             tile.transform.localRotation = Quaternion.identity;
             tile.transform.localScale = Vector3.one;
             return tile;
