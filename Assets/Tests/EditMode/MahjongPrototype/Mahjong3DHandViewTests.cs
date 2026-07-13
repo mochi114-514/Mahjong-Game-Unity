@@ -286,7 +286,7 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void RenderOpenMelds_ShowsThreeTilesPerMeldAndClearsWhenEmpty()
+        public void RenderOpenMelds_ShowsThreeTilesPerMeldAndClearRemovesThem()
         {
             GameObject root = new GameObject("OpenMeldViewTest");
             GameObject prefab = new GameObject("Tile3DPrefab");
@@ -305,19 +305,119 @@ namespace MahjongPrototype.Tests
 
                 Component[] tileViews = GetTileViews(root);
                 Assert.That(tileViews.Length, Is.EqualTo(6));
-                Assert.That(GetProperty(tileViews[0], "Tile").ToString(), Is.EqualTo("5m"));
-                Assert.That(GetProperty(tileViews[3], "Tile").ToString(), Is.EqualTo("3m"));
-                Assert.That(GetProperty(tileViews[4], "Tile").ToString(), Is.EqualTo("4m"));
-                Assert.That(GetProperty(tileViews[5], "Tile").ToString(), Is.EqualTo("5m"));
-                Assert.That(tileViews[0].transform.localPosition.x, Is.EqualTo(-3.2f).Within(0.0001f));
-                Assert.That(tileViews[1].transform.localPosition.x, Is.EqualTo(-1.6f).Within(0.0001f));
-                Assert.That(tileViews[2].transform.localPosition.x, Is.EqualTo(0f).Within(0.0001f));
-                Assert.That(tileViews[3].transform.localPosition.x, Is.EqualTo(-7.4f).Within(0.0001f));
-                Assert.That(tileViews[4].transform.localPosition.x, Is.EqualTo(-5.8f).Within(0.0001f));
-                Assert.That(tileViews[5].transform.localPosition.x, Is.EqualTo(-4.2f).Within(0.0001f));
 
-                Invoke(view, "RenderOpenMelds", CreateList(openMeldType));
+                Invoke(view, "Clear");
                 Assert.That(GetTileViews(root).Length, Is.EqualTo(0));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(prefab);
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void RenderOpenMelds_ChiPlacesOnlyCalledTileHorizontallyAtLeftEdge()
+        {
+            GameObject root = new GameObject("OpenMeldChiLayoutTest");
+            GameObject prefab = new GameObject("Tile3DPrefab");
+            try
+            {
+                object view = root.AddComponent(Type.GetType(Mahjong3DOpenMeldViewTypeName, true));
+                object tilePrefab = prefab.AddComponent(Type.GetType(Mahjong3DTileViewTypeName, true));
+                SetPrivateField(view, "tilePrefab", tilePrefab);
+                SetPrivateField(view, "verticalTileSpacing", 2f);
+                SetPrivateField(view, "horizontalTileSpacing", 1f);
+
+                IList openMelds = CreateList(RequireType(OpenMeldTypeName));
+                openMelds.Add(CreateOpenMeld("Chi", "3m 4m 5m", "4m", 1, "East", "North"));
+                Invoke(view, "RenderOpenMelds", openMelds);
+
+                Component[] tileViews = GetTileViews(root);
+                Assert.That(tileViews.Length, Is.EqualTo(3));
+                Assert.That(GetProperty(tileViews[0], "Tile").ToString(), Is.EqualTo("4m"));
+                Assert.That(GetProperty(tileViews[1], "Tile").ToString(), Is.EqualTo("3m"));
+                Assert.That(GetProperty(tileViews[2], "Tile").ToString(), Is.EqualTo("5m"));
+                AssertHorizontal(tileViews[0]);
+                AssertVertical(tileViews[1]);
+                AssertVertical(tileViews[2]);
+                Assert.That(tileViews[0].transform.localPosition.x, Is.EqualTo(-3.5f).Within(0.0001f));
+                Assert.That(tileViews[1].transform.localPosition.x, Is.EqualTo(-2f).Within(0.0001f));
+                Assert.That(tileViews[2].transform.localPosition.x, Is.EqualTo(0f).Within(0.0001f));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(prefab);
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [TestCase("North", 0)]
+        [TestCase("West", 1)]
+        [TestCase("South", 2)]
+        public void RenderOpenMelds_PonPlacesCalledTileBySourceSeat(
+            string sourceSeatName,
+            int expectedCalledTileIndex)
+        {
+            GameObject root = new GameObject("OpenMeldPonSourceLayoutTest");
+            GameObject prefab = new GameObject("Tile3DPrefab");
+            try
+            {
+                object view = root.AddComponent(Type.GetType(Mahjong3DOpenMeldViewTypeName, true));
+                object tilePrefab = prefab.AddComponent(Type.GetType(Mahjong3DTileViewTypeName, true));
+                SetPrivateField(view, "tilePrefab", tilePrefab);
+
+                IList openMelds = CreateList(RequireType(OpenMeldTypeName));
+                openMelds.Add(CreateOpenMeld("Pon", "5m 5m 5m", "5m", 1, "East", sourceSeatName));
+                Invoke(view, "RenderOpenMelds", openMelds);
+
+                Component[] tileViews = GetTileViews(root);
+                Assert.That(tileViews.Length, Is.EqualTo(3));
+                for (int tileIndex = 0; tileIndex < tileViews.Length; tileIndex++)
+                {
+                    if (tileIndex == expectedCalledTileIndex)
+                        AssertHorizontal(tileViews[tileIndex]);
+                    else
+                        AssertVertical(tileViews[tileIndex]);
+                }
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(prefab);
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void RenderOpenMelds_UsesSeparateTileSpacingAndMaintainsMeldGapFromRightEdge()
+        {
+            GameObject root = new GameObject("OpenMeldSpacingLayoutTest");
+            GameObject prefab = new GameObject("Tile3DPrefab");
+            try
+            {
+                object view = root.AddComponent(Type.GetType(Mahjong3DOpenMeldViewTypeName, true));
+                object tilePrefab = prefab.AddComponent(Type.GetType(Mahjong3DTileViewTypeName, true));
+                SetPrivateField(view, "tilePrefab", tilePrefab);
+                SetPrivateField(view, "verticalTileSpacing", 2f);
+                SetPrivateField(view, "horizontalTileSpacing", 1f);
+                SetPrivateField(view, "meldSpacing", 3f);
+
+                IList openMelds = CreateList(RequireType(OpenMeldTypeName));
+                openMelds.Add(CreateOpenMeld("Chi", "3m 4m 5m", "4m", 1, "East", "North"));
+                openMelds.Add(CreateOpenMeld("Pon", "6m 6m 6m", "6m", 2, "East", "South"));
+                Invoke(view, "RenderOpenMelds", openMelds);
+
+                Component[] tileViews = GetTileViews(root);
+                Assert.That(tileViews.Length, Is.EqualTo(6));
+                Assert.That(tileViews[2].transform.localPosition.x, Is.EqualTo(0f).Within(0.0001f));
+                Assert.That(tileViews[0].transform.localPosition.x, Is.EqualTo(-3.5f).Within(0.0001f));
+                Assert.That(tileViews[3].transform.localPosition.x, Is.EqualTo(-11f).Within(0.0001f));
+                Assert.That(tileViews[4].transform.localPosition.x, Is.EqualTo(-9f).Within(0.0001f));
+                Assert.That(tileViews[5].transform.localPosition.x, Is.EqualTo(-7.5f).Within(0.0001f));
+                Assert.That(tileViews[0].transform.localPosition.x - 0.5f, Is.EqualTo(-4f).Within(0.0001f));
+                Assert.That(tileViews[5].transform.localPosition.x + 0.5f, Is.EqualTo(-7f).Within(0.0001f));
+                AssertHorizontal(tileViews[0]);
+                AssertHorizontal(tileViews[5]);
             }
             finally
             {
@@ -351,14 +451,16 @@ namespace MahjongPrototype.Tests
             string kind,
             string tileText,
             string calledTileCode,
-            int sourceDiscardId)
+            int sourceDiscardId,
+            string callerSeatName = "East",
+            string sourceSeatName = "West")
         {
             return Activator.CreateInstance(
                 RequireType(OpenMeldTypeName),
                 Enum.Parse(RequireType(OpenMeldKindTypeName), kind),
                 CreateTiles(tileText),
-                Seat("East"),
-                Seat("West"),
+                Seat(callerSeatName),
+                Seat(sourceSeatName),
                 CreateTile(calledTileCode),
                 sourceDiscardId);
         }
@@ -393,6 +495,18 @@ namespace MahjongPrototype.Tests
         private static Component[] GetTileViews(GameObject root)
         {
             return root.GetComponentsInChildren(Type.GetType(Mahjong3DTileViewTypeName, true), true);
+        }
+
+        private static void AssertHorizontal(Component tileView)
+        {
+            Assert.That(
+                Quaternion.Angle(tileView.transform.localRotation, Quaternion.Euler(0f, 0f, 90f)),
+                Is.LessThan(0.001f));
+        }
+
+        private static void AssertVertical(Component tileView)
+        {
+            Assert.That(Quaternion.Angle(tileView.transform.localRotation, Quaternion.identity), Is.LessThan(0.001f));
         }
 
         private static object Invoke(object target, string methodName, params object[] args)
