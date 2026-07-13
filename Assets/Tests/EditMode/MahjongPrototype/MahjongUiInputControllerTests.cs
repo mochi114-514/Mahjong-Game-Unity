@@ -527,6 +527,8 @@ namespace MahjongPrototype.Tests
                 "MahjongPrototype.UI3D.Mahjong3DDrawnTileView, Assembly-CSharp";
             private const string DiscardRiverViewTypeName =
                 "MahjongPrototype.UI3D.Mahjong3DDiscardRiverView, Assembly-CSharp";
+            private const string OpenMeldViewTypeName =
+                "MahjongPrototype.UI3D.Mahjong3DOpenMeldView, Assembly-CSharp";
             private const string TileViewTypeName =
                 "MahjongPrototype.UI3D.Mahjong3DTileView, Assembly-CSharp";
             private const string TileFaceCatalogTypeName =
@@ -906,13 +908,18 @@ namespace MahjongPrototype.Tests
                 Component discardRiverView =
                     CreateChild(selfController.transform, "DiscardRiverView")
                     .AddComponent(reflection.RequireType(DiscardRiverViewTypeName));
+                Component openMeldView =
+                    CreateChild(selfController.transform, "OpenMeldView")
+                    .AddComponent(reflection.RequireType(OpenMeldViewTypeName));
 
                 reflection.SetPrivateField(handView, "tilePrefab", tilePrefab);
                 reflection.SetPrivateField(drawnTileView, "tilePrefab", tilePrefab);
                 reflection.SetPrivateField(discardRiverView, "tilePrefab", tilePrefab);
+                reflection.SetPrivateField(openMeldView, "tilePrefab", tilePrefab);
                 reflection.SetPrivateField(selfController, "handView", handView);
                 reflection.SetPrivateField(selfController, "drawnTileView", drawnTileView);
                 reflection.SetPrivateField(selfController, "discardRiverView", discardRiverView);
+                reflection.SetPrivateField(selfController, "openMeldView", openMeldView);
                 reflection.SetPrivateField(presenter, "selfBottomPlayerUiController", selfController);
                 return presenter;
             }

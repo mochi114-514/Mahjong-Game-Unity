@@ -18,11 +18,13 @@ namespace MahjongPrototype.UI3D
         [SerializeField] private Mahjong3DHandView handView;
         [SerializeField] private Mahjong3DDrawnTileView drawnTileView;
         [SerializeField] private Mahjong3DDiscardRiverView discardRiverView;
+        [SerializeField] private Mahjong3DOpenMeldView openMeldView;
 
         private SeatId handDataSeat = SeatId.East;
         private bool warnedMissingHandView;
         private bool warnedMissingDrawnTileView;
         private bool warnedMissingDiscardRiverView;
+        private bool warnedMissingOpenMeldView;
         private bool isHandViewSubscribed;
         private bool isDrawnTileViewSubscribed;
 
@@ -33,6 +35,7 @@ namespace MahjongPrototype.UI3D
         public Mahjong3DHandView HandView => handView;
         public Mahjong3DDrawnTileView DrawnTileView => drawnTileView;
         public Mahjong3DDiscardRiverView DiscardRiverView => discardRiverView;
+        public Mahjong3DOpenMeldView OpenMeldView => openMeldView;
         public SeatId HandDataSeat => handDataSeat;
 
         private void OnEnable()
@@ -163,13 +166,21 @@ namespace MahjongPrototype.UI3D
 
         public void RenderDiscardRiver(IReadOnlyList<DiscardRecord> discards, SeatId dataSeat)
         {
+            RenderDiscardRiver(discards, null, dataSeat);
+        }
+
+        public void RenderDiscardRiver(
+            IReadOnlyList<DiscardRecord> discards,
+            IReadOnlyDictionary<int, DiscardClaim> discardClaims,
+            SeatId dataSeat)
+        {
             if (discardRiverView == null)
             {
                 WarnMissingOnce(ref warnedMissingDiscardRiverView, "3D discard river view is not assigned.");
                 return;
             }
 
-            discardRiverView.RenderDiscardRiver(discards, dataSeat);
+            discardRiverView.RenderDiscardRiver(discards, discardClaims, dataSeat);
         }
 
         public void ClearDiscardRiver()
@@ -178,6 +189,23 @@ namespace MahjongPrototype.UI3D
                 return;
 
             discardRiverView.Clear();
+        }
+
+        public void RenderOpenMelds(IReadOnlyList<OpenMeld> openMelds)
+        {
+            if (openMeldView == null)
+            {
+                WarnMissingOnce(ref warnedMissingOpenMeldView, "3D open meld view is not assigned.");
+                return;
+            }
+
+            openMeldView.RenderOpenMelds(openMelds);
+        }
+
+        public void ClearOpenMelds()
+        {
+            if (openMeldView != null)
+                openMeldView.Clear();
         }
 
         private void SubscribeViewEvents()

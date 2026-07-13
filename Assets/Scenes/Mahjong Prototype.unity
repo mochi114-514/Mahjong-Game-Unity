@@ -781,6 +781,7 @@ MonoBehaviour:
   handView: {fileID: 1291247606}
   drawnTileView: {fileID: 1189237188}
   discardRiverView: {fileID: 1684105271}
+  openMeldView: {fileID: 2100000033}
 --- !u!4 &302940770
 Transform:
   m_ObjectHideFlags: 0
@@ -797,6 +798,7 @@ Transform:
   - {fileID: 1291247607}
   - {fileID: 1684105270}
   - {fileID: 1189237187}
+  - {fileID: 2100000032}
   m_Father: {fileID: 1893660902}
   m_LocalEulerAnglesHint: {x: 0, y: -90, z: 0}
 --- !u!224 &305630989 stripped
@@ -3036,6 +3038,7 @@ MonoBehaviour:
   handView: {fileID: 1393176125}
   drawnTileView: {fileID: 1177992612}
   discardRiverView: {fileID: 695813523}
+  openMeldView: {fileID: 2100000013}
 --- !u!4 &905030593
 Transform:
   m_ObjectHideFlags: 0
@@ -3052,6 +3055,7 @@ Transform:
   - {fileID: 1393176126}
   - {fileID: 695813522}
   - {fileID: 1177992611}
+  - {fileID: 2100000012}
   m_Father: {fileID: 1893660902}
   m_LocalEulerAnglesHint: {x: 0, y: 90, z: 0}
 --- !u!1 &949053538
@@ -4403,7 +4407,7 @@ Transform:
   m_GameObject: {fileID: 1328381983}
   serializedVersion: 2
   m_LocalRotation: {x: 0.38268343, y: 0, z: 0, w: 0.92387956}
-  m_LocalPosition: {x: 14, y: 4, z: 0.5}
+  m_LocalPosition: {x: 14, y: 1, z: 2.5}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -4641,6 +4645,7 @@ Transform:
   - {fileID: 1914715866}
   - {fileID: 636301887}
   - {fileID: 1328381984}
+  - {fileID: 2100000002}
   m_Father: {fileID: 1893660902}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &1417294270
@@ -4659,6 +4664,7 @@ MonoBehaviour:
   handView: {fileID: 1914715867}
   drawnTileView: {fileID: 1328381985}
   discardRiverView: {fileID: 636301888}
+  openMeldView: {fileID: 2100000003}
 --- !u!1 &1477977272
 GameObject:
   m_ObjectHideFlags: 0
@@ -5366,6 +5372,7 @@ MonoBehaviour:
   handView: {fileID: 1571365216}
   drawnTileView: {fileID: 1839618430}
   discardRiverView: {fileID: 1298846571}
+  openMeldView: {fileID: 2100000023}
 --- !u!4 &1638928077
 Transform:
   m_ObjectHideFlags: 0
@@ -5382,6 +5389,7 @@ Transform:
   - {fileID: 1571365217}
   - {fileID: 1298846570}
   - {fileID: 1839618429}
+  - {fileID: 2100000022}
   m_Father: {fileID: 1893660902}
   m_LocalEulerAnglesHint: {x: 180, y: 0, z: 180}
 --- !u!1 &1684105269
@@ -6190,7 +6198,7 @@ Transform:
   m_GameObject: {fileID: 1914715865}
   serializedVersion: 2
   m_LocalRotation: {x: 0.38268343, y: 0, z: 0, w: 0.92387956}
-  m_LocalPosition: {x: -2, y: 4, z: 0.5}
+  m_LocalPosition: {x: -2, y: 1, z: 2.5}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -6761,6 +6769,198 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2033423521}
   m_CullTransparentMesh: 1
+--- !u!1 &2100000001
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2100000002}
+  - component: {fileID: 2100000003}
+  m_Layer: 0
+  m_Name: SelfBottom OpenMelds
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2100000002
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2100000001}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0.7071068, y: 0, z: 0, w: 0.7071068}
+  m_LocalPosition: {x: 12, y: -0.8, z: 1.5}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1417294269}
+  m_LocalEulerAnglesHint: {x: 90, y: 0, z: 0}
+--- !u!114 &2100000003
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2100000001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e1c6a8899336426f9d11d1e8290970cf, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI3D.Mahjong3DOpenMeldView
+  spawnRoot: {fileID: 2100000002}
+  tilePrefab: {fileID: 3781737991026447910, guid: a9f8505a4f6dec34fa30ef58c92e940d, type: 3}
+  tileSpacing: 2
+  meldSpacing: 1
+--- !u!1 &2100000011
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2100000012}
+  - component: {fileID: 2100000013}
+  m_Layer: 0
+  m_Name: NextLeft OpenMelds
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2100000012
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2100000011}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 20, y: 0, z: -2}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 905030593}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2100000013
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2100000011}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e1c6a8899336426f9d11d1e8290970cf, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI3D.Mahjong3DOpenMeldView
+  spawnRoot: {fileID: 2100000012}
+  tilePrefab: {fileID: 6693814208160502204, guid: 937dff25a8118f742aad1c49b74a7384, type: 3}
+  tileSpacing: 1.6
+  meldSpacing: 1
+--- !u!1 &2100000021
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2100000022}
+  - component: {fileID: 2100000023}
+  m_Layer: 0
+  m_Name: AcrossTop OpenMelds
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2100000022
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2100000021}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 20, y: 0, z: -2}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1638928077}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2100000023
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2100000021}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e1c6a8899336426f9d11d1e8290970cf, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI3D.Mahjong3DOpenMeldView
+  spawnRoot: {fileID: 2100000022}
+  tilePrefab: {fileID: 6693814208160502204, guid: 937dff25a8118f742aad1c49b74a7384, type: 3}
+  tileSpacing: 1.6
+  meldSpacing: 1
+--- !u!1 &2100000031
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2100000032}
+  - component: {fileID: 2100000033}
+  m_Layer: 0
+  m_Name: PreviousRight OpenMelds
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2100000032
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2100000031}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 20, y: 0, z: -2}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 302940770}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2100000033
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2100000031}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e1c6a8899336426f9d11d1e8290970cf, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI3D.Mahjong3DOpenMeldView
+  spawnRoot: {fileID: 2100000032}
+  tilePrefab: {fileID: 6693814208160502204, guid: 937dff25a8118f742aad1c49b74a7384, type: 3}
+  tileSpacing: 1.6
+  meldSpacing: 1
 --- !u!1 &2135888383
 GameObject:
   m_ObjectHideFlags: 0

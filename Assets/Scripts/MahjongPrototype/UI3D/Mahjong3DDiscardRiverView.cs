@@ -23,6 +23,14 @@ namespace MahjongPrototype.UI3D
 
         public void RenderDiscardRiver(IReadOnlyList<DiscardRecord> discards, SeatId dataSeat)
         {
+            RenderDiscardRiver(discards, null, dataSeat);
+        }
+
+        public void RenderDiscardRiver(
+            IReadOnlyList<DiscardRecord> discards,
+            IReadOnlyDictionary<int, DiscardClaim> discardClaims,
+            SeatId dataSeat)
+        {
             Clear();
 
             if (discards == null)
@@ -40,7 +48,7 @@ namespace MahjongPrototype.UI3D
             for (int i = 0; i < discards.Count; i++)
             {
                 DiscardRecord record = discards[i];
-                if (record.ActorSeat != dataSeat)
+                if (record.ActorSeat != dataSeat || IsClaimed(record, discardClaims))
                     continue;
 
                 Mahjong3DTileView tile = Instantiate(tilePrefab, root);
@@ -53,6 +61,13 @@ namespace MahjongPrototype.UI3D
                 activeTiles.Add(tile);
                 riverIndex++;
             }
+        }
+
+        private static bool IsClaimed(
+            DiscardRecord record,
+            IReadOnlyDictionary<int, DiscardClaim> discardClaims)
+        {
+            return discardClaims != null && discardClaims.ContainsKey(record.Id);
         }
 
         public void Clear()

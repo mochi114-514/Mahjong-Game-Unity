@@ -474,6 +474,7 @@ namespace MahjongPrototype.UI
             {
                 RefreshPlayerHandForSeat(resolution.Candidate.Seat);
                 RefreshPlayerDiscardRiverForSeat(resolution.SourceDiscard.ActorSeat);
+                RefreshPlayerOpenMeldsForSeat(resolution.Candidate.Seat);
             }
 
             RefreshGlobalStatus();
@@ -688,6 +689,15 @@ namespace MahjongPrototype.UI
                 return;
 
             RefreshPlayerDiscardRiver3DForSeat(state, seat);
+        }
+
+        private void RefreshPlayerOpenMeldsForSeat(SeatId seat)
+        {
+            MahjongGameState state = gameFlow != null ? gameFlow.CurrentState : null;
+            if (state == null || playerArea3DPresenter == null)
+                return;
+
+            playerArea3DPresenter.RefreshOpenMeldsForSeat(state, seat);
         }
 
         private void RefreshWinDecision(MahjongGameState state)
