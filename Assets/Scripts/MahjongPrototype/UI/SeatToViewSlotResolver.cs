@@ -12,12 +12,12 @@ namespace MahjongPrototype.UI
                 case 0:
                     return ViewSlot.SelfBottom;
                 case 1:
-                    return ViewSlot.NextLeft;
+                    return ViewSlot.PreviousRight;
                 case 2:
                     return ViewSlot.AcrossTop;
                 case 3:
                 default:
-                    return ViewSlot.PreviousRight;
+                    return ViewSlot.NextLeft;
             }
         }
     }
