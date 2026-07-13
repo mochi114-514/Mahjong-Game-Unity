@@ -13,7 +13,11 @@ namespace MahjongPrototype.UI3D
         [SerializeField] private Transform spawnRoot;
         [SerializeField] private Mahjong3DTileView tilePrefab;
         [SerializeField] private int columns = 6;
-        [SerializeField] private float spacingX = 0.45f;
+
+        [Header("Tile Spacing")]
+        [FormerlySerializedAs("spacingX")]
+        [SerializeField] private float verticalTileSpacing = 0.45f;
+        [SerializeField] private float horizontalTileSpacing = 2.6f;
 
         [FormerlySerializedAs("spacingZ")]
         [SerializeField] private float spacingY = 0.6f;
@@ -23,13 +27,23 @@ namespace MahjongPrototype.UI3D
 
         public void RenderDiscardRiver(IReadOnlyList<DiscardRecord> discards, SeatId dataSeat)
         {
-            RenderDiscardRiver(discards, null, dataSeat);
+            RenderDiscardRiver(discards, null, dataSeat, false, 0);
         }
 
         public void RenderDiscardRiver(
             IReadOnlyList<DiscardRecord> discards,
             IReadOnlyDictionary<int, DiscardClaim> discardClaims,
             SeatId dataSeat)
+        {
+            RenderDiscardRiver(discards, discardClaims, dataSeat, false, 0);
+        }
+
+        public void RenderDiscardRiver(
+            IReadOnlyList<DiscardRecord> discards,
+            IReadOnlyDictionary<int, DiscardClaim> discardClaims,
+            SeatId dataSeat,
+            bool isReachDeclared,
+            int reachDeclaredTurnIndex)
         {
             Clear();
 
@@ -45,22 +59,41 @@ namespace MahjongPrototype.UI3D
             Transform root = spawnRoot != null ? spawnRoot : transform;
             int safeColumns = Mathf.Max(1, columns);
             int riverIndex = 0;
+            float previousTileSpacing = 0f;
+            float previousTileX = 0f;
             for (int i = 0; i < discards.Count; i++)
             {
                 DiscardRecord record = discards[i];
                 if (record.ActorSeat != dataSeat || IsClaimed(record, discardClaims))
                     continue;
 
-                Mahjong3DTileView tile = Instantiate(tilePrefab, root);
                 int column = riverIndex % safeColumns;
                 int row = riverIndex / safeColumns;
-                tile.transform.localPosition = new Vector3(column * spacingX, row * spacingY, 0f);
-                tile.transform.localRotation = Quaternion.identity;
+                bool isReachDeclarationTile = isReachDeclared &&
+                                              record.TurnIndex == reachDeclaredTurnIndex;
+                float tileSpacing = GetTileSpacing(isReachDeclarationTile);
+                float tileX = column == 0
+                    ? 0f
+                    : previousTileX + ((previousTileSpacing + tileSpacing) * 0.5f);
+
+                Mahjong3DTileView tile = Instantiate(tilePrefab, root);
+                tile.transform.localPosition = new Vector3(tileX, row * spacingY, 0f);
+                tile.transform.localRotation = isReachDeclarationTile
+                    ? Quaternion.Euler(0f, 0f, 90f)
+                    : Quaternion.identity;
                 tile.transform.localScale = Vector3.one;
                 tile.Initialize(riverIndex, record.Tile, true, false);
                 activeTiles.Add(tile);
+                previousTileSpacing = tileSpacing;
+                previousTileX = tileX;
                 riverIndex++;
             }
+        }
+
+        private float GetTileSpacing(bool isHorizontal)
+        {
+            float spacing = isHorizontal ? horizontalTileSpacing : verticalTileSpacing;
+            return Mathf.Max(0.001f, spacing);
         }
 
         private static bool IsClaimed(

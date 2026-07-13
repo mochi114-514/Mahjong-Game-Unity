@@ -212,7 +212,7 @@ namespace MahjongPrototype.UI3D
                 if (controller == null)
                     continue;
 
-                controller.RenderDiscardRiver(state.Discards, state.DiscardClaims, seat);
+                RenderDiscardRiver(controller, state, seat);
                 renderedViewSlots.Add(viewSlot);
             }
 
@@ -236,7 +236,21 @@ namespace MahjongPrototype.UI3D
                 return;
             }
 
-            controller.RenderDiscardRiver(state.Discards, state.DiscardClaims, seat);
+            RenderDiscardRiver(controller, state, seat);
+        }
+
+        private static void RenderDiscardRiver(
+            Mahjong3DPlayerUiController controller,
+            MahjongGameState state,
+            SeatId seat)
+        {
+            PlayerSeat playerSeat = state.GetPlayerSeat(seat);
+            controller.RenderDiscardRiver(
+                state.Discards,
+                state.DiscardClaims,
+                seat,
+                playerSeat.IsReachDeclared,
+                playerSeat.ReachDeclaredTurnIndex);
         }
 
         public void ClearDiscardRivers()

@@ -2280,7 +2280,8 @@ MonoBehaviour:
   spawnRoot: {fileID: 636301887}
   tilePrefab: {fileID: 6693814208160502204, guid: 937dff25a8118f742aad1c49b74a7384, type: 3}
   columns: 6
-  spacingX: 1.6
+  verticalTileSpacing: 1.6
+  horizontalTileSpacing: 2.1
   spacingY: -2.1
 --- !u!1 &682677003
 GameObject:
@@ -2381,7 +2382,8 @@ MonoBehaviour:
   spawnRoot: {fileID: 695813522}
   tilePrefab: {fileID: 6693814208160502204, guid: 937dff25a8118f742aad1c49b74a7384, type: 3}
   columns: 6
-  spacingX: 1.6
+  verticalTileSpacing: 1.6
+  horizontalTileSpacing: 2.1
   spacingY: -2.1
 --- !u!1 &765603164
 GameObject:
@@ -4381,7 +4383,8 @@ MonoBehaviour:
   spawnRoot: {fileID: 1298846570}
   tilePrefab: {fileID: 6693814208160502204, guid: 937dff25a8118f742aad1c49b74a7384, type: 3}
   columns: 6
-  spacingX: 1.6
+  verticalTileSpacing: 1.6
+  horizontalTileSpacing: 2.1
   spacingY: -2.1
 --- !u!1 &1328381983
 GameObject:
@@ -5442,7 +5445,8 @@ MonoBehaviour:
   spawnRoot: {fileID: 1684105270}
   tilePrefab: {fileID: 6693814208160502204, guid: 937dff25a8118f742aad1c49b74a7384, type: 3}
   columns: 6
-  spacingX: 1.6
+  verticalTileSpacing: 1.6
+  horizontalTileSpacing: 2.1
   spacingY: -2.1
 --- !u!1 &1695056098
 GameObject:

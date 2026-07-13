@@ -177,7 +177,7 @@ namespace MahjongPrototype.UI3D
 
         public void RenderDiscardRiver(IReadOnlyList<DiscardRecord> discards, SeatId dataSeat)
         {
-            RenderDiscardRiver(discards, null, dataSeat);
+            RenderDiscardRiver(discards, null, dataSeat, false, 0);
         }
 
         public void RenderDiscardRiver(
@@ -185,13 +185,28 @@ namespace MahjongPrototype.UI3D
             IReadOnlyDictionary<int, DiscardClaim> discardClaims,
             SeatId dataSeat)
         {
+            RenderDiscardRiver(discards, discardClaims, dataSeat, false, 0);
+        }
+
+        public void RenderDiscardRiver(
+            IReadOnlyList<DiscardRecord> discards,
+            IReadOnlyDictionary<int, DiscardClaim> discardClaims,
+            SeatId dataSeat,
+            bool isReachDeclared,
+            int reachDeclaredTurnIndex)
+        {
             if (discardRiverView == null)
             {
                 WarnMissingOnce(ref warnedMissingDiscardRiverView, "3D discard river view is not assigned.");
                 return;
             }
 
-            discardRiverView.RenderDiscardRiver(discards, discardClaims, dataSeat);
+            discardRiverView.RenderDiscardRiver(
+                discards,
+                discardClaims,
+                dataSeat,
+                isReachDeclared,
+                reachDeclaredTurnIndex);
         }
 
         public void ClearDiscardRiver()

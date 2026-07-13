@@ -286,6 +286,160 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
+        public void RenderDiscardRiver_OnlyNormalReachDeclarationTileIsHorizontal()
+        {
+            GameObject root = new GameObject("DiscardRiverNormalReachLayoutTest");
+            GameObject prefab = new GameObject("Tile3DPrefab");
+            try
+            {
+                object view = root.AddComponent(Type.GetType(Mahjong3DDiscardRiverViewTypeName, true));
+                object tilePrefab = prefab.AddComponent(Type.GetType(Mahjong3DTileViewTypeName, true));
+                SetPrivateField(view, "tilePrefab", tilePrefab);
+
+                IList discards = CreateList(RequireType(DiscardRecordTypeName));
+                discards.Add(CreateDiscard(1, "East", "1m", 4));
+                discards.Add(CreateDiscard(2, "East", "2m", 5));
+                discards.Add(CreateDiscard(3, "East", "3m", 6));
+
+                Invoke(view, "RenderDiscardRiver", discards, null, Seat("East"), true, 5);
+
+                Component[] tileViews = GetTileViews(root);
+                Assert.That(tileViews.Length, Is.EqualTo(3));
+                AssertVertical(tileViews[0]);
+                AssertHorizontal(tileViews[1]);
+                AssertVertical(tileViews[2]);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(prefab);
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void RenderDiscardRiver_DoubleReachDeclarationTileIsHorizontal()
+        {
+            GameObject root = new GameObject("DiscardRiverDoubleReachLayoutTest");
+            GameObject prefab = new GameObject("Tile3DPrefab");
+            try
+            {
+                object view = root.AddComponent(Type.GetType(Mahjong3DDiscardRiverViewTypeName, true));
+                object tilePrefab = prefab.AddComponent(Type.GetType(Mahjong3DTileViewTypeName, true));
+                SetPrivateField(view, "tilePrefab", tilePrefab);
+
+                IList discards = CreateList(RequireType(DiscardRecordTypeName));
+                discards.Add(CreateDiscard(1, "East", "1m", 1));
+                discards.Add(CreateDiscard(2, "East", "2m", 2));
+
+                Invoke(view, "RenderDiscardRiver", discards, null, Seat("East"), true, 1);
+
+                Component[] tileViews = GetTileViews(root);
+                Assert.That(tileViews.Length, Is.EqualTo(2));
+                AssertHorizontal(tileViews[0]);
+                AssertVertical(tileViews[1]);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(prefab);
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void RenderDiscardRiver_UsesMixedTileSpacingAndStartsEachRowAtRoot()
+        {
+            GameObject root = new GameObject("DiscardRiverSpacingLayoutTest");
+            GameObject prefab = new GameObject("Tile3DPrefab");
+            try
+            {
+                object view = root.AddComponent(Type.GetType(Mahjong3DDiscardRiverViewTypeName, true));
+                object tilePrefab = prefab.AddComponent(Type.GetType(Mahjong3DTileViewTypeName, true));
+                SetPrivateField(view, "tilePrefab", tilePrefab);
+                SetPrivateField(view, "verticalTileSpacing", 2f);
+                SetPrivateField(view, "horizontalTileSpacing", 1f);
+                SetPrivateField(view, "spacingY", 10f);
+
+                IList discards = CreateList(RequireType(DiscardRecordTypeName));
+                for (int id = 1; id <= 7; id++)
+                    discards.Add(CreateDiscard(id, "East", $"{id}m", id));
+
+                Invoke(view, "RenderDiscardRiver", discards, null, Seat("East"), true, 2);
+
+                Component[] tileViews = GetTileViews(root);
+                Assert.That(tileViews.Length, Is.EqualTo(7));
+                Assert.That(tileViews[0].transform.localPosition, Is.EqualTo(new Vector3(0f, 0f, 0f)));
+                Assert.That(tileViews[1].transform.localPosition.x, Is.EqualTo(1.5f).Within(0.0001f));
+                Assert.That(tileViews[2].transform.localPosition.x, Is.EqualTo(3f).Within(0.0001f));
+                Assert.That(tileViews[5].transform.localPosition.x, Is.EqualTo(9f).Within(0.0001f));
+                Assert.That(tileViews[6].transform.localPosition, Is.EqualTo(new Vector3(0f, 10f, 0f)));
+                AssertHorizontal(tileViews[1]);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(prefab);
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void RenderDiscardRiver_ExcludesClaimedReachDeclarationTile()
+        {
+            GameObject root = new GameObject("DiscardRiverClaimedReachFilterTest");
+            GameObject prefab = new GameObject("Tile3DPrefab");
+            try
+            {
+                object view = root.AddComponent(Type.GetType(Mahjong3DDiscardRiverViewTypeName, true));
+                object tilePrefab = prefab.AddComponent(Type.GetType(Mahjong3DTileViewTypeName, true));
+                SetPrivateField(view, "tilePrefab", tilePrefab);
+
+                IList discards = CreateList(RequireType(DiscardRecordTypeName));
+                discards.Add(CreateDiscard(1, "East", "1m", 4));
+                discards.Add(CreateDiscard(2, "East", "2m", 5));
+                discards.Add(CreateDiscard(3, "East", "3m", 6));
+
+                Invoke(view, "RenderDiscardRiver", discards, CreateClaims(2), Seat("East"), true, 5);
+
+                Component[] tileViews = GetTileViews(root);
+                Assert.That(tileViews.Length, Is.EqualTo(2));
+                Assert.That(GetProperty(tileViews[0], "Tile").ToString(), Is.EqualTo("1m"));
+                Assert.That(GetProperty(tileViews[1], "Tile").ToString(), Is.EqualTo("3m"));
+                AssertVertical(tileViews[0]);
+                AssertVertical(tileViews[1]);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(prefab);
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void RenderDiscardRiver_ClearRemovesGeneratedTiles()
+        {
+            GameObject root = new GameObject("DiscardRiverClearTest");
+            GameObject prefab = new GameObject("Tile3DPrefab");
+            try
+            {
+                object view = root.AddComponent(Type.GetType(Mahjong3DDiscardRiverViewTypeName, true));
+                object tilePrefab = prefab.AddComponent(Type.GetType(Mahjong3DTileViewTypeName, true));
+                SetPrivateField(view, "tilePrefab", tilePrefab);
+
+                IList discards = CreateList(RequireType(DiscardRecordTypeName));
+                discards.Add(CreateDiscard(1, "East", "1m"));
+                Invoke(view, "RenderDiscardRiver", discards, null, Seat("East"), false, 0);
+                Assert.That(GetTileViews(root).Length, Is.EqualTo(1));
+
+                Invoke(view, "Clear");
+                Assert.That(GetTileViews(root).Length, Is.EqualTo(0));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(prefab);
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
         public void RenderOpenMelds_ShowsThreeTilesPerMeldAndClearRemovesThem()
         {
             GameObject root = new GameObject("OpenMeldViewTest");
@@ -426,14 +580,14 @@ namespace MahjongPrototype.Tests
             }
         }
 
-        private static object CreateDiscard(int id, string seatName, string tileCode)
+        private static object CreateDiscard(int id, string seatName, string tileCode, int turnIndex = 1)
         {
             return Activator.CreateInstance(
                 RequireType(DiscardRecordTypeName),
                 id,
                 Seat(seatName),
                 CreateTile(tileCode),
-                1,
+                turnIndex,
                 Enum.Parse(RequireType(DiscardSourceTypeName), "Hand"),
                 false);
         }
