@@ -63,8 +63,9 @@ namespace MahjongPrototype.Services
             ReactionWindow reactionWindow =
                 gameState.BeginReactionWindow(sourceDiscard, candidates);
             ReactionWindowResolution resolution = candidates.Count <= 0
-                ? ReactionWindowResolution.NoReaction(sourceDiscard)
+                ? ReactionWindowResolution.NoReaction(reactionWindow.WindowId, sourceDiscard)
                 : ReactionWindowResolution.None;
+            BeginResolutionIfNeeded(reactionWindow, resolution);
             return new ReactionWindowStartResult(
                 reactionWindow,
                 evaluation.Notifications,
@@ -89,12 +90,15 @@ namespace MahjongPrototype.Services
             }
 
             candidate.Declare();
+            ReactionWindowResolution resolution = ReactionWindowResolution.RonDeclared(
+                reactionWindow.WindowId,
+                reactionWindow.SourceDiscard,
+                candidate);
+            BeginResolutionIfNeeded(reactionWindow, resolution);
             return ReactionWindowAnswerResult.AcceptedAnswer(
                 reactionWindow.WindowId,
                 candidate,
-                ReactionWindowResolution.RonDeclared(
-                    reactionWindow.SourceDiscard,
-                    candidate));
+                resolution);
         }
 
         public ReactionWindowAnswerResult DeclineRon(
@@ -116,10 +120,12 @@ namespace MahjongPrototype.Services
 
             candidate.Decline();
             winDecisionService.MarkDeclinedRonFuriten(gameState, seat);
+            ReactionWindowResolution resolution = ResolveIfNoPendingCandidates(reactionWindow);
+            BeginResolutionIfNeeded(reactionWindow, resolution);
             return ReactionWindowAnswerResult.AcceptedAnswer(
                 reactionWindow.WindowId,
                 candidate,
-                ResolveIfNoPendingCandidates(reactionWindow));
+                resolution);
         }
 
         public ReactionWindowAnswerResult DeclarePon(
@@ -167,6 +173,8 @@ namespace MahjongPrototype.Services
 
             if (reactionWindow.WindowId != windowId)
                 return ReactionWindowAnswerResult.Rejected("ReactionWindowStale");
+            if (!reactionWindow.IsAcceptingAnswers)
+                return ReactionWindowAnswerResult.Rejected("ReactionWindowResolving");
 
             MeldCallDeclarationResult result = meldCallService.TryDeclare(
                 gameState,
@@ -179,13 +187,16 @@ namespace MahjongPrototype.Services
 
             ReactionWindowResolution resolution = kind == MeldCallKind.Pon
                 ? ReactionWindowResolution.PonDeclared(
+                    reactionWindow.WindowId,
                     reactionWindow.SourceDiscard,
                     result.Candidate,
                     result.OpenMeld)
                 : ReactionWindowResolution.ChiDeclared(
+                    reactionWindow.WindowId,
                     reactionWindow.SourceDiscard,
                     result.Candidate,
                     result.OpenMeld);
+            BeginResolutionIfNeeded(reactionWindow, resolution);
             return ReactionWindowAnswerResult.AcceptedAnswer(
                 reactionWindow.WindowId,
                 result.Candidate,
@@ -210,10 +221,12 @@ namespace MahjongPrototype.Services
             }
 
             candidate.Decline();
+            ReactionWindowResolution resolution = ResolveIfNoPendingCandidates(reactionWindow);
+            BeginResolutionIfNeeded(reactionWindow, resolution);
             return ReactionWindowAnswerResult.AcceptedAnswer(
                 reactionWindow.WindowId,
                 candidate,
-                ResolveIfNoPendingCandidates(reactionWindow));
+                resolution);
         }
 
         public ReactionWindowAnswerResult DeclineMeldCalls(
@@ -232,6 +245,8 @@ namespace MahjongPrototype.Services
 
             if (reactionWindow.WindowId != windowId)
                 return ReactionWindowAnswerResult.Rejected("ReactionWindowStale");
+            if (!reactionWindow.IsAcceptingAnswers)
+                return ReactionWindowAnswerResult.Rejected("ReactionWindowResolving");
 
             MeldCallDeclineResult result = meldCallService.TryDecline(
                 gameState,
@@ -240,18 +255,32 @@ namespace MahjongPrototype.Services
             if (!result.Declined)
                 return ReactionWindowAnswerResult.Rejected(result.Reason);
 
+            ReactionWindowResolution resolution = ResolveIfNoPendingCandidates(reactionWindow);
+            BeginResolutionIfNeeded(reactionWindow, resolution);
             return ReactionWindowAnswerResult.AcceptedAnswer(
                 reactionWindow.WindowId,
                 result.Candidate,
-                ResolveIfNoPendingCandidates(reactionWindow));
+                resolution);
+        }
+
+        private static void BeginResolutionIfNeeded(
+            ReactionWindow reactionWindow,
+            ReactionWindowResolution resolution)
+        {
+            if (resolution.IsResolved)
+                reactionWindow.TryBeginResolution();
         }
 
         private static ReactionWindowResolution ResolveIfNoPendingCandidates(
             ReactionWindow reactionWindow)
         {
             return reactionWindow.PendingCandidate == null
-                ? ReactionWindowResolution.NoReaction(reactionWindow.SourceDiscard)
-                : ReactionWindowResolution.Pending(reactionWindow.SourceDiscard);
+                ? ReactionWindowResolution.NoReaction(
+                    reactionWindow.WindowId,
+                    reactionWindow.SourceDiscard)
+                : ReactionWindowResolution.Pending(
+                    reactionWindow.WindowId,
+                    reactionWindow.SourceDiscard);
         }
 
         private static bool TryGetPendingCandidate(
@@ -279,6 +308,12 @@ namespace MahjongPrototype.Services
             if (reactionWindow.WindowId != windowId)
             {
                 reason = "ReactionWindowStale";
+                return false;
+            }
+
+            if (!reactionWindow.IsAcceptingAnswers)
+            {
+                reason = "ReactionWindowResolving";
                 return false;
             }
 

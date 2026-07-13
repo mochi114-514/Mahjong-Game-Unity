@@ -95,25 +95,25 @@ namespace MahjongPrototype.Notifications
 
         public void NotifyReactionWindowStarted(ReactionWindow reactionWindow)
         {
-            ReactionWindowStarted?.Invoke(reactionWindow);
+            NotifyReactionSubscribers(ReactionWindowStarted, reactionWindow, nameof(ReactionWindowStarted));
             NotifyAny();
         }
 
         public void NotifyReactionWindowAnswered(ReactionWindowAnswerResult result)
         {
-            ReactionWindowAnswered?.Invoke(result);
+            NotifyReactionSubscribers(ReactionWindowAnswered, result, nameof(ReactionWindowAnswered));
             NotifyAny();
         }
 
         public void NotifyReactionWindowResolved(ReactionWindowResolution resolution)
         {
-            ReactionWindowResolved?.Invoke(resolution);
+            NotifyReactionSubscribers(ReactionWindowResolved, resolution, nameof(ReactionWindowResolved));
             NotifyAny();
         }
 
         public void NotifyReactionWindowClosed(int windowId)
         {
-            ReactionWindowClosed?.Invoke(windowId);
+            NotifyReactionSubscribers(ReactionWindowClosed, windowId, nameof(ReactionWindowClosed));
             NotifyAny();
         }
 
@@ -323,7 +323,47 @@ namespace MahjongPrototype.Notifications
 
         private void NotifyAny()
         {
-            AnyEventNotified?.Invoke();
+            Delegate[] subscribers = AnyEventNotified?.GetInvocationList();
+            if (subscribers == null)
+                return;
+
+            for (int i = 0; i < subscribers.Length; i++)
+            {
+                try
+                {
+                    ((Action)subscribers[i])();
+                }
+                catch (Exception exception)
+                {
+                    Debug.LogException(exception, this);
+                }
+            }
+        }
+
+        private void NotifyReactionSubscribers<T>(
+            Action<T> notification,
+            T payload,
+            string notificationName)
+        {
+            if (notification == null)
+                return;
+
+            Delegate[] subscribers = notification.GetInvocationList();
+            for (int i = 0; i < subscribers.Length; i++)
+            {
+                try
+                {
+                    ((Action<T>)subscribers[i])(payload);
+                }
+                catch (Exception exception)
+                {
+                    Debug.LogException(
+                        new InvalidOperationException(
+                            $"Reaction notification subscriber failed. Event={notificationName}",
+                            exception),
+                        this);
+                }
+            }
         }
     }
 }

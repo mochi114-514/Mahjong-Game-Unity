@@ -3,9 +3,12 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using MahjongPrototype.Tests.TestSupport.Core;
 using MahjongPrototype.Tests.TestSupport.Mahjong;
 using NUnit.Framework;
+using UnityEngine;
+using UnityEngine.TestTools;
 
 namespace MahjongPrototype.Tests
 {
@@ -50,9 +53,147 @@ namespace MahjongPrototype.Tests
                     Is.LessThan(events.IndexOf("ReactionWindowResolved")),
                     events.Describe());
                 Assert.That(
-                    events.IndexOf("ReactionWindowClosed"),
-                    Is.LessThan(events.LastIndexOf("TurnStarted")),
+                    events.LastIndexOf("TurnStarted"),
+                    Is.LessThan(events.IndexOf("ReactionWindowResolved")),
                     events.Describe());
+            }
+        }
+
+        [Test]
+        public void FinalReactionNotifications_RejectReentrantMeldDeclarations()
+        {
+            using (MahjongGameFlowTestSession session = CreatePonSession(false))
+            {
+                int windowId = session.Query.ReactionWindowId;
+                object reactionWindow = session.Query.CurrentReactionWindow;
+                bool answeredReentryAccepted = true;
+                bool resolvedReentryAccepted = true;
+
+                using (EventCallbackSubscription answered = EventCallbackSubscription.Create(
+                    session.EventNotifier,
+                    "ReactionWindowAnswered",
+                    () =>
+                    {
+                        answeredReentryAccepted = session.Commands.TryRequestDeclarePonForSeat(
+                            "East",
+                            windowId);
+                    }))
+                using (EventCallbackSubscription resolved = EventCallbackSubscription.Create(
+                    session.EventNotifier,
+                    "ReactionWindowResolved",
+                    () =>
+                    {
+                        resolvedReentryAccepted = session.Commands.TryRequestDeclarePonForSeat(
+                            "East",
+                            windowId);
+                    }))
+                {
+                    Assert.That(session.Commands.TryRequestDeclarePonForSeat("East", windowId), Is.True);
+                }
+
+                Assert.That(answeredReentryAccepted, Is.False);
+                Assert.That(resolvedReentryAccepted, Is.False);
+                Assert.That(session.Query.CurrentReactionWindow, Is.Null);
+                Assert.That(session.Query.TurnPhaseName, Is.EqualTo("WaitingForDiscardAfterCall"));
+                Assert.That(session.Reflection.GetProperty(reactionWindow, "State").ToString(), Is.EqualTo("Closed"));
+            }
+        }
+
+        [Test]
+        public void ReactionWindowClosed_DoesNotExposeWaitingForDrawToTheOldDiscarder()
+        {
+            using (MahjongGameFlowTestSession session = CreatePonSession(false))
+            {
+                int windowId = session.Query.ReactionWindowId;
+                int turnIndex = session.Query.TurnIndex;
+                bool oldDiscarderDrew = true;
+
+                using (EventCallbackSubscription closed = EventCallbackSubscription.Create(
+                    session.EventNotifier,
+                    "ReactionWindowClosed",
+                    () => oldDiscarderDrew = session.Commands.TryRequestDrawForSeat("West")))
+                {
+                    Assert.That(session.Commands.TryRequestDeclarePonForSeat("East", windowId), Is.True);
+                }
+
+                Assert.That(oldDiscarderDrew, Is.False);
+                Assert.That(session.Query.CurrentTurnName, Is.EqualTo("East"));
+                Assert.That(session.Query.TurnIndex, Is.EqualTo(turnIndex + 1));
+                Assert.That(session.Query.TurnPhaseName, Is.EqualTo("WaitingForDiscardAfterCall"));
+            }
+        }
+
+        [Test]
+        public void ReactionWindowNotificationException_DoesNotBlockLaterSubscribersOrFinalState()
+        {
+            using (MahjongGameFlowTestSession session = CreatePonSession(false))
+            {
+                int windowId = session.Query.ReactionWindowId;
+                int laterSubscriberCount = 0;
+
+                using (EventCallbackSubscription throwingSubscriber = EventCallbackSubscription.Create(
+                    session.EventNotifier,
+                    "ReactionWindowResolved",
+                    () => throw new InvalidOperationException("ReactionWindowResolved subscriber failure")))
+                using (EventCallbackSubscription laterSubscriber = EventCallbackSubscription.Create(
+                    session.EventNotifier,
+                    "ReactionWindowResolved",
+                    () => laterSubscriberCount++))
+                {
+                    LogAssert.Expect(
+                        LogType.Exception,
+                        new Regex("Reaction notification subscriber failed\\. Event=ReactionWindowResolved"));
+                    Assert.That(session.Commands.TryRequestDeclarePonForSeat("East", windowId), Is.True);
+                }
+
+                Assert.That(laterSubscriberCount, Is.EqualTo(1));
+                Assert.That(session.Query.CurrentReactionWindow, Is.Null);
+                Assert.That(session.Query.CurrentTurnName, Is.EqualTo("East"));
+                Assert.That(session.Query.TurnPhaseName, Is.EqualTo("WaitingForDiscardAfterCall"));
+                Assert.That(HasCallOccurred(session), Is.True);
+            }
+        }
+
+        [Test]
+        public void OldAndDuplicateReactionWindowResolutions_AreRejected()
+        {
+            using (MahjongGameFlowTestSession session = CreatePonSession(false))
+            using (EventSequenceRecorder events = new EventSequenceRecorder(
+                session.EventNotifier,
+                "ReactionWindowResolved"))
+            {
+                int windowId = session.Query.ReactionWindowId;
+                object sourceDiscard = session.Query.DiscardAt(0);
+
+                Assert.That(session.Commands.TryRequestDeclarePonForSeat("East", windowId), Is.True);
+                object completedResolution = events.FirstPayload("ReactionWindowResolved");
+                int completedWindowId = (int)session.Reflection.GetProperty(
+                    completedResolution,
+                    "WindowId");
+                Assert.That(completedWindowId, Is.EqualTo(windowId));
+                Assert.That(
+                    session.Reflection.Invoke(session.GameFlow, "ResolveReactionWindow", completedResolution),
+                    Is.False);
+
+                Type candidateType = Type.GetType(
+                    "MahjongPrototype.Domain.ReactionWindowCandidate, Assembly-CSharp",
+                    true);
+                object emptyCandidates = Activator.CreateInstance(
+                    typeof(List<>).MakeGenericType(candidateType));
+                object currentWindow = session.Reflection.Invoke(
+                    session.CurrentState,
+                    "BeginReactionWindow",
+                    sourceDiscard,
+                    emptyCandidates);
+
+                Assert.That(session.Query.IsReactionWindowPending, Is.True);
+                Assert.That(
+                    session.Reflection.Invoke(session.GameFlow, "ResolveReactionWindow", completedResolution),
+                    Is.False);
+                Assert.That(
+                    session.Reflection.GetProperty(currentWindow, "State").ToString(),
+                    Is.EqualTo("AcceptingAnswers"));
+                Assert.That(session.Query.ReactionWindowId, Is.Not.EqualTo(completedWindowId));
             }
         }
 
@@ -736,6 +877,61 @@ namespace MahjongPrototype.Tests
                 {
                     EventInfo.RemoveEventHandler(source, Handler);
                 }
+            }
+        }
+
+        private sealed class EventCallbackSubscription : IDisposable
+        {
+            private readonly object eventSource;
+            private readonly EventInfo eventInfo;
+            private readonly Delegate handler;
+
+            private EventCallbackSubscription(
+                object eventSource,
+                EventInfo eventInfo,
+                Delegate handler)
+            {
+                this.eventSource = eventSource;
+                this.eventInfo = eventInfo;
+                this.handler = handler;
+            }
+
+            public static EventCallbackSubscription Create(
+                object eventSource,
+                string eventName,
+                Action callback)
+            {
+                Assert.That(eventSource, Is.Not.Null);
+                Assert.That(callback, Is.Not.Null);
+
+                EventInfo eventInfo = eventSource.GetType().GetEvent(
+                    eventName,
+                    BindingFlags.Public | BindingFlags.Instance);
+                Assert.That(eventInfo, Is.Not.Null, $"Event not found: {eventName}");
+
+                ParameterInfo[] parameterInfos = eventInfo.EventHandlerType
+                    .GetMethod("Invoke")
+                    .GetParameters();
+                ParameterExpression[] parameters = new ParameterExpression[parameterInfos.Length];
+                for (int i = 0; i < parameterInfos.Length; i++)
+                {
+                    parameters[i] = Expression.Parameter(
+                        parameterInfos[i].ParameterType,
+                        parameterInfos[i].Name);
+                }
+
+                MethodInfo callbackInvoke = typeof(Action).GetMethod(nameof(Action.Invoke));
+                Delegate handler = Expression.Lambda(
+                    eventInfo.EventHandlerType,
+                    Expression.Call(Expression.Constant(callback), callbackInvoke),
+                    parameters).Compile();
+                eventInfo.AddEventHandler(eventSource, handler);
+                return new EventCallbackSubscription(eventSource, eventInfo, handler);
+            }
+
+            public void Dispose()
+            {
+                eventInfo.RemoveEventHandler(eventSource, handler);
             }
         }
     }

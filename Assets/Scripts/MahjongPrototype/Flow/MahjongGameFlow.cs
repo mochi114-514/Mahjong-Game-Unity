@@ -631,9 +631,7 @@ namespace MahjongPrototype
                 return false;
             }
 
-            EventPublisher.NotifyReactionWindowAnswered(answer);
-            ResolveReactionWindow(answer.Resolution);
-            return true;
+            return CompleteReactionWindowAnswer(answer);
         }
 
         public bool TryRequestDeclineRonForSeat(SeatId actorSeat, int reactionWindowId)
@@ -652,14 +650,18 @@ namespace MahjongPrototype
                 return false;
             }
 
-            EventPublisher.NotifyReactionWindowAnswered(answer);
-            EventPublisher.NotifyWinDeclined(answer.Candidate.Seat, answer.Resolution.SourceDiscard.TurnIndex);
-            EventPublisher.NotifyWinDeclinedDetailed(
-                answer.Candidate.Seat,
-                WinType.Ron,
-                answer.Resolution.SourceDiscard.TurnIndex);
-            ResolveReactionWindow(answer.Resolution);
-            return true;
+            return CompleteReactionWindowAnswer(
+                answer,
+                () =>
+                {
+                    EventPublisher.NotifyWinDeclined(
+                        answer.Candidate.Seat,
+                        answer.Resolution.SourceDiscard.TurnIndex);
+                    EventPublisher.NotifyWinDeclinedDetailed(
+                        answer.Candidate.Seat,
+                        WinType.Ron,
+                        answer.Resolution.SourceDiscard.TurnIndex);
+                });
         }
 
         public bool TryRequestDeclarePonForSeat(SeatId actorSeat, int reactionWindowId)
@@ -705,9 +707,7 @@ namespace MahjongPrototype
                 return false;
             }
 
-            EventPublisher.NotifyReactionWindowAnswered(answer);
-            ResolveReactionWindow(answer.Resolution);
-            return true;
+            return CompleteReactionWindowAnswer(answer);
         }
 
         public bool TryRequestDeclinePonForSeat(SeatId actorSeat, int reactionWindowId)
@@ -726,9 +726,7 @@ namespace MahjongPrototype
                 return false;
             }
 
-            EventPublisher.NotifyReactionWindowAnswered(answer);
-            ResolveReactionWindow(answer.Resolution);
-            return true;
+            return CompleteReactionWindowAnswer(answer);
         }
 
         public bool TryRequestDeclineMeldCallsForSeat(SeatId actorSeat, int reactionWindowId)
@@ -747,9 +745,7 @@ namespace MahjongPrototype
                 return false;
             }
 
-            EventPublisher.NotifyReactionWindowAnswered(answer);
-            ResolveReactionWindow(answer.Resolution);
-            return true;
+            return CompleteReactionWindowAnswer(answer);
         }
 
         public void RequestDeclineWin()
@@ -970,40 +966,77 @@ namespace MahjongPrototype
                 ResolveReactionWindow(start.Resolution);
         }
 
-        private void ResolveReactionWindow(ReactionWindowResolution resolution)
+        private bool CompleteReactionWindowAnswer(
+            ReactionWindowAnswerResult answer,
+            System.Action afterAnswered = null)
         {
-            if (!resolution.IsResolved || gameState == null)
-                return;
+            if (!answer.Accepted)
+                return false;
 
-            int windowId = gameState.CurrentReactionWindow != null
-                ? gameState.CurrentReactionWindow.WindowId
-                : 0;
+            if (!answer.Resolution.IsResolved)
+            {
+                EventPublisher.NotifyReactionWindowAnswered(answer);
+                afterAnswered?.Invoke();
+                return true;
+            }
+
+            return ResolveReactionWindow(
+                answer.Resolution,
+                () =>
+                {
+                    EventPublisher.NotifyReactionWindowAnswered(answer);
+                    afterAnswered?.Invoke();
+                });
+        }
+
+        private bool ResolveReactionWindow(ReactionWindowResolution resolution)
+        {
+            return ResolveReactionWindow(resolution, null);
+        }
+
+        private bool ResolveReactionWindow(
+            ReactionWindowResolution resolution,
+            System.Action afterFinalStateEstablished)
+        {
+            if (!resolution.IsResolved || gameState == null ||
+                !gameState.BeginReactionWindowResolution(resolution.WindowId))
+            {
+                return false;
+            }
+
+            if (!gameState.CompleteReactionWindowResolution(resolution.WindowId))
+                return false;
+
+            ApplyReactionWindowResolution(resolution);
+            afterFinalStateEstablished?.Invoke();
             EventPublisher.NotifyTurnDebug(
                 "ReactionWindowResolved",
-                $"windowId={windowId}; resolution={resolution.Type}; sourceSeat={resolution.SourceDiscard.ActorSeat}",
+                $"windowId={resolution.WindowId}; resolution={resolution.Type}; sourceSeat={resolution.SourceDiscard.ActorSeat}",
                 seat: resolution.SourceDiscard.ActorSeat,
                 tile: resolution.SourceDiscard.Tile,
                 turnIndex: resolution.SourceDiscard.TurnIndex);
             EventPublisher.NotifyReactionWindowResolved(resolution);
-            if (windowId > 0)
-                gameState.CloseReactionWindow(windowId);
-            EventPublisher.NotifyReactionWindowClosed(windowId);
+            EventPublisher.NotifyReactionWindowClosed(resolution.WindowId);
+            return true;
+        }
 
+        private void ApplyReactionWindowResolution(ReactionWindowResolution resolution)
+        {
             switch (resolution.Type)
             {
                 case ReactionWindowResolutionType.NoReaction:
                     AdvanceOrEndAfterDiscard(resolution.SourceDiscard);
-                    return;
+                    break;
                 case ReactionWindowResolutionType.RonDeclared:
                     EndRound(
                         RoundLifecycleService.RoundEndReasonWin,
                         () => NotifyDeclaredReactionRon(resolution),
                         resolution);
-                    return;
+                    break;
                 case ReactionWindowResolutionType.PonDeclared:
                 case ReactionWindowResolutionType.ChiDeclared:
                     BeginTurnAfterMeldCall(resolution);
-                    return;
+                    break;
             }
         }
 

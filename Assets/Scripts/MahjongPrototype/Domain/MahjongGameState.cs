@@ -433,8 +433,23 @@ namespace MahjongPrototype.Domain
                 return false;
             }
 
+            reactionWindow.TryClose();
             TransitionTo(TurnPhaseType.WaitingForDraw);
             return true;
+        }
+
+        public bool BeginReactionWindowResolution(int windowId)
+        {
+            return IsReactionWindowPending && reactionWindow != null &&
+                reactionWindow.WindowId == windowId &&
+                (reactionWindow.IsResolving || reactionWindow.TryBeginResolution());
+        }
+
+        public bool CompleteReactionWindowResolution(int windowId)
+        {
+            return IsReactionWindowPending && reactionWindow != null &&
+                reactionWindow.WindowId == windowId && reactionWindow.IsResolving &&
+                reactionWindow.TryClose();
         }
 
         public void BeginRoundResult(RoundResult result)

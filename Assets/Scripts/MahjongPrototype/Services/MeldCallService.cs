@@ -36,7 +36,8 @@ namespace MahjongPrototype.Services
             SeatId seat)
         {
             List<MeldCallKind> kinds = new List<MeldCallKind>();
-            if (reactionWindow == null || reactionWindow.PendingRonCandidate != null)
+            if (reactionWindow == null || !reactionWindow.IsAcceptingAnswers ||
+                reactionWindow.PendingRonCandidate != null)
                 return kinds;
 
             bool hasAnyPendingPon = HasPendingCandidate(reactionWindow, ReactionKind.Pon);
@@ -65,7 +66,8 @@ namespace MahjongPrototype.Services
         {
             if (gameState == null || reactionWindow == null ||
                 !gameState.IsReactionWindowPending ||
-                gameState.CurrentReactionWindow != reactionWindow)
+                gameState.CurrentReactionWindow != reactionWindow ||
+                !reactionWindow.IsAcceptingAnswers)
             {
                 return MeldCallDeclarationResult.Rejected("MeldCallWindowMissing");
             }
@@ -133,7 +135,8 @@ namespace MahjongPrototype.Services
         {
             if (gameState == null || reactionWindow == null ||
                 !gameState.IsReactionWindowPending ||
-                gameState.CurrentReactionWindow != reactionWindow)
+                gameState.CurrentReactionWindow != reactionWindow ||
+                !reactionWindow.IsAcceptingAnswers)
             {
                 return MeldCallDeclineResult.Rejected("MeldCallWindowMissing");
             }

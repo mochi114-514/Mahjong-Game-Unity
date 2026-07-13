@@ -26,6 +26,13 @@ namespace MahjongPrototype.Domain
         ChiDeclared
     }
 
+    public enum ReactionWindowState
+    {
+        AcceptingAnswers,
+        Resolving,
+        Closed
+    }
+
     public abstract class ReactionWindowCandidateDetail
     {
     }
@@ -294,6 +301,7 @@ namespace MahjongPrototype.Domain
     public sealed class ReactionWindow
     {
         private readonly List<ReactionWindowCandidate> candidates;
+        private ReactionWindowState state = ReactionWindowState.AcceptingAnswers;
 
         public ReactionWindow(
             int windowId,
@@ -320,6 +328,10 @@ namespace MahjongPrototype.Domain
         public DiscardRecord SourceDiscard { get; }
         public int TurnIndex { get; }
         public IReadOnlyList<ReactionWindowCandidate> Candidates => candidates;
+        public ReactionWindowState State => state;
+        public bool IsAcceptingAnswers => state == ReactionWindowState.AcceptingAnswers;
+        public bool IsResolving => state == ReactionWindowState.Resolving;
+        public bool IsClosed => state == ReactionWindowState.Closed;
 
         public ReactionWindowCandidate PendingCandidate =>
             FindPendingCandidate(ReactionKind.Ron) ??
@@ -357,6 +369,24 @@ namespace MahjongPrototype.Domain
             }
         }
 
+        internal bool TryBeginResolution()
+        {
+            if (!IsAcceptingAnswers)
+                return false;
+
+            state = ReactionWindowState.Resolving;
+            return true;
+        }
+
+        internal bool TryClose()
+        {
+            if (IsClosed)
+                return false;
+
+            state = ReactionWindowState.Closed;
+            return true;
+        }
+
         private ReactionWindowCandidate FindPendingCandidate(ReactionKind kind)
         {
             for (int i = 0; i < candidates.Count; i++)
@@ -373,11 +403,13 @@ namespace MahjongPrototype.Domain
     public readonly struct ReactionWindowResolution
     {
         private ReactionWindowResolution(
+            int windowId,
             ReactionWindowResolutionType type,
             DiscardRecord sourceDiscard,
             ReactionWindowCandidate candidate,
             OpenMeld openMeld)
         {
+            WindowId = windowId;
             Type = type;
             SourceDiscard = sourceDiscard;
             Candidate = candidate;
@@ -385,29 +417,33 @@ namespace MahjongPrototype.Domain
         }
 
         public static ReactionWindowResolution None => new ReactionWindowResolution(
+            0,
             ReactionWindowResolutionType.None,
             default,
             null,
             null);
 
+        public int WindowId { get; }
         public ReactionWindowResolutionType Type { get; }
         public DiscardRecord SourceDiscard { get; }
         public ReactionWindowCandidate Candidate { get; }
         public OpenMeld OpenMeld { get; }
         public bool IsResolved => Type != ReactionWindowResolutionType.None;
 
-        public static ReactionWindowResolution NoReaction(DiscardRecord sourceDiscard)
+        public static ReactionWindowResolution NoReaction(int windowId, DiscardRecord sourceDiscard)
         {
             return new ReactionWindowResolution(
+                windowId,
                 ReactionWindowResolutionType.NoReaction,
                 sourceDiscard,
                 null,
                 null);
         }
 
-        public static ReactionWindowResolution Pending(DiscardRecord sourceDiscard)
+        public static ReactionWindowResolution Pending(int windowId, DiscardRecord sourceDiscard)
         {
             return new ReactionWindowResolution(
+                windowId,
                 ReactionWindowResolutionType.None,
                 sourceDiscard,
                 null,
@@ -415,6 +451,7 @@ namespace MahjongPrototype.Domain
         }
 
         public static ReactionWindowResolution RonDeclared(
+            int windowId,
             DiscardRecord sourceDiscard,
             ReactionWindowCandidate candidate)
         {
@@ -422,6 +459,7 @@ namespace MahjongPrototype.Domain
                 throw new ArgumentException("A ron resolution requires a ron candidate.", nameof(candidate));
 
             return new ReactionWindowResolution(
+                windowId,
                 ReactionWindowResolutionType.RonDeclared,
                 sourceDiscard,
                 candidate,
@@ -429,6 +467,7 @@ namespace MahjongPrototype.Domain
         }
 
         public static ReactionWindowResolution PonDeclared(
+            int windowId,
             DiscardRecord sourceDiscard,
             ReactionWindowCandidate candidate,
             OpenMeld openMeld)
@@ -439,6 +478,7 @@ namespace MahjongPrototype.Domain
                 throw new ArgumentNullException(nameof(openMeld));
 
             return new ReactionWindowResolution(
+                windowId,
                 ReactionWindowResolutionType.PonDeclared,
                 sourceDiscard,
                 candidate,
@@ -446,6 +486,7 @@ namespace MahjongPrototype.Domain
         }
 
         public static ReactionWindowResolution ChiDeclared(
+            int windowId,
             DiscardRecord sourceDiscard,
             ReactionWindowCandidate candidate,
             OpenMeld openMeld)
@@ -456,6 +497,7 @@ namespace MahjongPrototype.Domain
                 throw new ArgumentException("A chi resolution requires a chi open meld.", nameof(openMeld));
 
             return new ReactionWindowResolution(
+                windowId,
                 ReactionWindowResolutionType.ChiDeclared,
                 sourceDiscard,
                 candidate,
