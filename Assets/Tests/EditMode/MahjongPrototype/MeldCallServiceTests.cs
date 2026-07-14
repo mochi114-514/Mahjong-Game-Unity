@@ -11,12 +11,22 @@ namespace MahjongPrototype.Tests
     {
         private const string MeldCallServiceTypeName =
             "MahjongPrototype.Services.MeldCallService, Assembly-CSharp";
+        private const string PonServiceTypeName =
+            "MahjongPrototype.Services.PonService, Assembly-CSharp";
+        private const string ChiServiceTypeName =
+            "MahjongPrototype.Services.ChiService, Assembly-CSharp";
+        private const string PreparedMeldCallTypeName =
+            "MahjongPrototype.Services.PreparedMeldCall, Assembly-CSharp";
         private const string MeldCallKindTypeName =
             "MahjongPrototype.Domain.MeldCallKind, Assembly-CSharp";
         private const string ReactionKindTypeName =
             "MahjongPrototype.Domain.ReactionKind, Assembly-CSharp";
         private const string ReactionWindowCandidateTypeName =
             "MahjongPrototype.Domain.ReactionWindowCandidate, Assembly-CSharp";
+        private const string OpenMeldTypeName =
+            "MahjongPrototype.Domain.OpenMeld, Assembly-CSharp";
+        private const string OpenMeldKindTypeName =
+            "MahjongPrototype.Domain.OpenMeldType, Assembly-CSharp";
         private const string WinCheckResultTypeName =
             "MahjongPrototype.Domain.WinCheckResult, Assembly-CSharp";
         private const string WinDeclarationEvaluationResultTypeName =
@@ -161,6 +171,171 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
+        public void TryCommitMeldCall_RejectsMissingTilesAndClaimedDiscardsWithoutAdditionalMutation()
+        {
+            Fixture missingTilesFixture = CreateFixture("East", "West");
+            AddHandTiles(missingTilesFixture, "East", "5m", "5m");
+            object missingTilesWindow = BeginMeldCallWindow(missingTilesFixture, "West", "5m");
+            object missingTilesCandidate = FindCandidate(missingTilesFixture, missingTilesWindow, "Pon");
+            object missingTilesPreparedCall = PreparePon(
+                missingTilesFixture,
+                missingTilesWindow,
+                missingTilesCandidate);
+            object hand = missingTilesFixture.Reflection.GetProperty(
+                missingTilesFixture.DataFactory.GetPlayerSeat(missingTilesFixture.GameState, "East"),
+                "Hand");
+            Assert.That((bool)missingTilesFixture.Reflection.Invoke(hand, "TryRemoveAt", 0, null), Is.True);
+
+            Assert.That(
+                TryCommitPreparedCall(
+                    missingTilesFixture,
+                    missingTilesWindow,
+                    missingTilesPreparedCall),
+                Is.False);
+            AssertUncommittedState(
+                missingTilesFixture,
+                missingTilesWindow,
+                missingTilesCandidate,
+                expectedHandCount: 1,
+                expectedClaimCount: 0);
+
+            Fixture claimedDiscardFixture = CreateFixture("East", "West");
+            AddHandTiles(claimedDiscardFixture, "East", "5m", "5m");
+            object claimedDiscardWindow = BeginMeldCallWindow(claimedDiscardFixture, "West", "5m");
+            object claimedDiscardCandidate = FindCandidate(claimedDiscardFixture, claimedDiscardWindow, "Pon");
+            object claimedDiscardPreparedCall = PreparePon(
+                claimedDiscardFixture,
+                claimedDiscardWindow,
+                claimedDiscardCandidate);
+            Assert.That(
+                (bool)claimedDiscardFixture.Reflection.Invoke(
+                    claimedDiscardFixture.GameState,
+                    "TryClaimDiscard",
+                    claimedDiscardFixture.Reflection.GetProperty(claimedDiscardPreparedCall, "OpenMeld")),
+                Is.True);
+
+            Assert.That(
+                TryCommitPreparedCall(
+                    claimedDiscardFixture,
+                    claimedDiscardWindow,
+                    claimedDiscardPreparedCall),
+                Is.False);
+            AssertUncommittedState(
+                claimedDiscardFixture,
+                claimedDiscardWindow,
+                claimedDiscardCandidate,
+                expectedHandCount: 2,
+                expectedClaimCount: 1);
+        }
+
+        [Test]
+        public void TryCommitMeldCall_RejectsStaleAndDetachedCandidatesWithoutMutation()
+        {
+            Fixture staleFixture = CreateFixture("East", "West");
+            AddHandTiles(staleFixture, "East", "5m", "5m");
+            object staleWindow = BeginMeldCallWindow(staleFixture, "West", "5m");
+            object staleCandidate = FindCandidate(staleFixture, staleWindow, "Pon");
+            object stalePreparedCall = PreparePon(staleFixture, staleWindow, staleCandidate);
+            int staleWindowId = (int)staleFixture.Reflection.GetProperty(staleWindow, "WindowId");
+            Assert.That(
+                (bool)staleFixture.Reflection.Invoke(
+                    staleFixture.GameState,
+                    "CloseReactionWindow",
+                    staleWindowId),
+                Is.True);
+
+            Assert.That(TryCommitPreparedCall(staleFixture, staleWindow, stalePreparedCall), Is.False);
+            AssertUncommittedState(
+                staleFixture,
+                staleWindow,
+                staleCandidate,
+                expectedHandCount: 2,
+                expectedClaimCount: 0);
+
+            Fixture detachedFixture = CreateFixture("East", "West");
+            AddHandTiles(detachedFixture, "East", "5m", "5m");
+            object detachedWindow = BeginMeldCallWindow(detachedFixture, "West", "5m");
+            object detachedCandidate = detachedFixture.Reflection.InvokeStatic(
+                detachedFixture.ReactionWindowCandidateType,
+                "CreatePon",
+                detachedFixture.DataFactory.ParseSeat("East"),
+                detachedFixture.DataFactory.CreateTile("5m"));
+            object detachedPreparedCall = PreparePon(
+                detachedFixture,
+                detachedWindow,
+                detachedCandidate);
+
+            Assert.That(
+                TryCommitPreparedCall(detachedFixture, detachedWindow, detachedPreparedCall),
+                Is.False);
+            AssertUncommittedState(
+                detachedFixture,
+                detachedWindow,
+                detachedCandidate,
+                expectedHandCount: 2,
+                expectedClaimCount: 0);
+        }
+
+        [Test]
+        public void TryCommitMeldCall_RejectsInconsistentCallerAndSourceWithoutMutation()
+        {
+            Fixture fixture = CreateFixture("East", "South", "West");
+            AddHandTiles(fixture, "East", "5m", "5m");
+            object reactionWindow = BeginMeldCallWindow(fixture, "West", "5m");
+            object candidate = FindCandidate(fixture, reactionWindow, "Pon");
+            int sourceDiscardId = (int)fixture.Reflection.GetProperty(
+                fixture.Reflection.GetProperty(reactionWindow, "SourceDiscard"),
+                "Id");
+            object forgedOpenMeld = fixture.Reflection.CreateInstance(
+                fixture.Reflection.RequireType(OpenMeldTypeName),
+                Enum.Parse(fixture.Reflection.RequireType(OpenMeldKindTypeName), "Pon"),
+                fixture.DataFactory.CreateTileArray("5m", "5m", "5m"),
+                fixture.DataFactory.ParseSeat("South"),
+                fixture.DataFactory.ParseSeat("South"),
+                fixture.DataFactory.CreateTile("5m"),
+                sourceDiscardId);
+            object forgedPreparedCall = fixture.Reflection.CreateInstance(
+                fixture.Reflection.RequireType(PreparedMeldCallTypeName),
+                candidate,
+                fixture.DataFactory.CreateTileArray("5m", "5m"),
+                forgedOpenMeld);
+
+            Assert.That(TryCommitPreparedCall(fixture, reactionWindow, forgedPreparedCall), Is.False);
+            AssertUncommittedState(
+                fixture,
+                reactionWindow,
+                candidate,
+                expectedHandCount: 2,
+                expectedClaimCount: 0);
+        }
+
+        [Test]
+        public void TryCommitMeldCall_AppliesPonAndChiOnlyOnce()
+        {
+            Fixture ponFixture = CreateFixture("East", "West");
+            AddHandTiles(ponFixture, "East", "5m", "5m");
+            object ponWindow = BeginMeldCallWindow(ponFixture, "West", "5m");
+            object ponCandidate = FindCandidate(ponFixture, ponWindow, "Pon");
+            object ponPreparedCall = PreparePon(ponFixture, ponWindow, ponCandidate);
+
+            Assert.That(TryCommitPreparedCall(ponFixture, ponWindow, ponPreparedCall), Is.True);
+            AssertCommittedState(ponFixture, ponCandidate, "Pon");
+            Assert.That(TryCommitPreparedCall(ponFixture, ponWindow, ponPreparedCall), Is.False);
+            AssertCommittedState(ponFixture, ponCandidate, "Pon");
+
+            Fixture chiFixture = CreateFixture("East", "West");
+            AddHandTiles(chiFixture, "East", "3m", "4m");
+            object chiWindow = BeginMeldCallWindow(chiFixture, "West", "5m");
+            object chiCandidate = FindCandidate(chiFixture, chiWindow, "Chi");
+            object chiPreparedCall = PrepareChi(chiFixture, chiWindow, chiCandidate, 3);
+
+            Assert.That(TryCommitPreparedCall(chiFixture, chiWindow, chiPreparedCall), Is.True);
+            AssertCommittedState(chiFixture, chiCandidate, "Chi");
+            Assert.That(TryCommitPreparedCall(chiFixture, chiWindow, chiPreparedCall), Is.False);
+            AssertCommittedState(chiFixture, chiCandidate, "Chi");
+        }
+
+        [Test]
         public void AvailableKinds_HidesAllMeldCallsWhileRonIsPending()
         {
             Fixture fixture = CreateFixture("East", "West");
@@ -176,6 +351,123 @@ namespace MahjongPrototype.Tests
                 candidates);
 
             Assert.That(AvailableKinds(fixture, reactionWindow, "East"), Is.Empty);
+        }
+
+        private static object PreparePon(
+            Fixture fixture,
+            object reactionWindow,
+            object candidate)
+        {
+            object[] arguments =
+            {
+                fixture.GameState,
+                reactionWindow,
+                candidate,
+                null,
+                null
+            };
+            bool prepared = (bool)fixture.Reflection.Invoke(
+                fixture.Reflection.CreateInstance(
+                    fixture.Reflection.RequireType(PonServiceTypeName)),
+                "TryPrepareDeclaration",
+                arguments);
+            Assert.That(prepared, Is.True);
+            return arguments[3];
+        }
+
+        private static object PrepareChi(
+            Fixture fixture,
+            object reactionWindow,
+            object candidate,
+            int optionId)
+        {
+            object[] arguments =
+            {
+                fixture.GameState,
+                reactionWindow,
+                candidate,
+                optionId,
+                null,
+                null
+            };
+            bool prepared = (bool)fixture.Reflection.Invoke(
+                fixture.Reflection.CreateInstance(
+                    fixture.Reflection.RequireType(ChiServiceTypeName)),
+                "TryPrepareDeclaration",
+                arguments);
+            Assert.That(prepared, Is.True);
+            return arguments[4];
+        }
+
+        private static bool TryCommitPreparedCall(
+            Fixture fixture,
+            object reactionWindow,
+            object preparedCall)
+        {
+            object[] arguments = { reactionWindow, preparedCall, null };
+            return (bool)fixture.Reflection.Invoke(
+                fixture.GameState,
+                "TryCommitMeldCall",
+                arguments);
+        }
+
+        private static object FindCandidate(
+            Fixture fixture,
+            object reactionWindow,
+            string kindName)
+        {
+            object candidates = fixture.Reflection.GetProperty(reactionWindow, "Candidates");
+            for (int i = 0; i < fixture.Collections.Count(candidates); i++)
+            {
+                object candidate = fixture.Collections.Item(candidates, i);
+                if (fixture.Reflection.GetProperty(candidate, "Kind").ToString() == kindName)
+                    return candidate;
+            }
+
+            Assert.Fail($"Missing {kindName} candidate.");
+            return null;
+        }
+
+        private static void AssertUncommittedState(
+            Fixture fixture,
+            object reactionWindow,
+            object candidate,
+            int expectedHandCount,
+            int expectedClaimCount)
+        {
+            Assert.That(HandCount(fixture, "East"), Is.EqualTo(expectedHandCount));
+            Assert.That(OpenMeldCount(fixture, "East"), Is.EqualTo(0));
+            Assert.That(
+                fixture.Collections.Count(
+                    fixture.Reflection.GetProperty(fixture.GameState, "DiscardClaims")),
+                Is.EqualTo(expectedClaimCount));
+            Assert.That((bool)fixture.Reflection.GetProperty(fixture.GameState, "HasCallOccurred"), Is.False);
+            Assert.That(
+                fixture.Reflection.GetProperty(candidate, "ResponseState").ToString(),
+                Is.EqualTo("Pending"));
+            Assert.That(
+                fixture.Reflection.GetProperty(reactionWindow, "Candidates"),
+                Is.Not.Null);
+        }
+
+        private static void AssertCommittedState(
+            Fixture fixture,
+            object candidate,
+            string expectedMeldType)
+        {
+            Assert.That(HandCount(fixture, "East"), Is.EqualTo(0));
+            Assert.That(OpenMeldCount(fixture, "East"), Is.EqualTo(1));
+            Assert.That(
+                fixture.Reflection.GetProperty(OpenMeldAt(fixture, "East", 0), "Type").ToString(),
+                Is.EqualTo(expectedMeldType));
+            Assert.That(
+                fixture.Collections.Count(
+                    fixture.Reflection.GetProperty(fixture.GameState, "DiscardClaims")),
+                Is.EqualTo(1));
+            Assert.That((bool)fixture.Reflection.GetProperty(fixture.GameState, "HasCallOccurred"), Is.True);
+            Assert.That(
+                fixture.Reflection.GetProperty(candidate, "ResponseState").ToString(),
+                Is.EqualTo("Declared"));
         }
 
         private static void AssertRejectedWithoutMutation(

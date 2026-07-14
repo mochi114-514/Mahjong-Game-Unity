@@ -328,6 +328,76 @@ namespace MahjongPrototype.Domain
             return true;
         }
 
+        internal bool TryCommitMeldCall(
+            ReactionWindow expectedWindow,
+            PreparedMeldCall preparedCall,
+            out string reason)
+        {
+            reason = string.Empty;
+            if (!IsReactionWindowPending || reactionWindow == null ||
+                !ReferenceEquals(reactionWindow, expectedWindow) ||
+                !reactionWindow.IsAcceptingAnswers)
+            {
+                reason = "MeldCallWindowMissing";
+                return false;
+            }
+
+            if (preparedCall == null || preparedCall.Candidate == null ||
+                preparedCall.OpenMeld == null || preparedCall.HandTiles == null)
+            {
+                reason = "MeldCallCandidateMissing";
+                return false;
+            }
+
+            ReactionWindowCandidate candidate = preparedCall.Candidate;
+            OpenMeld openMeld = preparedCall.OpenMeld;
+            if (!ContainsPendingMeldCallCandidate(reactionWindow, candidate) ||
+                !IsPreparedMeldCallConsistent(
+                    reactionWindow.SourceDiscard,
+                    candidate,
+                    preparedCall.HandTiles,
+                    openMeld))
+            {
+                reason = "MeldCallStateChanged";
+                return false;
+            }
+
+            PlayerSeat playerSeat = GetPlayerSeat(candidate.Seat);
+            if (!playerSeat.CanAddOpenMeld(openMeld) ||
+                !playerSeat.Hand.ContainsTilesByValue(preparedCall.HandTiles))
+            {
+                reason = "MeldCallTilesMissing";
+                return false;
+            }
+
+            if (!CanClaimDiscard(
+                    openMeld.SourceDiscardId,
+                    openMeld.CallerSeat,
+                    openMeld.SourceSeat,
+                    openMeld.CalledTile))
+            {
+                reason = "MeldCallStateChanged";
+                return false;
+            }
+
+            // All failure conditions are checked above. This block contains only
+            // deterministic state writes and deliberately raises no notifications.
+            if (!playerSeat.Hand.TryRemoveTilesByValue(preparedCall.HandTiles))
+            {
+                reason = "MeldCallTilesMissing";
+                return false;
+            }
+
+            playerSeat.AddOpenMeld(openMeld);
+            discardClaims.Add(
+                openMeld.SourceDiscardId,
+                new DiscardClaim(openMeld.SourceDiscardId, openMeld.CallerSeat, openMeld));
+            HasCallOccurred = true;
+            candidate.Declare();
+            reactionWindow.CloseMeldCallsExcept(candidate);
+            return true;
+        }
+
         public void MarkCallOccurred()
         {
             HasCallOccurred = true;
@@ -630,6 +700,109 @@ namespace MahjongPrototype.Domain
         public bool RemoveActiveSkillEffect(ActiveSkillEffect effect)
         {
             return effect != null && activeSkillEffects.Remove(effect);
+        }
+
+        private static bool IsPreparedMeldCallConsistent(
+            DiscardRecord sourceDiscard,
+            ReactionWindowCandidate candidate,
+            IReadOnlyList<Tile> handTiles,
+            OpenMeld openMeld)
+        {
+            if (candidate == null || handTiles == null || handTiles.Count != 2 ||
+                openMeld == null || openMeld.CallerSeat != candidate.Seat ||
+                openMeld.SourceDiscardId != sourceDiscard.Id ||
+                openMeld.SourceSeat != sourceDiscard.ActorSeat ||
+                openMeld.CalledTile != sourceDiscard.Tile)
+            {
+                return false;
+            }
+
+            if (candidate.Kind == ReactionKind.Pon)
+            {
+                return candidate.PonDetail != null &&
+                    candidate.PonDetail.CalledTile == sourceDiscard.Tile &&
+                    openMeld.Type == OpenMeldType.Pon &&
+                    ContainsOnlyTile(handTiles, sourceDiscard.Tile) &&
+                    ContainsOnlyTile(openMeld.Tiles, sourceDiscard.Tile);
+            }
+
+            if (candidate.Kind != ReactionKind.Chi || candidate.ChiDetail == null ||
+                candidate.ChiDetail.CalledTile != sourceDiscard.Tile ||
+                openMeld.Type != OpenMeldType.Chi)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < candidate.ChiDetail.Options.Count; i++)
+            {
+                ChiOption option = candidate.ChiDetail.Options[i];
+                if (HasSameTileValues(option.HandTiles, handTiles) &&
+                    HasSameTileValues(option.MeldTiles, openMeld.Tiles))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool ContainsOnlyTile(IReadOnlyList<Tile> tiles, Tile expectedTile)
+        {
+            if (tiles == null || tiles.Count <= 0)
+                return false;
+
+            for (int i = 0; i < tiles.Count; i++)
+            {
+                if (tiles[i] != expectedTile)
+                    return false;
+            }
+
+            return true;
+        }
+
+        private static bool HasSameTileValues(
+            IReadOnlyList<Tile> firstTiles,
+            IReadOnlyList<Tile> secondTiles)
+        {
+            if (firstTiles == null || secondTiles == null || firstTiles.Count != secondTiles.Count)
+                return false;
+
+            for (int i = 0; i < firstTiles.Count; i++)
+            {
+                int firstCount = 0;
+                int secondCount = 0;
+                for (int j = 0; j < firstTiles.Count; j++)
+                {
+                    if (firstTiles[j] == firstTiles[i])
+                        firstCount++;
+                    if (secondTiles[j] == firstTiles[i])
+                        secondCount++;
+                }
+
+                if (firstCount != secondCount)
+                    return false;
+            }
+
+            return true;
+        }
+
+        private static bool ContainsPendingMeldCallCandidate(
+            ReactionWindow window,
+            ReactionWindowCandidate candidate)
+        {
+            if (candidate == null || !candidate.IsPending ||
+                (candidate.Kind != ReactionKind.Pon && candidate.Kind != ReactionKind.Chi))
+            {
+                return false;
+            }
+
+            for (int i = 0; i < window.Candidates.Count; i++)
+            {
+                if (ReferenceEquals(window.Candidates[i], candidate))
+                    return true;
+            }
+
+            return false;
         }
 
         private bool ContainsActiveTurnSeat(SeatId seat)

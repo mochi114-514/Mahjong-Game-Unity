@@ -106,10 +106,15 @@ namespace MahjongPrototype.Domain
         {
             if (openMeld == null)
                 throw new ArgumentNullException(nameof(openMeld));
-            if (openMeld.CallerSeat != SeatId)
+            if (!CanAddOpenMeld(openMeld))
                 throw new InvalidOperationException("Open meld caller seat must match its owner.");
 
             openMelds.Add(openMeld);
+        }
+
+        public bool CanAddOpenMeld(OpenMeld openMeld)
+        {
+            return openMeld != null && openMeld.CallerSeat == SeatId;
         }
     }
 }

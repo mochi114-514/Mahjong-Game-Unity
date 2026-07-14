@@ -57,6 +57,27 @@ namespace MahjongPrototype.Domain
 
         public bool TryRemoveTilesByValue(IReadOnlyList<Tile> requiredTiles)
         {
+            if (!ContainsTilesByValue(requiredTiles))
+                return false;
+
+            for (int requiredIndex = 0; requiredIndex < requiredTiles.Count; requiredIndex++)
+            {
+                Tile requiredTile = requiredTiles[requiredIndex];
+                for (int tileIndex = tiles.Count - 1; tileIndex >= 0; tileIndex--)
+                {
+                    if (tiles[tileIndex] != requiredTile)
+                        continue;
+
+                    tiles.RemoveAt(tileIndex);
+                    break;
+                }
+            }
+
+            return true;
+        }
+
+        public bool ContainsTilesByValue(IReadOnlyList<Tile> requiredTiles)
+        {
             if (requiredTiles == null || requiredTiles.Count <= 0)
                 return false;
 
@@ -82,19 +103,6 @@ namespace MahjongPrototype.Domain
 
                 if (matchingCount < requiredCount)
                     return false;
-            }
-
-            for (int requiredIndex = 0; requiredIndex < requiredTiles.Count; requiredIndex++)
-            {
-                Tile requiredTile = requiredTiles[requiredIndex];
-                for (int tileIndex = tiles.Count - 1; tileIndex >= 0; tileIndex--)
-                {
-                    if (tiles[tileIndex] != requiredTile)
-                        continue;
-
-                    tiles.RemoveAt(tileIndex);
-                    break;
-                }
             }
 
             return true;

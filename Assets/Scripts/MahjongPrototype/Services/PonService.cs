@@ -30,32 +30,6 @@ namespace MahjongPrototype.Services
             return candidates;
         }
 
-        public PonDeclarationResult TryDeclare(
-            MahjongGameState gameState,
-            ReactionWindow reactionWindow,
-            ReactionWindowCandidate candidate)
-        {
-            if (!TryPrepareDeclaration(
-                    gameState,
-                    reactionWindow,
-                    candidate,
-                    out PreparedMeldCall preparedCall,
-                    out string reason))
-            {
-                return PonDeclarationResult.Rejected(reason);
-            }
-
-            if (!MeldCallService.TryCommitPreparedCall(
-                    gameState,
-                    preparedCall,
-                    out reason))
-            {
-                return PonDeclarationResult.Rejected(reason);
-            }
-
-            return PonDeclarationResult.Succeeded(preparedCall.OpenMeld);
-        }
-
         internal bool TryPrepareDeclaration(
             MahjongGameState gameState,
             ReactionWindow reactionWindow,
@@ -127,27 +101,4 @@ namespace MahjongPrototype.Services
         }
     }
 
-    public readonly struct PonDeclarationResult
-    {
-        private PonDeclarationResult(bool declared, OpenMeld openMeld, string reason)
-        {
-            Declared = declared;
-            OpenMeld = openMeld;
-            Reason = reason ?? string.Empty;
-        }
-
-        public static PonDeclarationResult Succeeded(OpenMeld openMeld)
-        {
-            return new PonDeclarationResult(true, openMeld, string.Empty);
-        }
-
-        public static PonDeclarationResult Rejected(string reason)
-        {
-            return new PonDeclarationResult(false, null, reason);
-        }
-
-        public bool Declared { get; }
-        public OpenMeld OpenMeld { get; }
-        public string Reason { get; }
-    }
 }

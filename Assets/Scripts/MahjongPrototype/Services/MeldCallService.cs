@@ -120,11 +120,9 @@ namespace MahjongPrototype.Services
             if (!prepared)
                 return MeldCallDeclarationResult.Rejected(reason);
 
-            if (!TryCommitPreparedCall(gameState, preparedCall, out reason))
+            if (!gameState.TryCommitMeldCall(reactionWindow, preparedCall, out reason))
                 return MeldCallDeclarationResult.Rejected(reason);
 
-            candidate.Declare();
-            reactionWindow.CloseMeldCallsExcept(candidate);
             return MeldCallDeclarationResult.Succeeded(kind, candidate, preparedCall.OpenMeld);
         }
 
@@ -165,48 +163,6 @@ namespace MahjongPrototype.Services
             return declinedCandidate != null
                 ? MeldCallDeclineResult.Succeeded(declinedCandidate)
                 : MeldCallDeclineResult.Rejected("MeldCallCandidateMissing");
-        }
-
-        internal static bool TryCommitPreparedCall(
-            MahjongGameState gameState,
-            PreparedMeldCall preparedCall,
-            out string reason)
-        {
-            reason = string.Empty;
-            if (gameState == null || preparedCall == null || preparedCall.Candidate == null ||
-                preparedCall.OpenMeld == null || preparedCall.HandTiles == null)
-            {
-                reason = "MeldCallCandidateMissing";
-                return false;
-            }
-
-            OpenMeld openMeld = preparedCall.OpenMeld;
-            if (!gameState.CanClaimDiscard(
-                    openMeld.SourceDiscardId,
-                    openMeld.CallerSeat,
-                    openMeld.SourceSeat,
-                    openMeld.CalledTile))
-            {
-                reason = "MeldCallStateChanged";
-                return false;
-            }
-
-            PlayerSeat playerSeat = gameState.GetPlayerSeat(preparedCall.Candidate.Seat);
-            if (!playerSeat.Hand.TryRemoveTilesByValue(preparedCall.HandTiles))
-            {
-                reason = "MeldCallTilesMissing";
-                return false;
-            }
-
-            playerSeat.AddOpenMeld(openMeld);
-            if (!gameState.TryClaimDiscard(openMeld))
-            {
-                throw new InvalidOperationException(
-                    "A validated meld discard claim could not be recorded.");
-            }
-
-            gameState.MarkCallOccurred();
-            return true;
         }
 
         private static void AddCandidates(
