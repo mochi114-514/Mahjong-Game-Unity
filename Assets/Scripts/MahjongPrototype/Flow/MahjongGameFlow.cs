@@ -281,17 +281,21 @@ namespace MahjongPrototype
             string blockedEventName,
             bool warnOnBlocked)
         {
-            return gameState.TurnPhase == TurnPhase.WaitingForRinshanDraw
-                ? TryDrawRinshanForSeat(
+            if (gameState.TurnPhase == TurnPhase.WaitingForRinshanDraw)
+            {
+                return TryDrawRinshanForSeat(
                     seat,
                     completedEventName,
                     blockedEventName,
-                    warnOnBlocked)
-                : TryDrawForSeat(
-                    seat,
-                    completedEventName,
-                    blockedEventName,
-                    warnOnBlocked);
+                    warnOnBlocked,
+                    out _);
+            }
+
+            return TryDrawForSeat(
+                seat,
+                completedEventName,
+                blockedEventName,
+                warnOnBlocked);
         }
 
         private bool TryDrawForSeat(
@@ -789,6 +793,7 @@ namespace MahjongPrototype
                 tile: tile,
                 turnIndex: gameState.TurnIndex);
             EventPublisher.NotifyMeldDeclared(result.Meld);
+            TryAutoDrawRinshanAfterKan(actorSeat, "Ankan");
             return true;
         }
 
@@ -1089,6 +1094,8 @@ namespace MahjongPrototype
             if (!gameState.CompleteReactionWindowResolution(resolution.WindowId))
                 return false;
 
+            bool shouldAutoDrawRinshan =
+                resolution.Type == ReactionWindowResolutionType.DaiminkanDeclared;
             ApplyReactionWindowResolution(resolution);
             afterFinalStateEstablished?.Invoke();
             EventPublisher.NotifyTurnDebug(
@@ -1099,6 +1106,8 @@ namespace MahjongPrototype
                 turnIndex: resolution.SourceDiscard.TurnIndex);
             EventPublisher.NotifyReactionWindowResolved(resolution);
             EventPublisher.NotifyReactionWindowClosed(resolution.WindowId);
+            if (shouldAutoDrawRinshan && resolution.Candidate != null)
+                TryAutoDrawRinshanAfterKan(resolution.Candidate.Seat, "Daiminkan");
             return true;
         }
 
@@ -1106,14 +1115,17 @@ namespace MahjongPrototype
             SeatId seat,
             string completedEventName,
             string blockedEventName,
-            bool warnOnBlocked)
+            bool warnOnBlocked,
+            out string failureReason)
         {
+            failureReason = string.Empty;
             if (gameState.CurrentTurn != seat)
             {
                 if (warnOnBlocked)
                     Warn("Only the current seat can draw a rinshan tile.");
 
                 NotifyTurnBlocked(blockedEventName, "NotCurrentTurn");
+                failureReason = "NotCurrentTurn";
                 return false;
             }
 
@@ -1125,6 +1137,7 @@ namespace MahjongPrototype
                 gameState.TurnPhase != TurnPhase.WaitingForRinshanDraw)
             {
                 NotifyTurnBlocked(blockedEventName, "RinshanDrawUnavailable");
+                failureReason = "RinshanDrawUnavailable";
                 return false;
             }
 
@@ -1135,6 +1148,7 @@ namespace MahjongPrototype
             if (!result.Success)
             {
                 NotifyTurnBlocked(blockedEventName, "RinshanDrawUnavailable");
+                failureReason = result.Message;
                 return false;
             }
 
@@ -1150,6 +1164,26 @@ namespace MahjongPrototype
             EventPublisher.NotifyTileDrawn(result);
             ResolveAfterDraw(seat);
             return true;
+        }
+
+        private void TryAutoDrawRinshanAfterKan(SeatId seat, string kanType)
+        {
+            if (TryDrawRinshanForSeat(
+                    seat,
+                    "RinshanDrawCompleted",
+                    "RinshanDrawBlocked",
+                    false,
+                    out string failureReason))
+            {
+                return;
+            }
+
+            EventPublisher.NotifyTurnDebug(
+                "RinshanDrawFailed",
+                $"kan={kanType}; reason={failureReason}; phase={gameState?.TurnPhase}; currentTurn={gameState?.CurrentTurn}; liveWall={gameState?.Wall.Count}; rinshanRemaining={gameState?.Wall.RemainingRinshanTileCount}",
+                seat: seat,
+                turnIndex: gameState != null ? gameState.TurnIndex : 0);
+            EndRound(RoundLifecycleService.RoundEndReasonWallEmpty);
         }
 
         private void ApplyReactionWindowResolution(ReactionWindowResolution resolution)

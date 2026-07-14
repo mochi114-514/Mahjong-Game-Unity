@@ -1,5 +1,8 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq.Expressions;
+using System.Reflection;
 using MahjongPrototype.Tests.TestSupport.Core;
 using MahjongPrototype.Tests.TestSupport.Mahjong;
 using NUnit.Framework;
@@ -9,7 +12,7 @@ namespace MahjongPrototype.Tests
     public sealed class KanGameFlowTests
     {
         [Test]
-        public void DaiminkanCandidate_AppearsBesidePonAndCommitsOnceBeforeRinshanDraw()
+        public void DaiminkanCandidate_AppearsBesidePonAndAutoDrawsRinshanAfterReactionWindowCloses()
         {
             using (MahjongGameFlowTestSession session = CreateDaiminkanSession())
             {
@@ -18,7 +21,12 @@ namespace MahjongPrototype.Tests
                 int sourceDiscardId = session.Query.LastDiscardId;
                 int turnIndex = session.Query.TurnIndex;
                 int liveWallBefore = session.Query.WallCount;
+                int rinshanBefore = RemainingRinshanTileCount(session);
                 object sourcePlayerSeat = session.Query.GetPlayerSeat("West");
+                EventSequenceRecorder events = new EventSequenceRecorder(
+                    session.EventNotifier,
+                    "ReactionWindowClosed",
+                    "TileDrawn");
                 session.Reflection.Invoke(sourcePlayerSeat, "DeclareReach", turnIndex);
 
                 Assert.That(GetCandidateKinds(session), Does.Contain("Pon"));
@@ -28,19 +36,28 @@ namespace MahjongPrototype.Tests
                         sourcePlayerSeat,
                         "IsIppatsuEligible"),
                     Is.True);
-                Assert.That(
-                    session.Commands.TryRequestDeclareDaiminkanForSeat("East", windowId),
-                    Is.True);
+                try
+                {
+                    Assert.That(
+                        session.Commands.TryRequestDeclareDaiminkanForSeat("East", windowId),
+                        Is.True);
+                }
+                finally
+                {
+                    events.Dispose();
+                }
 
                 Assert.That(session.Query.CurrentTurnName, Is.EqualTo("East"));
                 Assert.That(session.Query.TurnIndex, Is.EqualTo(turnIndex + 1));
-                Assert.That(session.Query.TurnPhaseName, Is.EqualTo("WaitingForRinshanDraw"));
+                Assert.That(session.Query.IsReactionWindowPending, Is.False);
+                Assert.That(session.Query.TurnPhaseName, Is.EqualTo("WaitingForDiscard"));
                 Assert.That(session.Query.HandCount("East"), Is.EqualTo(10));
-                Assert.That(session.Query.HasDrawnTile("East"), Is.False);
+                Assert.That(session.Query.HasDrawnTile("East"), Is.True);
                 Assert.That(session.Query.MeldCount("East"), Is.EqualTo(1));
                 Assert.That(session.Query.IsClosed("East"), Is.False);
                 Assert.That(session.Query.TryGetDiscardClaim(sourceDiscardId, out _), Is.True);
-                Assert.That(session.Query.WallCount, Is.EqualTo(liveWallBefore));
+                Assert.That(session.Query.WallCount, Is.EqualTo(liveWallBefore - 1));
+                Assert.That(RemainingRinshanTileCount(session), Is.EqualTo(rinshanBefore - 1));
                 Assert.That(HasCallOccurred(session), Is.True);
                 Assert.That(
                     (bool)session.Reflection.GetProperty(
@@ -62,16 +79,33 @@ namespace MahjongPrototype.Tests
                 Assert.That(
                     GetCandidateResponseStates(session, reactionWindow),
                     Does.Contain("Declared"));
-
-                Assert.That(session.Commands.TryRequestDrawForSeat("East"), Is.True);
-                Assert.That(session.Query.WallCount, Is.EqualTo(liveWallBefore - 1));
-                Assert.That(session.Query.HasDrawnTile("East"), Is.True);
-                Assert.That(session.Query.TurnPhaseName, Is.EqualTo("WaitingForDiscard"));
+                Assert.That(events.Names, Is.EqualTo(new[] { "ReactionWindowClosed", "TileDrawn" }));
                 Assert.That(
                     session.Reflection.GetProperty(session.CurrentState, "LastTurnDraw"),
                     Is.Null,
                     "A rinshan draw must not be recorded as a normal last-live-wall draw.");
+                Assert.That(session.Commands.TryRequestDrawForSeat("East"), Is.False);
+                Assert.That(session.Query.WallCount, Is.EqualTo(liveWallBefore - 1));
+                Assert.That(RemainingRinshanTileCount(session), Is.EqualTo(rinshanBefore - 1));
                 Assert.That(session.Commands.TryRequestDiscardDrawnTileForSeat("East"), Is.True);
+            }
+        }
+
+        [Test]
+        public void Daiminkan_AutoRinshanAllowsHandDiscardWithoutExternalDrawRequest()
+        {
+            using (MahjongGameFlowTestSession session = CreateDaiminkanSession())
+            {
+                Assert.That(
+                    session.Commands.TryRequestDeclareDaiminkanForSeat(
+                        "East",
+                        session.Query.ReactionWindowId),
+                    Is.True);
+                int discardCountBefore = session.Query.DiscardCount;
+
+                session.Commands.RequestDiscard(0);
+
+                Assert.That(session.Query.DiscardCount, Is.EqualTo(discardCountBefore + 1));
             }
         }
 
@@ -185,7 +219,7 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void Ankan_UsesThreeHandTilesAndDrawnFourthThenKeepsTurnForRinshan()
+        public void Ankan_UsesThreeHandTilesAndDrawnFourthThenAutoDrawsRinshan()
         {
             using (MahjongGameFlowTestSession session = CreateSession(2))
             {
@@ -203,12 +237,13 @@ namespace MahjongPrototype.Tests
                     "2s", "6s", "9s");
                 session.DataFactory.SetDrawnTile(session.CurrentState, "East", "P");
                 int liveWallBefore = session.Query.WallCount;
+                int rinshanBefore = RemainingRinshanTileCount(session);
 
                 Assert.That(AnkanCandidateCodes(session), Is.EqualTo(new[] { "P" }));
                 Assert.That(session.Commands.TryRequestDeclareAnkanForSeat("East", "P"), Is.True);
 
                 Assert.That(session.Query.HandCount("East"), Is.EqualTo(10));
-                Assert.That(session.Query.HasDrawnTile("East"), Is.False);
+                Assert.That(session.Query.HasDrawnTile("East"), Is.True);
                 Assert.That(session.Query.MeldCount("East"), Is.EqualTo(1));
                 Assert.That(session.Query.IsClosed("East"), Is.True);
                 Assert.That(
@@ -217,8 +252,9 @@ namespace MahjongPrototype.Tests
                         "DiscardClaims")),
                     Is.EqualTo(0));
                 Assert.That(session.Query.CurrentTurnName, Is.EqualTo("East"));
-                Assert.That(session.Query.TurnPhaseName, Is.EqualTo("WaitingForRinshanDraw"));
-                Assert.That(session.Query.WallCount, Is.EqualTo(liveWallBefore));
+                Assert.That(session.Query.TurnPhaseName, Is.EqualTo("WaitingForDiscard"));
+                Assert.That(session.Query.WallCount, Is.EqualTo(liveWallBefore - 1));
+                Assert.That(RemainingRinshanTileCount(session), Is.EqualTo(rinshanBefore - 1));
                 Assert.That(HasCallOccurred(session), Is.True);
                 Assert.That(
                     (bool)session.Reflection.GetProperty(
@@ -231,10 +267,8 @@ namespace MahjongPrototype.Tests
                 Assert.That(session.Query.HandCount("East"), Is.EqualTo(10));
                 Assert.That(session.Query.MeldCount("East"), Is.EqualTo(1));
 
-                Assert.That(session.Commands.TryRequestDrawForSeat("East"), Is.True);
+                Assert.That(session.Commands.TryRequestDrawForSeat("East"), Is.False);
                 Assert.That(session.Query.WallCount, Is.EqualTo(liveWallBefore - 1));
-                Assert.That(session.Query.HasDrawnTile("East"), Is.True);
-                Assert.That(session.Query.TurnPhaseName, Is.EqualTo("WaitingForDiscard"));
                 Assert.That(session.Commands.TryRequestDiscardDrawnTileForSeat("East"), Is.True);
             }
         }
@@ -258,8 +292,13 @@ namespace MahjongPrototype.Tests
                 Assert.That(session.Query.HandCount("East"), Is.EqualTo(10));
                 Assert.That(CountHandTile(session, "East", "P"), Is.EqualTo(0));
                 Assert.That(CountHandTile(session, "East", "1m"), Is.EqualTo(1));
-                Assert.That(session.Query.HasDrawnTile("East"), Is.False);
-                Assert.That(session.Query.TurnPhaseName, Is.EqualTo("WaitingForRinshanDraw"));
+                Assert.That(session.Query.HasDrawnTile("East"), Is.True);
+                Assert.That(session.Query.TurnPhaseName, Is.EqualTo("WaitingForDiscard"));
+                int discardCountBefore = session.Query.DiscardCount;
+
+                session.Commands.RequestDiscard(0);
+
+                Assert.That(session.Query.DiscardCount, Is.EqualTo(discardCountBefore + 1));
             }
         }
 
@@ -333,7 +372,7 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void RinshanDraw_AfterAnkanRunsWinEvaluationBeforeDiscard()
+        public void Ankan_AutoRinshanRunsWinEvaluationBeforeDiscard()
         {
             using (MahjongGameFlowTestSession session = CreateSession(1))
             {
@@ -366,7 +405,6 @@ namespace MahjongPrototype.Tests
                 Assert.That(
                     session.Commands.TryRequestDeclareAnkanForSeat("East", ankanTileCode),
                     Is.True);
-                Assert.That(session.Commands.TryRequestDrawForSeat("East"), Is.True);
 
                 Assert.That(session.Query.TurnPhaseName, Is.EqualTo("WinDecision"));
                 Assert.That(session.Query.WallCount, Is.EqualTo(0));
@@ -494,6 +532,13 @@ namespace MahjongPrototype.Tests
             return count;
         }
 
+        private static int RemainingRinshanTileCount(MahjongGameFlowTestSession session)
+        {
+            return (int)session.Reflection.GetProperty(
+                session.Reflection.GetProperty(session.CurrentState, "Wall"),
+                "RemainingRinshanTileCount");
+        }
+
         private static void ClearLiveWall(MahjongGameFlowTestSession session, object wall)
         {
             ReduceLiveWallTo(session, wall, 0);
@@ -526,6 +571,82 @@ namespace MahjongPrototype.Tests
             string propertyName)
         {
             return session.Reflection.GetProperty(target, propertyName)?.ToString();
+        }
+
+        private sealed class EventSequenceRecorder : IDisposable
+        {
+            private readonly object eventSource;
+            private readonly List<string> names = new List<string>();
+            private readonly List<EventSubscription> subscriptions =
+                new List<EventSubscription>();
+
+            public EventSequenceRecorder(object eventSource, params string[] eventNames)
+            {
+                this.eventSource = eventSource;
+                for (int i = 0; i < eventNames.Length; i++)
+                    Subscribe(eventNames[i]);
+            }
+
+            public IReadOnlyList<string> Names => names;
+
+            public void Dispose()
+            {
+                for (int i = subscriptions.Count - 1; i >= 0; i--)
+                    subscriptions[i].EventInfo.RemoveEventHandler(
+                        eventSource,
+                        subscriptions[i].Handler);
+
+                subscriptions.Clear();
+            }
+
+            private void Subscribe(string eventName)
+            {
+                EventInfo eventInfo = eventSource.GetType().GetEvent(
+                    eventName,
+                    BindingFlags.Public | BindingFlags.Instance);
+                Assert.That(eventInfo, Is.Not.Null, $"Event not found: {eventName}");
+
+                ParameterInfo[] parameters = eventInfo.EventHandlerType
+                    .GetMethod("Invoke")
+                    .GetParameters();
+                ParameterExpression[] expressions = new ParameterExpression[parameters.Length];
+                for (int i = 0; i < parameters.Length; i++)
+                {
+                    expressions[i] = Expression.Parameter(
+                        parameters[i].ParameterType,
+                        parameters[i].Name);
+                }
+
+                MethodInfo record = GetType().GetMethod(
+                    nameof(Record),
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                Delegate handler = Expression.Lambda(
+                    eventInfo.EventHandlerType,
+                    Expression.Call(
+                        Expression.Constant(this),
+                        record,
+                        Expression.Constant(eventName)),
+                    expressions).Compile();
+                eventInfo.AddEventHandler(eventSource, handler);
+                subscriptions.Add(new EventSubscription(eventInfo, handler));
+            }
+
+            private void Record(string eventName)
+            {
+                names.Add(eventName);
+            }
+
+            private readonly struct EventSubscription
+            {
+                public EventSubscription(EventInfo eventInfo, Delegate handler)
+                {
+                    EventInfo = eventInfo;
+                    Handler = handler;
+                }
+
+                public EventInfo EventInfo { get; }
+                public Delegate Handler { get; }
+            }
         }
     }
 }
