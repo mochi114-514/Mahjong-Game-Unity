@@ -115,6 +115,32 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
                 reactionWindowId);
         }
 
+        public bool TryRequestDeclareDaiminkanForSeat(string seatName, int reactionWindowId)
+        {
+            return (bool)reflection.Invoke(
+                GameFlow,
+                "TryRequestDeclareDaiminkanForSeat",
+                dataFactory.ParseSeat(seatName),
+                reactionWindowId);
+        }
+
+        public bool TryRequestDeclareAnkanForSeat(string seatName, string tileCode)
+        {
+            return (bool)reflection.Invoke(
+                GameFlow,
+                "TryRequestDeclareAnkanForSeat",
+                dataFactory.ParseSeat(seatName),
+                dataFactory.CreateTile(tileCode));
+        }
+
+        public object GetAnkanCandidatesForSeat(string seatName)
+        {
+            return reflection.Invoke(
+                GameFlow,
+                "GetAnkanCandidatesForSeat",
+                dataFactory.ParseSeat(seatName));
+        }
+
         public bool TryRequestDeclareChiForSeat(
             string seatName,
             int reactionWindowId,

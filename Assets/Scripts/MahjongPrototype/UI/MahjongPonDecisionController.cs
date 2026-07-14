@@ -16,19 +16,29 @@ namespace MahjongPrototype.UI
         [SerializeField] private Button declineButton;
         [SerializeField] private MahjongUiInputController inputController;
 
-        private readonly List<Button> chiOptionButtons = new List<Button>();
+        private readonly List<Button> dynamicMeldButtons = new List<Button>();
         private bool warnedMissingRoot;
         private bool warnedMissingPonButton;
         private bool warnedMissingInputController;
 
         public void SetPonDecision(bool visible, Tile? calledTile)
         {
-            SetMeldCallDecision(visible, null, calledTile);
+            SetMeldCallDecision(visible, false, null, null, calledTile);
         }
 
         public void SetMeldCallDecision(
             bool showPon,
             IReadOnlyList<ChiOption> chiOptions,
+            Tile? calledTile)
+        {
+            SetMeldCallDecision(showPon, false, chiOptions, null, calledTile);
+        }
+
+        public void SetMeldCallDecision(
+            bool showPon,
+            bool showDaiminkan,
+            IReadOnlyList<ChiOption> chiOptions,
+            IReadOnlyList<Tile> ankanCandidates,
             Tile? calledTile)
         {
             if (ponDecisionRoot == null)
@@ -37,19 +47,23 @@ namespace MahjongPrototype.UI
                 return;
             }
 
-            ClearChiOptionButtons();
+            ClearDynamicMeldButtons();
             bool showChi = chiOptions != null && chiOptions.Count > 0;
-            bool visible = showPon || showChi;
+            bool showAnkan = ankanCandidates != null && ankanCandidates.Count > 0;
+            bool showReactionDecision = showPon || showDaiminkan || showChi;
+            bool visible = showReactionDecision || showAnkan;
             ponDecisionRoot.SetActive(visible);
-            SetStaticButtonVisibility(showPon, visible);
+            SetStaticButtonVisibility(showPon, showReactionDecision);
             if (decisionLabel != null)
             {
                 decisionLabel.text = visible && calledTile.HasValue
                     ? $"鳴き {calledTile.Value}"
-                    : string.Empty;
+                    : showAnkan
+                        ? "暗槓"
+                        : string.Empty;
             }
 
-            if (!showChi)
+            if (!showDaiminkan && !showChi && !showAnkan)
                 return;
 
             if (ponButton == null)
@@ -68,11 +82,21 @@ namespace MahjongPrototype.UI
                 return;
             }
 
-            for (int i = 0; i < chiOptions.Count; i++)
-                CreateChiOptionButton(chiOptions[i]);
+            if (showDaiminkan)
+                CreateMeldButton("Daiminkan", "大明槓", MeldCallKind.Kan, 0);
+            if (showChi)
+            {
+                for (int i = 0; i < chiOptions.Count; i++)
+                    CreateChiOptionButton(chiOptions[i]);
+            }
+            if (showAnkan)
+            {
+                for (int i = 0; i < ankanCandidates.Count; i++)
+                    CreateAnkanButton(ankanCandidates[i]);
+            }
         }
 
-        private void SetStaticButtonVisibility(bool showPon, bool visible)
+        private void SetStaticButtonVisibility(bool showPon, bool showDecline)
         {
             if (ponButton != null)
                 ponButton.gameObject.SetActive(showPon);
@@ -80,7 +104,7 @@ namespace MahjongPrototype.UI
                 WarnMissingOnce(ref warnedMissingPonButton, "PonButton is not assigned.");
 
             if (declineButton != null)
-                declineButton.gameObject.SetActive(visible);
+                declineButton.gameObject.SetActive(showDecline);
         }
 
         private void CreateChiOptionButton(ChiOption option)
@@ -88,24 +112,48 @@ namespace MahjongPrototype.UI
             if (option == null)
                 return;
 
+            CreateMeldButton(
+                $"ChiOption_{option.OptionId}",
+                $"チー {FormatTiles(option.MeldTiles)}",
+                MeldCallKind.Chi,
+                option.OptionId);
+        }
+
+        private void CreateAnkanButton(Tile tile)
+        {
+            if (!tile.IsValid)
+                return;
+
+            CreateMeldButton(
+                $"Ankan_{tile.TypeIndex}",
+                $"暗槓 {tile}",
+                MeldCallKind.Kan,
+                tile.TypeIndex);
+        }
+
+        private void CreateMeldButton(
+            string buttonName,
+            string label,
+            MeldCallKind kind,
+            int optionId)
+        {
             Button button = Instantiate(ponButton, ponButton.transform.parent);
-            int optionId = option.OptionId;
-            button.name = $"ChiOption_{optionId}";
+            button.name = buttonName;
             if (declineButton != null)
                 button.transform.SetSiblingIndex(declineButton.transform.GetSiblingIndex());
             button.onClick.RemoveAllListeners();
             button.onClick.AddListener(
-                () => inputController.RequestMeldCall(MeldCallKind.Chi, optionId));
+                () => inputController.RequestMeldCall(kind, optionId));
             button.gameObject.SetActive(true);
-            SetButtonLabel(button, $"チー {FormatTiles(option.MeldTiles)}");
-            chiOptionButtons.Add(button);
+            SetButtonLabel(button, label);
+            dynamicMeldButtons.Add(button);
         }
 
-        private void ClearChiOptionButtons()
+        private void ClearDynamicMeldButtons()
         {
-            for (int i = chiOptionButtons.Count - 1; i >= 0; i--)
+            for (int i = dynamicMeldButtons.Count - 1; i >= 0; i--)
             {
-                Button button = chiOptionButtons[i];
+                Button button = dynamicMeldButtons[i];
                 if (button == null)
                     continue;
 
@@ -116,7 +164,7 @@ namespace MahjongPrototype.UI
                     DestroyImmediate(button.gameObject);
             }
 
-            chiOptionButtons.Clear();
+            dynamicMeldButtons.Clear();
         }
 
         private static void SetButtonLabel(Button button, string label)

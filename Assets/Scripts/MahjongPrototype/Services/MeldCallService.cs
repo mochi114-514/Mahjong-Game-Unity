@@ -8,16 +8,26 @@ namespace MahjongPrototype.Services
     {
         private readonly PonService ponService;
         private readonly ChiService chiService;
+        private readonly KanService kanService;
 
         public MeldCallService()
-            : this(new PonService(), new ChiService())
+            : this(new PonService(), new ChiService(), new KanService())
         {
         }
 
         public MeldCallService(PonService ponService, ChiService chiService)
+            : this(ponService, chiService, new KanService())
+        {
+        }
+
+        public MeldCallService(
+            PonService ponService,
+            ChiService chiService,
+            KanService kanService)
         {
             this.ponService = ponService ?? throw new ArgumentNullException(nameof(ponService));
             this.chiService = chiService ?? throw new ArgumentNullException(nameof(chiService));
+            this.kanService = kanService ?? throw new ArgumentNullException(nameof(kanService));
         }
 
         public IReadOnlyList<ReactionWindowCandidate> CollectCandidates(
@@ -27,6 +37,7 @@ namespace MahjongPrototype.Services
             List<ReactionWindowCandidate> candidates =
                 new List<ReactionWindowCandidate>();
             AddCandidates(candidates, ponService.CollectCandidates(gameState, sourceDiscard));
+            AddCandidates(candidates, kanService.CollectDaiminkanCandidates(gameState, sourceDiscard));
             AddCandidates(candidates, chiService.CollectCandidates(gameState, sourceDiscard));
             return candidates;
         }
@@ -41,15 +52,25 @@ namespace MahjongPrototype.Services
                 return kinds;
 
             bool hasAnyPendingPon = HasPendingCandidate(reactionWindow, ReactionKind.Pon);
+            bool hasAnyPendingDaiminkan = HasPendingCandidate(
+                reactionWindow,
+                ReactionKind.Daiminkan);
             bool hasSeatPendingPon = HasPendingCandidate(
                 reactionWindow,
                 seat,
                 ReactionKind.Pon);
+            bool hasSeatPendingDaiminkan = HasPendingCandidate(
+                reactionWindow,
+                seat,
+                ReactionKind.Daiminkan);
             if (hasSeatPendingPon)
                 kinds.Add(MeldCallKind.Pon);
+            if (hasSeatPendingDaiminkan)
+                kinds.Add(MeldCallKind.Kan);
 
             if (HasPendingCandidate(reactionWindow, seat, ReactionKind.Chi) &&
-                (!hasAnyPendingPon || hasSeatPendingPon))
+                ((!hasAnyPendingPon && !hasAnyPendingDaiminkan) ||
+                    hasSeatPendingPon || hasSeatPendingDaiminkan))
             {
                 kinds.Add(MeldCallKind.Chi);
             }
@@ -84,6 +105,9 @@ namespace MahjongPrototype.Services
                 case MeldCallKind.Chi:
                     reactionKind = ReactionKind.Chi;
                     break;
+                case MeldCallKind.Kan:
+                    reactionKind = ReactionKind.Daiminkan;
+                    break;
                 default:
                     return MeldCallDeclarationResult.Rejected("MeldCallKindUnsupported");
             }
@@ -107,13 +131,22 @@ namespace MahjongPrototype.Services
                     out preparedCall,
                     out reason);
             }
-            else
+            else if (kind == MeldCallKind.Chi)
             {
                 prepared = chiService.TryPrepareDeclaration(
                     gameState,
                     reactionWindow,
                     candidate,
                     chiOptionId,
+                    out preparedCall,
+                    out reason);
+            }
+            else
+            {
+                prepared = kanService.TryPrepareDaiminkanDeclaration(
+                    gameState,
+                    reactionWindow,
+                    candidate,
                     out preparedCall,
                     out reason);
             }
@@ -238,6 +271,9 @@ namespace MahjongPrototype.Services
                     return true;
                 case ReactionKind.Chi:
                     kind = MeldCallKind.Chi;
+                    return true;
+                case ReactionKind.Daiminkan:
+                    kind = MeldCallKind.Kan;
                     return true;
                 default:
                     kind = default;

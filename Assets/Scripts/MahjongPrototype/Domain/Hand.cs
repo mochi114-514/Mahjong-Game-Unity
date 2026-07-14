@@ -9,6 +9,21 @@ namespace MahjongPrototype.Domain
 
         public int Count => tiles.Count;
 
+        public int CountTilesByValue(Tile tile)
+        {
+            if (!tile.IsValid)
+                return 0;
+
+            int count = 0;
+            for (int i = 0; i < tiles.Count; i++)
+            {
+                if (tiles[i] == tile)
+                    count++;
+            }
+
+            return count;
+        }
+
         public void Add(Tile tile)
         {
             tiles.Add(tile);

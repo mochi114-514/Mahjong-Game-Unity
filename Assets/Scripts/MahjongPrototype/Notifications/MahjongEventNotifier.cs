@@ -20,6 +20,7 @@ namespace MahjongPrototype.Notifications
         public event Action<ReactionWindowAnswerResult> ReactionWindowAnswered;
         public event Action<ReactionWindowResolution> ReactionWindowResolved;
         public event Action<int> ReactionWindowClosed;
+        public event Action<PlayerMeld> MeldDeclared;
         public event Action<SeatId, ActiveSkillEffect> SkillActivated;
         public event Action<ActiveSkillEffect> SkillEffectRegistered;
         public event Action<DrawResult> SkillEffectResolved;
@@ -77,13 +78,13 @@ namespace MahjongPrototype.Notifications
 
         public void NotifyTurnStarted(SeatId seat, int turnIndex)
         {
-            TurnStarted?.Invoke(seat, turnIndex);
+            NotifySubscribers(TurnStarted, seat, turnIndex, nameof(TurnStarted));
             NotifyAny();
         }
 
         public void NotifyTileDrawn(DrawResult drawResult)
         {
-            TileDrawn?.Invoke(drawResult);
+            NotifyReactionSubscribers(TileDrawn, drawResult, nameof(TileDrawn));
             NotifyAny();
         }
 
@@ -114,6 +115,12 @@ namespace MahjongPrototype.Notifications
         public void NotifyReactionWindowClosed(int windowId)
         {
             NotifyReactionSubscribers(ReactionWindowClosed, windowId, nameof(ReactionWindowClosed));
+            NotifyAny();
+        }
+
+        public void NotifyMeldDeclared(PlayerMeld meld)
+        {
+            NotifyReactionSubscribers(MeldDeclared, meld, nameof(MeldDeclared));
             NotifyAny();
         }
 
@@ -232,7 +239,14 @@ namespace MahjongPrototype.Notifications
             Tile? tile = null,
             int? turnIndex = null)
         {
-            TurnDebug?.Invoke(eventName, message, seat, tile, turnIndex);
+            NotifySubscribers(
+                TurnDebug,
+                eventName,
+                message,
+                seat,
+                tile,
+                turnIndex,
+                nameof(TurnDebug));
             NotifyAny();
         }
 
@@ -360,6 +374,68 @@ namespace MahjongPrototype.Notifications
                     Debug.LogException(
                         new InvalidOperationException(
                             $"Reaction notification subscriber failed. Event={notificationName}",
+                            exception),
+                        this);
+                }
+            }
+        }
+
+        private void NotifySubscribers<TFirst, TSecond>(
+            Action<TFirst, TSecond> notification,
+            TFirst first,
+            TSecond second,
+            string notificationName)
+        {
+            if (notification == null)
+                return;
+
+            Delegate[] subscribers = notification.GetInvocationList();
+            for (int i = 0; i < subscribers.Length; i++)
+            {
+                try
+                {
+                    ((Action<TFirst, TSecond>)subscribers[i])(first, second);
+                }
+                catch (Exception exception)
+                {
+                    Debug.LogException(
+                        new InvalidOperationException(
+                            $"Notification subscriber failed. Event={notificationName}",
+                            exception),
+                        this);
+                }
+            }
+        }
+
+        private void NotifySubscribers<TFirst, TSecond, TThird, TFourth, TFifth>(
+            Action<TFirst, TSecond, TThird, TFourth, TFifth> notification,
+            TFirst first,
+            TSecond second,
+            TThird third,
+            TFourth fourth,
+            TFifth fifth,
+            string notificationName)
+        {
+            if (notification == null)
+                return;
+
+            Delegate[] subscribers = notification.GetInvocationList();
+            for (int i = 0; i < subscribers.Length; i++)
+            {
+                try
+                {
+                    ((Action<TFirst, TSecond, TThird, TFourth, TFifth>)subscribers[i])(
+                        first,
+                        second,
+                        third,
+                        fourth,
+                        fifth);
+                }
+                catch (Exception exception)
+                {
+                    Debug.LogException(
+                        new InvalidOperationException(
+                            $"Notification subscriber failed. Event={notificationName}",
                             exception),
                         this);
                 }

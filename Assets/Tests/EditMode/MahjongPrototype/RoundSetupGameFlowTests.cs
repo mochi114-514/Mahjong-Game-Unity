@@ -62,7 +62,7 @@ namespace MahjongPrototype.Tests
                     "SeatSlotsAssigned",
                     "RoundStarted"
                 };
-                for (int i = 0; i < 136; i++)
+                for (int i = 0; i < 122; i++)
                     expectedEvents.Add("TileDrawn");
 
                 expectedEvents.Add("RoundEnded");

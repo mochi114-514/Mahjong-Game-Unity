@@ -578,6 +578,92 @@ namespace MahjongPrototype.Tests
             }
         }
 
+        [Test]
+        public void RenderOpenMelds_DaiminkanAndAnkanRenderFourTilesWithOnlyCalledKanTileRotated()
+        {
+            GameObject root = new GameObject("OpenMeldKanLayoutTest");
+            GameObject prefab = new GameObject("Tile3DPrefab");
+            try
+            {
+                object view = root.AddComponent(Type.GetType(Mahjong3DOpenMeldViewTypeName, true));
+                object tilePrefab = prefab.AddComponent(Type.GetType(Mahjong3DTileViewTypeName, true));
+                SetPrivateField(view, "tilePrefab", tilePrefab);
+
+                IList melds = CreateList(RequireType(PlayerMeldTypeName));
+                melds.Add(CreateDiscardDerivedMeld(
+                    "Daiminkan",
+                    "5m 5m 5m 5m",
+                    "5m",
+                    1,
+                    "East",
+                    "South"));
+                melds.Add(CreateAnkan("P", "East"));
+                Invoke(view, "RenderOpenMelds", melds);
+
+                Component[] tileViews = GetTileViews(root);
+                Assert.That(tileViews.Length, Is.EqualTo(8));
+                for (int tileIndex = 0; tileIndex < 4; tileIndex++)
+                {
+                    if (tileIndex == 2)
+                        AssertHorizontal(tileViews[tileIndex]);
+                    else
+                        AssertVertical(tileViews[tileIndex]);
+                }
+                for (int tileIndex = 4; tileIndex < 8; tileIndex++)
+                    AssertVertical(tileViews[tileIndex]);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(prefab);
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void RenderOpenMelds_ThreeAndFourTileBlocksKeepFirstAnchorAndMeldSpacing()
+        {
+            GameObject root = new GameObject("OpenMeldMixedWidthSpacingTest");
+            GameObject prefab = new GameObject("Tile3DPrefab");
+            try
+            {
+                object view = root.AddComponent(Type.GetType(Mahjong3DOpenMeldViewTypeName, true));
+                object tilePrefab = prefab.AddComponent(Type.GetType(Mahjong3DTileViewTypeName, true));
+                SetPrivateField(view, "tilePrefab", tilePrefab);
+                SetPrivateField(view, "verticalTileSpacing", 2f);
+                SetPrivateField(view, "horizontalTileSpacing", 1f);
+                SetPrivateField(view, "meldSpacing", 3f);
+
+                IList melds = CreateList(RequireType(PlayerMeldTypeName));
+                melds.Add(CreateDiscardDerivedMeld(
+                    "Pon",
+                    "6m 6m 6m",
+                    "6m",
+                    1,
+                    "East",
+                    "West"));
+                melds.Add(CreateAnkan("P", "East"));
+                Invoke(view, "RenderOpenMelds", melds);
+
+                Component[] tileViews = GetTileViews(root);
+                Assert.That(tileViews.Length, Is.EqualTo(7));
+                Assert.That(tileViews[2].transform.localPosition.x, Is.EqualTo(0f).Within(0.0001f));
+                Assert.That(tileViews[0].transform.localPosition.x, Is.EqualTo(-3f).Within(0.0001f));
+                Assert.That(tileViews[3].transform.localPosition.x, Is.EqualTo(-14f).Within(0.0001f));
+                Assert.That(tileViews[6].transform.localPosition.x, Is.EqualTo(-8f).Within(0.0001f));
+                Assert.That(
+                    tileViews[0].transform.localPosition.x - 1f,
+                    Is.EqualTo(-4f).Within(0.0001f));
+                Assert.That(
+                    tileViews[6].transform.localPosition.x + 1f,
+                    Is.EqualTo(-7f).Within(0.0001f));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(prefab);
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
         private static object CreateDiscard(int id, string seatName, string tileCode, int turnIndex = 1)
         {
             return Activator.CreateInstance(
@@ -621,6 +707,22 @@ namespace MahjongPrototype.Tests
                     Seat(sourceSeatName),
                     CreateTile(calledTileCode),
                     (object)sourceDiscardId
+                });
+        }
+
+        private static object CreateAnkan(string tileCode, string ownerSeatName)
+        {
+            Type playerMeldType = RequireType(PlayerMeldTypeName);
+            MethodInfo factory = playerMeldType.GetMethod(
+                "CreateAnkan",
+                BindingFlags.Public | BindingFlags.Static);
+            Assert.That(factory, Is.Not.Null);
+            return factory.Invoke(
+                null,
+                new[]
+                {
+                    CreateTiles($"{tileCode} {tileCode} {tileCode} {tileCode}"),
+                    Seat(ownerSeatName)
                 });
         }
 

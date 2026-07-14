@@ -198,21 +198,29 @@ namespace MahjongPrototype.UI
             gameFlow.RequestDeclineWin();
         }
 
-        private void HandleMeldCallRequested(MeldCallKind kind, int chiOptionId)
+        private void HandleMeldCallRequested(MeldCallKind kind, int optionId)
         {
             if (!TryGetGameFlow("Cannot respond to a meld call because MahjongGameFlow is not assigned."))
                 return;
 
             MahjongGameState state = gameFlow.CurrentState;
             ReactionWindow reactionWindow = state != null ? state.CurrentReactionWindow : null;
-            if (state == null || reactionWindow == null)
+            if (state == null)
                 return;
+
+            if (reactionWindow == null)
+            {
+                if (kind == MeldCallKind.Kan)
+                    gameFlow.TryRequestDeclareAnkanForSeat(state.SelfSeat, optionId);
+
+                return;
+            }
 
             gameFlow.TryRequestDeclareMeldCallForSeat(
                 state.SelfSeat,
                 reactionWindow.WindowId,
                 kind,
-                chiOptionId);
+                optionId);
         }
 
         private void HandleDeclineMeldCallsRequested()

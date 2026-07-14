@@ -96,6 +96,11 @@ namespace MahjongPrototype.Notifications
             notifierProvider()?.NotifyReactionWindowClosed(windowId);
         }
 
+        public void NotifyMeldDeclared(PlayerMeld meld)
+        {
+            notifierProvider()?.NotifyMeldDeclared(meld);
+        }
+
         public void NotifySkillActivated(SeatId actorSeat, ActiveSkillEffect effect)
         {
             notifierProvider()?.NotifySkillActivated(actorSeat, effect);

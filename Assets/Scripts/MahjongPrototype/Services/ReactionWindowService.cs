@@ -11,14 +11,14 @@ namespace MahjongPrototype.Services
         private readonly MeldCallService meldCallService;
 
         public ReactionWindowService(WinDecisionService winDecisionService)
-            : this(winDecisionService, new PonService(), new ChiService())
+            : this(winDecisionService, new PonService(), new ChiService(), new KanService())
         {
         }
 
         public ReactionWindowService(
             WinDecisionService winDecisionService,
             PonService ponService)
-            : this(winDecisionService, ponService, new ChiService())
+            : this(winDecisionService, ponService, new ChiService(), new KanService())
         {
         }
 
@@ -26,13 +26,23 @@ namespace MahjongPrototype.Services
             WinDecisionService winDecisionService,
             PonService ponService,
             ChiService chiService)
+            : this(winDecisionService, ponService, chiService, new KanService())
+        {
+        }
+
+        public ReactionWindowService(
+            WinDecisionService winDecisionService,
+            PonService ponService,
+            ChiService chiService,
+            KanService kanService)
         {
             this.winDecisionService = winDecisionService ??
                 throw new ArgumentNullException(nameof(winDecisionService));
             this.ponService = ponService ?? throw new ArgumentNullException(nameof(ponService));
             meldCallService = new MeldCallService(
                 this.ponService,
-                chiService ?? throw new ArgumentNullException(nameof(chiService)));
+                chiService ?? throw new ArgumentNullException(nameof(chiService)),
+                kanService ?? throw new ArgumentNullException(nameof(kanService)));
         }
 
         public ReactionWindowStartResult Begin(
@@ -155,6 +165,19 @@ namespace MahjongPrototype.Services
                 optionId);
         }
 
+        public ReactionWindowAnswerResult DeclareDaiminkan(
+            MahjongGameState gameState,
+            SeatId seat,
+            int windowId)
+        {
+            return DeclareCall(
+                gameState,
+                seat,
+                windowId,
+                MeldCallKind.Kan,
+                0);
+        }
+
         public ReactionWindowAnswerResult DeclareCall(
             MahjongGameState gameState,
             SeatId seat,
@@ -185,17 +208,33 @@ namespace MahjongPrototype.Services
             if (!result.Declared)
                 return ReactionWindowAnswerResult.Rejected(result.Reason);
 
-            ReactionWindowResolution resolution = kind == MeldCallKind.Pon
-                ? ReactionWindowResolution.PonDeclared(
-                    reactionWindow.WindowId,
-                    reactionWindow.SourceDiscard,
-                    result.Candidate,
-                    result.Meld)
-                : ReactionWindowResolution.ChiDeclared(
-                    reactionWindow.WindowId,
-                    reactionWindow.SourceDiscard,
-                    result.Candidate,
-                    result.Meld);
+            ReactionWindowResolution resolution;
+            switch (kind)
+            {
+                case MeldCallKind.Pon:
+                    resolution = ReactionWindowResolution.PonDeclared(
+                        reactionWindow.WindowId,
+                        reactionWindow.SourceDiscard,
+                        result.Candidate,
+                        result.Meld);
+                    break;
+                case MeldCallKind.Chi:
+                    resolution = ReactionWindowResolution.ChiDeclared(
+                        reactionWindow.WindowId,
+                        reactionWindow.SourceDiscard,
+                        result.Candidate,
+                        result.Meld);
+                    break;
+                case MeldCallKind.Kan:
+                    resolution = ReactionWindowResolution.DaiminkanDeclared(
+                        reactionWindow.WindowId,
+                        reactionWindow.SourceDiscard,
+                        result.Candidate,
+                        result.Meld);
+                    break;
+                default:
+                    return ReactionWindowAnswerResult.Rejected("MeldCallKindUnsupported");
+            }
             BeginResolutionIfNeeded(reactionWindow, resolution);
             return ReactionWindowAnswerResult.AcceptedAnswer(
                 reactionWindow.WindowId,

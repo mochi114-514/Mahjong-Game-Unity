@@ -57,6 +57,7 @@ namespace MahjongPrototype.Logging
             eventNotifier.ReactionWindowAnswered += HandleReactionWindowAnswered;
             eventNotifier.ReactionWindowResolved += HandleReactionWindowResolved;
             eventNotifier.ReactionWindowClosed += HandleReactionWindowClosed;
+            eventNotifier.MeldDeclared += HandleMeldDeclared;
             eventNotifier.RoundEnded += HandleRoundEnded;
             eventNotifier.SeatSlotsAssigned += HandleSeatSlotsAssigned;
             eventNotifier.TurnDebug += HandleTurnDebug;
@@ -89,6 +90,7 @@ namespace MahjongPrototype.Logging
             eventNotifier.ReactionWindowAnswered -= HandleReactionWindowAnswered;
             eventNotifier.ReactionWindowResolved -= HandleReactionWindowResolved;
             eventNotifier.ReactionWindowClosed -= HandleReactionWindowClosed;
+            eventNotifier.MeldDeclared -= HandleMeldDeclared;
             eventNotifier.RoundEnded -= HandleRoundEnded;
             eventNotifier.SeatSlotsAssigned -= HandleSeatSlotsAssigned;
             eventNotifier.TurnDebug -= HandleTurnDebug;
@@ -141,16 +143,34 @@ namespace MahjongPrototype.Logging
 
         private void HandleTileDrawn(DrawResult result)
         {
+            MahjongGameState state = GetCurrentState();
             DevLog.Record(
                 "Mahjong",
                 "TileDrawn",
-                $"source={result.Source}; purpose={result.Purpose}; {result.Message}",
+                $"source={result.Source}; purpose={result.Purpose}; {result.Message}; deadWall={state?.Wall.DeadWallCount}; rinshanRemaining={state?.Wall.RemainingRinshanTileCount}",
                 seat: result.Seat,
                 tile: result.Tile,
                 hand: GetHandText(result.Seat),
                 wallCount: result.WallCountAfterDraw,
                 turnIndex: GetTurnIndex(),
                 activeSkill: result.ResolvedSkillEffect != null ? result.ResolvedSkillEffect.ToLogText() : null);
+        }
+
+        private void HandleMeldDeclared(PlayerMeld meld)
+        {
+            if (meld == null)
+                return;
+
+            MahjongGameState state = GetCurrentState();
+            DevLog.Record(
+                "Mahjong",
+                $"{meld.Type}Declared",
+                $"caller={meld.OwnerSeat}; sourceSeat={meld.SourceSeat}; sourceDiscardId={meld.SourceDiscardId}; liveWall={state?.Wall.Count}; deadWall={state?.Wall.DeadWallCount}; rinshanRemaining={state?.Wall.RemainingRinshanTileCount}",
+                seat: meld.OwnerSeat,
+                tile: meld.PhysicalTiles.Count > 0 ? meld.PhysicalTiles[0] : (Tile?)null,
+                hand: GetHandText(meld.OwnerSeat),
+                wallCount: GetWallCount(),
+                turnIndex: GetTurnIndex());
         }
 
         private void HandleTileDiscarded(DiscardRecord record)

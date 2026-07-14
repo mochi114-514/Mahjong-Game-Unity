@@ -5,14 +5,27 @@ namespace MahjongPrototype.Domain
 {
     public sealed class Wall
     {
-        private readonly List<Tile> tiles;
+        private const int DeadWallTileCount = 14;
+        private const int RinshanTileCount = 4;
 
-        private Wall(List<Tile> tiles)
+        private readonly List<Tile> tiles;
+        private readonly List<Tile> deadWallTiles;
+        private int remainingRinshanTileCount;
+
+        private Wall(List<Tile> tiles, List<Tile> deadWallTiles)
         {
             this.tiles = tiles ?? throw new ArgumentNullException(nameof(tiles));
+            this.deadWallTiles = deadWallTiles ?? throw new ArgumentNullException(nameof(deadWallTiles));
+            if (deadWallTiles.Count != DeadWallTileCount)
+                throw new ArgumentException("The dead wall must contain exactly 14 tiles.", nameof(deadWallTiles));
+
+            remainingRinshanTileCount = RinshanTileCount;
         }
 
         public int Count => tiles.Count;
+        public int DeadWallCount => deadWallTiles.Count;
+        public int RemainingRinshanTileCount => remainingRinshanTileCount;
+        public bool CanDrawRinshan => remainingRinshanTileCount > 0 && tiles.Count > 0;
 
         public static Wall CreateStandardShuffled(int? seed = null)
         {
@@ -24,7 +37,9 @@ namespace MahjongPrototype.Domain
             AddHonors(generated);
 
             Shuffle(generated, seed.HasValue ? new Random(seed.Value) : new Random());
-            return new Wall(generated);
+            List<Tile> deadWall = generated.GetRange(0, DeadWallTileCount);
+            generated.RemoveRange(0, DeadWallTileCount);
+            return new Wall(generated, deadWall);
         }
 
         public bool Contains(Tile tile)
@@ -60,9 +75,42 @@ namespace MahjongPrototype.Domain
             return true;
         }
 
+        public bool TryTakeRinshan(out Tile tile)
+        {
+            if (!CanDrawRinshan)
+            {
+                tile = default;
+                return false;
+            }
+
+            tile = deadWallTiles[0];
+            deadWallTiles.RemoveAt(0);
+
+            int replacementIndex = tiles.Count - 1;
+            Tile replacementTile = tiles[replacementIndex];
+            tiles.RemoveAt(replacementIndex);
+            deadWallTiles.Add(replacementTile);
+            remainingRinshanTileCount--;
+            return true;
+        }
+
         public IReadOnlyList<Tile> GetSnapshot()
         {
             return tiles.ToArray();
+        }
+
+        public IReadOnlyList<Tile> GetDeadWallSnapshot()
+        {
+            return deadWallTiles.ToArray();
+        }
+
+        public IReadOnlyList<Tile> GetRinshanSnapshot()
+        {
+            Tile[] snapshot = new Tile[remainingRinshanTileCount];
+            for (int i = 0; i < snapshot.Length; i++)
+                snapshot[i] = deadWallTiles[i];
+
+            return snapshot;
         }
 
         private static void AddSuit(List<Tile> target, TileSuit suit)

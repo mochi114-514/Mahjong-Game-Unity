@@ -5,7 +5,7 @@ using UnityEngine.Serialization;
 
 namespace MahjongPrototype.UI3D
 {
-    // PROTOTYPE: renders called meld tiles in a simple line for each player area.
+    // PROTOTYPE: renders fixed meld tiles in a simple line for each player area.
     [DisallowMultipleComponent]
     [AddComponentMenu("Mahjong Prototype/UI3D/Mahjong 3D Open Meld View")]
     public sealed class Mahjong3DOpenMeldView : MonoBehaviour
@@ -90,9 +90,11 @@ namespace MahjongPrototype.UI3D
             for (int meldIndex = 0; meldIndex < melds.Count; meldIndex++)
             {
                 PlayerMeld meld = melds[meldIndex];
-                // PROTOTYPE: Kan placement is deferred until kan calls are implemented.
                 if (meld == null ||
-                    (meld.Type != PlayerMeldType.Chi && meld.Type != PlayerMeldType.Pon))
+                    (meld.Type != PlayerMeldType.Chi &&
+                        meld.Type != PlayerMeldType.Pon &&
+                        meld.Type != PlayerMeldType.Daiminkan &&
+                        meld.Type != PlayerMeldType.Ankan))
                     continue;
 
                 layouts.Add(BuildMeldTileLayout(meld));
@@ -120,7 +122,9 @@ namespace MahjongPrototype.UI3D
                 return layout;
             }
 
-            int ponCalledTileIndex = ResolvePonCalledTileIndex(meld);
+            int ponCalledTileIndex = meld.HasDiscardSource
+                ? ResolvePonCalledTileIndex(meld)
+                : -1;
             for (int tileIndex = 0; tileIndex < tiles.Count; tileIndex++)
             {
                 layout.Add(new MeldTileLayout(tiles[tileIndex], tileIndex == ponCalledTileIndex));

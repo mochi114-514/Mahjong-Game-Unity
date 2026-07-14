@@ -52,6 +52,7 @@ namespace MahjongPrototype
         private readonly RoundStartingSeatResolver roundStartingSeatResolver =
             new RoundStartingSeatResolver();
         private readonly DrawService drawService = new DrawService();
+        private readonly KanService kanService = new KanService();
         private readonly DiscardService discardService = new DiscardService();
         private readonly WinChecker winChecker = new WinChecker();
         private readonly ReachChecker reachChecker = new ReachChecker();
@@ -255,7 +256,11 @@ namespace MahjongPrototype
             if (!CanUseSelfTurnInput("DrawBlocked"))
                 return;
 
-            TryDrawForSeat(gameState.SelfSeat, "DrawCompleted", "DrawBlocked", true);
+            TryDrawForSeatByPhase(
+                gameState.SelfSeat,
+                "DrawCompleted",
+                "DrawBlocked",
+                true);
         }
 
         public bool TryRequestDrawForSeat(SeatId actorSeat)
@@ -263,11 +268,30 @@ namespace MahjongPrototype
             if (!CanUseGameState())
                 return false;
 
-            return TryDrawForSeat(
+            return TryDrawForSeatByPhase(
                 actorSeat,
                 "DrawCompleted",
                 "DrawBlocked",
                 false);
+        }
+
+        private bool TryDrawForSeatByPhase(
+            SeatId seat,
+            string completedEventName,
+            string blockedEventName,
+            bool warnOnBlocked)
+        {
+            return gameState.TurnPhase == TurnPhase.WaitingForRinshanDraw
+                ? TryDrawRinshanForSeat(
+                    seat,
+                    completedEventName,
+                    blockedEventName,
+                    warnOnBlocked)
+                : TryDrawForSeat(
+                    seat,
+                    completedEventName,
+                    blockedEventName,
+                    warnOnBlocked);
         }
 
         private bool TryDrawForSeat(
@@ -673,6 +697,17 @@ namespace MahjongPrototype
                 0);
         }
 
+        public bool TryRequestDeclareDaiminkanForSeat(
+            SeatId actorSeat,
+            int reactionWindowId)
+        {
+            return TryRequestDeclareMeldCallForSeat(
+                actorSeat,
+                reactionWindowId,
+                MeldCallKind.Kan,
+                0);
+        }
+
         public bool TryRequestDeclareChiForSeat(
             SeatId actorSeat,
             int reactionWindowId,
@@ -708,6 +743,53 @@ namespace MahjongPrototype
             }
 
             return CompleteReactionWindowAnswer(answer);
+        }
+
+        public IReadOnlyList<Tile> GetAnkanCandidatesForSeat(SeatId actorSeat)
+        {
+            return gameState == null
+                ? System.Array.Empty<Tile>()
+                : kanService.CollectAnkanCandidates(gameState, actorSeat);
+        }
+
+        public bool TryRequestDeclareAnkanForSeat(SeatId actorSeat, int tileTypeIndex)
+        {
+            IReadOnlyList<Tile> candidates = GetAnkanCandidatesForSeat(actorSeat);
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                if (candidates[i].TypeIndex == tileTypeIndex)
+                    return TryRequestDeclareAnkanForSeat(actorSeat, candidates[i]);
+            }
+
+            NotifyKanBlocked(actorSeat, default, "AnkanCandidateMissing");
+            return false;
+        }
+
+        public bool TryRequestDeclareAnkanForSeat(SeatId actorSeat, Tile tile)
+        {
+            if (!CanUseGameState())
+                return false;
+
+            AnkanDeclarationResult result = kanService.TryDeclareAnkan(
+                gameState,
+                actorSeat,
+                tile);
+            if (!result.Declared)
+            {
+                NotifyKanBlocked(actorSeat, tile, result.Reason);
+                return false;
+            }
+
+            ApplyAutoSortIfEnabled(actorSeat, "AnkanDeclared", false);
+            gameState.ClearIppatsuEligibilityForAllPlayers();
+            EventPublisher.NotifyTurnDebug(
+                "AnkanDeclared",
+                $"caller={actorSeat}; tile={tile}; phase={gameState.TurnPhase}; liveWall={gameState.Wall.Count}; deadWall={gameState.Wall.DeadWallCount}; rinshanRemaining={gameState.Wall.RemainingRinshanTileCount}",
+                seat: actorSeat,
+                tile: tile,
+                turnIndex: gameState.TurnIndex);
+            EventPublisher.NotifyMeldDeclared(result.Meld);
+            return true;
         }
 
         public bool TryRequestDeclinePonForSeat(SeatId actorSeat, int reactionWindowId)
@@ -1020,6 +1102,56 @@ namespace MahjongPrototype
             return true;
         }
 
+        private bool TryDrawRinshanForSeat(
+            SeatId seat,
+            string completedEventName,
+            string blockedEventName,
+            bool warnOnBlocked)
+        {
+            if (gameState.CurrentTurn != seat)
+            {
+                if (warnOnBlocked)
+                    Warn("Only the current seat can draw a rinshan tile.");
+
+                NotifyTurnBlocked(blockedEventName, "NotCurrentTurn");
+                return false;
+            }
+
+            PlayerSeat playerSeat = gameState.GetPlayerSeat(seat);
+            if (gameState.IsRoundEnded || gameState.IsWinDecisionPending ||
+                gameState.IsReachDecisionPending ||
+                gameState.IsReachDiscardSelectionPending ||
+                playerSeat.HasDrawnTile ||
+                gameState.TurnPhase != TurnPhase.WaitingForRinshanDraw)
+            {
+                NotifyTurnBlocked(blockedEventName, "RinshanDrawUnavailable");
+                return false;
+            }
+
+            DrawResult result = drawService.DrawTile(
+                seat,
+                gameState,
+                DrawPurpose.RinshanDraw);
+            if (!result.Success)
+            {
+                NotifyTurnBlocked(blockedEventName, "RinshanDrawUnavailable");
+                return false;
+            }
+
+            playerSeat.SetDrawnTile(result.Tile);
+            gameState.EnterWaitingForDiscard();
+            playerSeat.ClearTemporaryFuriten();
+            EventPublisher.NotifyTurnDebug(
+                "RinshanDrawCompleted",
+                $"phase={gameState.TurnPhase}; drawnTile={result.Tile}; liveWall={gameState.Wall.Count}; deadWall={gameState.Wall.DeadWallCount}; rinshanRemaining={gameState.Wall.RemainingRinshanTileCount}",
+                seat: seat,
+                tile: result.Tile,
+                turnIndex: gameState.TurnIndex);
+            EventPublisher.NotifyTileDrawn(result);
+            ResolveAfterDraw(seat);
+            return true;
+        }
+
         private void ApplyReactionWindowResolution(ReactionWindowResolution resolution)
         {
             switch (resolution.Type)
@@ -1036,6 +1168,9 @@ namespace MahjongPrototype
                 case ReactionWindowResolutionType.PonDeclared:
                 case ReactionWindowResolutionType.ChiDeclared:
                     BeginTurnAfterMeldCall(resolution);
+                    break;
+                case ReactionWindowResolutionType.DaiminkanDeclared:
+                    BeginTurnAfterDaiminkan(resolution);
                     break;
             }
         }
@@ -1057,6 +1192,26 @@ namespace MahjongPrototype
                 seat: resolution.Candidate.Seat,
                 tile: resolution.SourceDiscard.Tile,
                 turnIndex: gameState.TurnIndex);
+        }
+
+        private void BeginTurnAfterDaiminkan(ReactionWindowResolution resolution)
+        {
+            if (resolution.Candidate == null || resolution.Meld == null)
+                return;
+
+            EnsureTurnFlowService();
+            gameState.ClearIppatsuEligibilityForAllPlayers();
+            turnFlowService.BeginTurnAfterKan(gameState, resolution.Candidate.Seat);
+            EventPublisher.NotifyTurnStarted(
+                resolution.Candidate.Seat,
+                gameState.TurnIndex);
+            EventPublisher.NotifyTurnDebug(
+                "DaiminkanDeclared",
+                $"windowSourceDiscardId={resolution.SourceDiscard.Id}; caller={resolution.Candidate.Seat}; source={resolution.SourceDiscard.ActorSeat}; phase={gameState.TurnPhase}; liveWall={gameState.Wall.Count}; deadWall={gameState.Wall.DeadWallCount}; rinshanRemaining={gameState.Wall.RemainingRinshanTileCount}",
+                seat: resolution.Candidate.Seat,
+                tile: resolution.SourceDiscard.Tile,
+                turnIndex: gameState.TurnIndex);
+            EventPublisher.NotifyMeldDeclared(resolution.Meld);
         }
 
         private void NotifyDeclaredReactionRon(ReactionWindowResolution resolution)
@@ -1661,6 +1816,19 @@ namespace MahjongPrototype
                 eventName,
                 $"reason={reason}; phase={gameState.TurnPhase}; hasDrawnTile={currentPlayerSeat.HasDrawnTile}",
                 seat: gameState.CurrentTurn,
+                turnIndex: gameState.TurnIndex);
+        }
+
+        private void NotifyKanBlocked(SeatId seat, Tile tile, string reason)
+        {
+            if (gameState == null)
+                return;
+
+            EventPublisher.NotifyTurnDebug(
+                "KanBlocked",
+                $"reason={reason}; phase={gameState.TurnPhase}; liveWall={gameState.Wall.Count}; deadWall={gameState.Wall.DeadWallCount}; rinshanRemaining={gameState.Wall.RemainingRinshanTileCount}",
+                seat: seat,
+                tile: tile.IsValid ? tile : (Tile?)null,
                 turnIndex: gameState.TurnIndex);
         }
 

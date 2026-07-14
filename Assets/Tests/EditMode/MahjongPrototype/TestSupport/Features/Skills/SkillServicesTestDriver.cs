@@ -165,6 +165,16 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Skills
                 ParseDrawPurpose("TurnDraw"));
         }
 
+        public object DrawRinshanTile(object gameState, string drawingSeat)
+        {
+            return reflection.Invoke(
+                drawService,
+                "DrawTile",
+                dataFactory.ParseSeat(drawingSeat),
+                gameState,
+                ParseDrawPurpose("RinshanDraw"));
+        }
+
         public int ActiveSkillEffectCount(object gameState)
         {
             return collections.Count(reflection.GetProperty(gameState, "ActiveSkillEffects"));
@@ -178,6 +188,16 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Skills
         public bool SkillWasPresent(object drawResult)
         {
             return (bool)reflection.GetProperty(drawResult, "SkillWasPresent");
+        }
+
+        public string DrawSource(object drawResult)
+        {
+            return reflection.GetProperty(drawResult, "Source").ToString();
+        }
+
+        public int WallCountAfterDraw(object drawResult)
+        {
+            return (int)reflection.GetProperty(drawResult, "WallCountAfterDraw");
         }
 
         public string EffectOwnerSeat(object activeEffect)
@@ -196,4 +216,3 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Skills
         }
     }
 }
-

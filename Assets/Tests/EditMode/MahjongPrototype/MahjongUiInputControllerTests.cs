@@ -275,6 +275,40 @@ namespace MahjongPrototype.Tests
                 Assert.That(requestedKind, Is.EqualTo("Chi"));
                 Assert.That(requestedOptionId, Is.EqualTo(4));
 
+                IList ankanCandidates = (IList)Activator.CreateInstance(
+                    typeof(List<>).MakeGenericType(calledTile.GetType()));
+                ankanCandidates.Add(dataFactory.CreateTile("P"));
+                ankanCandidates.Add(dataFactory.CreateTile("C"));
+                reflection.Invoke(
+                    controller,
+                    "SetMeldCallDecision",
+                    false,
+                    true,
+                    null,
+                    ankanCandidates,
+                    calledTile);
+
+                Button daiminkanButton = FindButton(decisionRoot.transform, "Daiminkan");
+                Assert.That(daiminkanButton, Is.Not.Null);
+                daiminkanButton.onClick.Invoke();
+                Assert.That(requestedKind, Is.EqualTo("Kan"));
+                Assert.That(requestedOptionId, Is.EqualTo(0));
+
+                reflection.Invoke(
+                    controller,
+                    "SetMeldCallDecision",
+                    false,
+                    false,
+                    null,
+                    ankanCandidates,
+                    null);
+                Assert.That(declineButton.gameObject.activeSelf, Is.False);
+                Button redDragonAnkanButton = FindButton(decisionRoot.transform, "Ankan_33");
+                Assert.That(redDragonAnkanButton, Is.Not.Null);
+                redDragonAnkanButton.onClick.Invoke();
+                Assert.That(requestedKind, Is.EqualTo("Kan"));
+                Assert.That(requestedOptionId, Is.EqualTo(33));
+
                 reflection.Invoke(controller, "SetMeldCallDecision", false, null, null);
                 Assert.That(decisionRoot.activeSelf, Is.False);
             }

@@ -128,5 +128,35 @@ namespace MahjongPrototype.Domain
         {
             return meld != null && meld.OwnerSeat == SeatId;
         }
+
+        internal bool TryCommitAnkan(Tile tile, PlayerMeld meld)
+        {
+            if (!tile.IsValid || meld == null || meld.Type != PlayerMeldType.Ankan ||
+                !CanAddMeld(meld) || !drawnTile.HasValue)
+            {
+                return false;
+            }
+
+            Tile existingDrawnTile = drawnTile.Value;
+            int matchingHandTileCount = Hand.CountTilesByValue(tile);
+            int matchingLogicalTileCount = matchingHandTileCount +
+                (existingDrawnTile == tile ? 1 : 0);
+            if (matchingLogicalTileCount != 4)
+                return false;
+
+            int handTilesToRemove = existingDrawnTile == tile ? 3 : 4;
+            if (matchingHandTileCount != handTilesToRemove ||
+                !Hand.TryRemoveTilesByValue(tile, handTilesToRemove))
+            {
+                return false;
+            }
+
+            drawnTile = null;
+            if (existingDrawnTile != tile)
+                Hand.Add(existingDrawnTile);
+
+            melds.Add(meld);
+            return true;
+        }
     }
 }

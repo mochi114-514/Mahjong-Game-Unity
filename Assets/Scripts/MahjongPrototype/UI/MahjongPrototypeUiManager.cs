@@ -234,6 +234,7 @@ namespace MahjongPrototype.UI
             eventNotifier.ReactionWindowAnswered += HandleReactionWindowAnswered;
             eventNotifier.ReactionWindowResolved += HandleReactionWindowResolved;
             eventNotifier.ReactionWindowClosed += HandleReactionWindowClosed;
+            eventNotifier.MeldDeclared += HandleMeldDeclared;
             eventNotifier.SkillActivated += HandleSkillActivated;
             eventNotifier.SkillEffectRegistered += HandleSkillEffectRegistered;
             eventNotifier.SkillEffectResolved += HandleSkillEffectResolved;
@@ -267,6 +268,7 @@ namespace MahjongPrototype.UI
             eventNotifier.ReactionWindowAnswered -= HandleReactionWindowAnswered;
             eventNotifier.ReactionWindowResolved -= HandleReactionWindowResolved;
             eventNotifier.ReactionWindowClosed -= HandleReactionWindowClosed;
+            eventNotifier.MeldDeclared -= HandleMeldDeclared;
             eventNotifier.SkillActivated -= HandleSkillActivated;
             eventNotifier.SkillEffectRegistered -= HandleSkillEffectRegistered;
             eventNotifier.SkillEffectResolved -= HandleSkillEffectResolved;
@@ -469,7 +471,8 @@ namespace MahjongPrototype.UI
         private void HandleReactionWindowResolved(ReactionWindowResolution resolution)
         {
             if ((resolution.Type == ReactionWindowResolutionType.PonDeclared ||
-                 resolution.Type == ReactionWindowResolutionType.ChiDeclared) &&
+                 resolution.Type == ReactionWindowResolutionType.ChiDeclared ||
+                 resolution.Type == ReactionWindowResolutionType.DaiminkanDeclared) &&
                 resolution.Candidate != null)
             {
                 RefreshPlayerHandForSeat(resolution.Candidate.Seat);
@@ -479,6 +482,19 @@ namespace MahjongPrototype.UI
 
             RefreshGlobalStatus();
             RefreshWinDecisionUi();
+            RefreshPonDecisionUi();
+            RefreshInteractionUi();
+        }
+
+        private void HandleMeldDeclared(PlayerMeld meld)
+        {
+            if (meld == null)
+                return;
+
+            RefreshPlayerHandForSeat(meld.OwnerSeat);
+            RefreshPlayerDrawnTileForSeat(meld.OwnerSeat);
+            RefreshPlayerOpenMeldsForSeat(meld.OwnerSeat);
+            RefreshGlobalStatus();
             RefreshPonDecisionUi();
             RefreshInteractionUi();
         }
@@ -736,15 +752,37 @@ namespace MahjongPrototype.UI
             ReactionWindow reactionWindow = state != null
                 ? state.CurrentReactionWindow
                 : null;
-            if (state == null || reactionWindow == null)
+            if (state == null)
             {
-                ponDecisionController.SetMeldCallDecision(false, null, null);
+                ponDecisionController.SetMeldCallDecision(
+                    false,
+                    false,
+                    null,
+                    null,
+                    null);
+                return;
+            }
+
+            if (reactionWindow == null)
+            {
+                IReadOnlyList<Tile> ankanCandidates = gameFlow != null
+                    ? gameFlow.GetAnkanCandidatesForSeat(state.SelfSeat)
+                    : null;
+                ponDecisionController.SetMeldCallDecision(
+                    false,
+                    false,
+                    null,
+                    ankanCandidates,
+                    null);
                 return;
             }
 
             IReadOnlyList<MeldCallKind> availableKinds =
                 meldCallService.GetAvailableKinds(reactionWindow, state.SelfSeat);
             bool showPon = ContainsMeldCallKind(availableKinds, MeldCallKind.Pon);
+            bool showDaiminkan = ContainsMeldCallKind(
+                availableKinds,
+                MeldCallKind.Kan);
             IReadOnlyList<ChiOption> chiOptions = ContainsMeldCallKind(
                     availableKinds,
                     MeldCallKind.Chi)
@@ -752,7 +790,9 @@ namespace MahjongPrototype.UI
                 : null;
             ponDecisionController.SetMeldCallDecision(
                 showPon,
+                showDaiminkan,
                 chiOptions,
+                null,
                 reactionWindow.SourceDiscard.Tile);
         }
 

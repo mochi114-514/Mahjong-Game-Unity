@@ -5,9 +5,10 @@ namespace MahjongPrototype.Domain
 {
     public enum ReactionKind
     {
-        Ron,
-        Pon,
-        Chi
+        Ron = 0,
+        Pon = 1,
+        Chi = 2,
+        Daiminkan = 3
     }
 
     public enum ReactionResponseState
@@ -23,7 +24,8 @@ namespace MahjongPrototype.Domain
         NoReaction,
         RonDeclared,
         PonDeclared,
-        ChiDeclared
+        ChiDeclared,
+        DaiminkanDeclared
     }
 
     public enum ReactionWindowState
@@ -176,6 +178,19 @@ namespace MahjongPrototype.Domain
         public Tile CalledTile { get; }
     }
 
+    public sealed class DaiminkanReactionWindowCandidateDetail : ReactionWindowCandidateDetail
+    {
+        public DaiminkanReactionWindowCandidateDetail(Tile calledTile)
+        {
+            if (!calledTile.IsValid)
+                throw new ArgumentException("Called tile must be valid.", nameof(calledTile));
+
+            CalledTile = calledTile;
+        }
+
+        public Tile CalledTile { get; }
+    }
+
     public sealed class ChiReactionWindowCandidateDetail : ReactionWindowCandidateDetail
     {
         private readonly IReadOnlyList<ChiOption> options;
@@ -243,7 +258,8 @@ namespace MahjongPrototype.Domain
                 throw new ArgumentNullException(nameof(detail));
             if ((kind == ReactionKind.Ron && !(detail is RonReactionWindowCandidateDetail)) ||
                 (kind == ReactionKind.Pon && !(detail is PonReactionWindowCandidateDetail)) ||
-                (kind == ReactionKind.Chi && !(detail is ChiReactionWindowCandidateDetail)))
+                (kind == ReactionKind.Chi && !(detail is ChiReactionWindowCandidateDetail)) ||
+                (kind == ReactionKind.Daiminkan && !(detail is DaiminkanReactionWindowCandidateDetail)))
             {
                 throw new ArgumentException("Candidate detail does not match reaction kind.", nameof(detail));
             }
@@ -273,6 +289,14 @@ namespace MahjongPrototype.Domain
                 new ChiReactionWindowCandidateDetail(calledTile, options));
         }
 
+        public static ReactionWindowCandidate CreateDaiminkan(SeatId seat, Tile calledTile)
+        {
+            return new ReactionWindowCandidate(
+                seat,
+                ReactionKind.Daiminkan,
+                new DaiminkanReactionWindowCandidateDetail(calledTile));
+        }
+
         public SeatId Seat { get; }
         public ReactionKind Kind { get; }
         public ReactionWindowCandidateDetail Detail { get; }
@@ -280,6 +304,8 @@ namespace MahjongPrototype.Domain
             Detail as RonReactionWindowCandidateDetail;
         public PonReactionWindowCandidateDetail PonDetail =>
             Detail as PonReactionWindowCandidateDetail;
+        public DaiminkanReactionWindowCandidateDetail DaiminkanDetail =>
+            Detail as DaiminkanReactionWindowCandidateDetail;
         public ChiReactionWindowCandidateDetail ChiDetail =>
             Detail as ChiReactionWindowCandidateDetail;
         // Compatibility projection for the existing win declaration and result paths.
@@ -336,6 +362,7 @@ namespace MahjongPrototype.Domain
         public ReactionWindowCandidate PendingCandidate =>
             FindPendingCandidate(ReactionKind.Ron) ??
             FindPendingCandidate(ReactionKind.Pon) ??
+            FindPendingCandidate(ReactionKind.Daiminkan) ??
             FindPendingCandidate(ReactionKind.Chi);
 
         public ReactionWindowCandidate PendingRonCandidate =>
@@ -346,8 +373,14 @@ namespace MahjongPrototype.Domain
                 ? FindPendingCandidate(ReactionKind.Pon)
                 : null;
 
+        public ReactionWindowCandidate PendingDaiminkanCandidate =>
+            PendingRonCandidate == null
+                ? FindPendingCandidate(ReactionKind.Daiminkan)
+                : null;
+
         public ReactionWindowCandidate PendingChiCandidate =>
-            PendingRonCandidate == null && PendingPonCandidate == null
+            PendingRonCandidate == null && PendingPonCandidate == null &&
+                PendingDaiminkanCandidate == null
                 ? FindPendingCandidate(ReactionKind.Chi)
                 : null;
 
@@ -360,7 +393,9 @@ namespace MahjongPrototype.Domain
             {
                 ReactionWindowCandidate candidate = candidates[i];
                 if (candidate == declaredCandidate || !candidate.IsPending ||
-                    (candidate.Kind != ReactionKind.Pon && candidate.Kind != ReactionKind.Chi))
+                    (candidate.Kind != ReactionKind.Pon &&
+                        candidate.Kind != ReactionKind.Daiminkan &&
+                        candidate.Kind != ReactionKind.Chi))
                 {
                     continue;
                 }
@@ -499,6 +534,33 @@ namespace MahjongPrototype.Domain
             return new ReactionWindowResolution(
                 windowId,
                 ReactionWindowResolutionType.ChiDeclared,
+                sourceDiscard,
+                candidate,
+                meld);
+        }
+
+        public static ReactionWindowResolution DaiminkanDeclared(
+            int windowId,
+            DiscardRecord sourceDiscard,
+            ReactionWindowCandidate candidate,
+            PlayerMeld meld)
+        {
+            if (candidate == null || candidate.Kind != ReactionKind.Daiminkan)
+            {
+                throw new ArgumentException(
+                    "A daiminkan resolution requires a daiminkan candidate.",
+                    nameof(candidate));
+            }
+            if (meld == null || meld.Type != PlayerMeldType.Daiminkan)
+            {
+                throw new ArgumentException(
+                    "A daiminkan resolution requires a daiminkan meld.",
+                    nameof(meld));
+            }
+
+            return new ReactionWindowResolution(
+                windowId,
+                ReactionWindowResolutionType.DaiminkanDeclared,
                 sourceDiscard,
                 candidate,
                 meld);

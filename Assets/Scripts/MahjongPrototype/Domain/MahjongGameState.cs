@@ -164,6 +164,19 @@ namespace MahjongPrototype.Domain
             TransitionTo(TurnPhaseType.WaitingForDiscardAfterCall);
         }
 
+        public void EnterWaitingForRinshanDraw()
+        {
+            if (GetPlayerSeat(CurrentTurn).HasDrawnTile)
+            {
+                throw new InvalidOperationException(
+                    "Cannot wait for a rinshan draw while the current seat has a drawn tile.");
+            }
+            if (!Wall.CanDrawRinshan)
+                throw new InvalidOperationException("A rinshan draw is not available.");
+
+            TransitionTo(TurnPhaseType.WaitingForRinshanDraw);
+        }
+
         public void SetSelfWind(SeatId selfWind)
         {
             SetSelfSeat(selfWind);
@@ -369,6 +382,16 @@ namespace MahjongPrototype.Domain
                 return false;
             }
 
+            if (!PlayerMeldRules.TryGetStructuralMeldCount(
+                    playerSeat.Melds,
+                    out int structuralMeldCount) ||
+                structuralMeldCount >= 4 ||
+                (meld.Type == PlayerMeldType.Daiminkan && !Wall.CanDrawRinshan))
+            {
+                reason = "MeldCallStateChanged";
+                return false;
+            }
+
             if (!meld.HasDiscardSource || !CanClaimDiscard(
                     meld.SourceDiscardId.Value,
                     meld.OwnerSeat,
@@ -393,6 +416,73 @@ namespace MahjongPrototype.Domain
             HasCallOccurred = true;
             candidate.Declare();
             reactionWindow.CloseMeldCallsExcept(candidate);
+            return true;
+        }
+
+        internal bool TryCommitAnkan(
+            SeatId seat,
+            Tile tile,
+            out PlayerMeld meld,
+            out string reason)
+        {
+            meld = null;
+            reason = string.Empty;
+            if (!tile.IsValid || IsRoundEnded || CurrentTurn != seat ||
+                turnPhase != TurnPhaseType.WaitingForDiscard)
+            {
+                reason = "AnkanTurnUnavailable";
+                return false;
+            }
+
+            SeatSlot slot = GetSeatSlot(seat);
+            PlayerSeat playerSeat = GetPlayerSeat(seat);
+            if (!slot.HasPlayer || slot.ParticipantType != ParticipantType.LocalHuman ||
+                playerSeat.IsReachDeclared || !playerSeat.HasDrawnTile)
+            {
+                reason = playerSeat.IsReachDeclared
+                    ? "AnkanReachUnsupported"
+                    : "AnkanSeatUnavailable";
+                return false;
+            }
+
+            if (!Wall.CanDrawRinshan)
+            {
+                reason = "RinshanDrawUnavailable";
+                return false;
+            }
+
+            if (!PlayerMeldRules.TryGetStructuralMeldCount(
+                    playerSeat.Melds,
+                    out int structuralMeldCount) ||
+                structuralMeldCount >= 4)
+            {
+                reason = "AnkanMeldLimit";
+                return false;
+            }
+
+            int logicalTileCount = playerSeat.Hand.CountTilesByValue(tile) +
+                (playerSeat.DrawnTile.Value == tile ? 1 : 0);
+            if (logicalTileCount != 4)
+            {
+                reason = "AnkanTilesMissing";
+                return false;
+            }
+
+            PlayerMeld preparedMeld = PlayerMeld.CreateAnkan(
+                new[] { tile, tile, tile, tile },
+                seat);
+
+            // All validation is complete. The seat mutation and phase transition do
+            // not notify observers and cannot fail for the validated snapshot.
+            if (!playerSeat.TryCommitAnkan(tile, preparedMeld))
+            {
+                reason = "AnkanTilesMissing";
+                return false;
+            }
+
+            HasCallOccurred = true;
+            meld = preparedMeld;
+            TransitionTo(TurnPhaseType.WaitingForRinshanDraw);
             return true;
         }
 
@@ -706,7 +796,7 @@ namespace MahjongPrototype.Domain
             IReadOnlyList<Tile> handTiles,
             PlayerMeld meld)
         {
-            if (candidate == null || handTiles == null || handTiles.Count != 2 ||
+            if (candidate == null || handTiles == null ||
                 meld == null || !meld.HasDiscardSource || meld.OwnerSeat != candidate.Seat ||
                 meld.SourceDiscardId.Value != sourceDiscard.Id ||
                 meld.SourceSeat.Value != sourceDiscard.ActorSeat ||
@@ -717,14 +807,25 @@ namespace MahjongPrototype.Domain
 
             if (candidate.Kind == ReactionKind.Pon)
             {
-                return candidate.PonDetail != null &&
+                return handTiles.Count == 2 && candidate.PonDetail != null &&
                     candidate.PonDetail.CalledTile == sourceDiscard.Tile &&
                     meld.Type == PlayerMeldType.Pon &&
                     ContainsOnlyTile(handTiles, sourceDiscard.Tile) &&
                     ContainsOnlyTile(meld.PhysicalTiles, sourceDiscard.Tile);
             }
 
-            if (candidate.Kind != ReactionKind.Chi || candidate.ChiDetail == null ||
+            if (candidate.Kind == ReactionKind.Daiminkan)
+            {
+                return handTiles.Count == 3 && candidate.DaiminkanDetail != null &&
+                    candidate.DaiminkanDetail.CalledTile == sourceDiscard.Tile &&
+                    meld.Type == PlayerMeldType.Daiminkan &&
+                    ContainsOnlyTile(handTiles, sourceDiscard.Tile) &&
+                    meld.PhysicalTileCount == 4 &&
+                    ContainsOnlyTile(meld.PhysicalTiles, sourceDiscard.Tile);
+            }
+
+            if (handTiles.Count != 2 || candidate.Kind != ReactionKind.Chi ||
+                candidate.ChiDetail == null ||
                 candidate.ChiDetail.CalledTile != sourceDiscard.Tile ||
                 meld.Type != PlayerMeldType.Chi)
             {
@@ -789,7 +890,9 @@ namespace MahjongPrototype.Domain
             ReactionWindowCandidate candidate)
         {
             if (candidate == null || !candidate.IsPending ||
-                (candidate.Kind != ReactionKind.Pon && candidate.Kind != ReactionKind.Chi))
+                (candidate.Kind != ReactionKind.Pon &&
+                    candidate.Kind != ReactionKind.Daiminkan &&
+                    candidate.Kind != ReactionKind.Chi))
             {
                 return false;
             }
