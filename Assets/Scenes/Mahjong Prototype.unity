@@ -6822,9 +6822,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI3D.Mahjong3DOpenMeldView
   spawnRoot: {fileID: 2100000002}
-  tilePrefab: {fileID: 3781737991026447910, guid: a9f8505a4f6dec34fa30ef58c92e940d, type: 3}
-  verticalTileSpacing: 2
-  horizontalTileSpacing: 2.6
+  tilePrefab: {fileID: 6693814208160502204, guid: 937dff25a8118f742aad1c49b74a7384, type: 3}
+  verticalTileSpacing: 1.6
+  horizontalTileSpacing: 2.1
   meldSpacing: 0.3
 --- !u!1 &2100000011
 GameObject:
@@ -6872,8 +6872,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI3D.Mahjong3DOpenMeldView
   spawnRoot: {fileID: 2100000012}
   tilePrefab: {fileID: 6693814208160502204, guid: 937dff25a8118f742aad1c49b74a7384, type: 3}
-  verticalTileSpacing: 2
-  horizontalTileSpacing: 2.6
+  verticalTileSpacing: 1.6
+  horizontalTileSpacing: 2.1
   meldSpacing: 0.3
 --- !u!1 &2100000021
 GameObject:
@@ -6921,8 +6921,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI3D.Mahjong3DOpenMeldView
   spawnRoot: {fileID: 2100000022}
   tilePrefab: {fileID: 6693814208160502204, guid: 937dff25a8118f742aad1c49b74a7384, type: 3}
-  verticalTileSpacing: 2
-  horizontalTileSpacing: 2.6
+  verticalTileSpacing: 1.6
+  horizontalTileSpacing: 2.1
   meldSpacing: 0.3
 --- !u!1 &2100000031
 GameObject:
@@ -6970,8 +6970,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI3D.Mahjong3DOpenMeldView
   spawnRoot: {fileID: 2100000032}
   tilePrefab: {fileID: 6693814208160502204, guid: 937dff25a8118f742aad1c49b74a7384, type: 3}
-  verticalTileSpacing: 2
-  horizontalTileSpacing: 2.6
+  verticalTileSpacing: 1.6
+  horizontalTileSpacing: 2.1
   meldSpacing: 0.3
 --- !u!1 &2135888383
 GameObject:
