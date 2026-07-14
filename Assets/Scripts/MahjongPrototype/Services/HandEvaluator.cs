@@ -361,15 +361,15 @@ namespace MahjongPrototype.Services
                     return false;
             }
 
-            for (int i = 0; context.OpenMelds != null && i < context.OpenMelds.Count; i++)
+            for (int i = 0; context.Melds != null && i < context.Melds.Count; i++)
             {
-                OpenMeld openMeld = context.OpenMelds[i];
-                if (openMeld == null)
+                PlayerMeld meld = context.Melds[i];
+                if (meld == null)
                     return false;
 
-                for (int j = 0; j < openMeld.Tiles.Count; j++)
+                for (int j = 0; j < meld.PhysicalTiles.Count; j++)
                 {
-                    if (!IsSimpleNumberTile(openMeld.Tiles[j]))
+                    if (!IsSimpleNumberTile(meld.PhysicalTiles[j]))
                         return false;
                 }
             }
@@ -420,16 +420,16 @@ namespace MahjongPrototype.Services
                 }
             }
 
-            for (int i = 0; context.OpenMelds != null && i < context.OpenMelds.Count; i++)
+            for (int i = 0; context.Melds != null && i < context.Melds.Count; i++)
             {
-                OpenMeld openMeld = context.OpenMelds[i];
-                if (openMeld == null)
+                PlayerMeld meld = context.Melds[i];
+                if (meld == null)
                     return false;
 
-                for (int j = 0; j < openMeld.Tiles.Count; j++)
+                for (int j = 0; j < meld.PhysicalTiles.Count; j++)
                 {
                     if (!TryAnalyzeTileCompositionTile(
-                            openMeld.Tiles[j],
+                            meld.PhysicalTiles[j],
                             ref numberSuitMask,
                             ref hasHonor,
                             ref allTilesAreGreen,
@@ -1001,17 +1001,19 @@ namespace MahjongPrototype.Services
                 return false;
             }
 
-            int openMeldCount = context.OpenMelds != null
-                ? context.OpenMelds.Count
-                : 0;
-            if (openMeldCount > decomposition.Melds.Count)
-                return false;
-
-            for (int i = openMeldCount; i < decomposition.Melds.Count; i++)
+            for (int i = 0; i < decomposition.Melds.Count; i++)
             {
                 HandMeld meld = decomposition.Melds[i];
                 if (meld == null || meld.Type != MeldType.Triplet)
                     continue;
+
+                if (meld.IsFixed)
+                {
+                    if (!meld.IsOpen)
+                        concealedTripletCount++;
+
+                    continue;
+                }
 
                 if (IsRonCompletedShanponTriplet(
                         context,

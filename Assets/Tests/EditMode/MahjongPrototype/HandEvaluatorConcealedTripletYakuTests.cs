@@ -157,14 +157,14 @@ namespace MahjongPrototype.Tests
             using (WinDeclarationEvaluatorTestDriver driver =
                 WinDeclarationEvaluatorTestDriver.Create())
             {
-                object openMelds = driver.CreateOpenPonMelds("1m");
+                object melds = driver.CreateOpenPonMelds("1m");
                 object result = driver.EvaluateWithTile(
                     CreateConcealedTripletCatalog(driver),
                     OpenPonThreeConcealedTripletTankiHand,
                     "5s",
                     "Tsumo",
                     isClosed: false,
-                    openMelds: openMelds);
+                    melds: melds);
                 object candidate =
                     driver.FindCandidateContainingYaku(result, "Sanankou");
 
@@ -179,14 +179,14 @@ namespace MahjongPrototype.Tests
             using (WinDeclarationEvaluatorTestDriver driver =
                 WinDeclarationEvaluatorTestDriver.Create())
             {
-                object openMelds = driver.CreateOpenPonMelds("1m");
+                object melds = driver.CreateOpenPonMelds("1m");
                 object result = driver.EvaluateWithTile(
                     CreateConcealedTripletCatalog(driver),
                     OpenPonTwoConcealedTripletShanponHand,
                     "4s",
                     "Tsumo",
                     isClosed: false,
-                    openMelds: openMelds);
+                    melds: melds);
                 object candidate =
                     driver.FindCandidateContainingYaku(result, "Sanankou");
 
@@ -200,14 +200,14 @@ namespace MahjongPrototype.Tests
             using (WinDeclarationEvaluatorTestDriver driver =
                 WinDeclarationEvaluatorTestDriver.Create())
             {
-                object openMelds = driver.CreateOpenPonMelds("1m");
+                object melds = driver.CreateOpenPonMelds("1m");
                 object result = driver.EvaluateWithTile(
                     CreateConcealedTripletCatalog(driver),
                     OpenPonTwoConcealedTripletShanponHand,
                     "4s",
                     "Ron",
                     isClosed: false,
-                    openMelds: openMelds);
+                    melds: melds);
                 object candidate =
                     driver.FindStandardCandidateWithWaitType(result, "Shanpon");
 
@@ -222,14 +222,14 @@ namespace MahjongPrototype.Tests
             using (WinDeclarationEvaluatorTestDriver driver =
                 WinDeclarationEvaluatorTestDriver.Create())
             {
-                object openMelds = driver.CreateOpenPonMelds("1m");
+                object melds = driver.CreateOpenPonMelds("1m");
                 object result = driver.EvaluateWithTile(
                     CreateConcealedTripletCatalog(driver),
                     OpenPonThreeConcealedTripletTankiHand,
                     "5s",
                     "Tsumo",
                     isClosed: false,
-                    openMelds: openMelds);
+                    melds: melds);
                 object candidate =
                     driver.FindStandardCandidateWithWaitType(result, "Tanki");
 
@@ -237,6 +237,28 @@ namespace MahjongPrototype.Tests
                 Assert.That(driver.CandidateContainsYaku(candidate, "Sanankou"), Is.True);
                 Assert.That(driver.CandidateContainsYaku(candidate, "Suuankou"), Is.False);
                 Assert.That(driver.CandidateContainsYaku(candidate, "SuuankouTanki"), Is.False);
+            }
+        }
+
+        [Test]
+        public void EvaluateWithTile_AnkanCountsAsConcealedAndKeepsSuuankouTankiEligible()
+        {
+            using (WinDeclarationEvaluatorTestDriver driver =
+                WinDeclarationEvaluatorTestDriver.Create())
+            {
+                object melds = driver.CreateAnkanMelds("1m");
+                object result = driver.EvaluateWithTile(
+                    CreateConcealedTripletCatalog(driver),
+                    OpenPonThreeConcealedTripletTankiHand,
+                    "5s",
+                    "Tsumo",
+                    isClosed: true,
+                    melds: melds);
+                object candidate =
+                    driver.FindCandidateContainingYaku(result, "SuuankouTanki");
+
+                Assert.That(driver.CanDeclareWin(result), Is.True);
+                AssertSuuankouTankiOnly(driver, candidate);
             }
         }
 

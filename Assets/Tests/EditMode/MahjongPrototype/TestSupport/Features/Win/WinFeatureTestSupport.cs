@@ -19,10 +19,8 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
             "MahjongPrototype.Services.NoYakuTenpaiEvaluator, Assembly-CSharp";
         private const string WinDeclarationEvaluationContextTypeName =
             "MahjongPrototype.Domain.WinDeclarationEvaluationContext, Assembly-CSharp";
-        private const string OpenMeldTypeName =
-            "MahjongPrototype.Domain.OpenMeld, Assembly-CSharp";
-        private const string OpenMeldKindTypeName =
-            "MahjongPrototype.Domain.OpenMeldType, Assembly-CSharp";
+        private const string PlayerMeldTypeName =
+            "MahjongPrototype.Domain.PlayerMeld, Assembly-CSharp";
 
         private readonly UnityObjectTestOwner owner = new UnityObjectTestOwner();
         private bool disposed;
@@ -103,10 +101,10 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
             bool isFirstTurnTsumoEligible = false,
             bool isLastLiveWallDraw = false,
             bool isLastLiveWallDiscard = false,
-            object openMelds = null)
+            object melds = null)
         {
             Type contextType = Reflection.RequireType(WinDeclarationEvaluationContextTypeName);
-            if (openMelds != null)
+            if (melds != null)
             {
                 return Reflection.CreateInstance(
                     contextType,
@@ -124,7 +122,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
                     isFirstTurnTsumoEligible,
                     isLastLiveWallDraw,
                     isLastLiveWallDiscard,
-                    openMelds);
+                    melds);
             }
 
             return Reflection.CreateInstance(
@@ -151,13 +149,13 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
             string sourceSeatName = "West",
             int sourceDiscardId = 1)
         {
-            Type openMeldType = Reflection.RequireType(OpenMeldTypeName);
-            Type openMeldListType = typeof(List<>).MakeGenericType(openMeldType);
-            IList openMelds = (IList)Reflection.CreateInstance(openMeldListType);
+            Type playerMeldType = Reflection.RequireType(PlayerMeldTypeName);
+            Type meldListType = typeof(List<>).MakeGenericType(playerMeldType);
+            IList melds = (IList)Reflection.CreateInstance(meldListType);
             object calledTile = DataFactory.CreateTile(tileCode);
-            object openMeld = Reflection.CreateInstance(
-                openMeldType,
-                Enum.Parse(Reflection.RequireType(OpenMeldKindTypeName), "Pon"),
+            object meld = Reflection.InvokeStatic(
+                playerMeldType,
+                "CreatePon",
                 DataFactory.CreateTileArrayFromText(
                     string.Join(" ", tileCode, tileCode, tileCode)),
                 DataFactory.ParseSeat(callerSeatName),
@@ -165,8 +163,8 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
                 calledTile,
                 sourceDiscardId);
 
-            openMelds.Add(openMeld);
-            return openMelds;
+            melds.Add(meld);
+            return melds;
         }
 
         public object CreateOpenChiMelds(
@@ -176,20 +174,38 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
             string sourceSeatName = "West",
             int sourceDiscardId = 1)
         {
-            Type openMeldType = Reflection.RequireType(OpenMeldTypeName);
-            Type openMeldListType = typeof(List<>).MakeGenericType(openMeldType);
-            IList openMelds = (IList)Reflection.CreateInstance(openMeldListType);
-            object openMeld = Reflection.CreateInstance(
-                openMeldType,
-                Enum.Parse(Reflection.RequireType(OpenMeldKindTypeName), "Chi"),
+            Type playerMeldType = Reflection.RequireType(PlayerMeldTypeName);
+            Type meldListType = typeof(List<>).MakeGenericType(playerMeldType);
+            IList melds = (IList)Reflection.CreateInstance(meldListType);
+            object meld = Reflection.InvokeStatic(
+                playerMeldType,
+                "CreateChi",
                 DataFactory.CreateTileArrayFromText(meldTileText),
                 DataFactory.ParseSeat(callerSeatName),
                 DataFactory.ParseSeat(sourceSeatName),
                 DataFactory.CreateTile(calledTileCode),
                 sourceDiscardId);
 
-            openMelds.Add(openMeld);
-            return openMelds;
+            melds.Add(meld);
+            return melds;
+        }
+
+        public object CreateAnkanMelds(
+            string tileCode,
+            string ownerSeatName = "East")
+        {
+            Type playerMeldType = Reflection.RequireType(PlayerMeldTypeName);
+            Type meldListType = typeof(List<>).MakeGenericType(playerMeldType);
+            IList melds = (IList)Reflection.CreateInstance(meldListType);
+            object meld = Reflection.InvokeStatic(
+                playerMeldType,
+                "CreateAnkan",
+                DataFactory.CreateTileArrayFromText(
+                    string.Join(" ", tileCode, tileCode, tileCode, tileCode)),
+                DataFactory.ParseSeat(ownerSeatName));
+
+            melds.Add(meld);
+            return melds;
         }
 
         public object CreateYakuDefinition(

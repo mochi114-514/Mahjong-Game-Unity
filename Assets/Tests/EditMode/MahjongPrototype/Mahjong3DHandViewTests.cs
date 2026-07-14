@@ -243,9 +243,7 @@ namespace MahjongPrototype.Tests
             "MahjongPrototype.Domain.DiscardRecord, Assembly-CSharp";
         private const string DiscardClaimTypeName =
             "MahjongPrototype.Domain.DiscardClaim, Assembly-CSharp";
-        private const string OpenMeldTypeName = "MahjongPrototype.Domain.OpenMeld, Assembly-CSharp";
-        private const string OpenMeldKindTypeName =
-            "MahjongPrototype.Domain.OpenMeldType, Assembly-CSharp";
+        private const string PlayerMeldTypeName = "MahjongPrototype.Domain.PlayerMeld, Assembly-CSharp";
         private const string Mahjong3DDiscardRiverViewTypeName =
             "MahjongPrototype.UI3D.Mahjong3DDiscardRiverView, Assembly-CSharp";
         private const string Mahjong3DOpenMeldViewTypeName =
@@ -450,12 +448,12 @@ namespace MahjongPrototype.Tests
                 object tilePrefab = prefab.AddComponent(Type.GetType(Mahjong3DTileViewTypeName, true));
                 SetPrivateField(view, "tilePrefab", tilePrefab);
 
-                Type openMeldType = RequireType(OpenMeldTypeName);
-                IList openMelds = CreateList(openMeldType);
-                openMelds.Add(CreateOpenMeld("Pon", "5m 5m 5m", "5m", 1));
-                openMelds.Add(CreateOpenMeld("Chi", "3m 4m 5m", "5m", 2));
+                Type playerMeldType = RequireType(PlayerMeldTypeName);
+                IList melds = CreateList(playerMeldType);
+                melds.Add(CreateDiscardDerivedMeld("Pon", "5m 5m 5m", "5m", 1));
+                melds.Add(CreateDiscardDerivedMeld("Chi", "3m 4m 5m", "5m", 2));
 
-                Invoke(view, "RenderOpenMelds", openMelds);
+                Invoke(view, "RenderOpenMelds", melds);
 
                 Component[] tileViews = GetTileViews(root);
                 Assert.That(tileViews.Length, Is.EqualTo(6));
@@ -483,9 +481,9 @@ namespace MahjongPrototype.Tests
                 SetPrivateField(view, "verticalTileSpacing", 2f);
                 SetPrivateField(view, "horizontalTileSpacing", 1f);
 
-                IList openMelds = CreateList(RequireType(OpenMeldTypeName));
-                openMelds.Add(CreateOpenMeld("Chi", "3m 4m 5m", "4m", 1, "East", "North"));
-                Invoke(view, "RenderOpenMelds", openMelds);
+                IList melds = CreateList(RequireType(PlayerMeldTypeName));
+                melds.Add(CreateDiscardDerivedMeld("Chi", "3m 4m 5m", "4m", 1, "East", "North"));
+                Invoke(view, "RenderOpenMelds", melds);
 
                 Component[] tileViews = GetTileViews(root);
                 Assert.That(tileViews.Length, Is.EqualTo(3));
@@ -521,9 +519,9 @@ namespace MahjongPrototype.Tests
                 object tilePrefab = prefab.AddComponent(Type.GetType(Mahjong3DTileViewTypeName, true));
                 SetPrivateField(view, "tilePrefab", tilePrefab);
 
-                IList openMelds = CreateList(RequireType(OpenMeldTypeName));
-                openMelds.Add(CreateOpenMeld("Pon", "5m 5m 5m", "5m", 1, "East", sourceSeatName));
-                Invoke(view, "RenderOpenMelds", openMelds);
+                IList melds = CreateList(RequireType(PlayerMeldTypeName));
+                melds.Add(CreateDiscardDerivedMeld("Pon", "5m 5m 5m", "5m", 1, "East", sourceSeatName));
+                Invoke(view, "RenderOpenMelds", melds);
 
                 Component[] tileViews = GetTileViews(root);
                 Assert.That(tileViews.Length, Is.EqualTo(3));
@@ -556,10 +554,10 @@ namespace MahjongPrototype.Tests
                 SetPrivateField(view, "horizontalTileSpacing", 1f);
                 SetPrivateField(view, "meldSpacing", 3f);
 
-                IList openMelds = CreateList(RequireType(OpenMeldTypeName));
-                openMelds.Add(CreateOpenMeld("Chi", "3m 4m 5m", "4m", 1, "East", "North"));
-                openMelds.Add(CreateOpenMeld("Pon", "6m 6m 6m", "6m", 2, "East", "South"));
-                Invoke(view, "RenderOpenMelds", openMelds);
+                IList melds = CreateList(RequireType(PlayerMeldTypeName));
+                melds.Add(CreateDiscardDerivedMeld("Chi", "3m 4m 5m", "4m", 1, "East", "North"));
+                melds.Add(CreateDiscardDerivedMeld("Pon", "6m 6m 6m", "6m", 2, "East", "South"));
+                Invoke(view, "RenderOpenMelds", melds);
 
                 Component[] tileViews = GetTileViews(root);
                 Assert.That(tileViews.Length, Is.EqualTo(6));
@@ -601,7 +599,7 @@ namespace MahjongPrototype.Tests
             return claims;
         }
 
-        private static object CreateOpenMeld(
+        private static object CreateDiscardDerivedMeld(
             string kind,
             string tileText,
             string calledTileCode,
@@ -609,14 +607,21 @@ namespace MahjongPrototype.Tests
             string callerSeatName = "East",
             string sourceSeatName = "West")
         {
-            return Activator.CreateInstance(
-                RequireType(OpenMeldTypeName),
-                Enum.Parse(RequireType(OpenMeldKindTypeName), kind),
-                CreateTiles(tileText),
-                Seat(callerSeatName),
-                Seat(sourceSeatName),
-                CreateTile(calledTileCode),
-                sourceDiscardId);
+            Type playerMeldType = RequireType(PlayerMeldTypeName);
+            MethodInfo factory = playerMeldType.GetMethod(
+                "Create" + kind,
+                BindingFlags.Public | BindingFlags.Static);
+            Assert.That(factory, Is.Not.Null);
+            return factory.Invoke(
+                null,
+                new[]
+                {
+                    CreateTiles(tileText),
+                    Seat(callerSeatName),
+                    Seat(sourceSeatName),
+                    CreateTile(calledTileCode),
+                    (object)sourceDiscardId
+                });
         }
 
         private static IList CreateTiles(string tileText)

@@ -23,10 +23,8 @@ namespace MahjongPrototype.Tests
             "MahjongPrototype.Domain.ReactionKind, Assembly-CSharp";
         private const string ReactionWindowCandidateTypeName =
             "MahjongPrototype.Domain.ReactionWindowCandidate, Assembly-CSharp";
-        private const string OpenMeldTypeName =
-            "MahjongPrototype.Domain.OpenMeld, Assembly-CSharp";
-        private const string OpenMeldKindTypeName =
-            "MahjongPrototype.Domain.OpenMeldType, Assembly-CSharp";
+        private const string PlayerMeldTypeName =
+            "MahjongPrototype.Domain.PlayerMeld, Assembly-CSharp";
         private const string WinCheckResultTypeName =
             "MahjongPrototype.Domain.WinCheckResult, Assembly-CSharp";
         private const string WinDeclarationEvaluationResultTypeName =
@@ -82,11 +80,11 @@ namespace MahjongPrototype.Tests
             Assert.That(HandCount(fixture, "East"), Is.EqualTo(2));
             Assert.That(HandTileCodes(fixture, "East"), Is.EqualTo("5m 5m"));
             Assert.That((bool)fixture.Reflection.GetProperty(fixture.GameState, "HasCallOccurred"), Is.True);
-            Assert.That(OpenMeldCount(fixture, "East"), Is.EqualTo(1));
+            Assert.That(MeldCount(fixture, "East"), Is.EqualTo(1));
 
-            object openMeld = OpenMeldAt(fixture, "East", 0);
-            Assert.That(fixture.Reflection.GetProperty(openMeld, "Type").ToString(), Is.EqualTo("Chi"));
-            Assert.That(TileCodes(fixture, fixture.Reflection.GetProperty(openMeld, "Tiles")), Is.EqualTo("3m 4m 5m"));
+            object meld = MeldAt(fixture, "East", 0);
+            Assert.That(fixture.Reflection.GetProperty(meld, "Type").ToString(), Is.EqualTo("Chi"));
+            Assert.That(TileCodes(fixture, fixture.Reflection.GetProperty(meld, "PhysicalTiles")), Is.EqualTo("3m 4m 5m"));
             Assert.That(
                 (bool)fixture.Reflection.Invoke(
                     fixture.GameState,
@@ -115,9 +113,9 @@ namespace MahjongPrototype.Tests
 
             Assert.That((bool)fixture.Reflection.GetProperty(result, "Declared"), Is.True);
             Assert.That(HandCount(fixture, "East"), Is.EqualTo(0));
-            Assert.That(OpenMeldCount(fixture, "East"), Is.EqualTo(1));
+            Assert.That(MeldCount(fixture, "East"), Is.EqualTo(1));
             Assert.That(
-                fixture.Reflection.GetProperty(OpenMeldAt(fixture, "East", 0), "Type").ToString(),
+                fixture.Reflection.GetProperty(MeldAt(fixture, "East", 0), "Type").ToString(),
                 Is.EqualTo("Pon"));
             Assert.That((bool)fixture.Reflection.GetProperty(fixture.GameState, "HasCallOccurred"), Is.True);
         }
@@ -135,7 +133,7 @@ namespace MahjongPrototype.Tests
             Assert.That(CandidateResponseState(fixture, reactionWindow, "Pon"), Is.EqualTo("Declined"));
             Assert.That(CandidateResponseState(fixture, reactionWindow, "Chi"), Is.EqualTo("Declined"));
             Assert.That(HandCount(fixture, "East"), Is.EqualTo(4));
-            Assert.That(OpenMeldCount(fixture, "East"), Is.EqualTo(0));
+            Assert.That(MeldCount(fixture, "East"), Is.EqualTo(0));
             Assert.That((bool)fixture.Reflection.GetProperty(fixture.GameState, "HasCallOccurred"), Is.False);
         }
 
@@ -211,7 +209,7 @@ namespace MahjongPrototype.Tests
                 (bool)claimedDiscardFixture.Reflection.Invoke(
                     claimedDiscardFixture.GameState,
                     "TryClaimDiscard",
-                    claimedDiscardFixture.Reflection.GetProperty(claimedDiscardPreparedCall, "OpenMeld")),
+                    claimedDiscardFixture.Reflection.GetProperty(claimedDiscardPreparedCall, "Meld")),
                 Is.True);
 
             Assert.That(
@@ -286,11 +284,11 @@ namespace MahjongPrototype.Tests
             int sourceDiscardId = (int)fixture.Reflection.GetProperty(
                 fixture.Reflection.GetProperty(reactionWindow, "SourceDiscard"),
                 "Id");
-            object forgedOpenMeld = fixture.Reflection.CreateInstance(
-                fixture.Reflection.RequireType(OpenMeldTypeName),
-                Enum.Parse(fixture.Reflection.RequireType(OpenMeldKindTypeName), "Pon"),
+            object forgedMeld = fixture.Reflection.InvokeStatic(
+                fixture.Reflection.RequireType(PlayerMeldTypeName),
+                "CreatePon",
                 fixture.DataFactory.CreateTileArray("5m", "5m", "5m"),
-                fixture.DataFactory.ParseSeat("South"),
+                fixture.DataFactory.ParseSeat("East"),
                 fixture.DataFactory.ParseSeat("South"),
                 fixture.DataFactory.CreateTile("5m"),
                 sourceDiscardId);
@@ -298,7 +296,7 @@ namespace MahjongPrototype.Tests
                 fixture.Reflection.RequireType(PreparedMeldCallTypeName),
                 candidate,
                 fixture.DataFactory.CreateTileArray("5m", "5m"),
-                forgedOpenMeld);
+                forgedMeld);
 
             Assert.That(TryCommitPreparedCall(fixture, reactionWindow, forgedPreparedCall), Is.False);
             AssertUncommittedState(
@@ -436,7 +434,7 @@ namespace MahjongPrototype.Tests
             int expectedClaimCount)
         {
             Assert.That(HandCount(fixture, "East"), Is.EqualTo(expectedHandCount));
-            Assert.That(OpenMeldCount(fixture, "East"), Is.EqualTo(0));
+            Assert.That(MeldCount(fixture, "East"), Is.EqualTo(0));
             Assert.That(
                 fixture.Collections.Count(
                     fixture.Reflection.GetProperty(fixture.GameState, "DiscardClaims")),
@@ -456,9 +454,9 @@ namespace MahjongPrototype.Tests
             string expectedMeldType)
         {
             Assert.That(HandCount(fixture, "East"), Is.EqualTo(0));
-            Assert.That(OpenMeldCount(fixture, "East"), Is.EqualTo(1));
+            Assert.That(MeldCount(fixture, "East"), Is.EqualTo(1));
             Assert.That(
-                fixture.Reflection.GetProperty(OpenMeldAt(fixture, "East", 0), "Type").ToString(),
+                fixture.Reflection.GetProperty(MeldAt(fixture, "East", 0), "Type").ToString(),
                 Is.EqualTo(expectedMeldType));
             Assert.That(
                 fixture.Collections.Count(
@@ -480,7 +478,7 @@ namespace MahjongPrototype.Tests
             object result = TryDeclare(fixture, reactionWindow, "East", kindName, optionId);
             Assert.That((bool)fixture.Reflection.GetProperty(result, "Declared"), Is.False);
             Assert.That(HandCount(fixture, "East"), Is.EqualTo(expectedHandCount));
-            Assert.That(OpenMeldCount(fixture, "East"), Is.EqualTo(0));
+            Assert.That(MeldCount(fixture, "East"), Is.EqualTo(0));
             Assert.That((bool)fixture.Reflection.GetProperty(fixture.GameState, "HasCallOccurred"), Is.False);
         }
 
@@ -593,11 +591,11 @@ namespace MahjongPrototype.Tests
                 "Count");
         }
 
-        private static int OpenMeldCount(Fixture fixture, string seatName)
+        private static int MeldCount(Fixture fixture, string seatName)
         {
             return fixture.Collections.Count(fixture.Reflection.GetProperty(
                 fixture.DataFactory.GetPlayerSeat(fixture.GameState, seatName),
-                "OpenMelds"));
+                "Melds"));
         }
 
         private static string HandTileCodes(Fixture fixture, string seatName)
@@ -608,12 +606,12 @@ namespace MahjongPrototype.Tests
             return TileCodes(fixture, fixture.Reflection.Invoke(hand, "GetTiles"));
         }
 
-        private static object OpenMeldAt(Fixture fixture, string seatName, int index)
+        private static object MeldAt(Fixture fixture, string seatName, int index)
         {
             return fixture.Collections.Item(
                 fixture.Reflection.GetProperty(
                     fixture.DataFactory.GetPlayerSeat(fixture.GameState, seatName),
-                    "OpenMelds"),
+                    "Melds"),
                 index);
         }
 

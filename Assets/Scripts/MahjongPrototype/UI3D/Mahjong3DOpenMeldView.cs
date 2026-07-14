@@ -24,11 +24,11 @@ namespace MahjongPrototype.UI3D
         private readonly List<Mahjong3DTileView> activeTiles = new List<Mahjong3DTileView>();
         private bool warnedMissingTilePrefab;
 
-        public void RenderOpenMelds(IReadOnlyList<OpenMeld> openMelds)
+        public void RenderOpenMelds(IReadOnlyList<PlayerMeld> melds)
         {
             Clear();
 
-            if (openMelds == null)
+            if (melds == null)
                 return;
 
             if (tilePrefab == null)
@@ -37,7 +37,7 @@ namespace MahjongPrototype.UI3D
                 return;
             }
 
-            List<List<MeldTileLayout>> meldLayouts = BuildMeldLayouts(openMelds);
+            List<List<MeldTileLayout>> meldLayouts = BuildMeldLayouts(melds);
             Transform root = spawnRoot != null ? spawnRoot : transform;
             float rightEdgeX = 0f;
             int tileIndex = 0;
@@ -84,28 +84,30 @@ namespace MahjongPrototype.UI3D
             activeTiles.Clear();
         }
 
-        private List<List<MeldTileLayout>> BuildMeldLayouts(IReadOnlyList<OpenMeld> openMelds)
+        private List<List<MeldTileLayout>> BuildMeldLayouts(IReadOnlyList<PlayerMeld> melds)
         {
             List<List<MeldTileLayout>> layouts = new List<List<MeldTileLayout>>();
-            for (int meldIndex = 0; meldIndex < openMelds.Count; meldIndex++)
+            for (int meldIndex = 0; meldIndex < melds.Count; meldIndex++)
             {
-                OpenMeld openMeld = openMelds[meldIndex];
-                if (openMeld == null)
+                PlayerMeld meld = melds[meldIndex];
+                // PROTOTYPE: Kan placement is deferred until kan calls are implemented.
+                if (meld == null ||
+                    (meld.Type != PlayerMeldType.Chi && meld.Type != PlayerMeldType.Pon))
                     continue;
 
-                layouts.Add(BuildMeldTileLayout(openMeld));
+                layouts.Add(BuildMeldTileLayout(meld));
             }
 
             return layouts;
         }
 
-        private static List<MeldTileLayout> BuildMeldTileLayout(OpenMeld openMeld)
+        private static List<MeldTileLayout> BuildMeldTileLayout(PlayerMeld meld)
         {
-            IReadOnlyList<Tile> tiles = openMeld.Tiles;
+            IReadOnlyList<Tile> tiles = meld.PhysicalTiles;
             List<MeldTileLayout> layout = new List<MeldTileLayout>(tiles.Count);
-            if (openMeld.Type == OpenMeldType.Chi)
+            if (meld.Type == PlayerMeldType.Chi)
             {
-                int calledTileIndex = FindCalledTileIndex(tiles, openMeld.CalledTile);
+                int calledTileIndex = FindCalledTileIndex(tiles, meld.AcquiredTile.Value);
                 if (calledTileIndex >= 0)
                     layout.Add(new MeldTileLayout(tiles[calledTileIndex], true));
 
@@ -118,7 +120,7 @@ namespace MahjongPrototype.UI3D
                 return layout;
             }
 
-            int ponCalledTileIndex = ResolvePonCalledTileIndex(openMeld);
+            int ponCalledTileIndex = ResolvePonCalledTileIndex(meld);
             for (int tileIndex = 0; tileIndex < tiles.Count; tileIndex++)
             {
                 layout.Add(new MeldTileLayout(tiles[tileIndex], tileIndex == ponCalledTileIndex));
@@ -162,10 +164,10 @@ namespace MahjongPrototype.UI3D
             return -1;
         }
 
-        private static int ResolvePonCalledTileIndex(OpenMeld openMeld)
+        private static int ResolvePonCalledTileIndex(PlayerMeld meld)
         {
             int relativeSourceSeat =
-                ((int)openMeld.SourceSeat - (int)openMeld.CallerSeat + 4) % 4;
+                ((int)meld.SourceSeat.Value - (int)meld.OwnerSeat + 4) % 4;
             switch (relativeSourceSeat)
             {
                 case 3:

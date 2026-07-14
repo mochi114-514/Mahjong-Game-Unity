@@ -211,9 +211,9 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
                 "Count");
         }
 
-        public int OpenMeldCount(string seatName)
+        public int MeldCount(string seatName)
         {
-            return collections.Count(reflection.GetProperty(GetPlayerSeat(seatName), "OpenMelds"));
+            return collections.Count(reflection.GetProperty(GetPlayerSeat(seatName), "Melds"));
         }
 
         public bool IsClosed(string seatName)
@@ -228,10 +228,10 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
                 "IsTemporaryFuriten");
         }
 
-        public object OpenMeldAt(string seatName, int index)
+        public object MeldAt(string seatName, int index)
         {
             return collections.Item(
-                reflection.GetProperty(GetPlayerSeat(seatName), "OpenMelds"),
+                reflection.GetProperty(GetPlayerSeat(seatName), "Melds"),
                 index);
         }
 

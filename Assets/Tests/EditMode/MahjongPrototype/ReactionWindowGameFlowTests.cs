@@ -313,17 +313,17 @@ namespace MahjongPrototype.Tests
                 Assert.That(session.Query.TurnPhaseName, Is.EqualTo("WaitingForDiscardAfterCall"));
                 Assert.That(session.Query.HasDrawnTile("East"), Is.False);
                 Assert.That(session.Query.HandCount("East"), Is.EqualTo(11));
-                Assert.That(session.Query.OpenMeldCount("East"), Is.EqualTo(1));
+                Assert.That(session.Query.MeldCount("East"), Is.EqualTo(1));
                 Assert.That(session.Query.IsClosed("East"), Is.False);
                 Assert.That(session.Query.TryGetDiscardClaim(sourceDiscardId, out object claim), Is.True);
-                Assert.That(session.Reflection.GetProperty(claim, "CallerSeat").ToString(), Is.EqualTo("East"));
+                Assert.That(session.Reflection.GetProperty(claim, "ClaimingSeat").ToString(), Is.EqualTo("East"));
                 Assert.That(CountDiscardsWithId(session, sourceDiscardId), Is.EqualTo(1));
 
-                object openMeld = session.Query.OpenMeldAt("East", 0);
-                Assert.That(session.Reflection.GetProperty(openMeld, "Type").ToString(), Is.EqualTo("Pon"));
-                Assert.That(session.Collections.Count(session.Reflection.GetProperty(openMeld, "Tiles")), Is.EqualTo(3));
-                Assert.That(session.Reflection.GetProperty(openMeld, "SourceSeat").ToString(), Is.EqualTo("West"));
-                Assert.That((int)session.Reflection.GetProperty(openMeld, "SourceDiscardId"), Is.EqualTo(sourceDiscardId));
+                object meld = session.Query.MeldAt("East", 0);
+                Assert.That(session.Reflection.GetProperty(meld, "Type").ToString(), Is.EqualTo("Pon"));
+                Assert.That(session.Collections.Count(session.Reflection.GetProperty(meld, "PhysicalTiles")), Is.EqualTo(3));
+                Assert.That(session.Reflection.GetProperty(meld, "SourceSeat").ToString(), Is.EqualTo("West"));
+                Assert.That((int)session.Reflection.GetProperty(meld, "SourceDiscardId"), Is.EqualTo(sourceDiscardId));
             }
         }
 
@@ -383,12 +383,12 @@ namespace MahjongPrototype.Tests
                 Assert.That(session.Query.TurnPhaseName, Is.EqualTo("WaitingForDiscardAfterCall"));
                 Assert.That(session.Query.HasDrawnTile("East"), Is.False);
                 Assert.That(session.Query.HandCount("East"), Is.EqualTo(11));
-                Assert.That(session.Query.OpenMeldCount("East"), Is.EqualTo(1));
+                Assert.That(session.Query.MeldCount("East"), Is.EqualTo(1));
 
-                object openMeld = session.Query.OpenMeldAt("East", 0);
-                Assert.That(session.Reflection.GetProperty(openMeld, "Type").ToString(), Is.EqualTo("Chi"));
+                object meld = session.Query.MeldAt("East", 0);
+                Assert.That(session.Reflection.GetProperty(meld, "Type").ToString(), Is.EqualTo("Chi"));
                 Assert.That(
-                    session.Collections.Count(session.Reflection.GetProperty(openMeld, "Tiles")),
+                    session.Collections.Count(session.Reflection.GetProperty(meld, "PhysicalTiles")),
                     Is.EqualTo(3));
             }
         }
@@ -465,7 +465,7 @@ namespace MahjongPrototype.Tests
                     session.Commands.TryRequestDeclineMeldCallsForSeat("East", windowId),
                     Is.True);
                 Assert.That(session.Query.IsReactionWindowPending, Is.False);
-                Assert.That(session.Query.OpenMeldCount("East"), Is.EqualTo(0));
+                Assert.That(session.Query.MeldCount("East"), Is.EqualTo(0));
                 Assert.That(session.Query.IsTemporaryFuriten("East"), Is.True);
                 Assert.That(HasCallOccurred(session), Is.False);
                 Assert.That(session.Query.CurrentTurnName, Is.EqualTo("East"));
@@ -547,21 +547,19 @@ namespace MahjongPrototype.Tests
         {
             using (MahjongGameFlowTestSession session = CreateSession(1))
             {
-                Type openMeldType = session.Reflection.RequireType(
-                    "MahjongPrototype.Domain.OpenMeld, Assembly-CSharp");
-                Type openMeldKindType = session.Reflection.RequireType(
-                    "MahjongPrototype.Domain.OpenMeldType, Assembly-CSharp");
-                IList openMelds = (IList)Activator.CreateInstance(
-                    typeof(List<>).MakeGenericType(openMeldType));
-                object openMeld = session.Reflection.CreateInstance(
-                    openMeldType,
-                    Enum.Parse(openMeldKindType, "Pon"),
+                Type playerMeldType = session.Reflection.RequireType(
+                    "MahjongPrototype.Domain.PlayerMeld, Assembly-CSharp");
+                IList melds = (IList)Activator.CreateInstance(
+                    typeof(List<>).MakeGenericType(playerMeldType));
+                object meld = session.Reflection.InvokeStatic(
+                    playerMeldType,
+                    "CreatePon",
                     session.DataFactory.CreateTileArray("5m", "5m", "5m"),
                     session.DataFactory.ParseSeat("East"),
                     session.DataFactory.ParseSeat("West"),
                     session.DataFactory.CreateTile("5m"),
                     1);
-                openMelds.Add(openMeld);
+                melds.Add(meld);
 
                 object winChecker = session.Reflection.CreateInstance(
                     session.Reflection.RequireType("MahjongPrototype.Services.WinChecker, Assembly-CSharp"));
@@ -574,7 +572,7 @@ namespace MahjongPrototype.Tests
                         "6s", "6s",
                         "6p", "6p"),
                     session.DataFactory.CreateTile("6s"),
-                    openMelds);
+                    melds);
 
                 Assert.That(canWin, Is.True);
             }

@@ -55,7 +55,7 @@ namespace MahjongPrototype.Services
                 return FuritenSeatEvaluationResult.NotEvaluated(seat);
 
             IReadOnlyList<Tile> handTiles = playerSeat.Hand.GetTiles();
-            if (!TryBuildTypeCounts(handTiles, playerSeat.OpenMelds, out int[] typeCounts))
+            if (!TryBuildTypeCounts(handTiles, playerSeat.Melds, out int[] typeCounts))
                 return FuritenSeatEvaluationResult.NotEvaluated(seat);
 
             bool[] selfDiscardedTypeIndices = BuildSelfDiscardedTypeIndices(
@@ -73,7 +73,7 @@ namespace MahjongPrototype.Services
                 if (!winChecker.CanWinWithTile(
                         handTiles,
                         winningTile,
-                        playerSeat.OpenMelds))
+                        playerSeat.Melds))
                     continue;
 
                 isTenpai = true;
@@ -91,13 +91,16 @@ namespace MahjongPrototype.Services
 
         private static bool TryBuildTypeCounts(
             IReadOnlyList<Tile> handTiles,
-            IReadOnlyList<OpenMeld> openMelds,
+            IReadOnlyList<PlayerMeld> melds,
             out int[] typeCounts)
         {
             typeCounts = new int[TileTypeCount];
 
-            int openMeldCount = openMelds != null ? openMelds.Count : 0;
-            if (handTiles == null || handTiles.Count != BaseHandTileCount - openMeldCount * 3)
+            if (!PlayerMeldRules.TryGetExpectedConcealedTileCount(
+                    BaseHandTileCount,
+                    melds,
+                    out int expectedConcealedTileCount) ||
+                handTiles == null || handTiles.Count != expectedConcealedTileCount)
                 return false;
 
             for (int i = 0; i < handTiles.Count; i++)
@@ -112,29 +115,7 @@ namespace MahjongPrototype.Services
                     return false;
             }
 
-            if (openMelds != null)
-            {
-                for (int i = 0; i < openMelds.Count; i++)
-                {
-                    OpenMeld openMeld = openMelds[i];
-                    if (openMeld == null)
-                        return false;
-
-                    for (int j = 0; j < openMeld.Tiles.Count; j++)
-                    {
-                        Tile tile = openMeld.Tiles[j];
-                        int typeIndex = tile.TypeIndex;
-                        if (!tile.IsValid || typeIndex < 0 || typeIndex >= TileTypeCount)
-                            return false;
-
-                        typeCounts[typeIndex]++;
-                        if (typeCounts[typeIndex] > 4)
-                            return false;
-                    }
-                }
-            }
-
-            return true;
+            return PlayerMeldRules.TryAddPhysicalTileCounts(melds, typeCounts, 4);
         }
 
         private static bool[] BuildSelfDiscardedTypeIndices(

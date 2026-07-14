@@ -217,7 +217,7 @@ namespace MahjongPrototype.UI3D
             discardRiverView.Clear();
         }
 
-        public void RenderOpenMelds(IReadOnlyList<OpenMeld> openMelds)
+        public void RenderOpenMelds(IReadOnlyList<PlayerMeld> melds)
         {
             if (openMeldView == null)
             {
@@ -225,7 +225,7 @@ namespace MahjongPrototype.UI3D
                 return;
             }
 
-            openMeldView.RenderOpenMelds(openMelds);
+            openMeldView.RenderOpenMelds(melds);
         }
 
         public void ClearOpenMelds()

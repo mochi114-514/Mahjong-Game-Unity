@@ -190,12 +190,12 @@ namespace MahjongPrototype.Services
                     reactionWindow.WindowId,
                     reactionWindow.SourceDiscard,
                     result.Candidate,
-                    result.OpenMeld)
+                    result.Meld)
                 : ReactionWindowResolution.ChiDeclared(
                     reactionWindow.WindowId,
                     reactionWindow.SourceDiscard,
                     result.Candidate,
-                    result.OpenMeld);
+                    result.Meld);
             BeginResolutionIfNeeded(reactionWindow, resolution);
             return ReactionWindowAnswerResult.AcceptedAnswer(
                 reactionWindow.WindowId,

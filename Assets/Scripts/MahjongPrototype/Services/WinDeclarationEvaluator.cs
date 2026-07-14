@@ -23,7 +23,7 @@ namespace MahjongPrototype.Services
             WinningHandAnalysisResult analysis = winChecker.AnalyzeWithTileDetailed(
                 context.HandTiles,
                 context.WinningTile,
-                context.OpenMelds);
+                context.Melds);
             WinCheckResult winCheckResult = WinChecker.ToWinCheckResult(analysis);
             if (!winCheckResult.CanWin)
             {
@@ -49,7 +49,7 @@ namespace MahjongPrototype.Services
                 context.IsFirstTurnTsumoEligible,
                 context.IsLastLiveWallDraw,
                 context.IsLastLiveWallDiscard,
-                context.OpenMelds);
+                context.Melds);
             HandEvaluationResult handEvaluationResult = handEvaluator.Evaluate(handContext);
             return new WinDeclarationEvaluationResult(
                 winCheckResult,

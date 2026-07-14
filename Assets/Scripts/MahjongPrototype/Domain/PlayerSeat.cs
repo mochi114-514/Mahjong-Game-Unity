@@ -6,7 +6,7 @@ namespace MahjongPrototype.Domain
     public sealed class PlayerSeat
     {
         private Tile? drawnTile;
-        private readonly List<OpenMeld> openMelds = new List<OpenMeld>();
+        private readonly List<PlayerMeld> melds = new List<PlayerMeld>();
 
         public PlayerSeat(SeatId seatId)
         {
@@ -24,8 +24,20 @@ namespace MahjongPrototype.Domain
         public bool IsIppatsuEligible { get; private set; }
         public bool IsTemporaryFuriten { get; private set; }
         public bool IsReachPassFuriten { get; private set; }
-        public IReadOnlyList<OpenMeld> OpenMelds => openMelds;
-        public bool IsClosed => openMelds.Count == 0;
+        public IReadOnlyList<PlayerMeld> Melds => melds;
+        public bool IsClosed
+        {
+            get
+            {
+                for (int i = 0; i < melds.Count; i++)
+                {
+                    if (melds[i].IsOpen)
+                        return false;
+                }
+
+                return true;
+            }
+        }
 
         public void SetDrawnTile(Tile tile)
         {
@@ -102,19 +114,19 @@ namespace MahjongPrototype.Domain
             IsTemporaryFuriten = false;
         }
 
-        public void AddOpenMeld(OpenMeld openMeld)
+        public void AddMeld(PlayerMeld meld)
         {
-            if (openMeld == null)
-                throw new ArgumentNullException(nameof(openMeld));
-            if (!CanAddOpenMeld(openMeld))
-                throw new InvalidOperationException("Open meld caller seat must match its owner.");
+            if (meld == null)
+                throw new ArgumentNullException(nameof(meld));
+            if (!CanAddMeld(meld))
+                throw new InvalidOperationException("Meld owner seat must match its player seat.");
 
-            openMelds.Add(openMeld);
+            melds.Add(meld);
         }
 
-        public bool CanAddOpenMeld(OpenMeld openMeld)
+        public bool CanAddMeld(PlayerMeld meld)
         {
-            return openMeld != null && openMeld.CallerSeat == SeatId;
+            return meld != null && meld.OwnerSeat == SeatId;
         }
     }
 }

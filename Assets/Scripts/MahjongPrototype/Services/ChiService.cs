@@ -104,14 +104,13 @@ namespace MahjongPrototype.Services
                 return false;
             }
 
-            OpenMeld openMeld = new OpenMeld(
-                OpenMeldType.Chi,
+            PlayerMeld meld = PlayerMeld.CreateChi(
                 option.MeldTiles,
                 candidate.Seat,
                 sourceDiscard.ActorSeat,
                 sourceDiscard.Tile,
                 sourceDiscard.Id);
-            preparedCall = new PreparedMeldCall(candidate, option.HandTiles, openMeld);
+            preparedCall = new PreparedMeldCall(candidate, option.HandTiles, meld);
             return true;
         }
 

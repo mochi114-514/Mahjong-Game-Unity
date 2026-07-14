@@ -273,7 +273,7 @@ namespace MahjongPrototype.Domain
             bool isFirstTurnTsumoEligible,
             bool isLastLiveWallDraw,
             bool isLastLiveWallDiscard,
-            IReadOnlyList<OpenMeld> openMelds)
+            IReadOnlyList<PlayerMeld> melds)
         {
             HandTiles = handTiles ?? throw new ArgumentNullException(nameof(handTiles));
             WinningTile = winningTile;
@@ -291,7 +291,7 @@ namespace MahjongPrototype.Domain
             IsFirstTurnTsumoEligible = isFirstTurnTsumoEligible;
             IsLastLiveWallDraw = isLastLiveWallDraw;
             IsLastLiveWallDiscard = isLastLiveWallDiscard;
-            OpenMelds = openMelds ?? Array.Empty<OpenMeld>();
+            Melds = melds ?? Array.Empty<PlayerMeld>();
         }
 
         public IReadOnlyList<Tile> HandTiles { get; }
@@ -310,6 +310,6 @@ namespace MahjongPrototype.Domain
         public bool IsFirstTurnTsumoEligible { get; }
         public bool IsLastLiveWallDraw { get; }
         public bool IsLastLiveWallDiscard { get; }
-        public IReadOnlyList<OpenMeld> OpenMelds { get; }
+        public IReadOnlyList<PlayerMeld> Melds { get; }
     }
 }

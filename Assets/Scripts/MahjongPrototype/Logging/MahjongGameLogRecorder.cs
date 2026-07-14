@@ -204,7 +204,7 @@ namespace MahjongPrototype.Logging
             DevLog.Record(
                 "Reaction",
                 "ReactionWindowResolved",
-                $"resolution={resolution.Type}; sourceDiscardId={resolution.SourceDiscard.Id}; caller={resolution.Candidate?.Seat}; openMeld={resolution.OpenMeld?.Type}",
+                $"resolution={resolution.Type}; sourceDiscardId={resolution.SourceDiscard.Id}; caller={resolution.Candidate?.Seat}; meld={resolution.Meld?.Type}",
                 seat: resolution.SourceDiscard.ActorSeat,
                 tile: resolution.SourceDiscard.Tile,
                 wallCount: GetWallCount(),

@@ -25,9 +25,9 @@ namespace MahjongPrototype.Services
         public bool CanWinWithTile(
             IReadOnlyList<Tile> handTiles,
             Tile winningTile,
-            IReadOnlyList<OpenMeld> openMelds)
+            IReadOnlyList<PlayerMeld> melds)
         {
-            return analyzer.AnalyzeWithTile(handTiles, winningTile, openMelds).CanWin;
+            return analyzer.AnalyzeWithTile(handTiles, winningTile, melds).CanWin;
         }
 
         public WinCheckResult CheckWinWithTile(IReadOnlyList<Tile> handTiles, Tile winningTile)
@@ -55,9 +55,9 @@ namespace MahjongPrototype.Services
         internal WinningHandAnalysisResult AnalyzeWithTileDetailed(
             IReadOnlyList<Tile> handTiles,
             Tile winningTile,
-            IReadOnlyList<OpenMeld> openMelds)
+            IReadOnlyList<PlayerMeld> melds)
         {
-            return analyzer.AnalyzeWithTile(handTiles, winningTile, openMelds);
+            return analyzer.AnalyzeWithTile(handTiles, winningTile, melds);
         }
 
         internal static WinCheckResult ToWinCheckResult(WinningHandAnalysisResult analysisResult)

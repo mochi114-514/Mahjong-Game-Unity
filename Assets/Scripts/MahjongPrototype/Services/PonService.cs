@@ -59,14 +59,13 @@ namespace MahjongPrototype.Services
                 sourceDiscard.Tile,
                 sourceDiscard.Tile
             };
-            OpenMeld openMeld = new OpenMeld(
-                OpenMeldType.Pon,
+            PlayerMeld meld = PlayerMeld.CreatePon(
                 new[] { sourceDiscard.Tile, sourceDiscard.Tile, sourceDiscard.Tile },
                 candidate.Seat,
                 sourceDiscard.ActorSeat,
                 sourceDiscard.Tile,
                 sourceDiscard.Id);
-            preparedCall = new PreparedMeldCall(candidate, handTiles, openMeld);
+            preparedCall = new PreparedMeldCall(candidate, handTiles, meld);
             return true;
         }
 

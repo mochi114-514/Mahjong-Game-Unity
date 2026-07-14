@@ -1042,7 +1042,7 @@ namespace MahjongPrototype
 
         private void BeginTurnAfterMeldCall(ReactionWindowResolution resolution)
         {
-            if (resolution.Candidate == null || resolution.OpenMeld == null)
+            if (resolution.Candidate == null || resolution.Meld == null)
                 return;
 
             EnsureTurnFlowService();
@@ -1052,7 +1052,7 @@ namespace MahjongPrototype
                 resolution.Candidate.Seat,
                 gameState.TurnIndex);
             EventPublisher.NotifyTurnDebug(
-                $"{resolution.OpenMeld.Type}Declared",
+                $"{resolution.Meld.Type}Declared",
                 $"windowSourceDiscardId={resolution.SourceDiscard.Id}; caller={resolution.Candidate.Seat}; source={resolution.SourceDiscard.ActorSeat}; phase={gameState.TurnPhase}",
                 seat: resolution.Candidate.Seat,
                 tile: resolution.SourceDiscard.Tile,

@@ -123,7 +123,7 @@ namespace MahjongPrototype.Services
             if (!gameState.TryCommitMeldCall(reactionWindow, preparedCall, out reason))
                 return MeldCallDeclarationResult.Rejected(reason);
 
-            return MeldCallDeclarationResult.Succeeded(kind, candidate, preparedCall.OpenMeld);
+            return MeldCallDeclarationResult.Succeeded(kind, candidate, preparedCall.Meld);
         }
 
         public MeldCallDeclineResult TryDecline(
@@ -251,7 +251,7 @@ namespace MahjongPrototype.Services
         public PreparedMeldCall(
             ReactionWindowCandidate candidate,
             IReadOnlyList<Tile> handTiles,
-            OpenMeld openMeld)
+            PlayerMeld meld)
         {
             Candidate = candidate ?? throw new ArgumentNullException(nameof(candidate));
             if (handTiles == null)
@@ -262,12 +262,12 @@ namespace MahjongPrototype.Services
                 copiedHandTiles.Add(handTiles[i]);
 
             HandTiles = copiedHandTiles.AsReadOnly();
-            OpenMeld = openMeld ?? throw new ArgumentNullException(nameof(openMeld));
+            Meld = meld ?? throw new ArgumentNullException(nameof(meld));
         }
 
         public ReactionWindowCandidate Candidate { get; }
         public IReadOnlyList<Tile> HandTiles { get; }
-        public OpenMeld OpenMeld { get; }
+        public PlayerMeld Meld { get; }
     }
 
     public readonly struct MeldCallDeclarationResult
@@ -276,22 +276,22 @@ namespace MahjongPrototype.Services
             bool declared,
             MeldCallKind kind,
             ReactionWindowCandidate candidate,
-            OpenMeld openMeld,
+            PlayerMeld meld,
             string reason)
         {
             Declared = declared;
             Kind = kind;
             Candidate = candidate;
-            OpenMeld = openMeld;
+            Meld = meld;
             Reason = reason ?? string.Empty;
         }
 
         public static MeldCallDeclarationResult Succeeded(
             MeldCallKind kind,
             ReactionWindowCandidate candidate,
-            OpenMeld openMeld)
+            PlayerMeld meld)
         {
-            return new MeldCallDeclarationResult(true, kind, candidate, openMeld, string.Empty);
+            return new MeldCallDeclarationResult(true, kind, candidate, meld, string.Empty);
         }
 
         public static MeldCallDeclarationResult Rejected(string reason)
@@ -307,7 +307,7 @@ namespace MahjongPrototype.Services
         public bool Declared { get; }
         public MeldCallKind Kind { get; }
         public ReactionWindowCandidate Candidate { get; }
-        public OpenMeld OpenMeld { get; }
+        public PlayerMeld Meld { get; }
         public string Reason { get; }
     }
 

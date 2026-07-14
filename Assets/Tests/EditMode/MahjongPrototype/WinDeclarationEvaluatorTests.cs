@@ -15,7 +15,7 @@ namespace MahjongPrototype.Tests
             {
                 object catalog = driver.CreateCatalog(
                     driver.CreateDefinition("Tanyao", "One", "One"));
-                object openMelds = driver.CreateOpenChiMelds("3m 4m 5m", "5m");
+                object melds = driver.CreateOpenChiMelds("3m 4m 5m", "5m");
 
                 object result = driver.EvaluateWithTile(
                     catalog,
@@ -23,7 +23,7 @@ namespace MahjongPrototype.Tests
                     "6s",
                     "Ron",
                     isClosed: false,
-                    openMelds: openMelds);
+                    melds: melds);
 
                 Assert.That(driver.IsWinningShape(result), Is.True);
                 Assert.That(driver.CanDeclareWin(result), Is.True);

@@ -33,8 +33,11 @@ namespace MahjongPrototype.Services
                 return NoYakuTenpaiEvaluationResult.NotTenpai;
 
             PlayerSeat selfPlayerSeat = gameState.GetPlayerSeat(gameState.SelfSeat);
-            int expectedConcealedTileCount = 13 - selfPlayerSeat.OpenMelds.Count * 3;
-            if (selfPlayerSeat.Hand.Count != expectedConcealedTileCount ||
+            if (!PlayerMeldRules.TryGetExpectedConcealedTileCount(
+                    13,
+                    selfPlayerSeat.Melds,
+                    out int expectedConcealedTileCount) ||
+                selfPlayerSeat.Hand.Count != expectedConcealedTileCount ||
                 selfPlayerSeat.HasDrawnTile)
                 return NoYakuTenpaiEvaluationResult.NotTenpai;
 
@@ -45,7 +48,7 @@ namespace MahjongPrototype.Services
                 gameState.SelfSeat,
                 selfPlayerSeat.IsReachDeclared,
                 selfPlayerSeat.IsClosed,
-                selfPlayerSeat.OpenMelds);
+                selfPlayerSeat.Melds);
         }
 
         public WinDecisionEvaluation EvaluateTsumo(MahjongGameState gameState)
@@ -224,7 +227,7 @@ namespace MahjongPrototype.Services
                 IsLastLiveWallDraw(gameState, winnerSeat, winningTile, winType),
                 winType == WinType.Ron && sourceDiscard.HasValue &&
                     sourceDiscard.Value.IsLastLiveWallDiscard,
-                playerSeat.OpenMelds);
+                playerSeat.Melds);
         }
 
         private static bool IsNoYakuWinningShape(

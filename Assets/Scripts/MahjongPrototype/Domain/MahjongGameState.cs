@@ -311,20 +311,19 @@ namespace MahjongPrototype.Domain
             return false;
         }
 
-        public bool TryClaimDiscard(OpenMeld openMeld)
+        public bool TryClaimDiscard(PlayerMeld meld)
         {
-            if (openMeld == null || !CanClaimDiscard(
-                    openMeld.SourceDiscardId,
-                    openMeld.CallerSeat,
-                    openMeld.SourceSeat,
-                    openMeld.CalledTile))
+            if (meld == null || !meld.HasDiscardSource || !CanClaimDiscard(
+                    meld.SourceDiscardId.Value,
+                    meld.OwnerSeat,
+                    meld.SourceSeat.Value,
+                    meld.AcquiredTile.Value))
             {
                 return false;
             }
 
-            discardClaims.Add(
-                openMeld.SourceDiscardId,
-                new DiscardClaim(openMeld.SourceDiscardId, openMeld.CallerSeat, openMeld));
+            DiscardClaim claim = new DiscardClaim(meld);
+            discardClaims.Add(claim.DiscardId, claim);
             return true;
         }
 
@@ -343,38 +342,38 @@ namespace MahjongPrototype.Domain
             }
 
             if (preparedCall == null || preparedCall.Candidate == null ||
-                preparedCall.OpenMeld == null || preparedCall.HandTiles == null)
+                preparedCall.Meld == null || preparedCall.HandTiles == null)
             {
                 reason = "MeldCallCandidateMissing";
                 return false;
             }
 
             ReactionWindowCandidate candidate = preparedCall.Candidate;
-            OpenMeld openMeld = preparedCall.OpenMeld;
+            PlayerMeld meld = preparedCall.Meld;
             if (!ContainsPendingMeldCallCandidate(reactionWindow, candidate) ||
                 !IsPreparedMeldCallConsistent(
                     reactionWindow.SourceDiscard,
                     candidate,
                     preparedCall.HandTiles,
-                    openMeld))
+                    meld))
             {
                 reason = "MeldCallStateChanged";
                 return false;
             }
 
             PlayerSeat playerSeat = GetPlayerSeat(candidate.Seat);
-            if (!playerSeat.CanAddOpenMeld(openMeld) ||
+            if (!playerSeat.CanAddMeld(meld) ||
                 !playerSeat.Hand.ContainsTilesByValue(preparedCall.HandTiles))
             {
                 reason = "MeldCallTilesMissing";
                 return false;
             }
 
-            if (!CanClaimDiscard(
-                    openMeld.SourceDiscardId,
-                    openMeld.CallerSeat,
-                    openMeld.SourceSeat,
-                    openMeld.CalledTile))
+            if (!meld.HasDiscardSource || !CanClaimDiscard(
+                    meld.SourceDiscardId.Value,
+                    meld.OwnerSeat,
+                    meld.SourceSeat.Value,
+                    meld.AcquiredTile.Value))
             {
                 reason = "MeldCallStateChanged";
                 return false;
@@ -388,10 +387,9 @@ namespace MahjongPrototype.Domain
                 return false;
             }
 
-            playerSeat.AddOpenMeld(openMeld);
-            discardClaims.Add(
-                openMeld.SourceDiscardId,
-                new DiscardClaim(openMeld.SourceDiscardId, openMeld.CallerSeat, openMeld));
+            playerSeat.AddMeld(meld);
+            DiscardClaim claim = new DiscardClaim(meld);
+            discardClaims.Add(claim.DiscardId, claim);
             HasCallOccurred = true;
             candidate.Declare();
             reactionWindow.CloseMeldCallsExcept(candidate);
@@ -706,13 +704,13 @@ namespace MahjongPrototype.Domain
             DiscardRecord sourceDiscard,
             ReactionWindowCandidate candidate,
             IReadOnlyList<Tile> handTiles,
-            OpenMeld openMeld)
+            PlayerMeld meld)
         {
             if (candidate == null || handTiles == null || handTiles.Count != 2 ||
-                openMeld == null || openMeld.CallerSeat != candidate.Seat ||
-                openMeld.SourceDiscardId != sourceDiscard.Id ||
-                openMeld.SourceSeat != sourceDiscard.ActorSeat ||
-                openMeld.CalledTile != sourceDiscard.Tile)
+                meld == null || !meld.HasDiscardSource || meld.OwnerSeat != candidate.Seat ||
+                meld.SourceDiscardId.Value != sourceDiscard.Id ||
+                meld.SourceSeat.Value != sourceDiscard.ActorSeat ||
+                meld.AcquiredTile.Value != sourceDiscard.Tile)
             {
                 return false;
             }
@@ -721,14 +719,14 @@ namespace MahjongPrototype.Domain
             {
                 return candidate.PonDetail != null &&
                     candidate.PonDetail.CalledTile == sourceDiscard.Tile &&
-                    openMeld.Type == OpenMeldType.Pon &&
+                    meld.Type == PlayerMeldType.Pon &&
                     ContainsOnlyTile(handTiles, sourceDiscard.Tile) &&
-                    ContainsOnlyTile(openMeld.Tiles, sourceDiscard.Tile);
+                    ContainsOnlyTile(meld.PhysicalTiles, sourceDiscard.Tile);
             }
 
             if (candidate.Kind != ReactionKind.Chi || candidate.ChiDetail == null ||
                 candidate.ChiDetail.CalledTile != sourceDiscard.Tile ||
-                openMeld.Type != OpenMeldType.Chi)
+                meld.Type != PlayerMeldType.Chi)
             {
                 return false;
             }
@@ -737,7 +735,7 @@ namespace MahjongPrototype.Domain
             {
                 ChiOption option = candidate.ChiDetail.Options[i];
                 if (HasSameTileValues(option.HandTiles, handTiles) &&
-                    HasSameTileValues(option.MeldTiles, openMeld.Tiles))
+                    HasSameTileValues(option.MeldTiles, meld.PhysicalTiles))
                 {
                     return true;
                 }

@@ -407,13 +407,13 @@ namespace MahjongPrototype.Domain
             ReactionWindowResolutionType type,
             DiscardRecord sourceDiscard,
             ReactionWindowCandidate candidate,
-            OpenMeld openMeld)
+            PlayerMeld meld)
         {
             WindowId = windowId;
             Type = type;
             SourceDiscard = sourceDiscard;
             Candidate = candidate;
-            OpenMeld = openMeld;
+            Meld = meld;
         }
 
         public static ReactionWindowResolution None => new ReactionWindowResolution(
@@ -427,7 +427,7 @@ namespace MahjongPrototype.Domain
         public ReactionWindowResolutionType Type { get; }
         public DiscardRecord SourceDiscard { get; }
         public ReactionWindowCandidate Candidate { get; }
-        public OpenMeld OpenMeld { get; }
+        public PlayerMeld Meld { get; }
         public bool IsResolved => Type != ReactionWindowResolutionType.None;
 
         public static ReactionWindowResolution NoReaction(int windowId, DiscardRecord sourceDiscard)
@@ -470,38 +470,38 @@ namespace MahjongPrototype.Domain
             int windowId,
             DiscardRecord sourceDiscard,
             ReactionWindowCandidate candidate,
-            OpenMeld openMeld)
+            PlayerMeld meld)
         {
             if (candidate == null || candidate.Kind != ReactionKind.Pon)
                 throw new ArgumentException("A pon resolution requires a pon candidate.", nameof(candidate));
-            if (openMeld == null)
-                throw new ArgumentNullException(nameof(openMeld));
+            if (meld == null || meld.Type != PlayerMeldType.Pon)
+                throw new ArgumentException("A pon resolution requires a pon meld.", nameof(meld));
 
             return new ReactionWindowResolution(
                 windowId,
                 ReactionWindowResolutionType.PonDeclared,
                 sourceDiscard,
                 candidate,
-                openMeld);
+                meld);
         }
 
         public static ReactionWindowResolution ChiDeclared(
             int windowId,
             DiscardRecord sourceDiscard,
             ReactionWindowCandidate candidate,
-            OpenMeld openMeld)
+            PlayerMeld meld)
         {
             if (candidate == null || candidate.Kind != ReactionKind.Chi)
                 throw new ArgumentException("A chi resolution requires a chi candidate.", nameof(candidate));
-            if (openMeld == null || openMeld.Type != OpenMeldType.Chi)
-                throw new ArgumentException("A chi resolution requires a chi open meld.", nameof(openMeld));
+            if (meld == null || meld.Type != PlayerMeldType.Chi)
+                throw new ArgumentException("A chi resolution requires a chi meld.", nameof(meld));
 
             return new ReactionWindowResolution(
                 windowId,
                 ReactionWindowResolutionType.ChiDeclared,
                 sourceDiscard,
                 candidate,
-                openMeld);
+                meld);
         }
     }
 

@@ -6,17 +6,32 @@ namespace MahjongPrototype.Domain
     public sealed class HandMeld
     {
         public HandMeld(MeldType type, IReadOnlyList<Tile> tiles)
+            : this(type, tiles, false, false)
+        {
+        }
+
+        internal HandMeld(
+            MeldType type,
+            IReadOnlyList<Tile> tiles,
+            bool isFixed,
+            bool isOpen)
         {
             List<Tile> copiedTiles = CopyAndSortTiles(tiles);
             if (!IsValidMeld(type, copiedTiles))
                 throw new ArgumentException("Tiles do not form the requested meld.", nameof(tiles));
+            if (!isFixed && isOpen)
+                throw new ArgumentException("Only a fixed meld can be marked open.", nameof(isOpen));
 
             Type = type;
             Tiles = copiedTiles.AsReadOnly();
+            IsFixed = isFixed;
+            IsOpen = isOpen;
         }
 
         public MeldType Type { get; }
         public IReadOnlyList<Tile> Tiles { get; }
+        public bool IsFixed { get; }
+        public bool IsOpen { get; }
 
         private static List<Tile> CopyAndSortTiles(IReadOnlyList<Tile> tiles)
         {

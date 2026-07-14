@@ -282,7 +282,7 @@ namespace MahjongPrototype.UI3D
                 if (controller == null)
                     continue;
 
-                controller.RenderOpenMelds(state.GetPlayerSeat(seat).OpenMelds);
+                controller.RenderOpenMelds(state.GetPlayerSeat(seat).Melds);
                 renderedViewSlots.Add(viewSlot);
             }
 
@@ -306,7 +306,7 @@ namespace MahjongPrototype.UI3D
                 return;
             }
 
-            controller.RenderOpenMelds(state.GetPlayerSeat(seat).OpenMelds);
+            controller.RenderOpenMelds(state.GetPlayerSeat(seat).Melds);
         }
 
         public void ClearOpenMelds()
