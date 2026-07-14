@@ -142,7 +142,7 @@ namespace MahjongPrototype.Tests
                 {
                     LogAssert.Expect(
                         LogType.Exception,
-                        new Regex("Reaction notification subscriber failed\\. Event=ReactionWindowResolved"));
+                        new Regex("^InvalidOperationException: ReactionWindowResolved subscriber failure"));
                     Assert.That(session.Commands.TryRequestDeclarePonForSeat("East", windowId), Is.True);
                 }
 
