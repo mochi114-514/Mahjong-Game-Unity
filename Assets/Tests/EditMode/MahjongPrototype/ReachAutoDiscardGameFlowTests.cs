@@ -88,29 +88,6 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void ReachDeclared_DrawWinningTile_StopsAtTsumoDecision()
-        {
-            using (ReachAutoDiscardGameFlowTestDriver driver =
-                ReachAutoDiscardGameFlowTestDriver.Create(2))
-            {
-                driver.DrawReachableHand();
-                driver.SetParticipantType("West", "LocalHuman");
-                driver.DeclareReachWithHandDiscard(12);
-                int discardCountBeforeWestTurnEnds = driver.DiscardCount;
-
-                driver.ForceDrawForSeat("East", "6m");
-                driver.DrawAndDiscardForSeat("West", "C");
-
-                Assert.That(driver.IsWinDecisionPending, Is.True);
-                Assert.That(driver.WinDecisionTypeName, Is.EqualTo("Tsumo"));
-                Assert.That(driver.HasDrawnTile("East"), Is.True);
-                Assert.That(driver.DrawnTileCode("East"), Is.EqualTo("6m"));
-                Assert.That(driver.DiscardCount, Is.EqualTo(discardCountBeforeWestTurnEnds + 1));
-                Assert.That(driver.CurrentTurnName, Is.EqualTo("East"));
-            }
-        }
-
-        [Test]
         public void ReachDeclared_TurnStartAutoDiscardAllowsRonDecision()
         {
             using (ReachAutoDiscardGameFlowTestDriver driver =
@@ -198,22 +175,26 @@ namespace MahjongPrototype.Tests
         public void ReachDeclared_DrawWinningTile_DoesNotAutoDiscardAndShowsTsumoDecision()
         {
             using (ReachAutoDiscardGameFlowTestDriver driver =
-                ReachAutoDiscardGameFlowTestDriver.Create())
+                ReachAutoDiscardGameFlowTestDriver.Create(2))
             {
                 driver.DrawReachableHand();
+                driver.SetParticipantType("West", "LocalHuman");
                 driver.DeclareReachWithHandDiscard(12);
-                int discardCountBefore = driver.DiscardCount;
+                int discardCountBeforeWestTurnEnds = driver.DiscardCount;
 
-                driver.ForceDraw("6m");
-                driver.RequestDraw();
+                driver.ForceDrawForSeat("East", "6m");
+                driver.DrawAndDiscardForSeat("West", "C");
 
                 Assert.That(driver.IsReachDeclared("East"), Is.True);
                 Assert.That(driver.HasDrawnTile("East"), Is.True);
                 Assert.That(driver.DrawnTileCode("East"), Is.EqualTo("6m"));
-                Assert.That(driver.DiscardCount, Is.EqualTo(discardCountBefore));
+                Assert.That(
+                    driver.DiscardCount,
+                    Is.EqualTo(discardCountBeforeWestTurnEnds + 1));
                 Assert.That(driver.IsWinDecisionPending, Is.True);
                 Assert.That(driver.WinDecisionTypeName, Is.EqualTo("Tsumo"));
                 Assert.That(driver.TurnPhaseName, Is.EqualTo("WinDecision"));
+                Assert.That(driver.CurrentTurnName, Is.EqualTo("East"));
             }
         }
 

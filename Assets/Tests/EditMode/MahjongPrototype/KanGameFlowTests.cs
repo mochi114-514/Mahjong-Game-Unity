@@ -303,7 +303,7 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void Ankan_MultipleCandidatesAreSelectableAndReachAllowsWaitPreservingKan()
+        public void Ankan_MultipleCandidatesAreSelectable()
         {
             using (MahjongGameFlowTestSession session = CreateSession(1))
             {
@@ -320,33 +320,70 @@ namespace MahjongPrototype.Tests
                 Assert.That(CountHandTile(session, "East", "P"), Is.EqualTo(4));
                 Assert.That(CountHandTile(session, "East", "C"), Is.EqualTo(0));
             }
+        }
 
-            using (MahjongGameFlowTestSession session = CreateSession(1))
+        [Test]
+        public void Ankan_MultipleCandidatesAreSelectableAndReachAllowsWaitPreservingKan()
+        {
+            using (MahjongGameFlowTestSession session = CreateSession(2))
             {
                 session.Commands.StartNewRound();
+                session.DataFactory.SetParticipantType(
+                    session.CurrentState,
+                    "West",
+                    "LocalHuman");
                 object playerSeat = session.Query.GetPlayerSeat("East");
                 session.DataFactory.AddHandTiles(
                     playerSeat,
                     "P", "P", "P",
-                    "1m", "3m", "7m", "9m",
-                    "1p", "4p", "8p",
-                    "2s", "6s", "9s");
+                    "1m", "2m", "3m",
+                    "1p", "2p", "3p",
+                    "1s", "2s", "3s",
+                    "C");
                 session.DataFactory.SetDrawnTile(session.CurrentState, "East", "P");
                 session.Reflection.Invoke(playerSeat, "DeclareReach", session.Query.TurnIndex);
                 int liveWallBefore = session.Query.WallCount;
+                int discardCountBefore = session.Query.DiscardCount;
+                int turnIndexBefore = session.Query.TurnIndex;
+                using (EventSequenceRecorder events = new EventSequenceRecorder(
+                    session.EventNotifier,
+                    "TileDrawn"))
+                {
+                    session.Commands.ResolveAfterDraw("East");
 
-                Assert.That(AnkanCandidateCodes(session), Is.EqualTo(new[] { "P" }));
-                Assert.That(session.Commands.TryRequestDeclareAnkanForSeat("East", "P"), Is.True);
-                Assert.That(session.Query.HandCount("East"), Is.EqualTo(10));
-                Assert.That(session.Query.HasDrawnTile("East"), Is.True);
-                Assert.That(session.Query.MeldCount("East"), Is.EqualTo(1));
-                Assert.That(
-                    (bool)session.Reflection.GetProperty(playerSeat, "IsReachDeclared"),
-                    Is.True);
-                Assert.That(
-                    (bool)session.Reflection.GetProperty(playerSeat, "IsIppatsuEligible"),
-                    Is.False);
-                Assert.That(session.Query.WallCount, Is.EqualTo(liveWallBefore - 1));
+                    Assert.That(session.Query.TurnPhaseName, Is.EqualTo("SelfKanDecision"));
+                    Assert.That(session.Query.CurrentTurnName, Is.EqualTo("East"));
+                    Assert.That(session.Query.TurnIndex, Is.EqualTo(turnIndexBefore));
+                    Assert.That(session.Query.HasDrawnTile("East"), Is.True);
+                    Assert.That(session.Query.DiscardCount, Is.EqualTo(discardCountBefore));
+                    Assert.That(AnkanCandidateCodes(session), Is.EqualTo(new[] { "P" }));
+
+                    Assert.That(
+                        session.Commands.TryRequestDeclareAnkanForSeat("East", "P"),
+                        Is.True);
+
+                    Assert.That(session.Query.MeldCount("East"), Is.EqualTo(1));
+                    Assert.That(
+                        (bool)session.Reflection.GetProperty(playerSeat, "IsReachDeclared"),
+                        Is.True);
+                    Assert.That(
+                        (bool)session.Reflection.GetProperty(playerSeat, "IsIppatsuEligible"),
+                        Is.False);
+                    Assert.That(session.Query.WallCount, Is.EqualTo(liveWallBefore - 1));
+                    Assert.That(events.Names, Is.EqualTo(new[] { "TileDrawn" }));
+                    Assert.That(session.Query.DiscardCount, Is.EqualTo(discardCountBefore + 1));
+                    Assert.That(
+                        session.Query.DiscardActorSeatNameAt(discardCountBefore),
+                        Is.EqualTo("East"));
+                    Assert.That(
+                        (int)session.Reflection.GetProperty(
+                            session.Query.DiscardAt(discardCountBefore),
+                            "TurnIndex"),
+                        Is.EqualTo(turnIndexBefore));
+                    Assert.That(session.Query.CurrentTurnName, Is.EqualTo("West"));
+                    Assert.That(session.Query.TurnPhaseName, Is.EqualTo("WaitingForDraw"));
+                    Assert.That(session.Query.TurnIndex, Is.EqualTo(turnIndexBefore + 1));
+                }
             }
         }
 
@@ -380,9 +417,13 @@ namespace MahjongPrototype.Tests
         [Test]
         public void ReachAnkanDecision_BlocksDiscardUntilDeclinedThenTsumogirisOnce()
         {
-            using (MahjongGameFlowTestSession session = CreateSession(1))
+            using (MahjongGameFlowTestSession session = CreateSession(2))
             {
                 session.Commands.StartNewRound();
+                session.DataFactory.SetParticipantType(
+                    session.CurrentState,
+                    "West",
+                    "LocalHuman");
                 object east = session.Query.GetPlayerSeat("East");
                 session.DataFactory.AddHandTiles(
                     east,
@@ -392,6 +433,7 @@ namespace MahjongPrototype.Tests
                 session.DataFactory.SetDrawnTile(session.CurrentState, "East", "P");
                 session.Reflection.Invoke(east, "DeclareReach", session.Query.TurnIndex);
                 int discardCountBefore = session.Query.DiscardCount;
+                int turnIndexBefore = session.Query.TurnIndex;
 
                 session.Commands.ResolveAfterDraw("East");
 
@@ -402,7 +444,18 @@ namespace MahjongPrototype.Tests
                     session.Commands.TryRequestDeclineSelfKanForSeat("East"),
                     Is.True);
                 Assert.That(session.Query.DiscardCount, Is.EqualTo(discardCountBefore + 1));
+                Assert.That(
+                    session.Query.DiscardActorSeatNameAt(discardCountBefore),
+                    Is.EqualTo("East"));
+                Assert.That(
+                    (int)session.Reflection.GetProperty(
+                        session.Query.DiscardAt(discardCountBefore),
+                        "TurnIndex"),
+                    Is.EqualTo(turnIndexBefore));
                 Assert.That(session.Query.HasDrawnTile("East"), Is.False);
+                Assert.That(session.Query.CurrentTurnName, Is.EqualTo("West"));
+                Assert.That(session.Query.TurnPhaseName, Is.EqualTo("WaitingForDraw"));
+                Assert.That(session.Query.TurnIndex, Is.EqualTo(turnIndexBefore + 1));
                 Assert.That(
                     session.Commands.TryRequestDeclineSelfKanForSeat("East"),
                     Is.False);
