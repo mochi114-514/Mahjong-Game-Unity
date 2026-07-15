@@ -120,11 +120,6 @@ namespace MahjongPrototype.Tests
             Assert.That(DefinitionIsEnabled(definition), Is.True, $"{kindName} IsEnabled must be true in the production catalog.");
         }
 
-        [TestCase("RinshanKaihou")]
-        [TestCase("Chankan")]
-        [TestCase("Toitoi")]
-        [TestCase("Sankantsu")]
-        [TestCase("Suukantsu")]
         [TestCase("Renhou")]
         public void ProductionCatalog_CurrentlyUnimplementedKinds_AreNotRegistered(string kindName)
         {
@@ -218,6 +213,11 @@ namespace MahjongPrototype.Tests
             new ExpectedDefinition("Chinroutou", "清老頭", "None", "None", true),
             new ExpectedDefinition("ChuurenPoutou", "九蓮宝燈", "None", "None", true),
             new ExpectedDefinition("JunseiChuurenPoutou", "純正九蓮宝燈", "None", "None", true),
+            new ExpectedDefinition("RinshanKaihou", "嶺上開花", "One", "One", false),
+            new ExpectedDefinition("Chankan", "槍槓", "One", "One", false),
+            new ExpectedDefinition("Toitoi", "対々和", "Two", "Two", false),
+            new ExpectedDefinition("Sankantsu", "三槓子", "Two", "Two", false),
+            new ExpectedDefinition("Suukantsu", "四槓子", "None", "None", true),
             new ExpectedDefinition("Tenhou", "天和", "None", "None", true),
             new ExpectedDefinition("Chiihou", "地和", "None", "None", true)
         };

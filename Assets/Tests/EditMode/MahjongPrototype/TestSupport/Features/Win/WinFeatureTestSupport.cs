@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using MahjongPrototype.Tests.TestSupport.Core;
 using MahjongPrototype.Tests.TestSupport.Mahjong;
 using MahjongPrototype.Tests.TestSupport.Unity;
@@ -101,10 +102,11 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
             bool isFirstTurnTsumoEligible = false,
             bool isLastLiveWallDraw = false,
             bool isLastLiveWallDiscard = false,
-            object melds = null)
+            object melds = null,
+            bool isRinshanDraw = false)
         {
             Type contextType = Reflection.RequireType(WinDeclarationEvaluationContextTypeName);
-            if (melds != null)
+            if (melds != null || isRinshanDraw)
             {
                 return Reflection.CreateInstance(
                     contextType,
@@ -122,7 +124,8 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
                     isFirstTurnTsumoEligible,
                     isLastLiveWallDraw,
                     isLastLiveWallDiscard,
-                    melds);
+                    melds,
+                    isRinshanDraw);
             }
 
             return Reflection.CreateInstance(
@@ -206,6 +209,83 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
 
             melds.Add(meld);
             return melds;
+        }
+
+        public object CreateMelds(
+            string[] ankanTileCodes = null,
+            string[] daiminkanTileCodes = null,
+            string[] ponTileCodes = null)
+        {
+            Type playerMeldType = Reflection.RequireType(PlayerMeldTypeName);
+            Type meldListType = typeof(List<>).MakeGenericType(playerMeldType);
+            IList melds = (IList)Reflection.CreateInstance(meldListType);
+            int sourceDiscardId = 1;
+
+            AddAnkanMelds(playerMeldType, melds, ankanTileCodes);
+            AddDiscardDerivedMelds(
+                playerMeldType,
+                melds,
+                "CreateDaiminkan",
+                daiminkanTileCodes,
+                4,
+                ref sourceDiscardId);
+            AddDiscardDerivedMelds(
+                playerMeldType,
+                melds,
+                "CreatePon",
+                ponTileCodes,
+                3,
+                ref sourceDiscardId);
+            return melds;
+        }
+
+        private void AddAnkanMelds(
+            Type playerMeldType,
+            IList melds,
+            IReadOnlyList<string> tileCodes)
+        {
+            if (tileCodes == null)
+                return;
+
+            for (int i = 0; i < tileCodes.Count; i++)
+            {
+                string tileCode = tileCodes[i];
+                melds.Add(Reflection.InvokeStatic(
+                    playerMeldType,
+                    "CreateAnkan",
+                    DataFactory.CreateTileArrayFromText(RepeatTileCode(tileCode, 4)),
+                    DataFactory.ParseSeat("East")));
+            }
+        }
+
+        private void AddDiscardDerivedMelds(
+            Type playerMeldType,
+            IList melds,
+            string factoryMethodName,
+            IReadOnlyList<string> tileCodes,
+            int tileCount,
+            ref int sourceDiscardId)
+        {
+            if (tileCodes == null)
+                return;
+
+            for (int i = 0; i < tileCodes.Count; i++)
+            {
+                string tileCode = tileCodes[i];
+                melds.Add(Reflection.InvokeStatic(
+                    playerMeldType,
+                    factoryMethodName,
+                    DataFactory.CreateTileArrayFromText(RepeatTileCode(tileCode, tileCount)),
+                    DataFactory.ParseSeat("East"),
+                    DataFactory.ParseSeat("West"),
+                    DataFactory.CreateTile(tileCode),
+                    sourceDiscardId++));
+            }
+        }
+
+        private static string RepeatTileCode(string tileCode, int count)
+        {
+            return string.Join(" ", new string[count].Select(_ => tileCode));
         }
 
         public object CreateYakuDefinition(

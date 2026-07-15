@@ -109,6 +109,13 @@ namespace MahjongPrototype.Services
                 context.WinType == WinType.Tsumo && context.IsClosed,
                 context.IsClosed);
             EvaluateLastTileYaku(context, yakus);
+            TryAddYaku(
+                yakus,
+                YakuKind.RinshanKaihou,
+                context.WinType == WinType.Tsumo &&
+                context.IsRinshanDraw &&
+                !context.IsLastLiveWallDraw,
+                context.IsClosed);
             TryAddYaku(yakus, YakuKind.Tanyao, IsTanyao(context), context.IsClosed);
             EvaluateFirstTurnYakuman(context, yakus);
         }
@@ -188,6 +195,8 @@ namespace MahjongPrototype.Services
             EvaluateDragonGroupYaku(context, candidate, yakus);
             EvaluateWindGroupYaku(context, candidate, yakus);
             EvaluateConcealedTripletYaku(context, candidate, yakus);
+            EvaluateToitoiYaku(context, candidate, yakus);
+            EvaluateKanYaku(context, candidate, yakus);
             EvaluateSanshokuDoujunYaku(context, candidate, yakus);
             EvaluateSanshokuDoukouYaku(context, candidate, yakus);
             EvaluateIttsuuYaku(context, candidate, yakus);
@@ -973,6 +982,60 @@ namespace MahjongPrototype.Services
                     true,
                     context.IsClosed);
             }
+        }
+
+        private void EvaluateToitoiYaku(
+            HandEvaluationContext context,
+            HandEvaluationCandidate candidate,
+            List<EvaluatedYaku> yakus)
+        {
+            StandardHandDecomposition decomposition =
+                candidate?.StandardInterpretation?.Decomposition;
+            if (decomposition == null || decomposition.Melds == null ||
+                decomposition.Melds.Count != 4)
+            {
+                return;
+            }
+
+            for (int i = 0; i < decomposition.Melds.Count; i++)
+            {
+                HandMeld meld = decomposition.Melds[i];
+                if (meld == null || meld.Type != MeldType.Triplet)
+                    return;
+            }
+
+            TryAddYaku(yakus, YakuKind.Toitoi, true, context.IsClosed);
+        }
+
+        private void EvaluateKanYaku(
+            HandEvaluationContext context,
+            HandEvaluationCandidate candidate,
+            List<EvaluatedYaku> yakus)
+        {
+            if (candidate == null ||
+                candidate.Type != HandEvaluationCandidateType.Standard)
+            {
+                return;
+            }
+
+            int kanCount = 0;
+            for (int i = 0; context.Melds != null && i < context.Melds.Count; i++)
+            {
+                PlayerMeld meld = context.Melds[i];
+                if (meld != null && meld.IsKan)
+                    kanCount++;
+            }
+
+            TryAddYaku(
+                yakus,
+                YakuKind.Sankantsu,
+                kanCount == 3,
+                context.IsClosed);
+            TryAddYaku(
+                yakus,
+                YakuKind.Suukantsu,
+                kanCount == 4,
+                context.IsClosed);
         }
 
         private static bool TryCountConcealedTriplets(

@@ -1162,7 +1162,10 @@ namespace MahjongPrototype
                 tile: result.Tile,
                 turnIndex: gameState.TurnIndex);
             EventPublisher.NotifyTileDrawn(result);
-            ResolveAfterDraw(seat);
+            ResolveAfterDraw(
+                seat,
+                result.Purpose == DrawPurpose.RinshanDraw &&
+                result.Source == DrawSource.Rinshan);
             return true;
         }
 
@@ -1367,18 +1370,20 @@ namespace MahjongPrototype
             return true;
         }
 
-        private void CheckWinPrototype()
+        private void CheckWinPrototype(bool isRinshanDraw = false)
         {
-            // PROTOTYPE: Check only a closed-hand self-draw declaration candidate.
+            // PROTOTYPE: Check only the current seat's self-draw declaration candidate.
             InitializeEvaluators();
-            WinDecisionEvaluation evaluation = winDecisionService.EvaluateTsumo(gameState);
+            WinDecisionEvaluation evaluation = winDecisionService.EvaluateTsumo(
+                gameState,
+                isRinshanDraw);
             NotifyWinDecisionStartedIfNeeded(evaluation);
             NotifyWinCheckResults(evaluation);
         }
 
-        private void ResolveAfterDraw(SeatId seat)
+        private void ResolveAfterDraw(SeatId seat, bool isRinshanDraw = false)
         {
-            CheckWinPrototype();
+            CheckWinPrototype(isRinshanDraw);
 
             if (gameState.IsWinDecisionPending)
             {

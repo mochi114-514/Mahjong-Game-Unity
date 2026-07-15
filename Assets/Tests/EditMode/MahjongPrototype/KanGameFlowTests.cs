@@ -374,7 +374,9 @@ namespace MahjongPrototype.Tests
         [Test]
         public void Ankan_AutoRinshanRunsWinEvaluationBeforeDiscard()
         {
-            using (MahjongGameFlowTestSession session = CreateSession(1))
+            using (MahjongGameFlowTestSession session = CreateSession(
+                1,
+                useRinshanOnlyCatalog: true))
             {
                 session.Commands.StartNewRound();
                 object wall = session.Reflection.GetProperty(session.CurrentState, "Wall");
@@ -415,6 +417,79 @@ namespace MahjongPrototype.Tests
                 Assert.That(
                     session.Reflection.GetProperty(session.CurrentState, "WinningTile").ToString(),
                     Is.EqualTo(winningTileCode));
+                Assert.That(
+                    EvaluationContainsYaku(
+                        session,
+                        session.Query.PendingWinDeclarationEvaluation,
+                        "RinshanKaihou"),
+                    Is.True);
+                Assert.That(session.Commands.TryRequestDeclareWinForSeat("East"), Is.True);
+                Assert.That(
+                    RoundResultContainsYaku(session, "RinshanKaihou"),
+                    Is.True);
+            }
+        }
+
+        [Test]
+        public void Daiminkan_AutoRinshanCarriesRinshanKaihouIntoWinDecisionAndRoundResult()
+        {
+            using (MahjongGameFlowTestSession session = CreateSession(
+                2,
+                useRinshanOnlyCatalog: true))
+            {
+                session.Commands.StartNewRound();
+                object wall = session.Reflection.GetProperty(session.CurrentState, "Wall");
+                object rinshanTiles = session.Reflection.Invoke(wall, "GetRinshanSnapshot");
+                string winningTileCode = session.Reflection.GetProperty(
+                    session.Collections.Item(rinshanTiles, 0),
+                    "Code").ToString();
+                string kanTileCode = winningTileCode == "P" ? "C" : "P";
+                session.DataFactory.AddHandTiles(
+                    session.Query.GetPlayerSeat("East"),
+                    kanTileCode,
+                    kanTileCode,
+                    kanTileCode,
+                    "1m", "2m", "3m",
+                    "1p", "2p", "3p",
+                    "1s", "2s", "3s",
+                    winningTileCode);
+                DiscardFromWest(session, kanTileCode);
+                EventSequenceRecorder events = new EventSequenceRecorder(
+                    session.EventNotifier,
+                    "ReactionWindowClosed",
+                    "TileDrawn");
+
+                try
+                {
+                    Assert.That(
+                        session.Commands.TryRequestDeclareDaiminkanForSeat(
+                            "East",
+                            session.Query.ReactionWindowId),
+                        Is.True);
+                }
+                finally
+                {
+                    events.Dispose();
+                }
+
+                Assert.That(session.Query.IsReactionWindowPending, Is.False);
+                Assert.That(session.Query.TurnPhaseName, Is.EqualTo("WinDecision"));
+                Assert.That(
+                    EvaluationContainsYaku(
+                        session,
+                        session.Query.PendingWinDeclarationEvaluation,
+                        "RinshanKaihou"),
+                    Is.True);
+                Assert.That(
+                    session.Reflection.GetProperty(session.CurrentState, "LastTurnDraw"),
+                    Is.Null);
+                Assert.That(
+                    events.Names,
+                    Is.EqualTo(new[] { "ReactionWindowClosed", "TileDrawn" }));
+                Assert.That(session.Commands.TryRequestDeclareWinForSeat("East"), Is.True);
+                Assert.That(
+                    RoundResultContainsYaku(session, "RinshanKaihou"),
+                    Is.True);
             }
         }
 
@@ -440,13 +515,21 @@ namespace MahjongPrototype.Tests
             Assert.That(session.Commands.TryRequestDiscardDrawnTileForSeat("West"), Is.True);
         }
 
-        private static MahjongGameFlowTestSession CreateSession(int participantCount)
+        private static MahjongGameFlowTestSession CreateSession(
+            int participantCount,
+            bool useRinshanOnlyCatalog = false)
         {
             ReflectionTestAccess reflection = new ReflectionTestAccess();
             CollectionTestAccess collections = new CollectionTestAccess(reflection);
             MahjongTestTypes types = new MahjongTestTypes(reflection);
             MahjongTestDataFactory dataFactory = new MahjongTestDataFactory(reflection, types);
-            object catalog = MahjongTestCatalogFactory.CreateStandardGameFlowYakuCatalog(dataFactory);
+            object catalog = useRinshanOnlyCatalog
+                ? dataFactory.CreateYakuCatalog(
+                    dataFactory.CreateYakuDefinition(
+                        "RinshanKaihou",
+                        "One",
+                        "One"))
+                : MahjongTestCatalogFactory.CreateStandardGameFlowYakuCatalog(dataFactory);
             MahjongGameFlowTestSession session = MahjongGameFlowTestSession.Create(
                 new MahjongGameFlowTestOptions
                 {
@@ -563,6 +646,55 @@ namespace MahjongPrototype.Tests
             return (bool)session.Reflection.GetProperty(
                 session.CurrentState,
                 "HasCallOccurred");
+        }
+
+        private static bool EvaluationContainsYaku(
+            MahjongGameFlowTestSession session,
+            object evaluation,
+            string yakuKindName)
+        {
+            object handEvaluation = session.Reflection.GetProperty(
+                evaluation,
+                "HandEvaluationResult");
+            object candidateResults = session.Reflection.GetProperty(
+                handEvaluation,
+                "CandidateResults");
+            for (int i = 0; i < session.Collections.Count(candidateResults); i++)
+            {
+                object candidate = session.Collections.Item(candidateResults, i);
+                object yakus = session.Reflection.GetProperty(candidate, "Yakus");
+                if (YakuCollectionContains(session, yakus, yakuKindName))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool RoundResultContainsYaku(
+            MahjongGameFlowTestSession session,
+            string yakuKindName)
+        {
+            return YakuCollectionContains(
+                session,
+                session.Reflection.GetProperty(
+                    session.Query.CurrentRoundResult,
+                    "Yakus"),
+                yakuKindName);
+        }
+
+        private static bool YakuCollectionContains(
+            MahjongGameFlowTestSession session,
+            object yakus,
+            string yakuKindName)
+        {
+            for (int i = 0; i < session.Collections.Count(yakus); i++)
+            {
+                object yaku = session.Collections.Item(yakus, i);
+                if (session.Reflection.GetProperty(yaku, "Kind").ToString() == yakuKindName)
+                    return true;
+            }
+
+            return false;
         }
 
         private static string PropertyText(

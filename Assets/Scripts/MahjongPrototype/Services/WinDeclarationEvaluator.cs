@@ -49,7 +49,8 @@ namespace MahjongPrototype.Services
                 context.IsFirstTurnTsumoEligible,
                 context.IsLastLiveWallDraw,
                 context.IsLastLiveWallDiscard,
-                context.Melds);
+                context.Melds,
+                context.IsRinshanDraw);
             HandEvaluationResult handEvaluationResult = handEvaluator.Evaluate(handContext);
             return new WinDeclarationEvaluationResult(
                 winCheckResult,

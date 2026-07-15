@@ -95,7 +95,8 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
             bool isFirstTurnTsumoEligible = false,
             bool isLastLiveWallDraw = false,
             bool isLastLiveWallDiscard = false,
-            object melds = null)
+            object melds = null,
+            bool isRinshanDraw = false)
         {
             object evaluator = support.CreateWinDeclarationEvaluator(catalog);
             object context = support.CreateWinDeclarationEvaluationContext(
@@ -111,7 +112,8 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
                 isFirstTurnTsumoEligible,
                 isLastLiveWallDraw,
                 isLastLiveWallDiscard,
-                melds);
+                melds,
+                isRinshanDraw);
 
             return support.Reflection.Invoke(evaluator, "EvaluateWithTile", context);
         }
@@ -149,6 +151,17 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
             string ownerSeatName = "East")
         {
             return support.CreateAnkanMelds(tileCode, ownerSeatName);
+        }
+
+        public object CreateMelds(
+            string[] ankanTileCodes = null,
+            string[] daiminkanTileCodes = null,
+            string[] ponTileCodes = null)
+        {
+            return support.CreateMelds(
+                ankanTileCodes,
+                daiminkanTileCodes,
+                ponTileCodes);
         }
 
         public bool IsWinningShape(object result)

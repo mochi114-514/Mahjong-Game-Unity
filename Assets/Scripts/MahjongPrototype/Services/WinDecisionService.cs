@@ -53,6 +53,13 @@ namespace MahjongPrototype.Services
 
         public WinDecisionEvaluation EvaluateTsumo(MahjongGameState gameState)
         {
+            return EvaluateTsumo(gameState, false);
+        }
+
+        public WinDecisionEvaluation EvaluateTsumo(
+            MahjongGameState gameState,
+            bool isRinshanDraw)
+        {
             if (gameState == null)
                 return WinDecisionEvaluation.None;
 
@@ -65,7 +72,9 @@ namespace MahjongPrototype.Services
                     playerSeat,
                     WinType.Tsumo,
                     winningTile.Value,
-                    null))
+                    null,
+                    null,
+                    isRinshanDraw))
                 : WinDeclarationEvaluationResult.NotWinningShape(WinCheckResult.NotWin);
             bool canDeclareWin = evaluationResult.CanDeclareWin;
 
@@ -208,7 +217,8 @@ namespace MahjongPrototype.Services
             WinType winType,
             Tile winningTile,
             SeatId? sourceSeat,
-            DiscardRecord? sourceDiscard = null)
+            DiscardRecord? sourceDiscard = null,
+            bool isRinshanDraw = false)
         {
             SeatId winnerSeat = playerSeat.SeatId;
             return new WinDeclarationEvaluationContext(
@@ -227,7 +237,8 @@ namespace MahjongPrototype.Services
                 IsLastLiveWallDraw(gameState, winnerSeat, winningTile, winType),
                 winType == WinType.Ron && sourceDiscard.HasValue &&
                     sourceDiscard.Value.IsLastLiveWallDiscard,
-                playerSeat.Melds);
+                playerSeat.Melds,
+                isRinshanDraw);
         }
 
         private static bool IsNoYakuWinningShape(
