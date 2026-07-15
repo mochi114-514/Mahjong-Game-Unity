@@ -303,7 +303,7 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void Ankan_MultipleCandidatesAreSelectableAndReachRejectsWithoutMutation()
+        public void Ankan_MultipleCandidatesAreSelectableAndReachAllowsWaitPreservingKan()
         {
             using (MahjongGameFlowTestSession session = CreateSession(1))
             {
@@ -335,12 +335,18 @@ namespace MahjongPrototype.Tests
                 session.Reflection.Invoke(playerSeat, "DeclareReach", session.Query.TurnIndex);
                 int liveWallBefore = session.Query.WallCount;
 
-                Assert.That(AnkanCandidateCodes(session), Is.Empty);
-                Assert.That(session.Commands.TryRequestDeclareAnkanForSeat("East", "P"), Is.False);
-                Assert.That(session.Query.HandCount("East"), Is.EqualTo(13));
+                Assert.That(AnkanCandidateCodes(session), Is.EqualTo(new[] { "P" }));
+                Assert.That(session.Commands.TryRequestDeclareAnkanForSeat("East", "P"), Is.True);
+                Assert.That(session.Query.HandCount("East"), Is.EqualTo(10));
                 Assert.That(session.Query.HasDrawnTile("East"), Is.True);
-                Assert.That(session.Query.MeldCount("East"), Is.EqualTo(0));
-                Assert.That(session.Query.WallCount, Is.EqualTo(liveWallBefore));
+                Assert.That(session.Query.MeldCount("East"), Is.EqualTo(1));
+                Assert.That(
+                    (bool)session.Reflection.GetProperty(playerSeat, "IsReachDeclared"),
+                    Is.True);
+                Assert.That(
+                    (bool)session.Reflection.GetProperty(playerSeat, "IsIppatsuEligible"),
+                    Is.False);
+                Assert.That(session.Query.WallCount, Is.EqualTo(liveWallBefore - 1));
             }
         }
 
@@ -368,6 +374,38 @@ namespace MahjongPrototype.Tests
                 Assert.That(session.Query.MeldCount("East"), Is.EqualTo(0));
                 Assert.That(session.Query.WallCount, Is.EqualTo(0));
                 Assert.That(HasCallOccurred(session), Is.False);
+            }
+        }
+
+        [Test]
+        public void ReachAnkanDecision_BlocksDiscardUntilDeclinedThenTsumogirisOnce()
+        {
+            using (MahjongGameFlowTestSession session = CreateSession(1))
+            {
+                session.Commands.StartNewRound();
+                object east = session.Query.GetPlayerSeat("East");
+                session.DataFactory.AddHandTiles(
+                    east,
+                    "P", "P", "P",
+                    "1m", "2m", "3m", "1p", "2p", "3p",
+                    "1s", "2s", "3s", "C");
+                session.DataFactory.SetDrawnTile(session.CurrentState, "East", "P");
+                session.Reflection.Invoke(east, "DeclareReach", session.Query.TurnIndex);
+                int discardCountBefore = session.Query.DiscardCount;
+
+                session.Commands.ResolveAfterDraw("East");
+
+                Assert.That(session.Query.TurnPhaseName, Is.EqualTo("SelfKanDecision"));
+                Assert.That(session.Query.HasDrawnTile("East"), Is.True);
+                Assert.That(session.Commands.TryRequestDiscardDrawnTileForSeat("East"), Is.False);
+                Assert.That(
+                    session.Commands.TryRequestDeclineSelfKanForSeat("East"),
+                    Is.True);
+                Assert.That(session.Query.DiscardCount, Is.EqualTo(discardCountBefore + 1));
+                Assert.That(session.Query.HasDrawnTile("East"), Is.False);
+                Assert.That(
+                    session.Commands.TryRequestDeclineSelfKanForSeat("East"),
+                    Is.False);
             }
         }
 
@@ -427,6 +465,119 @@ namespace MahjongPrototype.Tests
                 Assert.That(
                     RoundResultContainsYaku(session, "RinshanKaihou"),
                     Is.True);
+            }
+        }
+
+        [Test]
+        public void Kakan_UpgradesItsSourcePonAndAutoDrawsRinshanWithoutAddingADiscard()
+        {
+            using (MahjongGameFlowTestSession session = CreateSession(2))
+            {
+                session.Commands.StartNewRound();
+                session.DataFactory.AddHandTiles(
+                    session.Query.GetPlayerSeat("East"),
+                    "P", "P", "1m", "2m", "4m", "7m",
+                    "1p", "4p", "7p", "1s", "4s", "7s", "9s");
+                DiscardFromWest(session, "P");
+                int sourceDiscardId = session.Query.LastDiscardId;
+                Assert.That(
+                    session.Commands.TryRequestDeclarePonForSeat(
+                        "East",
+                        session.Query.ReactionWindowId),
+                    Is.True);
+
+                session.DataFactory.AddHandTiles(session.Query.GetPlayerSeat("East"), "P");
+                session.DataFactory.SetDrawnTile(session.CurrentState, "East", "1m");
+                session.Reflection.Invoke(session.CurrentState, "EnterWaitingForDiscard");
+                int discardCountBefore = session.Query.DiscardCount;
+                int liveWallBefore = session.Query.WallCount;
+                int rinshanBefore = RemainingRinshanTileCount(session);
+
+                Assert.That(
+                    session.Commands.TryRequestDeclareKakanForSeat("East", "P", 0),
+                    Is.True);
+
+                object meld = session.Query.MeldAt("East", 0);
+                Assert.That(session.Query.MeldCount("East"), Is.EqualTo(1));
+                Assert.That(PropertyText(session, meld, "Type"), Is.EqualTo("Kakan"));
+                Assert.That(
+                    session.Collections.Count(session.Reflection.GetProperty(meld, "PhysicalTiles")),
+                    Is.EqualTo(4));
+                Assert.That(session.Query.DiscardCount, Is.EqualTo(discardCountBefore));
+                Assert.That(session.Query.TryGetDiscardClaim(sourceDiscardId, out object claim), Is.True);
+                Assert.That(
+                    PropertyText(session, session.Reflection.GetProperty(claim, "Meld"), "Type"),
+                    Is.EqualTo("Kakan"));
+                Assert.That(session.Query.CurrentTurnName, Is.EqualTo("East"));
+                Assert.That(session.Query.TurnPhaseName, Is.EqualTo("WaitingForDiscard"));
+                Assert.That(session.Query.HasDrawnTile("East"), Is.True);
+                Assert.That(CountHandTile(session, "East", "1m"), Is.EqualTo(2));
+                Assert.That(session.Query.WallCount, Is.EqualTo(liveWallBefore - 1));
+                Assert.That(RemainingRinshanTileCount(session), Is.EqualTo(rinshanBefore - 1));
+                Assert.That(
+                    session.Commands.TryRequestDeclareKakanForSeat("East", "P", 0),
+                    Is.False);
+            }
+        }
+
+        [Test]
+        public void ChankanRon_LeavesPendingKakanAsPonAndCarriesChankanIntoRoundResult()
+        {
+            using (MahjongGameFlowTestSession session = CreateSession(
+                3,
+                useChankanCatalog: true))
+            {
+                session.Commands.StartNewRound();
+                session.DataFactory.SetParticipantType(
+                    session.CurrentState,
+                    "South",
+                    "LocalHuman");
+                session.DataFactory.AddHandTiles(
+                    session.Query.GetPlayerSeat("East"),
+                    "P", "P", "1m", "2m", "4m", "7m",
+                    "1p", "4p", "7p", "1s", "4s", "7s", "9s");
+                DiscardFromWest(session, "P");
+                Assert.That(
+                    session.Commands.TryRequestDeclarePonForSeat(
+                        "East",
+                        session.Query.ReactionWindowId),
+                    Is.True);
+
+                object south = session.Query.GetPlayerSeat("South");
+                session.DataFactory.AddHandTiles(
+                    south,
+                    "1m", "2m", "3m", "1p", "2p", "3p",
+                    "1s", "2s", "3s", "E", "E", "E", "P");
+                session.Reflection.Invoke(south, "DeclareReach", session.Query.TurnIndex);
+                session.DataFactory.SetDrawnTile(session.CurrentState, "East", "P");
+                session.Reflection.Invoke(session.CurrentState, "EnterWaitingForDiscard");
+                int wallBefore = session.Query.WallCount;
+                int discardCountBefore = session.Query.DiscardCount;
+
+                Assert.That(
+                    session.Commands.TryRequestDeclareKakanForSeat("East", "P", 0),
+                    Is.True);
+                Assert.That(session.Query.IsReactionWindowPending, Is.True);
+                Assert.That(GetCandidateKinds(session), Is.EqualTo(new[] { "Ron" }));
+                Assert.That(
+                    session.Commands.TryRequestDeclareRonForSeat(
+                        "South",
+                        session.Query.ReactionWindowId),
+                    Is.True);
+
+                Assert.That(PropertyText(session, session.Query.MeldAt("East", 0), "Type"),
+                    Is.EqualTo("Pon"));
+                Assert.That(session.Query.DiscardCount, Is.EqualTo(discardCountBefore));
+                Assert.That(session.Query.WallCount, Is.EqualTo(wallBefore));
+                Assert.That(
+                    session.Reflection.GetProperty(session.Query.CurrentRoundResult, "WinningTile").ToString(),
+                    Is.EqualTo("P"));
+                Assert.That(
+                    session.Reflection.GetProperty(session.Query.CurrentRoundResult, "SourceSeat").ToString(),
+                    Is.EqualTo("East"));
+                Assert.That(RoundResultContainsYaku(session, "Chankan"), Is.True);
+                Assert.That(RoundResultContainsYaku(session, "Reach"), Is.True);
+                Assert.That(RoundResultContainsYaku(session, "Ippatsu"), Is.True);
             }
         }
 
@@ -517,7 +668,8 @@ namespace MahjongPrototype.Tests
 
         private static MahjongGameFlowTestSession CreateSession(
             int participantCount,
-            bool useRinshanOnlyCatalog = false)
+            bool useRinshanOnlyCatalog = false,
+            bool useChankanCatalog = false)
         {
             ReflectionTestAccess reflection = new ReflectionTestAccess();
             CollectionTestAccess collections = new CollectionTestAccess(reflection);
@@ -529,6 +681,11 @@ namespace MahjongPrototype.Tests
                         "RinshanKaihou",
                         "One",
                         "One"))
+                : useChankanCatalog
+                    ? dataFactory.CreateYakuCatalog(
+                        dataFactory.CreateYakuDefinition("Chankan", "One", "One"),
+                        dataFactory.CreateYakuDefinition("Reach", "One", "None"),
+                        dataFactory.CreateYakuDefinition("Ippatsu", "One", "None"))
                 : MahjongTestCatalogFactory.CreateStandardGameFlowYakuCatalog(dataFactory);
             MahjongGameFlowTestSession session = MahjongGameFlowTestSession.Create(
                 new MahjongGameFlowTestOptions

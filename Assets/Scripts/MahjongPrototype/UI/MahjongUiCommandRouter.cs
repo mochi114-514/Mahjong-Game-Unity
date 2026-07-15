@@ -99,6 +99,8 @@ namespace MahjongPrototype.UI
             inputController.DeclineWinRequested += HandleDeclineWinRequested;
             inputController.MeldCallRequested += HandleMeldCallRequested;
             inputController.DeclineMeldCallsRequested += HandleDeclineMeldCallsRequested;
+            inputController.SelfKanRequested += HandleSelfKanRequested;
+            inputController.DeclineSelfKanRequested += HandleDeclineSelfKanRequested;
             inputController.ReachRequested += HandleReachRequested;
             inputController.DeclineReachRequested += HandleDeclineReachRequested;
             inputController.CancelReachRequested += HandleCancelReachRequested;
@@ -119,6 +121,8 @@ namespace MahjongPrototype.UI
             subscribedInputController.DeclineWinRequested -= HandleDeclineWinRequested;
             subscribedInputController.MeldCallRequested -= HandleMeldCallRequested;
             subscribedInputController.DeclineMeldCallsRequested -= HandleDeclineMeldCallsRequested;
+            subscribedInputController.SelfKanRequested -= HandleSelfKanRequested;
+            subscribedInputController.DeclineSelfKanRequested -= HandleDeclineSelfKanRequested;
             subscribedInputController.ReachRequested -= HandleReachRequested;
             subscribedInputController.DeclineReachRequested -= HandleDeclineReachRequested;
             subscribedInputController.CancelReachRequested -= HandleCancelReachRequested;
@@ -236,6 +240,37 @@ namespace MahjongPrototype.UI
             gameFlow.TryRequestDeclineMeldCallsForSeat(
                 state.SelfSeat,
                 reactionWindow.WindowId);
+        }
+
+        private void HandleSelfKanRequested(
+            SelfKanKind kind,
+            int tileTypeIndex,
+            int sourcePonMeldIndex)
+        {
+            if (!TryGetGameFlow("Cannot declare a self kan because MahjongGameFlow is not assigned."))
+                return;
+
+            MahjongGameState state = gameFlow.CurrentState;
+            if (state == null)
+                return;
+
+            if (kind == SelfKanKind.Ankan)
+                gameFlow.TryRequestDeclareAnkanForSeat(state.SelfSeat, tileTypeIndex);
+            else if (kind == SelfKanKind.Kakan)
+                gameFlow.TryRequestDeclareKakanForSeat(
+                    state.SelfSeat,
+                    tileTypeIndex,
+                    sourcePonMeldIndex);
+        }
+
+        private void HandleDeclineSelfKanRequested()
+        {
+            if (!TryGetGameFlow("Cannot decline self kan because MahjongGameFlow is not assigned."))
+                return;
+
+            MahjongGameState state = gameFlow.CurrentState;
+            if (state != null)
+                gameFlow.TryRequestDeclineSelfKanForSeat(state.SelfSeat);
         }
 
         private void HandleReachRequested()

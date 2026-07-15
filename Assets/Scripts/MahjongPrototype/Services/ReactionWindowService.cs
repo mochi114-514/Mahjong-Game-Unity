@@ -82,6 +82,48 @@ namespace MahjongPrototype.Services
                 resolution);
         }
 
+        public ReactionWindowStartResult BeginChankan(
+            MahjongGameState gameState,
+            SelfKanCandidate pendingKakan)
+        {
+            if (gameState == null || pendingKakan == null ||
+                pendingKakan.Kind != SelfKanKind.Kakan)
+            {
+                return ReactionWindowStartResult.None;
+            }
+
+            WinDecisionEvaluation evaluation = winDecisionService.EvaluateRon(
+                gameState,
+                pendingKakan.Tile,
+                pendingKakan.Seat,
+                pendingKakan.TurnIndex,
+                true);
+            List<ReactionWindowCandidate> candidates =
+                new List<ReactionWindowCandidate>();
+            if (evaluation.RonCandidate.HasValue)
+            {
+                RonWinCandidate ronCandidate = evaluation.RonCandidate.Value;
+                candidates.Add(new ReactionWindowCandidate(
+                    ronCandidate.Seat,
+                    ReactionKind.Ron,
+                    ronCandidate.EvaluationResult));
+            }
+
+            ReactionWindow reactionWindow = gameState.BeginKakanReactionWindow(
+                pendingKakan,
+                candidates);
+            ReactionWindowResolution resolution = candidates.Count <= 0
+                ? ReactionWindowResolution.NoReaction(
+                    reactionWindow.WindowId,
+                    reactionWindow.Source)
+                : ReactionWindowResolution.None;
+            BeginResolutionIfNeeded(reactionWindow, resolution);
+            return new ReactionWindowStartResult(
+                reactionWindow,
+                evaluation.Notifications,
+                resolution);
+        }
+
         public ReactionWindowAnswerResult DeclareRon(
             MahjongGameState gameState,
             SeatId seat,
@@ -102,7 +144,7 @@ namespace MahjongPrototype.Services
             candidate.Declare();
             ReactionWindowResolution resolution = ReactionWindowResolution.RonDeclared(
                 reactionWindow.WindowId,
-                reactionWindow.SourceDiscard,
+                reactionWindow.Source,
                 candidate);
             BeginResolutionIfNeeded(reactionWindow, resolution);
             return ReactionWindowAnswerResult.AcceptedAnswer(
@@ -316,10 +358,10 @@ namespace MahjongPrototype.Services
             return reactionWindow.PendingCandidate == null
                 ? ReactionWindowResolution.NoReaction(
                     reactionWindow.WindowId,
-                    reactionWindow.SourceDiscard)
+                    reactionWindow.Source)
                 : ReactionWindowResolution.Pending(
                     reactionWindow.WindowId,
-                    reactionWindow.SourceDiscard);
+                    reactionWindow.Source);
         }
 
         private static bool TryGetPendingCandidate(

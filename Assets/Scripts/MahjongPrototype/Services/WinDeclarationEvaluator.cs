@@ -50,7 +50,8 @@ namespace MahjongPrototype.Services
                 context.IsLastLiveWallDraw,
                 context.IsLastLiveWallDiscard,
                 context.Melds,
-                context.IsRinshanDraw);
+                context.IsRinshanDraw,
+                context.IsChankan);
             HandEvaluationResult handEvaluationResult = handEvaluator.Evaluate(handContext);
             return new WinDeclarationEvaluationResult(
                 winCheckResult,

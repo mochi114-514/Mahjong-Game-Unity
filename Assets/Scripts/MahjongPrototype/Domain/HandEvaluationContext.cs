@@ -315,6 +315,49 @@ namespace MahjongPrototype.Domain
             bool isLastLiveWallDiscard,
             IReadOnlyList<PlayerMeld> melds,
             bool isRinshanDraw)
+            : this(
+                handTiles,
+                winningTile,
+                winType,
+                shape,
+                winningHandAnalysis,
+                winnerSeat,
+                sourceSeat,
+                roundWind,
+                seatWind,
+                isReachDeclared,
+                isClosed,
+                isIppatsuEligible,
+                isDoubleReachDeclared,
+                isFirstTurnTsumoEligible,
+                isLastLiveWallDraw,
+                isLastLiveWallDiscard,
+                melds,
+                isRinshanDraw,
+                false)
+        {
+        }
+
+        public HandEvaluationContext(
+            IReadOnlyList<Tile> handTiles,
+            Tile winningTile,
+            WinType winType,
+            WinningHandShape shape,
+            WinningHandAnalysisResult winningHandAnalysis,
+            SeatId winnerSeat,
+            SeatId? sourceSeat,
+            RoundWind roundWind,
+            SeatId seatWind,
+            bool isReachDeclared,
+            bool isClosed,
+            bool isIppatsuEligible,
+            bool isDoubleReachDeclared,
+            bool isFirstTurnTsumoEligible,
+            bool isLastLiveWallDraw,
+            bool isLastLiveWallDiscard,
+            IReadOnlyList<PlayerMeld> melds,
+            bool isRinshanDraw,
+            bool isChankan)
         {
             HandTiles = handTiles ?? throw new ArgumentNullException(nameof(handTiles));
             WinningTile = winningTile;
@@ -334,6 +377,7 @@ namespace MahjongPrototype.Domain
             IsLastLiveWallDiscard = isLastLiveWallDiscard;
             Melds = melds ?? Array.Empty<PlayerMeld>();
             IsRinshanDraw = isRinshanDraw;
+            IsChankan = isChankan;
         }
 
         public IReadOnlyList<Tile> HandTiles { get; }
@@ -354,5 +398,6 @@ namespace MahjongPrototype.Domain
         public bool IsLastLiveWallDiscard { get; }
         public IReadOnlyList<PlayerMeld> Melds { get; }
         public bool IsRinshanDraw { get; }
+        public bool IsChankan { get; }
     }
 }

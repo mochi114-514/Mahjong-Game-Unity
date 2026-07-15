@@ -94,7 +94,8 @@ namespace MahjongPrototype.UI3D
                     (meld.Type != PlayerMeldType.Chi &&
                         meld.Type != PlayerMeldType.Pon &&
                         meld.Type != PlayerMeldType.Daiminkan &&
-                        meld.Type != PlayerMeldType.Ankan))
+                        meld.Type != PlayerMeldType.Ankan &&
+                        meld.Type != PlayerMeldType.Kakan))
                     continue;
 
                 layouts.Add(BuildMeldTileLayout(meld));

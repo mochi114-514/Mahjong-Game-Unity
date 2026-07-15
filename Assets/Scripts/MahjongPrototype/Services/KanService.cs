@@ -7,6 +7,7 @@ namespace MahjongPrototype.Services
     public sealed class KanService
     {
         private const int MaximumStructuralMeldCount = 4;
+        private readonly WinChecker winChecker = new WinChecker();
 
         public IReadOnlyList<ReactionWindowCandidate> CollectDaiminkanCandidates(
             MahjongGameState gameState,
@@ -40,30 +41,108 @@ namespace MahjongPrototype.Services
             SeatId seat)
         {
             List<Tile> candidates = new List<Tile>();
-            if (!CanConsiderAnkan(gameState, seat, out PlayerSeat playerSeat))
-                return candidates;
-
-            int[] typeCounts = new int[34];
-            IReadOnlyList<Tile> handTiles = playerSeat.Hand.GetTiles();
-            for (int i = 0; i < handTiles.Count; i++)
+            IReadOnlyList<SelfKanCandidate> selfKanCandidates =
+                CollectSelfKanCandidates(gameState, seat);
+            for (int i = 0; i < selfKanCandidates.Count; i++)
             {
-                int typeIndex = handTiles[i].TypeIndex;
-                if (typeIndex >= 0 && typeIndex < typeCounts.Length)
-                    typeCounts[typeIndex]++;
+                SelfKanCandidate candidate = selfKanCandidates[i];
+                if (candidate.Kind == SelfKanKind.Ankan)
+                    candidates.Add(candidate.Tile);
             }
 
+            return candidates;
+        }
+
+        public IReadOnlyList<SelfKanCandidate> CollectSelfKanCandidates(
+            MahjongGameState gameState,
+            SeatId seat)
+        {
+            List<SelfKanCandidate> candidates = new List<SelfKanCandidate>();
+            if (!CanConsiderSelfKan(gameState, seat, out PlayerSeat playerSeat))
+                return candidates;
+
+            IReadOnlyList<Tile> handTiles = playerSeat.Hand.GetTiles();
             Tile drawnTile = playerSeat.DrawnTile.Value;
-            typeCounts[drawnTile.TypeIndex]++;
+            int[] typeCounts = CountLogicalTiles(handTiles, drawnTile);
             for (int typeIndex = 0; typeIndex < typeCounts.Length; typeIndex++)
             {
-                if (typeCounts[typeIndex] == 4 &&
-                    TryFindTile(handTiles, drawnTile, typeIndex, out Tile candidate))
+                if (typeCounts[typeIndex] != 4 ||
+                    !TryFindTile(handTiles, drawnTile, typeIndex, out Tile tile,
+                        out SelfKanTileLocation location))
                 {
-                    candidates.Add(candidate);
+                    continue;
+                }
+
+                if (HasRoomForMeld(playerSeat) &&
+                    (!playerSeat.IsReachDeclared ||
+                     IsLegalReachAnkan(playerSeat, tile, drawnTile)))
+                {
+                    candidates.Add(new SelfKanCandidate(
+                        SelfKanKind.Ankan,
+                        seat,
+                        tile,
+                        location,
+                        gameState.TurnIndex));
+                }
+            }
+
+            if (playerSeat.IsReachDeclared)
+                return candidates;
+
+            for (int meldIndex = 0; meldIndex < playerSeat.Melds.Count; meldIndex++)
+            {
+                PlayerMeld meld = playerSeat.Melds[meldIndex];
+                if (meld == null || meld.Type != PlayerMeldType.Pon ||
+                    !meld.AcquiredTile.HasValue)
+                {
+                    continue;
+                }
+
+                Tile tile = meld.AcquiredTile.Value;
+                if (drawnTile == tile)
+                {
+                    candidates.Add(new SelfKanCandidate(
+                        SelfKanKind.Kakan,
+                        seat,
+                        tile,
+                        SelfKanTileLocation.DrawnTile,
+                        gameState.TurnIndex,
+                        meldIndex,
+                        meld));
+                }
+                else if (playerSeat.Hand.CountTilesByValue(tile) > 0)
+                {
+                    candidates.Add(new SelfKanCandidate(
+                        SelfKanKind.Kakan,
+                        seat,
+                        tile,
+                        SelfKanTileLocation.Hand,
+                        gameState.TurnIndex,
+                        meldIndex,
+                        meld));
                 }
             }
 
             return candidates;
+        }
+
+        public bool IsCurrentSelfKanCandidate(
+            MahjongGameState gameState,
+            SelfKanCandidate candidate)
+        {
+            if (candidate == null)
+                return false;
+
+            IReadOnlyList<SelfKanCandidate> candidates = CollectSelfKanCandidates(
+                gameState,
+                candidate.Seat);
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                if (candidates[i].Matches(candidate))
+                    return true;
+            }
+
+            return false;
         }
 
         internal bool TryPrepareDaiminkanDeclaration(
@@ -121,6 +200,21 @@ namespace MahjongPrototype.Services
             if (gameState == null)
                 return AnkanDeclarationResult.Rejected("GameStateMissing");
 
+            SelfKanCandidate candidate = null;
+            IReadOnlyList<SelfKanCandidate> candidates =
+                CollectSelfKanCandidates(gameState, seat);
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                if (candidates[i].Kind == SelfKanKind.Ankan &&
+                    candidates[i].Tile == tile)
+                {
+                    candidate = candidates[i];
+                    break;
+                }
+            }
+            if (candidate == null)
+                return AnkanDeclarationResult.Rejected("AnkanStateChanged");
+
             if (!gameState.TryCommitAnkan(seat, tile, out PlayerMeld meld, out string reason))
                 return AnkanDeclarationResult.Rejected(reason);
 
@@ -158,7 +252,7 @@ namespace MahjongPrototype.Services
             return playerSeat.Hand.CountTilesByValue(sourceDiscard.Tile) == 3;
         }
 
-        private static bool CanConsiderAnkan(
+        private static bool CanConsiderSelfKan(
             MahjongGameState gameState,
             SeatId seat,
             out PlayerSeat playerSeat)
@@ -166,7 +260,8 @@ namespace MahjongPrototype.Services
             playerSeat = null;
             if (gameState == null || gameState.IsRoundEnded ||
                 gameState.CurrentTurn != seat ||
-                gameState.TurnPhase != TurnPhase.WaitingForDiscard ||
+                (gameState.TurnPhase != TurnPhase.WaitingForDiscard &&
+                 gameState.TurnPhase != TurnPhase.SelfKanDecision) ||
                 !gameState.Wall.CanDrawRinshan)
             {
                 return false;
@@ -178,8 +273,15 @@ namespace MahjongPrototype.Services
                 return false;
 
             playerSeat = gameState.GetPlayerSeat(seat);
-            return !playerSeat.IsReachDeclared && playerSeat.HasDrawnTile &&
-                HasRoomForMeld(playerSeat);
+            if (gameState.IsSelfKanDecisionPending &&
+                (gameState.CurrentSelfKanDecision == null ||
+                 gameState.CurrentSelfKanDecision.Seat != seat ||
+                 gameState.CurrentSelfKanDecision.TurnIndex != gameState.TurnIndex))
+            {
+                return false;
+            }
+
+            return playerSeat.HasDrawnTile;
         }
 
         private static bool HasRoomForMeld(PlayerSeat playerSeat)
@@ -190,17 +292,82 @@ namespace MahjongPrototype.Services
                 meldCount < MaximumStructuralMeldCount;
         }
 
+        private bool IsLegalReachAnkan(
+            PlayerSeat playerSeat,
+            Tile tile,
+            Tile drawnTile)
+        {
+            if (drawnTile != tile || playerSeat.Hand.CountTilesByValue(tile) != 3 ||
+                !HasRoomForMeld(playerSeat))
+            {
+                return false;
+            }
+
+            List<Tile> afterAnkanHand = new List<Tile>(playerSeat.Hand.GetTiles());
+            if (!RemoveTiles(afterAnkanHand, tile, 3))
+                return false;
+
+            List<PlayerMeld> afterAnkanMelds = new List<PlayerMeld>(playerSeat.Melds)
+            {
+                PlayerMeld.CreateAnkan(new[] { tile, tile, tile, tile }, playerSeat.SeatId)
+            };
+            return HasSameWaitSet(
+                playerSeat.Hand.GetTiles(),
+                playerSeat.Melds,
+                afterAnkanHand,
+                afterAnkanMelds);
+        }
+
+        private bool HasSameWaitSet(
+            IReadOnlyList<Tile> beforeHand,
+            IReadOnlyList<PlayerMeld> beforeMelds,
+            IReadOnlyList<Tile> afterHand,
+            IReadOnlyList<PlayerMeld> afterMelds)
+        {
+            for (int typeIndex = 0; typeIndex < 34; typeIndex++)
+            {
+                Tile tile = FromTypeIndex(typeIndex);
+                if (winChecker.CanWinWithTile(beforeHand, tile, beforeMelds) !=
+                    winChecker.CanWinWithTile(afterHand, tile, afterMelds))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static int[] CountLogicalTiles(
+            IReadOnlyList<Tile> handTiles,
+            Tile drawnTile)
+        {
+            int[] typeCounts = new int[34];
+            for (int i = 0; i < handTiles.Count; i++)
+            {
+                int typeIndex = handTiles[i].TypeIndex;
+                if (typeIndex >= 0 && typeIndex < typeCounts.Length)
+                    typeCounts[typeIndex]++;
+            }
+
+            typeCounts[drawnTile.TypeIndex]++;
+            return typeCounts;
+        }
+
         private static bool TryFindTile(
             IReadOnlyList<Tile> handTiles,
             Tile drawnTile,
             int typeIndex,
-            out Tile tile)
+            out Tile tile,
+            out SelfKanTileLocation location)
         {
             for (int i = 0; i < handTiles.Count; i++)
             {
                 if (handTiles[i].TypeIndex == typeIndex)
                 {
                     tile = handTiles[i];
+                    location = drawnTile.TypeIndex == typeIndex
+                        ? SelfKanTileLocation.DrawnTile
+                        : SelfKanTileLocation.Hand;
                     return true;
                 }
             }
@@ -208,11 +375,41 @@ namespace MahjongPrototype.Services
             if (drawnTile.TypeIndex == typeIndex)
             {
                 tile = drawnTile;
+                location = SelfKanTileLocation.DrawnTile;
                 return true;
             }
 
             tile = default;
+            location = default;
             return false;
+        }
+
+        private static bool RemoveTiles(List<Tile> tiles, Tile tile, int count)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                int index = tiles.FindIndex(value => value == tile);
+                if (index < 0)
+                    return false;
+
+                tiles.RemoveAt(index);
+            }
+
+            return true;
+        }
+
+        private static Tile FromTypeIndex(int typeIndex)
+        {
+            if (typeIndex < 0 || typeIndex >= 34)
+                return default;
+            if (typeIndex < 9)
+                return Tile.CreateNumber(TileSuit.Man, typeIndex + 1);
+            if (typeIndex < 18)
+                return Tile.CreateNumber(TileSuit.Pin, typeIndex - 8);
+            if (typeIndex < 27)
+                return Tile.CreateNumber(TileSuit.Sou, typeIndex - 17);
+
+            return Tile.CreateHonor((HonorKind)(typeIndex - 26));
         }
 
     }

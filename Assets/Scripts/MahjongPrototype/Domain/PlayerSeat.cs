@@ -158,5 +158,56 @@ namespace MahjongPrototype.Domain
             melds.Add(meld);
             return true;
         }
+
+        internal bool TryCommitKakan(
+            int sourcePonMeldIndex,
+            Tile tile,
+            SelfKanTileLocation addedTileLocation,
+            out PlayerMeld meld)
+        {
+            meld = null;
+            if (!tile.IsValid || sourcePonMeldIndex < 0 ||
+                sourcePonMeldIndex >= melds.Count || !drawnTile.HasValue)
+            {
+                return false;
+            }
+
+            PlayerMeld sourcePon = melds[sourcePonMeldIndex];
+            if (sourcePon == null || sourcePon.Type != PlayerMeldType.Pon ||
+                !sourcePon.HasDiscardSource || sourcePon.AcquiredTile.Value != tile)
+            {
+                return false;
+            }
+
+            Tile existingDrawnTile = drawnTile.Value;
+            bool drawnMatches = existingDrawnTile == tile;
+            if ((addedTileLocation == SelfKanTileLocation.DrawnTile && !drawnMatches) ||
+                (addedTileLocation == SelfKanTileLocation.Hand &&
+                    Hand.CountTilesByValue(tile) <= 0))
+            {
+                return false;
+            }
+
+            PlayerMeld preparedMeld = PlayerMeld.CreateKakan(
+                new[] { tile, tile, tile, tile },
+                SeatId,
+                sourcePon.SourceSeat.Value,
+                sourcePon.AcquiredTile.Value,
+                sourcePon.SourceDiscardId.Value);
+
+            // All checks are complete; the deterministic writes below cannot fail.
+            if (addedTileLocation == SelfKanTileLocation.Hand)
+            {
+                if (!Hand.TryRemoveTilesByValue(tile, 1))
+                    return false;
+
+                Hand.Add(existingDrawnTile);
+            }
+
+            drawnTile = null;
+            melds[sourcePonMeldIndex] = preparedMeld;
+            meld = preparedMeld;
+            return true;
+        }
     }
 }

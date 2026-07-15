@@ -243,6 +243,7 @@ namespace MahjongPrototype.UI
             eventNotifier.WinDeclared += HandleWinDeclared;
             eventNotifier.WinDeclined += HandleWinDeclined;
             eventNotifier.ReachDecisionStarted += HandleReachDecisionStarted;
+            eventNotifier.SelfKanDecisionStarted += HandleSelfKanDecisionStarted;
             eventNotifier.ReachDiscardSelectionStarted += HandleReachDiscardSelectionStarted;
             eventNotifier.ReachDiscardSelectionCanceled += HandleReachDiscardSelectionCanceled;
             eventNotifier.ReachDeclared += HandleReachDeclared;
@@ -277,6 +278,7 @@ namespace MahjongPrototype.UI
             eventNotifier.WinDeclared -= HandleWinDeclared;
             eventNotifier.WinDeclined -= HandleWinDeclined;
             eventNotifier.ReachDecisionStarted -= HandleReachDecisionStarted;
+            eventNotifier.SelfKanDecisionStarted -= HandleSelfKanDecisionStarted;
             eventNotifier.ReachDiscardSelectionStarted -= HandleReachDiscardSelectionStarted;
             eventNotifier.ReachDiscardSelectionCanceled -= HandleReachDiscardSelectionCanceled;
             eventNotifier.ReachDeclared -= HandleReachDeclared;
@@ -463,6 +465,7 @@ namespace MahjongPrototype.UI
         private void HandleReactionWindowAnswered(ReactionWindowAnswerResult _)
         {
             RefreshGlobalStatus();
+            RefreshPonDecisionUi();
             RefreshWinDecisionUi();
             RefreshPonDecisionUi();
             RefreshInteractionUi();
@@ -532,6 +535,7 @@ namespace MahjongPrototype.UI
         {
             RefreshGlobalStatus();
             RefreshWinDecisionUi();
+            RefreshPonDecisionUi();
             RefreshReachDecisionUi();
             RefreshInteractionUi();
 
@@ -551,6 +555,7 @@ namespace MahjongPrototype.UI
         {
             RefreshGlobalStatus();
             RefreshWinDecisionUi();
+            RefreshPonDecisionUi();
             RefreshReachDecisionUi();
             RefreshInteractionUi();
 
@@ -562,6 +567,13 @@ namespace MahjongPrototype.UI
         {
             RefreshGlobalStatus();
             RefreshReachDecisionUi();
+            RefreshInteractionUi();
+        }
+
+        private void HandleSelfKanDecisionStarted(SeatId _, int __)
+        {
+            RefreshGlobalStatus();
+            RefreshPonDecisionUi();
             RefreshInteractionUi();
         }
 
@@ -759,20 +771,26 @@ namespace MahjongPrototype.UI
                     false,
                     null,
                     null,
+                    null,
+                    false,
                     null);
                 return;
             }
 
             if (reactionWindow == null)
             {
-                IReadOnlyList<Tile> ankanCandidates = gameFlow != null
-                    ? gameFlow.GetAnkanCandidatesForSeat(state.SelfSeat)
+                IReadOnlyList<SelfKanCandidate> selfKanCandidates = gameFlow != null
+                    ? gameFlow.GetSelfKanCandidatesForSeat(state.SelfSeat)
                     : null;
                 ponDecisionController.SetMeldCallDecision(
                     false,
                     false,
                     null,
-                    ankanCandidates,
+                    null,
+                    selfKanCandidates,
+                    state.IsSelfKanDecisionPending &&
+                    state.CurrentSelfKanDecision != null &&
+                    state.CurrentSelfKanDecision.Seat == state.SelfSeat,
                     null);
                 return;
             }
@@ -793,7 +811,9 @@ namespace MahjongPrototype.UI
                 showDaiminkan,
                 chiOptions,
                 null,
-                reactionWindow.SourceDiscard.Tile);
+                null,
+                false,
+                reactionWindow.Source.Tile);
         }
 
         private static bool ContainsMeldCallKind(

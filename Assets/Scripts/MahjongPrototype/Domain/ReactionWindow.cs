@@ -334,9 +334,22 @@ namespace MahjongPrototype.Domain
             DiscardRecord sourceDiscard,
             int turnIndex,
             IReadOnlyList<ReactionWindowCandidate> candidates)
+            : this(
+                windowId,
+                ReactionWindowSource.FromDiscard(sourceDiscard),
+                turnIndex,
+                candidates)
+        {
+        }
+
+        public ReactionWindow(
+            int windowId,
+            ReactionWindowSource source,
+            int turnIndex,
+            IReadOnlyList<ReactionWindowCandidate> candidates)
         {
             WindowId = windowId;
-            SourceDiscard = sourceDiscard;
+            Source = source;
             TurnIndex = turnIndex;
             this.candidates = new List<ReactionWindowCandidate>();
 
@@ -351,7 +364,9 @@ namespace MahjongPrototype.Domain
         }
 
         public int WindowId { get; }
-        public DiscardRecord SourceDiscard { get; }
+        public ReactionWindowSource Source { get; }
+        // Compatibility projection for discard-origin reaction windows.
+        public DiscardRecord SourceDiscard => Source.Discard.GetValueOrDefault();
         public int TurnIndex { get; }
         public IReadOnlyList<ReactionWindowCandidate> Candidates => candidates;
         public ReactionWindowState State => state;
@@ -440,13 +455,13 @@ namespace MahjongPrototype.Domain
         private ReactionWindowResolution(
             int windowId,
             ReactionWindowResolutionType type,
-            DiscardRecord sourceDiscard,
+            ReactionWindowSource source,
             ReactionWindowCandidate candidate,
             PlayerMeld meld)
         {
             WindowId = windowId;
             Type = type;
-            SourceDiscard = sourceDiscard;
+            Source = source;
             Candidate = candidate;
             Meld = meld;
         }
@@ -460,27 +475,39 @@ namespace MahjongPrototype.Domain
 
         public int WindowId { get; }
         public ReactionWindowResolutionType Type { get; }
-        public DiscardRecord SourceDiscard { get; }
+        public ReactionWindowSource Source { get; }
+        // Compatibility projection for normal discard reactions.
+        public DiscardRecord SourceDiscard => Source.Discard.GetValueOrDefault();
         public ReactionWindowCandidate Candidate { get; }
         public PlayerMeld Meld { get; }
         public bool IsResolved => Type != ReactionWindowResolutionType.None;
 
         public static ReactionWindowResolution NoReaction(int windowId, DiscardRecord sourceDiscard)
         {
+            return NoReaction(windowId, ReactionWindowSource.FromDiscard(sourceDiscard));
+        }
+
+        public static ReactionWindowResolution NoReaction(int windowId, ReactionWindowSource source)
+        {
             return new ReactionWindowResolution(
                 windowId,
                 ReactionWindowResolutionType.NoReaction,
-                sourceDiscard,
+                source,
                 null,
                 null);
         }
 
         public static ReactionWindowResolution Pending(int windowId, DiscardRecord sourceDiscard)
         {
+            return Pending(windowId, ReactionWindowSource.FromDiscard(sourceDiscard));
+        }
+
+        public static ReactionWindowResolution Pending(int windowId, ReactionWindowSource source)
+        {
             return new ReactionWindowResolution(
                 windowId,
                 ReactionWindowResolutionType.None,
-                sourceDiscard,
+                source,
                 null,
                 null);
         }
@@ -490,13 +517,24 @@ namespace MahjongPrototype.Domain
             DiscardRecord sourceDiscard,
             ReactionWindowCandidate candidate)
         {
+            return RonDeclared(
+                windowId,
+                ReactionWindowSource.FromDiscard(sourceDiscard),
+                candidate);
+        }
+
+        public static ReactionWindowResolution RonDeclared(
+            int windowId,
+            ReactionWindowSource source,
+            ReactionWindowCandidate candidate)
+        {
             if (candidate == null || candidate.Kind != ReactionKind.Ron)
                 throw new ArgumentException("A ron resolution requires a ron candidate.", nameof(candidate));
 
             return new ReactionWindowResolution(
                 windowId,
                 ReactionWindowResolutionType.RonDeclared,
-                sourceDiscard,
+                source,
                 candidate,
                 null);
         }
@@ -515,7 +553,7 @@ namespace MahjongPrototype.Domain
             return new ReactionWindowResolution(
                 windowId,
                 ReactionWindowResolutionType.PonDeclared,
-                sourceDiscard,
+                ReactionWindowSource.FromDiscard(sourceDiscard),
                 candidate,
                 meld);
         }
@@ -534,7 +572,7 @@ namespace MahjongPrototype.Domain
             return new ReactionWindowResolution(
                 windowId,
                 ReactionWindowResolutionType.ChiDeclared,
-                sourceDiscard,
+                ReactionWindowSource.FromDiscard(sourceDiscard),
                 candidate,
                 meld);
         }
@@ -561,7 +599,7 @@ namespace MahjongPrototype.Domain
             return new ReactionWindowResolution(
                 windowId,
                 ReactionWindowResolutionType.DaiminkanDeclared,
-                sourceDiscard,
+                ReactionWindowSource.FromDiscard(sourceDiscard),
                 candidate,
                 meld);
         }

@@ -194,9 +194,9 @@ namespace MahjongPrototype.Logging
             DevLog.Record(
                 "Reaction",
                 "ReactionWindowStarted",
-                $"windowId={reactionWindow.WindowId}; sourceDiscardId={reactionWindow.SourceDiscard.Id}; candidates={reactionWindow.Candidates.Count}",
-                seat: reactionWindow.SourceDiscard.ActorSeat,
-                tile: reactionWindow.SourceDiscard.Tile,
+                $"windowId={reactionWindow.WindowId}; source={reactionWindow.Source.Kind}; sourceDiscardId={reactionWindow.SourceDiscard.Id}; candidates={reactionWindow.Candidates.Count}",
+                seat: reactionWindow.Source.ActorSeat,
+                tile: reactionWindow.Source.Tile,
                 wallCount: GetWallCount(),
                 turnIndex: reactionWindow.TurnIndex);
         }
@@ -209,11 +209,11 @@ namespace MahjongPrototype.Logging
             DevLog.Record(
                 "Reaction",
                 "ReactionWindowAnswered",
-                $"windowId={result.WindowId}; sourceDiscardId={result.Resolution.SourceDiscard.Id}; reaction={result.Candidate.Kind}; answer={result.Candidate.ResponseState}",
+                $"windowId={result.WindowId}; source={result.Resolution.Source.Kind}; sourceDiscardId={result.Resolution.SourceDiscard.Id}; reaction={result.Candidate.Kind}; answer={result.Candidate.ResponseState}",
                 seat: result.Candidate.Seat,
-                tile: result.Resolution.SourceDiscard.Tile,
+                tile: result.Resolution.Source.Tile,
                 wallCount: GetWallCount(),
-                turnIndex: result.Resolution.SourceDiscard.TurnIndex);
+                turnIndex: result.Resolution.Source.TurnIndex);
         }
 
         private void HandleReactionWindowResolved(ReactionWindowResolution resolution)
@@ -224,11 +224,11 @@ namespace MahjongPrototype.Logging
             DevLog.Record(
                 "Reaction",
                 "ReactionWindowResolved",
-                $"resolution={resolution.Type}; sourceDiscardId={resolution.SourceDiscard.Id}; caller={resolution.Candidate?.Seat}; meld={resolution.Meld?.Type}",
-                seat: resolution.SourceDiscard.ActorSeat,
-                tile: resolution.SourceDiscard.Tile,
+                $"resolution={resolution.Type}; source={resolution.Source.Kind}; sourceDiscardId={resolution.SourceDiscard.Id}; caller={resolution.Candidate?.Seat}; meld={resolution.Meld?.Type}",
+                seat: resolution.Source.ActorSeat,
+                tile: resolution.Source.Tile,
                 wallCount: GetWallCount(),
-                turnIndex: resolution.SourceDiscard.TurnIndex);
+                turnIndex: resolution.Source.TurnIndex);
         }
 
         private void HandleReactionWindowClosed(int windowId)

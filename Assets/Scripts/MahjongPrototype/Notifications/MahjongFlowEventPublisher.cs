@@ -101,6 +101,11 @@ namespace MahjongPrototype.Notifications
             notifierProvider()?.NotifyMeldDeclared(meld);
         }
 
+        public void NotifySelfKanDecisionStarted(SeatId seat, int turnIndex)
+        {
+            notifierProvider()?.NotifySelfKanDecisionStarted(seat, turnIndex);
+        }
+
         public void NotifySkillActivated(SeatId actorSeat, ActiveSkillEffect effect)
         {
             notifierProvider()?.NotifySkillActivated(actorSeat, effect);

@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using MahjongPrototype.Domain;
 using TMPro;
 using UnityEngine;
+using UnityEngine.Events;
 using UnityEngine.UI;
 
 namespace MahjongPrototype.UI
@@ -20,10 +21,11 @@ namespace MahjongPrototype.UI
         private bool warnedMissingRoot;
         private bool warnedMissingPonButton;
         private bool warnedMissingInputController;
+        private UnityAction selfKanDeclineAction;
 
         public void SetPonDecision(bool visible, Tile? calledTile)
         {
-            SetMeldCallDecision(visible, false, null, null, calledTile);
+            SetMeldCallDecision(visible, false, null, null, null, false, calledTile);
         }
 
         public void SetMeldCallDecision(
@@ -31,7 +33,25 @@ namespace MahjongPrototype.UI
             IReadOnlyList<ChiOption> chiOptions,
             Tile? calledTile)
         {
-            SetMeldCallDecision(showPon, false, chiOptions, null, calledTile);
+            SetMeldCallDecision(showPon, false, chiOptions, null, null, false, calledTile);
+        }
+
+        // Compatibility overload retained for the existing pon/chi/ankan UI path.
+        public void SetMeldCallDecision(
+            bool showPon,
+            bool showDaiminkan,
+            IReadOnlyList<ChiOption> chiOptions,
+            IReadOnlyList<Tile> ankanCandidates,
+            Tile? calledTile)
+        {
+            SetMeldCallDecision(
+                showPon,
+                showDaiminkan,
+                chiOptions,
+                ankanCandidates,
+                null,
+                false,
+                calledTile);
         }
 
         public void SetMeldCallDecision(
@@ -39,6 +59,8 @@ namespace MahjongPrototype.UI
             bool showDaiminkan,
             IReadOnlyList<ChiOption> chiOptions,
             IReadOnlyList<Tile> ankanCandidates,
+            IReadOnlyList<SelfKanCandidate> selfKanCandidates,
+            bool showSelfKanDecline,
             Tile? calledTile)
         {
             if (ponDecisionRoot == null)
@@ -50,10 +72,11 @@ namespace MahjongPrototype.UI
             ClearDynamicMeldButtons();
             bool showChi = chiOptions != null && chiOptions.Count > 0;
             bool showAnkan = ankanCandidates != null && ankanCandidates.Count > 0;
+            bool showSelfKan = selfKanCandidates != null && selfKanCandidates.Count > 0;
             bool showReactionDecision = showPon || showDaiminkan || showChi;
-            bool visible = showReactionDecision || showAnkan;
+            bool visible = showReactionDecision || showAnkan || showSelfKan;
             ponDecisionRoot.SetActive(visible);
-            SetStaticButtonVisibility(showPon, showReactionDecision);
+            SetStaticButtonVisibility(showPon, showReactionDecision || showSelfKanDecline, showSelfKanDecline);
             if (decisionLabel != null)
             {
                 decisionLabel.text = visible && calledTile.HasValue
@@ -63,7 +86,7 @@ namespace MahjongPrototype.UI
                         : string.Empty;
             }
 
-            if (!showDaiminkan && !showChi && !showAnkan)
+            if (!showDaiminkan && !showChi && !showAnkan && !showSelfKan)
                 return;
 
             if (ponButton == null)
@@ -82,6 +105,8 @@ namespace MahjongPrototype.UI
                 return;
             }
 
+            ConfigureSelfKanDecline(showSelfKanDecline);
+
             if (showDaiminkan)
                 CreateMeldButton("Daiminkan", "大明槓", MeldCallKind.Kan, 0);
             if (showChi)
@@ -94,9 +119,17 @@ namespace MahjongPrototype.UI
                 for (int i = 0; i < ankanCandidates.Count; i++)
                     CreateAnkanButton(ankanCandidates[i]);
             }
+            if (showSelfKan)
+            {
+                for (int i = 0; i < selfKanCandidates.Count; i++)
+                    CreateSelfKanButton(selfKanCandidates[i]);
+            }
         }
 
-        private void SetStaticButtonVisibility(bool showPon, bool showDecline)
+        private void SetStaticButtonVisibility(
+            bool showPon,
+            bool showDecline,
+            bool showSelfKanDecline)
         {
             if (ponButton != null)
                 ponButton.gameObject.SetActive(showPon);
@@ -104,7 +137,12 @@ namespace MahjongPrototype.UI
                 WarnMissingOnce(ref warnedMissingPonButton, "PonButton is not assigned.");
 
             if (declineButton != null)
+            {
                 declineButton.gameObject.SetActive(showDecline);
+                ConfigureSelfKanDecline(showSelfKanDecline);
+                if (showDecline)
+                    SetButtonLabel(declineButton, showSelfKanDecline ? "カンしない" : "拒否");
+            }
         }
 
         private void CreateChiOptionButton(ChiOption option)
@@ -129,6 +167,26 @@ namespace MahjongPrototype.UI
                 $"暗槓 {tile}",
                 MeldCallKind.Kan,
                 tile.TypeIndex);
+        }
+
+        private void CreateSelfKanButton(SelfKanCandidate candidate)
+        {
+            if (candidate == null)
+                return;
+
+            Button button = Instantiate(ponButton, ponButton.transform.parent);
+            button.name = $"{candidate.Kind}_{candidate.Tile.TypeIndex}_{candidate.SourcePonMeldIndex}";
+            if (declineButton != null)
+                button.transform.SetSiblingIndex(declineButton.transform.GetSiblingIndex());
+            button.onClick.RemoveAllListeners();
+            button.onClick.AddListener(() => inputController.RequestSelfKan(
+                candidate.Kind,
+                candidate.Tile.TypeIndex,
+                candidate.SourcePonMeldIndex));
+            button.gameObject.SetActive(true);
+            string action = candidate.Kind == SelfKanKind.Ankan ? "暗槓" : "加槓";
+            SetButtonLabel(button, $"{action} {candidate.Tile}");
+            dynamicMeldButtons.Add(button);
         }
 
         private void CreateMeldButton(
@@ -165,6 +223,24 @@ namespace MahjongPrototype.UI
             }
 
             dynamicMeldButtons.Clear();
+        }
+
+        private void ConfigureSelfKanDecline(bool enabled)
+        {
+            if (declineButton == null)
+                return;
+
+            if (selfKanDeclineAction != null)
+            {
+                declineButton.onClick.RemoveListener(selfKanDeclineAction);
+                selfKanDeclineAction = null;
+            }
+
+            if (!enabled || inputController == null)
+                return;
+
+            selfKanDeclineAction = () => inputController.RequestDeclineSelfKan();
+            declineButton.onClick.AddListener(selfKanDeclineAction);
         }
 
         private static void SetButtonLabel(Button button, string label)

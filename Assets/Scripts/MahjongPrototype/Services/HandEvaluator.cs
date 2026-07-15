@@ -116,6 +116,11 @@ namespace MahjongPrototype.Services
                 context.IsRinshanDraw &&
                 !context.IsLastLiveWallDraw,
                 context.IsClosed);
+            TryAddYaku(
+                yakus,
+                YakuKind.Chankan,
+                context.WinType == WinType.Ron && context.IsChankan,
+                context.IsClosed);
             TryAddYaku(yakus, YakuKind.Tanyao, IsTanyao(context), context.IsClosed);
             EvaluateFirstTurnYakuman(context, yakus);
         }

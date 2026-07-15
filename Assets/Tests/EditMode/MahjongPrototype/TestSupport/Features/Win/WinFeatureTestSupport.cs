@@ -103,10 +103,11 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
             bool isLastLiveWallDraw = false,
             bool isLastLiveWallDiscard = false,
             object melds = null,
-            bool isRinshanDraw = false)
+            bool isRinshanDraw = false,
+            bool isChankan = false)
         {
             Type contextType = Reflection.RequireType(WinDeclarationEvaluationContextTypeName);
-            if (melds != null || isRinshanDraw)
+            if (melds != null || isRinshanDraw || isChankan)
             {
                 return Reflection.CreateInstance(
                     contextType,
@@ -125,7 +126,8 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
                     isLastLiveWallDraw,
                     isLastLiveWallDiscard,
                     melds,
-                    isRinshanDraw);
+                    isRinshanDraw,
+                    isChankan);
             }
 
             return Reflection.CreateInstance(

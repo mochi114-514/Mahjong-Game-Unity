@@ -96,7 +96,8 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
             bool isLastLiveWallDraw = false,
             bool isLastLiveWallDiscard = false,
             object melds = null,
-            bool isRinshanDraw = false)
+            bool isRinshanDraw = false,
+            bool isChankan = false)
         {
             object evaluator = support.CreateWinDeclarationEvaluator(catalog);
             object context = support.CreateWinDeclarationEvaluationContext(
@@ -113,7 +114,8 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
                 isLastLiveWallDraw,
                 isLastLiveWallDiscard,
                 melds,
-                isRinshanDraw);
+                isRinshanDraw,
+                isChankan);
 
             return support.Reflection.Invoke(evaluator, "EvaluateWithTile", context);
         }

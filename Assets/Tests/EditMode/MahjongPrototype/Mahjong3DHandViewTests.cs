@@ -620,6 +620,44 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
+        public void RenderOpenMelds_KakanRendersFourTilesAndPreservesTheOriginalCalledTileOrientation()
+        {
+            GameObject root = new GameObject("OpenMeldKakanLayoutTest");
+            GameObject prefab = new GameObject("Tile3DPrefab");
+            try
+            {
+                object view = root.AddComponent(Type.GetType(Mahjong3DOpenMeldViewTypeName, true));
+                object tilePrefab = prefab.AddComponent(Type.GetType(Mahjong3DTileViewTypeName, true));
+                SetPrivateField(view, "tilePrefab", tilePrefab);
+
+                IList melds = CreateList(RequireType(PlayerMeldTypeName));
+                melds.Add(CreateDiscardDerivedMeld(
+                    "Kakan",
+                    "5m 5m 5m 5m",
+                    "5m",
+                    1,
+                    "East",
+                    "South"));
+                Invoke(view, "RenderOpenMelds", melds);
+
+                Component[] tileViews = GetTileViews(root);
+                Assert.That(tileViews.Length, Is.EqualTo(4));
+                for (int tileIndex = 0; tileIndex < tileViews.Length; tileIndex++)
+                {
+                    if (tileIndex == 2)
+                        AssertHorizontal(tileViews[tileIndex]);
+                    else
+                        AssertVertical(tileViews[tileIndex]);
+                }
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(prefab);
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
         public void RenderOpenMelds_ThreeAndFourTileBlocksKeepFirstAnchorAndMeldSpacing()
         {
             GameObject root = new GameObject("OpenMeldMixedWidthSpacingTest");

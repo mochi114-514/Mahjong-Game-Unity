@@ -684,11 +684,11 @@ namespace MahjongPrototype
                 {
                     EventPublisher.NotifyWinDeclined(
                         answer.Candidate.Seat,
-                        answer.Resolution.SourceDiscard.TurnIndex);
+                        answer.Resolution.Source.TurnIndex);
                     EventPublisher.NotifyWinDeclinedDetailed(
                         answer.Candidate.Seat,
                         WinType.Ron,
-                        answer.Resolution.SourceDiscard.TurnIndex);
+                        answer.Resolution.Source.TurnIndex);
                 });
         }
 
@@ -756,13 +756,31 @@ namespace MahjongPrototype
                 : kanService.CollectAnkanCandidates(gameState, actorSeat);
         }
 
+        public IReadOnlyList<SelfKanCandidate> GetSelfKanCandidatesForSeat(SeatId actorSeat)
+        {
+            if (gameState == null)
+                return System.Array.Empty<SelfKanCandidate>();
+
+            if (gameState.IsSelfKanDecisionPending &&
+                gameState.CurrentSelfKanDecision != null &&
+                gameState.CurrentSelfKanDecision.Seat == actorSeat)
+            {
+                return gameState.CurrentSelfKanDecision.Candidates;
+            }
+
+            return kanService.CollectSelfKanCandidates(gameState, actorSeat);
+        }
+
         public bool TryRequestDeclareAnkanForSeat(SeatId actorSeat, int tileTypeIndex)
         {
-            IReadOnlyList<Tile> candidates = GetAnkanCandidatesForSeat(actorSeat);
+            IReadOnlyList<SelfKanCandidate> candidates = GetSelfKanCandidatesForSeat(actorSeat);
             for (int i = 0; i < candidates.Count; i++)
             {
-                if (candidates[i].TypeIndex == tileTypeIndex)
-                    return TryRequestDeclareAnkanForSeat(actorSeat, candidates[i]);
+                if (candidates[i].Kind == SelfKanKind.Ankan &&
+                    candidates[i].Tile.TypeIndex == tileTypeIndex)
+                {
+                    return TryRequestDeclareSelfKanForSeat(actorSeat, candidates[i]);
+                }
             }
 
             NotifyKanBlocked(actorSeat, default, "AnkanCandidateMissing");
@@ -771,16 +789,73 @@ namespace MahjongPrototype
 
         public bool TryRequestDeclareAnkanForSeat(SeatId actorSeat, Tile tile)
         {
+            IReadOnlyList<SelfKanCandidate> candidates = GetSelfKanCandidatesForSeat(actorSeat);
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                if (candidates[i].Kind == SelfKanKind.Ankan && candidates[i].Tile == tile)
+                    return TryRequestDeclareSelfKanForSeat(actorSeat, candidates[i]);
+            }
+
+            NotifyKanBlocked(actorSeat, tile, "AnkanCandidateMissing");
+            return false;
+        }
+
+        public bool TryRequestDeclareKakanForSeat(
+            SeatId actorSeat,
+            int tileTypeIndex,
+            int sourcePonMeldIndex)
+        {
+            IReadOnlyList<SelfKanCandidate> candidates = GetSelfKanCandidatesForSeat(actorSeat);
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                if (candidates[i].Kind == SelfKanKind.Kakan &&
+                    candidates[i].Tile.TypeIndex == tileTypeIndex &&
+                    candidates[i].SourcePonMeldIndex == sourcePonMeldIndex)
+                {
+                    return TryRequestDeclareSelfKanForSeat(actorSeat, candidates[i]);
+                }
+            }
+
+            NotifyKanBlocked(actorSeat, default, "KakanCandidateMissing");
+            return false;
+        }
+
+        public bool TryRequestDeclareSelfKanForSeat(
+            SeatId actorSeat,
+            SelfKanCandidate candidate)
+        {
             if (!CanUseGameState())
                 return false;
+
+            if (candidate == null || candidate.Seat != actorSeat)
+            {
+                NotifyKanBlocked(actorSeat, default, "SelfKanCandidateMissing");
+                return false;
+            }
+
+            if (!kanService.IsCurrentSelfKanCandidate(gameState, candidate))
+            {
+                NotifyKanBlocked(actorSeat, candidate.Tile, "SelfKanStateChanged");
+                return false;
+            }
+
+            if (gameState.IsSelfKanDecisionPending &&
+                !gameState.TryAcceptSelfKanDecision(candidate))
+            {
+                NotifyKanBlocked(actorSeat, candidate.Tile, "SelfKanDecisionStale");
+                return false;
+            }
+
+            if (candidate.Kind == SelfKanKind.Kakan)
+                return TryBeginKakanReactionWindow(candidate);
 
             AnkanDeclarationResult result = kanService.TryDeclareAnkan(
                 gameState,
                 actorSeat,
-                tile);
+                candidate.Tile);
             if (!result.Declared)
             {
-                NotifyKanBlocked(actorSeat, tile, result.Reason);
+                NotifyKanBlocked(actorSeat, candidate.Tile, result.Reason);
                 return false;
             }
 
@@ -788,13 +863,24 @@ namespace MahjongPrototype
             gameState.ClearIppatsuEligibilityForAllPlayers();
             EventPublisher.NotifyTurnDebug(
                 "AnkanDeclared",
-                $"caller={actorSeat}; tile={tile}; phase={gameState.TurnPhase}; liveWall={gameState.Wall.Count}; deadWall={gameState.Wall.DeadWallCount}; rinshanRemaining={gameState.Wall.RemainingRinshanTileCount}",
+                $"caller={actorSeat}; tile={candidate.Tile}; phase={gameState.TurnPhase}; liveWall={gameState.Wall.Count}; deadWall={gameState.Wall.DeadWallCount}; rinshanRemaining={gameState.Wall.RemainingRinshanTileCount}",
                 seat: actorSeat,
-                tile: tile,
+                tile: candidate.Tile,
                 turnIndex: gameState.TurnIndex);
             EventPublisher.NotifyMeldDeclared(result.Meld);
             TryAutoDrawRinshanAfterKan(actorSeat, "Ankan");
             return true;
+        }
+
+        public bool TryRequestDeclineSelfKanForSeat(SeatId actorSeat)
+        {
+            if (!CanUseGameState() || !gameState.TryDeclineSelfKanDecision(actorSeat))
+            {
+                NotifyKanBlocked(actorSeat, default, "SelfKanDecisionMissing");
+                return false;
+            }
+
+            return TryRequestDiscardDrawnTileForSeatInternal(actorSeat, false);
         }
 
         public bool TryRequestDeclinePonForSeat(SeatId actorSeat, int reactionWindowId)
@@ -870,13 +956,10 @@ namespace MahjongPrototype
                 result.WinType,
                 result.TurnIndex);
 
-            if (result.WinType == WinType.Tsumo &&
-                ShouldAutoDiscardDrawnTileAfterDraw(result.Seat))
+            if (result.WinType == WinType.Tsumo)
             {
-                TryAutoDiscardDrawnTileAfterDraw(result.Seat);
-                return;
+                ContinueAfterDeclinedTsumo(result.Seat);
             }
-
         }
 
         public void RequestDeclareReach()
@@ -1053,6 +1136,37 @@ namespace MahjongPrototype
                 ResolveReactionWindow(start.Resolution);
         }
 
+        private bool TryBeginKakanReactionWindow(SelfKanCandidate candidate)
+        {
+            EnsureReactionWindowService();
+            ReactionWindowStartResult start = reactionWindowService.BeginChankan(
+                gameState,
+                candidate);
+            if (start.ReactionWindow == null)
+            {
+                NotifyKanBlocked(candidate.Seat, candidate.Tile, "KakanWindowUnavailable");
+                return false;
+            }
+
+            cpuTurnController?.CancelPendingTurn();
+            CancelPendingAutoDiscardDrawnTile();
+            EventPublisher.NotifyTurnDebug(
+                "KakanDeclaredPending",
+                $"windowId={start.ReactionWindow.WindowId}; caller={candidate.Seat}; tile={candidate.Tile}; candidates={start.ReactionWindow.Candidates.Count}",
+                seat: candidate.Seat,
+                tile: candidate.Tile,
+                turnIndex: candidate.TurnIndex);
+            EventPublisher.NotifyReactionWindowStarted(start.ReactionWindow);
+            NotifyWinDecisionStartedIfNeeded(
+                start.ReactionWindow.PendingRonCandidate != null);
+            NotifyWinCheckResults(start.WinCheckNotifications);
+
+            if (start.Resolution.IsResolved)
+                return ResolveReactionWindow(start.Resolution);
+
+            return true;
+        }
+
         private bool CompleteReactionWindowAnswer(
             ReactionWindowAnswerResult answer,
             System.Action afterAnswered = null)
@@ -1096,18 +1210,45 @@ namespace MahjongPrototype
 
             bool shouldAutoDrawRinshan =
                 resolution.Type == ReactionWindowResolutionType.DaiminkanDeclared;
-            ApplyReactionWindowResolution(resolution);
+            PlayerMeld committedKakan = null;
+            if (resolution.Source.IsKakan &&
+                resolution.Type == ReactionWindowResolutionType.NoReaction)
+            {
+                ReactionWindow closedWindow = gameState.CurrentReactionWindow;
+                string kakanReason = "KakanWindowMissing";
+                if (closedWindow == null || !gameState.TryCommitKakan(
+                        closedWindow,
+                        gameState.PendingKakan,
+                        out committedKakan,
+                        out kakanReason))
+                {
+                    NotifyKanBlocked(resolution.Source.ActorSeat, resolution.Source.Tile, kakanReason);
+                    EndRound(RoundLifecycleService.RoundEndReasonWallEmpty);
+                    return false;
+                }
+
+                gameState.ClearIppatsuEligibilityForAllPlayers();
+                shouldAutoDrawRinshan = true;
+            }
+            else
+            {
+                ApplyReactionWindowResolution(resolution);
+            }
             afterFinalStateEstablished?.Invoke();
             EventPublisher.NotifyTurnDebug(
                 "ReactionWindowResolved",
-                $"windowId={resolution.WindowId}; resolution={resolution.Type}; sourceSeat={resolution.SourceDiscard.ActorSeat}",
-                seat: resolution.SourceDiscard.ActorSeat,
-                tile: resolution.SourceDiscard.Tile,
-                turnIndex: resolution.SourceDiscard.TurnIndex);
+                $"windowId={resolution.WindowId}; resolution={resolution.Type}; sourceSeat={resolution.Source.ActorSeat}; source={resolution.Source.Kind}",
+                seat: resolution.Source.ActorSeat,
+                tile: resolution.Source.Tile,
+                turnIndex: resolution.Source.TurnIndex);
             EventPublisher.NotifyReactionWindowResolved(resolution);
             EventPublisher.NotifyReactionWindowClosed(resolution.WindowId);
+            if (committedKakan != null)
+                EventPublisher.NotifyMeldDeclared(committedKakan);
             if (shouldAutoDrawRinshan && resolution.Candidate != null)
                 TryAutoDrawRinshanAfterKan(resolution.Candidate.Seat, "Daiminkan");
+            else if (shouldAutoDrawRinshan && committedKakan != null)
+                TryAutoDrawRinshanAfterKan(committedKakan.OwnerSeat, "Kakan");
             return true;
         }
 
@@ -1194,7 +1335,8 @@ namespace MahjongPrototype
             switch (resolution.Type)
             {
                 case ReactionWindowResolutionType.NoReaction:
-                    AdvanceOrEndAfterDiscard(resolution.SourceDiscard);
+                    if (resolution.Source.IsDiscard)
+                        AdvanceOrEndAfterDiscard(resolution.SourceDiscard);
                     break;
                 case ReactionWindowResolutionType.RonDeclared:
                     EndRound(
@@ -1257,17 +1399,17 @@ namespace MahjongPrototype
             if (candidate == null)
                 return;
 
-            EventPublisher.NotifyWinDeclared(candidate.Seat, resolution.SourceDiscard.TurnIndex);
+            EventPublisher.NotifyWinDeclared(candidate.Seat, resolution.Source.TurnIndex);
             EventPublisher.NotifyWinDeclaredDetailed(
                 candidate.Seat,
                 WinType.Ron,
-                resolution.SourceDiscard.TurnIndex);
+                resolution.Source.TurnIndex);
             EventPublisher.NotifyWinDeclaredEvaluated(
                 candidate.Seat,
                 WinType.Ron,
-                resolution.SourceDiscard.Tile,
-                resolution.SourceDiscard.ActorSeat,
-                resolution.SourceDiscard.TurnIndex,
+                resolution.Source.Tile,
+                resolution.Source.ActorSeat,
+                resolution.Source.TurnIndex,
                 candidate.WinDeclarationEvaluation);
         }
 
@@ -1400,6 +1542,9 @@ namespace MahjongPrototype
                 return;
             }
 
+            if (TryBeginReachAnkanDecisionAfterDraw(seat))
+                return;
+
             if (ShouldAutoDiscardDrawnTileAfterDraw(seat))
             {
                 TryAutoDiscardDrawnTileAfterDraw(seat);
@@ -1407,6 +1552,43 @@ namespace MahjongPrototype
             }
 
             TryBeginReachDecisionAfterDraw(seat);
+        }
+
+        private void ContinueAfterDeclinedTsumo(SeatId seat)
+        {
+            if (TryBeginReachAnkanDecisionAfterDraw(seat))
+                return;
+
+            if (ShouldAutoDiscardDrawnTileAfterDraw(seat))
+            {
+                TryAutoDiscardDrawnTileAfterDraw(seat);
+                return;
+            }
+
+            TryBeginReachDecisionAfterDraw(seat);
+        }
+
+        private bool TryBeginReachAnkanDecisionAfterDraw(SeatId seat)
+        {
+            if (gameState == null || gameState.CurrentTurn != seat ||
+                gameState.TurnPhase != TurnPhase.WaitingForDiscard ||
+                !gameState.GetPlayerSeat(seat).IsReachDeclared)
+            {
+                return false;
+            }
+
+            IReadOnlyList<SelfKanCandidate> candidates =
+                kanService.CollectSelfKanCandidates(gameState, seat);
+            if (candidates.Count <= 0 || !gameState.BeginSelfKanDecision(seat, candidates))
+                return false;
+
+            EventPublisher.NotifyTurnDebug(
+                "ReachAnkanDecisionStarted",
+                $"seat={seat}; candidates={candidates.Count}",
+                seat: seat,
+                turnIndex: gameState.TurnIndex);
+            EventPublisher.NotifySelfKanDecisionStarted(seat, gameState.TurnIndex);
+            return true;
         }
 
         private bool ShouldAutoDiscardDrawnTileAfterDraw(SeatId seat)

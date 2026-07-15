@@ -113,11 +113,11 @@ namespace MahjongPrototype.Services
                         candidate.WinDeclarationEvaluation?.HandEvaluationResult);
                 return RoundResult.CreateWin(
                     gameState.WindProgress,
-                    reactionResolution.SourceDiscard.TurnIndex,
+                    reactionResolution.Source.TurnIndex,
                     candidate.Seat,
                     WinType.Ron,
-                    reactionResolution.SourceDiscard.ActorSeat,
-                    reactionResolution.SourceDiscard.Tile,
+                    reactionResolution.Source.ActorSeat,
+                    reactionResolution.Source.Tile,
                     selectedRonCandidate,
                     IsFinalRound(gameState.WindProgress));
             }

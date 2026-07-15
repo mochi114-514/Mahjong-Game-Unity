@@ -59,6 +59,8 @@ namespace MahjongPrototype.UI
         public event Action DeclinePonRequested;
         public event Action<MeldCallKind, int> MeldCallRequested;
         public event Action DeclineMeldCallsRequested;
+        public event Action<SelfKanKind, int, int> SelfKanRequested;
+        public event Action DeclineSelfKanRequested;
         public event Action ReachRequested;
         public event Action DeclineReachRequested;
         public event Action CancelReachRequested;
@@ -292,6 +294,19 @@ namespace MahjongPrototype.UI
         public void RequestDeclineMeldCalls()
         {
             DeclineMeldCallsRequested?.Invoke();
+        }
+
+        public void RequestSelfKan(
+            SelfKanKind kind,
+            int tileTypeIndex,
+            int sourcePonMeldIndex)
+        {
+            SelfKanRequested?.Invoke(kind, tileTypeIndex, sourcePonMeldIndex);
+        }
+
+        public void RequestDeclineSelfKan()
+        {
+            DeclineSelfKanRequested?.Invoke();
         }
 
         private void HandleReachClicked()

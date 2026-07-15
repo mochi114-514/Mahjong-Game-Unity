@@ -394,6 +394,39 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
+        public void EvaluateWithTile_ChankanRequiresRonAndExplicitKakanReactionSource()
+        {
+            using (WinDeclarationEvaluatorTestDriver driver =
+                WinDeclarationEvaluatorTestDriver.Create())
+            {
+                object catalog = driver.CreateCatalog(
+                    driver.CreateDefinition("Chankan", "One", "One"));
+                const string hand = "1m 2m 3m 1p 2p 3p 1s 2s 3s E E E C";
+                object chankan = driver.EvaluateWithTile(
+                    catalog,
+                    hand,
+                    "C",
+                    "Ron",
+                    isChankan: true);
+                object ordinaryRon = driver.EvaluateWithTile(
+                    catalog,
+                    hand,
+                    "C",
+                    "Ron");
+                object tsumo = driver.EvaluateWithTile(
+                    catalog,
+                    hand,
+                    "C",
+                    "Tsumo",
+                    isChankan: true);
+
+                AssertYaku(driver, chankan, "Chankan");
+                AssertNoYaku(driver, ordinaryRon, "Chankan");
+                AssertNoYaku(driver, tsumo, "Chankan");
+            }
+        }
+
+        [Test]
         public void EvaluateWithTile_RinshanAndLastLiveWallFlag_DoNotCombineRinshanKaihouAndHaitei()
         {
             using (WinDeclarationEvaluatorTestDriver driver =
@@ -456,7 +489,6 @@ namespace MahjongPrototype.Tests
         private const string BasicWinningHand =
             "1m 2m 3m 1p 2p 3p 1s 2s 3s E E E C";
 
-        [TestCase("Chankan", "Ron")]
         [TestCase("Renhou", "Ron")]
         public void EvaluateWithTile_DefinitionAloneDoesNotEmitCurrentlyUnimplementedYaku(
             string yakuKindName,

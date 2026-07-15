@@ -141,6 +141,35 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
                 dataFactory.ParseSeat(seatName));
         }
 
+        public object GetSelfKanCandidatesForSeat(string seatName)
+        {
+            return reflection.Invoke(
+                GameFlow,
+                "GetSelfKanCandidatesForSeat",
+                dataFactory.ParseSeat(seatName));
+        }
+
+        public bool TryRequestDeclareKakanForSeat(
+            string seatName,
+            string tileCode,
+            int sourcePonMeldIndex)
+        {
+            return (bool)reflection.Invoke(
+                GameFlow,
+                "TryRequestDeclareKakanForSeat",
+                dataFactory.ParseSeat(seatName),
+                (int)reflection.GetProperty(dataFactory.CreateTile(tileCode), "TypeIndex"),
+                sourcePonMeldIndex);
+        }
+
+        public bool TryRequestDeclineSelfKanForSeat(string seatName)
+        {
+            return (bool)reflection.Invoke(
+                GameFlow,
+                "TryRequestDeclineSelfKanForSeat",
+                dataFactory.ParseSeat(seatName));
+        }
+
         public bool TryRequestDeclareChiForSeat(
             string seatName,
             int reactionWindowId,
@@ -185,6 +214,15 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
         public void CheckWinPrototype()
         {
             reflection.Invoke(GameFlow, "CheckWinPrototype");
+        }
+
+        public void ResolveAfterDraw(string seatName, bool isRinshanDraw = false)
+        {
+            reflection.Invoke(
+                GameFlow,
+                "ResolveAfterDraw",
+                dataFactory.ParseSeat(seatName),
+                isRinshanDraw);
         }
 
         public void DealInitialHands()

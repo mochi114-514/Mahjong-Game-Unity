@@ -30,6 +30,8 @@ namespace MahjongPrototype.Domain
         private static int nextReactionWindowId = 1;
         private int nextDiscardId = 1;
         private ReactionWindow reactionWindow;
+        private SelfKanDecision selfKanDecision;
+        private SelfKanCandidate pendingKakan;
         private SeatId winDecisionSeat;
         private WinType? winDecisionType;
         private Tile? winningTile;
@@ -96,10 +98,10 @@ namespace MahjongPrototype.Domain
             ? WinType.Ron
             : winDecisionType;
         public Tile? WinningTile => GetPendingRonCandidate() != null
-            ? reactionWindow.SourceDiscard.Tile
+            ? reactionWindow.Source.Tile
             : winningTile;
         public SeatId? WinSourceSeat => GetPendingRonCandidate() != null
-            ? reactionWindow.SourceDiscard.ActorSeat
+            ? reactionWindow.Source.ActorSeat
             : winSourceSeat;
         public int WinDecisionTurnIndex => GetPendingRonCandidate() != null
             ? reactionWindow.TurnIndex
@@ -110,6 +112,9 @@ namespace MahjongPrototype.Domain
                 : pendingWinDeclarationEvaluation;
         public TurnDrawRecord? LastTurnDraw => lastTurnDraw;
         public bool IsReachDecisionPending => turnPhase == TurnPhaseType.ReachDecision;
+        public bool IsSelfKanDecisionPending => turnPhase == TurnPhaseType.SelfKanDecision;
+        public SelfKanDecision CurrentSelfKanDecision => selfKanDecision;
+        public SelfKanCandidate PendingKakan => pendingKakan;
         public bool IsReachDiscardSelectionPending =>
             turnPhase == TurnPhaseType.ReachDiscardSelection;
         public SeatId ReachDecisionSeat { get; private set; }
@@ -119,6 +124,7 @@ namespace MahjongPrototype.Domain
             TurnPhase == TurnPhaseType.WinDecision ||
             TurnPhase == TurnPhaseType.ReactionWindow ||
             TurnPhase == TurnPhaseType.ReachDecision ||
+            TurnPhase == TurnPhaseType.SelfKanDecision ||
             TurnPhase == TurnPhaseType.RoundEnded ||
             TurnPhase == TurnPhaseType.RoundResult ||
             TurnPhase == TurnPhaseType.GameEnded;
@@ -437,11 +443,9 @@ namespace MahjongPrototype.Domain
             SeatSlot slot = GetSeatSlot(seat);
             PlayerSeat playerSeat = GetPlayerSeat(seat);
             if (!slot.HasPlayer || slot.ParticipantType != ParticipantType.LocalHuman ||
-                playerSeat.IsReachDeclared || !playerSeat.HasDrawnTile)
+                !playerSeat.HasDrawnTile)
             {
-                reason = playerSeat.IsReachDeclared
-                    ? "AnkanReachUnsupported"
-                    : "AnkanSeatUnavailable";
+                reason = "AnkanSeatUnavailable";
                 return false;
             }
 
@@ -481,6 +485,78 @@ namespace MahjongPrototype.Domain
             }
 
             HasCallOccurred = true;
+            meld = preparedMeld;
+            TransitionTo(TurnPhaseType.WaitingForRinshanDraw);
+            return true;
+        }
+
+        internal bool TryCommitKakan(
+            ReactionWindow expectedWindow,
+            SelfKanCandidate expectedCandidate,
+            out PlayerMeld meld,
+            out string reason)
+        {
+            meld = null;
+            reason = string.Empty;
+            if (!IsReactionWindowPending || reactionWindow == null ||
+                !ReferenceEquals(reactionWindow, expectedWindow) ||
+                !reactionWindow.IsClosed || !reactionWindow.Source.IsKakan ||
+                pendingKakan == null || expectedCandidate == null ||
+                !pendingKakan.Matches(expectedCandidate))
+            {
+                reason = "KakanWindowMissing";
+                return false;
+            }
+
+            SelfKanCandidate candidate = pendingKakan;
+            if (candidate.Kind != SelfKanKind.Kakan ||
+                candidate.TurnIndex != TurnIndex || CurrentTurn != candidate.Seat ||
+                reactionWindow.Source.ActorSeat != candidate.Seat ||
+                reactionWindow.Source.Tile != candidate.Tile ||
+                reactionWindow.Source.TurnIndex != candidate.TurnIndex ||
+                !Wall.CanDrawRinshan)
+            {
+                reason = "KakanStateChanged";
+                return false;
+            }
+
+            PlayerSeat playerSeat = GetPlayerSeat(candidate.Seat);
+            if (playerSeat.IsReachDeclared ||
+                candidate.SourcePonMeldIndex < 0 ||
+                candidate.SourcePonMeldIndex >= playerSeat.Melds.Count)
+            {
+                reason = "KakanStateChanged";
+                return false;
+            }
+
+            PlayerMeld sourcePon = playerSeat.Melds[candidate.SourcePonMeldIndex];
+            if (sourcePon == null || sourcePon.Type != PlayerMeldType.Pon ||
+                !sourcePon.HasDiscardSource ||
+                (candidate.SourcePon != null &&
+                 !ReferenceEquals(sourcePon, candidate.SourcePon)) ||
+                sourcePon.AcquiredTile.Value != candidate.Tile ||
+                !discardClaims.ContainsKey(sourcePon.SourceDiscardId.Value))
+            {
+                reason = "KakanClaimMissing";
+                return false;
+            }
+
+            if (!playerSeat.TryCommitKakan(
+                    candidate.SourcePonMeldIndex,
+                    candidate.Tile,
+                    candidate.AddedTileLocation,
+                    out PlayerMeld preparedMeld))
+            {
+                reason = "KakanStateChanged";
+                return false;
+            }
+
+            // The source discard was already claimed by the pon.  Keep its
+            // history and replace only the claim's meld projection.
+            discardClaims[preparedMeld.SourceDiscardId.Value] =
+                new DiscardClaim(preparedMeld);
+            HasCallOccurred = true;
+            pendingKakan = null;
             meld = preparedMeld;
             TransitionTo(TurnPhaseType.WaitingForRinshanDraw);
             return true;
@@ -574,10 +650,37 @@ namespace MahjongPrototype.Domain
             IReadOnlyList<ReactionWindowCandidate> candidates)
         {
             ClearReactionWindowData();
+            ClearPendingKakan();
             TransitionTo(TurnPhaseType.ReactionWindow);
             reactionWindow = new ReactionWindow(
                 nextReactionWindowId++,
                 sourceDiscard,
+                TurnIndex,
+                candidates);
+            return reactionWindow;
+        }
+
+        public ReactionWindow BeginKakanReactionWindow(
+            SelfKanCandidate candidate,
+            IReadOnlyList<ReactionWindowCandidate> candidates)
+        {
+            if (candidate == null || candidate.Kind != SelfKanKind.Kakan ||
+                IsRoundEnded || CurrentTurn != candidate.Seat ||
+                turnPhase != TurnPhaseType.WaitingForDiscard ||
+                candidate.TurnIndex != TurnIndex)
+            {
+                throw new InvalidOperationException("Kakan reaction state is unavailable.");
+            }
+
+            ClearReactionWindowData();
+            pendingKakan = candidate;
+            TransitionTo(TurnPhaseType.ReactionWindow);
+            reactionWindow = new ReactionWindow(
+                nextReactionWindowId++,
+                ReactionWindowSource.FromKakan(
+                    candidate.Seat,
+                    candidate.Tile,
+                    candidate.TurnIndex),
                 TurnIndex,
                 candidates);
             return reactionWindow;
@@ -608,6 +711,76 @@ namespace MahjongPrototype.Domain
             return IsReactionWindowPending && reactionWindow != null &&
                 reactionWindow.WindowId == windowId && reactionWindow.IsResolving &&
                 reactionWindow.TryClose();
+        }
+
+        public bool BeginSelfKanDecision(
+            SeatId seat,
+            IReadOnlyList<SelfKanCandidate> candidates)
+        {
+            if (IsRoundEnded || CurrentTurn != seat ||
+                turnPhase != TurnPhaseType.WaitingForDiscard ||
+                candidates == null || candidates.Count <= 0)
+            {
+                return false;
+            }
+
+            SelfKanCandidate[] copiedCandidates = new SelfKanCandidate[candidates.Count];
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                SelfKanCandidate candidate = candidates[i];
+                if (candidate == null || candidate.Seat != seat ||
+                    candidate.TurnIndex != TurnIndex)
+                {
+                    return false;
+                }
+
+                copiedCandidates[i] = candidate;
+            }
+
+            selfKanDecision = new SelfKanDecision(seat, TurnIndex, copiedCandidates);
+            TransitionTo(TurnPhaseType.SelfKanDecision);
+            return true;
+        }
+
+        public bool TryDeclineSelfKanDecision(SeatId seat)
+        {
+            if (!IsSelfKanDecisionPending || selfKanDecision == null ||
+                selfKanDecision.Seat != seat ||
+                selfKanDecision.TurnIndex != TurnIndex || CurrentTurn != seat ||
+                !GetPlayerSeat(seat).HasDrawnTile)
+            {
+                return false;
+            }
+
+            TransitionTo(TurnPhaseType.WaitingForDiscard);
+            return true;
+        }
+
+        public bool TryAcceptSelfKanDecision(SelfKanCandidate candidate)
+        {
+            if (!IsSelfKanDecisionPending || selfKanDecision == null ||
+                candidate == null || candidate.Seat != CurrentTurn ||
+                candidate.TurnIndex != TurnIndex ||
+                selfKanDecision.Seat != candidate.Seat ||
+                selfKanDecision.TurnIndex != candidate.TurnIndex)
+            {
+                return false;
+            }
+
+            bool found = false;
+            for (int i = 0; i < selfKanDecision.Candidates.Count; i++)
+            {
+                if (selfKanDecision.Candidates[i].Matches(candidate))
+                {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found)
+                return false;
+
+            TransitionTo(TurnPhaseType.WaitingForDiscard);
+            return true;
         }
 
         public void BeginRoundResult(RoundResult result)
@@ -704,7 +877,12 @@ namespace MahjongPrototype.Domain
                 ClearReachDecisionData();
             }
             if (nextPhase != TurnPhaseType.ReactionWindow)
+            {
                 ClearReactionWindowData();
+                ClearPendingKakan();
+            }
+            if (nextPhase != TurnPhaseType.SelfKanDecision)
+                ClearSelfKanDecisionData();
             if (nextPhase != TurnPhaseType.RoundResult &&
                 nextPhase != TurnPhaseType.GameEnded)
             {
@@ -741,6 +919,16 @@ namespace MahjongPrototype.Domain
         private void ClearReactionWindowData()
         {
             reactionWindow = null;
+        }
+
+        private void ClearPendingKakan()
+        {
+            pendingKakan = null;
+        }
+
+        private void ClearSelfKanDecisionData()
+        {
+            selfKanDecision = null;
         }
 
         public void ClearIppatsuEligibilityForAllPlayers()

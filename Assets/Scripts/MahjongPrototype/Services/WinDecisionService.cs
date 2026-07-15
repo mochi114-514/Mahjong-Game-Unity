@@ -100,6 +100,39 @@ namespace MahjongPrototype.Services
 
         public WinDecisionEvaluation EvaluateRon(MahjongGameState gameState, DiscardRecord discard)
         {
+            return EvaluateRon(
+                gameState,
+                discard.Tile,
+                discard.ActorSeat,
+                discard.TurnIndex,
+                false,
+                discard);
+        }
+
+        public WinDecisionEvaluation EvaluateRon(
+            MahjongGameState gameState,
+            Tile winningTile,
+            SeatId sourceSeat,
+            int turnIndex,
+            bool isChankan)
+        {
+            return EvaluateRon(
+                gameState,
+                winningTile,
+                sourceSeat,
+                turnIndex,
+                isChankan,
+                null);
+        }
+
+        private WinDecisionEvaluation EvaluateRon(
+            MahjongGameState gameState,
+            Tile winningTile,
+            SeatId sourceSeat,
+            int turnIndex,
+            bool isChankan,
+            DiscardRecord? sourceDiscard)
+        {
             if (gameState == null)
                 return WinDecisionEvaluation.None;
 
@@ -111,7 +144,7 @@ namespace MahjongPrototype.Services
             for (int i = 0; i < gameState.SeatSlots.Count; i++)
             {
                 SeatSlot slot = gameState.SeatSlots[i];
-                if (!slot.HasPlayer || slot.Wind == discard.ActorSeat ||
+                if (!slot.HasPlayer || slot.Wind == sourceSeat ||
                     slot.ParticipantType != ParticipantType.LocalHuman)
                 {
                     continue;
@@ -123,9 +156,11 @@ namespace MahjongPrototype.Services
                         gameState,
                         playerSeat,
                         WinType.Ron,
-                        discard.Tile,
-                        discard.ActorSeat,
-                        discard));
+                        winningTile,
+                        sourceSeat,
+                        sourceDiscard,
+                        false,
+                        isChankan));
                 if (IsNoYakuWinningShape(evaluationResult, playerSeat))
                     playerSeat.MarkTemporaryFuriten();
 
@@ -137,9 +172,9 @@ namespace MahjongPrototype.Services
                 notifications.Add(new WinCheckNotification(
                     slot.Wind,
                     WinType.Ron,
-                    discard.Tile,
-                    discard.ActorSeat,
-                    discard.TurnIndex,
+                    winningTile,
+                    sourceSeat,
+                    turnIndex,
                     canDeclareWin));
 
                 if (!canDeclareWin)
@@ -218,7 +253,8 @@ namespace MahjongPrototype.Services
             Tile winningTile,
             SeatId? sourceSeat,
             DiscardRecord? sourceDiscard = null,
-            bool isRinshanDraw = false)
+            bool isRinshanDraw = false,
+            bool isChankan = false)
         {
             SeatId winnerSeat = playerSeat.SeatId;
             return new WinDeclarationEvaluationContext(
@@ -238,7 +274,8 @@ namespace MahjongPrototype.Services
                 winType == WinType.Ron && sourceDiscard.HasValue &&
                     sourceDiscard.Value.IsLastLiveWallDiscard,
                 playerSeat.Melds,
-                isRinshanDraw);
+                isRinshanDraw,
+                isChankan);
         }
 
         private static bool IsNoYakuWinningShape(
