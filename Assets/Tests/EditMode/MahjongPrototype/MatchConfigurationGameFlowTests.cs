@@ -25,6 +25,8 @@ namespace MahjongPrototype.Tests
             "MahjongPrototype.Domain.DecisionProviderRoute, Assembly-CSharp";
         private const string ParticipantTypeAdapterTypeName =
             "MahjongPrototype.Domain.ParticipantTypeAdapter, Assembly-CSharp";
+        private const string LocalUiDecisionProviderTypeName =
+            "MahjongPrototype.LocalUiDecisionProvider, Assembly-CSharp";
 
         [Test]
         public void LegacySceneConfiguration_StartsLocalHumanAndCpuMatchThroughRosterProjection()
@@ -221,7 +223,11 @@ namespace MahjongPrototype.Tests
                     registry = CreateRegistry(
                         reflection,
                         types,
-                        new ProviderDefinition("Player1", "LocalUi", true));
+                        new ProviderDefinition(
+                            "Player1",
+                            "LocalUi",
+                            true,
+                            hasRuntimeProvider: true));
                     return;
                 case "DuplicateProvider":
                     roster = CreateRoster(
@@ -320,11 +326,27 @@ namespace MahjongPrototype.Tests
             for (int i = 0; i < definitions.Length; i++)
             {
                 ProviderDefinition definition = definitions[i];
-                registrations.Add(reflection.CreateInstance(
-                    registrationType,
-                    Enum.Parse(types.PlayerId, definition.PlayerId),
-                    Enum.Parse(routeType, definition.Route),
-                    definition.IsAvailable));
+                object playerId = Enum.Parse(types.PlayerId, definition.PlayerId);
+                object route = Enum.Parse(routeType, definition.Route);
+                if (definition.HasRuntimeProvider)
+                {
+                    Assert.That(definition.Route, Is.EqualTo("LocalUi"));
+                    object provider = reflection.CreateInstance(
+                        reflection.RequireType(LocalUiDecisionProviderTypeName));
+                    registrations.Add(reflection.CreateInstance(
+                        registrationType,
+                        playerId,
+                        route,
+                        provider));
+                }
+                else
+                {
+                    registrations.Add(reflection.CreateInstance(
+                        registrationType,
+                        playerId,
+                        route,
+                        definition.IsAvailable));
+                }
             }
 
             return reflection.CreateInstance(
@@ -357,16 +379,22 @@ namespace MahjongPrototype.Tests
 
         private readonly struct ProviderDefinition
         {
-            public ProviderDefinition(string playerId, string route, bool isAvailable)
+            public ProviderDefinition(
+                string playerId,
+                string route,
+                bool isAvailable,
+                bool hasRuntimeProvider = false)
             {
                 PlayerId = playerId;
                 Route = route;
                 IsAvailable = isAvailable;
+                HasRuntimeProvider = hasRuntimeProvider;
             }
 
             public string PlayerId { get; }
             public string Route { get; }
             public bool IsAvailable { get; }
+            public bool HasRuntimeProvider { get; }
         }
 
         private sealed class EventCounter : IDisposable

@@ -1687,8 +1687,10 @@ namespace MahjongPrototype
             if (gameState == null || matchRoster == null)
                 return false;
 
-            PlayerId? playerId = gameState.GetSeatSlot(seat).PlayerId;
+            SeatSlot seatSlot = gameState.GetSeatSlot(seat);
+            PlayerId? playerId = seatSlot.PlayerId;
             return playerId.HasValue &&
+                seatSlot.ParticipantType == ParticipantType.Cpu &&
                 matchRoster.TryGetParticipant(playerId.Value, out MatchParticipant participant) &&
                 participant.Kind == ParticipantKind.Cpu;
         }
