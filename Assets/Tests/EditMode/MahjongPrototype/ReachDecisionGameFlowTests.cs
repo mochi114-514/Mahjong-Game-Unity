@@ -196,7 +196,7 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void ReachDiscardSelection_RequestForceDrawSkill_IsRejectedAndKeepsSelection()
+        public void ReachDiscardSelection_RequestForceDrawSkill_RegistersEffectKeepsSelectionAndAllowsReach()
         {
             using (ReachDecisionGameFlowTestDriver driver =
                 ReachDecisionGameFlowTestDriver.Create())
@@ -213,7 +213,9 @@ namespace MahjongPrototype.Tests
 
                 driver.RequestForceDrawSkill("5m");
 
-                Assert.That(driver.ActiveSkillEffectCount, Is.EqualTo(0));
+                Assert.That(driver.ActiveSkillEffectCount, Is.EqualTo(1));
+                Assert.That(driver.ActiveSkillEffectOwnerSeatNameAt(0), Is.EqualTo("East"));
+                Assert.That(driver.ActiveSkillEffectTargetTileCodeAt(0), Is.EqualTo("5m"));
                 Assert.That(driver.IsReachDecisionPending, Is.False);
                 Assert.That(driver.IsReachDiscardSelectionPending, Is.True);
                 Assert.That(driver.ReachDiscardCandidateCount, Is.EqualTo(candidateCountBefore));
@@ -223,6 +225,13 @@ namespace MahjongPrototype.Tests
                 Assert.That(driver.DrawnTileCodeOrNull("East"), Is.EqualTo(drawnTileBefore));
                 Assert.That(driver.WallCount, Is.EqualTo(wallCountBefore));
                 Assert.That(driver.DiscardCount, Is.EqualTo(discardCountBefore));
+
+                driver.RequestDiscard(12);
+
+                Assert.That(driver.IsReachDeclared("East"), Is.True);
+                Assert.That(driver.IsReachDiscardSelectionPending, Is.False);
+                Assert.That(driver.ActiveSkillEffectCount, Is.EqualTo(1));
+                Assert.That(driver.ActiveSkillEffectTargetTileCodeAt(0), Is.EqualTo("5m"));
             }
         }
 

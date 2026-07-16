@@ -473,7 +473,7 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void RefreshInteractionState_ReachDiscardSelection_LocksControlAreaAndEnablesOnlyCandidates()
+        public void RefreshInteractionState_ReachDiscardSelection_KeepsForceDrawSkillAndCancelEnabledWithCandidates()
         {
             using (Driver driver = Driver.Create())
             {
@@ -483,7 +483,7 @@ namespace MahjongPrototype.Tests
                 driver.RefreshInteraction();
 
                 Assert.That(driver.DrawInteractable, Is.False);
-                Assert.That(driver.ForceDrawSkillInteractable, Is.False);
+                Assert.That(driver.ForceDrawSkillInteractable, Is.True);
                 Assert.That(driver.TargetTileInputInteractable, Is.True);
                 Assert.That(driver.AutoSortInteractable, Is.False);
                 Assert.That(driver.CancelReachInteractable, Is.True);
@@ -497,8 +497,38 @@ namespace MahjongPrototype.Tests
         public void RefreshInteractionState_LockedStatesDisableButtonsButKeepTargetTileInputEditable()
         {
             AssertControlAreaLocked(driver => driver.BeginWinDecision());
-            AssertControlAreaLocked(driver => driver.BeginReachDiscardSelection());
             AssertControlAreaLocked(driver => driver.MarkRoundEnded());
+        }
+
+        [Test]
+        public void ReachDiscardSelection_ForceDrawSkillKeepsCandidatesAndDisablesButtonImmediately()
+        {
+            using (Driver driver = Driver.Create())
+            {
+                driver.PrepareNormalSelfTurn();
+                driver.BeginReachDiscardSelection();
+                driver.TargetTileText = "5m";
+                driver.EnableUiNotifications();
+                driver.EnableCommandRouting();
+                driver.RefreshInteraction();
+                int candidateCountBefore = driver.ReachDiscardCandidateCount;
+
+                Assert.That(driver.CancelReachInteractable, Is.True);
+                Assert.That(driver.ForceDrawSkillInteractable, Is.True);
+                Assert.That(driver.FirstSelfHandTileInteractable, Is.True);
+
+                driver.ClickForceDrawSkill();
+
+                Assert.That(driver.ActiveSkillEffectCount, Is.EqualTo(1));
+                Assert.That(driver.IsReachDiscardSelectionPending, Is.True);
+                Assert.That(driver.ReachDiscardCandidateCount, Is.EqualTo(candidateCountBefore));
+                Assert.That(driver.DrawInteractable, Is.False);
+                Assert.That(driver.ForceDrawSkillInteractable, Is.False);
+                Assert.That(driver.AutoSortInteractable, Is.False);
+                Assert.That(driver.TargetTileInputInteractable, Is.True);
+                Assert.That(driver.CancelReachInteractable, Is.True);
+                Assert.That(driver.FirstSelfHandTileInteractable, Is.True);
+            }
         }
 
         [Test]
@@ -550,11 +580,11 @@ namespace MahjongPrototype.Tests
             {
                 driver.PrepareNormalOtherTurn();
                 driver.TargetTileText = "5m";
+                driver.EnableUiNotifications();
                 driver.EnableCommandRouting();
                 driver.RefreshInteraction();
 
                 driver.ClickForceDrawSkill();
-                driver.RefreshInteraction();
 
                 Assert.That(driver.HasForceDrawReservationForSelf, Is.True);
                 Assert.That(driver.ForceDrawSkillInteractable, Is.False);
@@ -667,6 +697,7 @@ namespace MahjongPrototype.Tests
             private readonly Toggle autoSortToggle;
             private readonly Component targetTileInput;
             private bool commandRoutingEnabled;
+            private bool uiNotificationsEnabled;
             private bool disposed;
 
             private Driver(
@@ -704,6 +735,11 @@ namespace MahjongPrototype.Tests
             public bool AutoSortInteractable => autoSortToggle.interactable;
             public bool TargetTileInputInteractable =>
                 (bool)reflection.GetProperty(targetTileInput, "interactable");
+            public bool IsReachDiscardSelectionPending =>
+                (bool)reflection.GetProperty(State, "IsReachDiscardSelectionPending");
+            public int ReachDiscardCandidateCount => collections.Count(
+                reflection.GetProperty(State, "ReachDiscardCandidates"));
+            public int ActiveSkillEffectCount => session.Query.ActiveSkillEffectCount;
             public bool CancelReachInteractable =>
                 ((Button)reflection.GetPrivateField(inputController, "cancelReachButton")).interactable;
             public string TargetTileText
@@ -746,7 +782,7 @@ namespace MahjongPrototype.Tests
                 MahjongGameFlowTestOptions options = new MahjongGameFlowTestOptions
                 {
                     RootName = "MahjongPrototypeUiManagerInteractionTest",
-                    AddEventNotifier = false,
+                    AddEventNotifier = true,
                     LogWarnings = false,
                     ParticipantCount = 2,
                     InitialHandTileCount = 0,
@@ -857,6 +893,16 @@ namespace MahjongPrototype.Tests
                 commandRoutingEnabled = true;
             }
 
+            public void EnableUiNotifications()
+            {
+                if (uiNotificationsEnabled)
+                    return;
+
+                reflection.SetPrivateField(uiManager, "eventNotifier", session.EventNotifier);
+                reflection.Invoke(uiManager, "SubscribeNotifications");
+                uiNotificationsEnabled = true;
+            }
+
             public void ClickDraw()
             {
                 drawButton.onClick.Invoke();
@@ -896,6 +942,9 @@ namespace MahjongPrototype.Tests
                     return;
 
                 disposed = true;
+
+                if (uiNotificationsEnabled)
+                    reflection.Invoke(uiManager, "UnsubscribeNotifications");
 
                 if (commandRoutingEnabled)
                 {

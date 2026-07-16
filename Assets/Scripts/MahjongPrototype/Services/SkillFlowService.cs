@@ -21,21 +21,8 @@ namespace MahjongPrototype.Services
             SeatId ownerSeat,
             string targetTileCode)
         {
-            if (gameState == null)
-                return SkillFlowResult.Rejected("GameState is not available.");
-            if (gameState.IsRoundEnded)
-                return SkillFlowResult.Rejected("Round already ended. Press Retry.");
-            if (gameState.IsWinDecisionPending)
-                return SkillFlowResult.Rejected("Declare or decline win before activating another skill.");
-            if (gameState.IsReactionWindowPending)
-                return SkillFlowResult.Rejected("Resolve reactions before activating another skill.");
-            if (gameState.TurnPhase == TurnPhase.WaitingForDiscardAfterCall)
-            {
-                return SkillFlowResult.Rejected(
-                    "Skills cannot be activated before the mandatory post-call discard.");
-            }
-            if (gameState.IsReachDiscardSelectionPending)
-                return SkillFlowResult.Rejected("Resolve reach discard selection before activating another skill.");
+            if (!CanRequestForceDraw(gameState, ownerSeat, out string reason))
+                return SkillFlowResult.Rejected(reason, ownerSeat);
             if (!Tile.TryParse(targetTileCode, out Tile targetTile))
             {
                 return SkillFlowResult.Rejected(
@@ -45,22 +32,14 @@ namespace MahjongPrototype.Services
             if (ownerSeat == gameState.CurrentTurn)
                 return ActivateForceDraw(gameState, ownerSeat, targetTile, false);
 
-            if (!IsActiveSeat(gameState, ownerSeat))
-                return SkillFlowResult.Rejected("Owner seat is not active.", ownerSeat, targetTile);
-            if (gameState.HasActiveSkillEffect(ownerSeat, SkillEffectKind.ForceDrawTile))
-            {
-                return SkillFlowResult.Rejected(
-                    "Force draw skill is already active.", ownerSeat, targetTile);
-            }
-
             PendingSkillReservation reservation = new PendingSkillReservation(
                 ownerSeat,
                 SkillEffectKind.ForceDrawTile,
                 targetTile,
                 gameState.CurrentTurn,
                 gameState.TurnIndex);
-            if (!reservationService.Reserve(reservation, out string reason))
-                return SkillFlowResult.Rejected(reason, ownerSeat, targetTile);
+            if (!reservationService.Reserve(reservation, out string reservationReason))
+                return SkillFlowResult.Rejected(reservationReason, ownerSeat, targetTile);
 
             return SkillFlowResult.Reserved(reservation);
         }
@@ -72,19 +51,56 @@ namespace MahjongPrototype.Services
         /// </summary>
         public bool CanRequestForceDraw(MahjongGameState gameState, SeatId ownerSeat)
         {
-            if (gameState == null ||
-                gameState.IsRoundEnded ||
-                gameState.IsWinDecisionPending ||
-                gameState.IsReactionWindowPending ||
-                gameState.TurnPhase == TurnPhase.WaitingForDiscardAfterCall ||
-                gameState.IsReachDiscardSelectionPending ||
-                !IsActiveSeat(gameState, ownerSeat) ||
-                reservationService.HasReservation(ownerSeat) ||
-                gameState.HasActiveSkillEffect(ownerSeat, SkillEffectKind.ForceDrawTile))
+            return CanRequestForceDraw(gameState, ownerSeat, out _);
+        }
+
+        private bool CanRequestForceDraw(
+            MahjongGameState gameState,
+            SeatId ownerSeat,
+            out string reason)
+        {
+            if (gameState == null)
             {
+                reason = "GameState is not available.";
+                return false;
+            }
+            if (gameState.IsRoundEnded)
+            {
+                reason = "Round already ended. Press Retry.";
+                return false;
+            }
+            if (gameState.IsWinDecisionPending)
+            {
+                reason = "Declare or decline win before activating another skill.";
+                return false;
+            }
+            if (gameState.IsReactionWindowPending)
+            {
+                reason = "Resolve reactions before activating another skill.";
+                return false;
+            }
+            if (gameState.TurnPhase == TurnPhase.WaitingForDiscardAfterCall)
+            {
+                reason = "Skills cannot be activated before the mandatory post-call discard.";
+                return false;
+            }
+            if (!IsActiveSeat(gameState, ownerSeat))
+            {
+                reason = "Owner seat is not active.";
+                return false;
+            }
+            if (reservationService.HasReservation(ownerSeat))
+            {
+                reason = "Force draw skill is already reserved.";
+                return false;
+            }
+            if (gameState.HasActiveSkillEffect(ownerSeat, SkillEffectKind.ForceDrawTile))
+            {
+                reason = "Force draw skill is already active.";
                 return false;
             }
 
+            reason = string.Empty;
             return true;
         }
 

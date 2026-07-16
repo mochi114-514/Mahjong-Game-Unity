@@ -751,10 +751,14 @@ namespace MahjongPrototype
 
         public void RequestForceDrawSkill(string targetTileCode)
         {
-            if (!CanUseSelfTurnInput("SkillBlocked"))
+            if (!CanUseGameState())
                 return;
 
-            RequestForceDrawSkillForSeat(gameState.SelfSeat, targetTileCode);
+            SeatId selfSeat = gameState.SelfSeat;
+            if (viewContext != null && viewContext.TryGetSelfSeat(gameState, out SeatId viewSelfSeat))
+                selfSeat = viewSelfSeat;
+
+            RequestForceDrawSkillForSeat(selfSeat, targetTileCode);
         }
 
         public void RequestForceDrawSkillForSeat(SeatId ownerSeat, string targetTileCode)

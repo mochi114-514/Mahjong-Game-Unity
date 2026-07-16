@@ -236,6 +236,7 @@ namespace MahjongPrototype.UI
             eventNotifier.ReactionWindowClosed += HandleReactionWindowClosed;
             eventNotifier.MeldDeclared += HandleMeldDeclared;
             eventNotifier.SkillActivated += HandleSkillActivated;
+            eventNotifier.SkillReserved += HandleSkillReserved;
             eventNotifier.SkillEffectRegistered += HandleSkillEffectRegistered;
             eventNotifier.SkillEffectResolved += HandleSkillEffectResolved;
             eventNotifier.SkillEffectExpired += HandleSkillEffectExpired;
@@ -271,6 +272,7 @@ namespace MahjongPrototype.UI
             eventNotifier.ReactionWindowClosed -= HandleReactionWindowClosed;
             eventNotifier.MeldDeclared -= HandleMeldDeclared;
             eventNotifier.SkillActivated -= HandleSkillActivated;
+            eventNotifier.SkillReserved -= HandleSkillReserved;
             eventNotifier.SkillEffectRegistered -= HandleSkillEffectRegistered;
             eventNotifier.SkillEffectResolved -= HandleSkillEffectResolved;
             eventNotifier.SkillEffectExpired -= HandleSkillEffectExpired;
@@ -514,11 +516,18 @@ namespace MahjongPrototype.UI
         private void HandleSkillActivated(SeatId _, ActiveSkillEffect __)
         {
             RefreshGlobalStatus();
+            RefreshInteractionUi();
+        }
+
+        private void HandleSkillReserved(PendingSkillReservation _)
+        {
+            RefreshInteractionUi();
         }
 
         private void HandleSkillEffectRegistered(ActiveSkillEffect _)
         {
             RefreshGlobalStatus();
+            RefreshInteractionUi();
         }
 
         private void HandleSkillEffectResolved(DrawResult _)
