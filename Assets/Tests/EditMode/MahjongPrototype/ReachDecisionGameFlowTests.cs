@@ -199,9 +199,10 @@ namespace MahjongPrototype.Tests
         public void ReachDiscardSelection_RequestForceDrawSkill_RegistersEffectKeepsSelectionAndAllowsReach()
         {
             using (ReachDecisionGameFlowTestDriver driver =
-                ReachDecisionGameFlowTestDriver.Create())
+                ReachDecisionGameFlowTestDriver.Create(2))
             {
                 driver.DrawReachableHand();
+                driver.SetParticipantType("West", "LocalHuman");
                 driver.RequestDeclareReach();
                 int candidateCountBefore = driver.ReachDiscardCandidateCount;
                 string currentTurnBefore = driver.CurrentTurnName;
@@ -213,7 +214,10 @@ namespace MahjongPrototype.Tests
 
                 driver.RequestForceDrawSkill("5m");
 
-                Assert.That(driver.ActiveSkillEffectCount, Is.EqualTo(1));
+                Assert.That(
+                    driver.ActiveSkillEffectCount,
+                    Is.EqualTo(1),
+                    "ForceDraw should be registered immediately during reach discard selection.");
                 Assert.That(driver.ActiveSkillEffectOwnerSeatNameAt(0), Is.EqualTo("East"));
                 Assert.That(driver.ActiveSkillEffectTargetTileCodeAt(0), Is.EqualTo("5m"));
                 Assert.That(driver.IsReachDecisionPending, Is.False);
@@ -230,7 +234,11 @@ namespace MahjongPrototype.Tests
 
                 Assert.That(driver.IsReachDeclared("East"), Is.True);
                 Assert.That(driver.IsReachDiscardSelectionPending, Is.False);
-                Assert.That(driver.ActiveSkillEffectCount, Is.EqualTo(1));
+                Assert.That(driver.CurrentTurnName, Is.EqualTo("West"));
+                Assert.That(
+                    driver.ActiveSkillEffectCount,
+                    Is.EqualTo(1),
+                    "ForceDraw should remain active until East's next draw.");
                 Assert.That(driver.ActiveSkillEffectTargetTileCodeAt(0), Is.EqualTo("5m"));
             }
         }
