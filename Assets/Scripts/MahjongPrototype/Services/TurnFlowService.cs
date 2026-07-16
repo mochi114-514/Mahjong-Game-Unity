@@ -67,11 +67,23 @@ namespace MahjongPrototype.Services
             SeatId seat,
             bool enableAutoDraw)
         {
+            return BuildAutomationPolicy(
+                gameState,
+                seat,
+                enableAutoDraw,
+                IsCpu(gameState, seat));
+        }
+
+        public TurnAutomationPolicy BuildAutomationPolicy(
+            MahjongGameState gameState,
+            SeatId seat,
+            bool enableAutoDraw,
+            bool isCpu)
+        {
             if (gameState == null)
                 return TurnAutomationPolicy.None;
 
             PlayerSeat playerSeat = gameState.GetPlayerSeat(seat);
-            bool isCpu = IsCpu(gameState, seat);
             bool isReachDeclared = playerSeat != null && playerSeat.IsReachDeclared;
 
             return new TurnAutomationPolicy(
@@ -85,6 +97,19 @@ namespace MahjongPrototype.Services
             MahjongGameState gameState,
             SeatId seat,
             bool enableAutoDraw)
+        {
+            return ShouldAutoDiscardDrawnTileAfterDraw(
+                gameState,
+                seat,
+                enableAutoDraw,
+                IsCpu(gameState, seat));
+        }
+
+        public bool ShouldAutoDiscardDrawnTileAfterDraw(
+            MahjongGameState gameState,
+            SeatId seat,
+            bool enableAutoDraw,
+            bool isCpu)
         {
             if (gameState == null ||
                 gameState.IsRoundEnded ||
@@ -102,7 +127,7 @@ namespace MahjongPrototype.Services
             if (playerSeat == null || !playerSeat.HasDrawnTile)
                 return false;
 
-            return BuildAutomationPolicy(gameState, seat, enableAutoDraw)
+            return BuildAutomationPolicy(gameState, seat, enableAutoDraw, isCpu)
                 .AutoDiscardDrawnTileAfterDraw;
         }
 

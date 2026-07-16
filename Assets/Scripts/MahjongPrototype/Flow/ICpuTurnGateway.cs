@@ -4,9 +4,13 @@ namespace MahjongPrototype
 {
     public interface ICpuTurnGateway
     {
-        bool RequestDrawForCpu(SeatId seat);
-        bool RequestDiscardDrawnTileForCpu(SeatId seat);
-        bool RequestDeclareWinForCpu(SeatId seat);
-        bool IsSameGameStateAndTurn(MahjongGameState gameState, SeatId seat, int turnIndex);
+        bool RequestDrawForCpu(PlayerId playerId, SeatId seat, int turnIndex);
+        bool RequestDiscardDrawnTileForCpu(PlayerId playerId, SeatId seat, int turnIndex);
+        bool RequestDeclareWinForCpu(PlayerId playerId, SeatId seat, int turnIndex);
+        bool IsSameGameStateAndTurn(
+            MahjongGameState gameState,
+            PlayerId playerId,
+            SeatId seat,
+            int turnIndex);
     }
 }

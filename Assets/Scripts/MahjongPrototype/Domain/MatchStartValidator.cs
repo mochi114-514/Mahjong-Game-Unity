@@ -100,6 +100,11 @@ namespace MahjongPrototype.Domain
                     return MatchStartValidationResult.Invalid(
                         $"Participant {participant.PlayerId} ({participant.Kind}) is incompatible with decision provider {registration.Route}.");
                 }
+                if (registration.Provider == null)
+                {
+                    return MatchStartValidationResult.Invalid(
+                        $"Decision provider {registration.Route} for player {participant.PlayerId} does not have a runtime implementation.");
+                }
             }
 
             return MatchStartValidationResult.Valid();

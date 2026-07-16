@@ -659,13 +659,19 @@ namespace MahjongPrototype.UI
             if (playerArea3DPresenter == null)
                 return;
 
+            if (gameFlow != null)
+                playerArea3DPresenter.SetViewContext(gameFlow.ViewContext);
             playerArea3DPresenter.Refresh(state, CanUseSelfGameplayInput(state));
         }
 
         private void RefreshTableCenterUi(MahjongGameState state)
         {
             if (tableCenterUiController != null)
+            {
+                if (gameFlow != null)
+                    tableCenterUiController.SetViewContext(gameFlow.ViewContext);
                 tableCenterUiController.Refresh(state);
+            }
         }
 
         private void RefreshPlayerHand3DForSeat(MahjongGameState state, SeatId seat)
@@ -673,6 +679,7 @@ namespace MahjongPrototype.UI
             if (playerArea3DPresenter == null)
                 return;
 
+            ConfigurePresentationViewContext();
             playerArea3DPresenter.RefreshHandForSeat(state, seat, CanUseSelfGameplayInput(state));
         }
 
@@ -681,6 +688,7 @@ namespace MahjongPrototype.UI
             if (playerArea3DPresenter == null)
                 return;
 
+            ConfigurePresentationViewContext();
             playerArea3DPresenter.RefreshDrawnTileForSeat(state, seat, CanUseSelfGameplayInput(state));
         }
 
@@ -689,6 +697,7 @@ namespace MahjongPrototype.UI
             if (playerArea3DPresenter == null)
                 return;
 
+            ConfigurePresentationViewContext();
             playerArea3DPresenter.RefreshDiscardRiverForSeat(state, seat);
         }
 
@@ -725,7 +734,14 @@ namespace MahjongPrototype.UI
             if (state == null || playerArea3DPresenter == null)
                 return;
 
+            ConfigurePresentationViewContext();
             playerArea3DPresenter.RefreshOpenMeldsForSeat(state, seat);
+        }
+
+        private void ConfigurePresentationViewContext()
+        {
+            if (gameFlow != null && playerArea3DPresenter != null)
+                playerArea3DPresenter.SetViewContext(gameFlow.ViewContext);
         }
 
         private void RefreshWinDecision(MahjongGameState state)
@@ -738,7 +754,7 @@ namespace MahjongPrototype.UI
                 bool showSelfWinDecision =
                     state != null &&
                     state.IsWinDecisionPending &&
-                    state.WinDecisionSeat == state.SelfSeat;
+                    IsSelfSeat(state.WinDecisionSeat);
                 WinType? winType = showSelfWinDecision
                     ? state.WinDecisionType
                     : null;
@@ -777,10 +793,13 @@ namespace MahjongPrototype.UI
                 return;
             }
 
+            if (!TryGetSelfSeat(state, out SeatId selfSeat))
+                return;
+
             if (reactionWindow == null)
             {
                 IReadOnlyList<SelfKanCandidate> selfKanCandidates = gameFlow != null
-                    ? gameFlow.GetSelfKanCandidatesForSeat(state.SelfSeat)
+                    ? gameFlow.GetSelfKanCandidatesForSeat(selfSeat)
                     : null;
                 ponDecisionController.SetMeldCallDecision(
                     false,
@@ -790,13 +809,13 @@ namespace MahjongPrototype.UI
                     selfKanCandidates,
                     state.IsSelfKanDecisionPending &&
                     state.CurrentSelfKanDecision != null &&
-                    state.CurrentSelfKanDecision.Seat == state.SelfSeat,
+                    state.CurrentSelfKanDecision.Seat == selfSeat,
                     null);
                 return;
             }
 
             IReadOnlyList<MeldCallKind> availableKinds =
-                meldCallService.GetAvailableKinds(reactionWindow, state.SelfSeat);
+                meldCallService.GetAvailableKinds(reactionWindow, selfSeat);
             bool showPon = ContainsMeldCallKind(availableKinds, MeldCallKind.Pon);
             bool showDaiminkan = ContainsMeldCallKind(
                 availableKinds,
@@ -804,7 +823,7 @@ namespace MahjongPrototype.UI
             IReadOnlyList<ChiOption> chiOptions = ContainsMeldCallKind(
                     availableKinds,
                     MeldCallKind.Chi)
-                ? FindSelfChiOptions(reactionWindow, state.SelfSeat)
+                ? FindSelfChiOptions(reactionWindow, selfSeat)
                 : null;
             ponDecisionController.SetMeldCallDecision(
                 showPon,
@@ -865,11 +884,11 @@ namespace MahjongPrototype.UI
                 bool showSelfReachDecision =
                     state != null &&
                     state.IsReachDecisionPending &&
-                    state.ReachDecisionSeat == state.SelfSeat;
+                    IsSelfSeat(state.ReachDecisionSeat);
                 bool showSelfReachCancel =
                     state != null &&
                     state.IsReachDiscardSelectionPending &&
-                    state.ReachDecisionSeat == state.SelfSeat;
+                    IsSelfSeat(state.ReachDecisionSeat);
                 reachDecisionController.SetReachUiVisible(showSelfReachDecision, showSelfReachCancel);
             }
         }
@@ -949,7 +968,8 @@ namespace MahjongPrototype.UI
         {
             return gameFlow != null &&
                 state != null &&
-                state.IsSelfTurn &&
+                TryGetSelfSeat(state, out SeatId selfSeat) &&
+                state.CurrentTurn == selfSeat &&
                 !state.IsInteractionLocked;
         }
 
@@ -971,26 +991,38 @@ namespace MahjongPrototype.UI
                 !state.IsReachDiscardSelectionPending;
         }
 
-        private static bool IsDeclaredReachWaitingForDraw(MahjongGameState state)
+        private bool IsDeclaredReachWaitingForDraw(MahjongGameState state)
         {
             return state != null &&
-                state.IsSelfTurn &&
+                TryGetSelfSeat(state, out SeatId selfSeat) &&
+                state.CurrentTurn == selfSeat &&
                 !state.IsInteractionLocked &&
-                state.GetPlayerSeat(state.SelfSeat).IsReachDeclared &&
-                !state.GetPlayerSeat(state.SelfSeat).HasDrawnTile;
+                state.GetPlayerSeat(selfSeat).IsReachDeclared &&
+                !state.GetPlayerSeat(selfSeat).HasDrawnTile;
         }
 
         private bool IsSelfSeat(SeatId seat)
         {
             MahjongGameState state = gameFlow != null ? gameFlow.CurrentState : null;
-            return state != null && state.IsSelfSeat(seat);
+            return state != null && TryGetSelfSeat(state, out SeatId selfSeat) &&
+                selfSeat == seat;
+        }
+
+        private bool TryGetSelfSeat(MahjongGameState state, out SeatId selfSeat)
+        {
+            selfSeat = default;
+            return state != null &&
+                gameFlow != null &&
+                gameFlow.ViewContext != null &&
+                gameFlow.ViewContext.TryGetSelfSeat(state, out selfSeat);
         }
 
         private void ApplyReachDiscardCandidateInteractable(MahjongGameState state)
         {
             if (state == null ||
                 !state.IsReachDiscardSelectionPending ||
-                state.ReachDecisionSeat != state.SelfSeat)
+                !TryGetSelfSeat(state, out SeatId selfSeat) ||
+                state.ReachDecisionSeat != selfSeat)
             {
                 if (playerArea3DPresenter != null && state != null)
                     playerArea3DPresenter.ClearSelfTileDimmed(state);
@@ -1027,7 +1059,10 @@ namespace MahjongPrototype.UI
             if (state == null || state.IsReachDiscardSelectionPending)
                 return;
 
-            PlayerSeat selfPlayerSeat = state.GetPlayerSeat(state.SelfSeat);
+            if (!TryGetSelfSeat(state, out SeatId selfSeat))
+                return;
+
+            PlayerSeat selfPlayerSeat = state.GetPlayerSeat(selfSeat);
             if (!selfPlayerSeat.IsReachDeclared)
                 return;
 
@@ -1133,8 +1168,9 @@ namespace MahjongPrototype.UI
             FuritenEvaluationResultSet resultSet = gameFlow.EvaluateAllFuriten();
             bool shouldShow =
                 resultSet != null &&
+                TryGetSelfSeat(state, out SeatId selfSeat) &&
                 resultSet.TryGet(
-                    state.SelfSeat,
+                    selfSeat,
                     out FuritenSeatEvaluationResult result) &&
                 result.IsEvaluated &&
                 result.IsFuriten;

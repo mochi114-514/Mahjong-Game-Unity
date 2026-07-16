@@ -147,6 +147,7 @@ namespace MahjongPrototype.Tests
         [TestCase("DuplicateProvider", "multiple decision providers")]
         [TestCase("KindMismatch", "incompatible")]
         [TestCase("UnavailableNetwork", "is unavailable")]
+        [TestCase("ConfiguredProviderWithoutRuntimeInstance", "runtime implementation")]
         [TestCase("DuplicatePlayer", "duplicate PlayerId")]
         public void InvalidProviderConfiguration_IsRejectedBeforeRoundStateOrNotifications(
             string invalidConfiguration,
@@ -252,6 +253,16 @@ namespace MahjongPrototype.Tests
                         reflection,
                         types,
                         new ProviderDefinition("Player1", "Network", false));
+                    return;
+                case "ConfiguredProviderWithoutRuntimeInstance":
+                    roster = CreateRoster(
+                        reflection,
+                        types,
+                        new ParticipantDefinition("Player1", "Human"));
+                    registry = CreateRegistry(
+                        reflection,
+                        types,
+                        new ProviderDefinition("Player1", "LocalUi", true));
                     return;
                 case "DuplicatePlayer":
                     roster = CreateRoster(

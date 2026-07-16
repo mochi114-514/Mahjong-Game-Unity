@@ -16,19 +16,47 @@ namespace MahjongPrototype.Domain
 
     public readonly struct DecisionProviderRegistration
     {
+        private readonly bool isConfiguredAvailable;
+
         public DecisionProviderRegistration(
             PlayerId playerId,
             DecisionProviderRoute route,
             bool isAvailable)
         {
+            // PROTOTYPE: Retained for the stage-one legacy adapter and tests.
+            // A match cannot start from this configuration-only registration;
+            // MahjongGameFlow replaces legacy scene registrations with a
+            // concrete provider in this same registry before validation.
             PlayerId = playerId;
             Route = route;
-            IsAvailable = isAvailable;
+            isConfiguredAvailable = isAvailable;
+            Provider = null;
+        }
+
+        public DecisionProviderRegistration(
+            PlayerId playerId,
+            DecisionProviderRoute route,
+            IDecisionProvider provider)
+        {
+            if (provider == null)
+                throw new ArgumentNullException(nameof(provider));
+            if (provider.Route != route)
+            {
+                throw new ArgumentException(
+                    $"Provider route {provider.Route} does not match registration route {route}.",
+                    nameof(provider));
+            }
+
+            PlayerId = playerId;
+            Route = route;
+            isConfiguredAvailable = true;
+            Provider = provider;
         }
 
         public PlayerId PlayerId { get; }
         public DecisionProviderRoute Route { get; }
-        public bool IsAvailable { get; }
+        public IDecisionProvider Provider { get; }
+        public bool IsAvailable => Provider != null ? Provider.IsAvailable : isConfiguredAvailable;
     }
 
     /// <summary>
