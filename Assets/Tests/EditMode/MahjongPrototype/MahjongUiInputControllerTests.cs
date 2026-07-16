@@ -129,15 +129,15 @@ namespace MahjongPrototype.Tests
                 driver.SetTargetTileSelection(1, 2);
 
                 Assert.That(driver.TargetTileText, Is.EqualTo("5m"));
-                Assert.That(driver.TargetTileStringPosition, Is.EqualTo(1));
-                Assert.That(driver.TargetTileStringSelectPosition, Is.EqualTo(2));
+                Assert.That(driver.TargetTileSelectionAnchorPosition, Is.EqualTo(1));
+                Assert.That(driver.TargetTileSelectionFocusPosition, Is.EqualTo(2));
 
                 driver.SetGameplayInputInteractable(false);
 
                 Assert.That(driver.TargetTileInputInteractable, Is.True);
                 Assert.That(driver.TargetTileText, Is.EqualTo("5m"));
-                Assert.That(driver.TargetTileStringPosition, Is.EqualTo(1));
-                Assert.That(driver.TargetTileStringSelectPosition, Is.EqualTo(2));
+                Assert.That(driver.TargetTileSelectionAnchorPosition, Is.EqualTo(1));
+                Assert.That(driver.TargetTileSelectionFocusPosition, Is.EqualTo(2));
             }
         }
 
@@ -527,8 +527,8 @@ namespace MahjongPrototype.Tests
                 driver.SetTargetTileSelection(1, 2);
 
                 Assert.That(driver.TargetTileText, Is.EqualTo("5m"));
-                Assert.That(driver.TargetTileStringPosition, Is.EqualTo(1));
-                Assert.That(driver.TargetTileStringSelectPosition, Is.EqualTo(2));
+                Assert.That(driver.TargetTileSelectionAnchorPosition, Is.EqualTo(1));
+                Assert.That(driver.TargetTileSelectionFocusPosition, Is.EqualTo(2));
 
                 driver.RefreshInteraction();
                 driver.BeginReachDiscardSelection();
@@ -538,8 +538,8 @@ namespace MahjongPrototype.Tests
 
                 Assert.That(driver.TargetTileInputInteractable, Is.True);
                 Assert.That(driver.TargetTileText, Is.EqualTo("5m"));
-                Assert.That(driver.TargetTileStringPosition, Is.EqualTo(1));
-                Assert.That(driver.TargetTileStringSelectPosition, Is.EqualTo(2));
+                Assert.That(driver.TargetTileSelectionAnchorPosition, Is.EqualTo(1));
+                Assert.That(driver.TargetTileSelectionFocusPosition, Is.EqualTo(2));
             }
         }
 
@@ -711,10 +711,14 @@ namespace MahjongPrototype.Tests
                 get => (string)reflection.GetProperty(targetTileInput, "text");
                 set => reflection.SetProperty(targetTileInput, "text", value);
             }
-            public int TargetTileStringPosition =>
-                (int)reflection.GetProperty(targetTileInput, "stringPosition");
-            public int TargetTileStringSelectPosition =>
-                (int)reflection.GetProperty(targetTileInput, "stringSelectPosition");
+            public int TargetTileSelectionAnchorPosition =>
+                (int)reflection.GetProperty(
+                    targetTileInput,
+                    "selectionStringAnchorPosition");
+            public int TargetTileSelectionFocusPosition =>
+                (int)reflection.GetProperty(
+                    targetTileInput,
+                    "selectionStringFocusPosition");
             public bool HasForceDrawReservationForSelf
             {
                 get
@@ -863,10 +867,16 @@ namespace MahjongPrototype.Tests
                 forceDrawSkillButton.onClick.Invoke();
             }
 
-            public void SetTargetTileSelection(int position, int selectPosition)
+            public void SetTargetTileSelection(int anchorPosition, int focusPosition)
             {
-                reflection.SetProperty(targetTileInput, "stringPosition", position);
-                reflection.SetProperty(targetTileInput, "stringSelectPosition", selectPosition);
+                reflection.SetProperty(
+                    targetTileInput,
+                    "selectionStringAnchorPosition",
+                    anchorPosition);
+                reflection.SetProperty(
+                    targetTileInput,
+                    "selectionStringFocusPosition",
+                    focusPosition);
             }
 
             public Snapshot CaptureSnapshot()

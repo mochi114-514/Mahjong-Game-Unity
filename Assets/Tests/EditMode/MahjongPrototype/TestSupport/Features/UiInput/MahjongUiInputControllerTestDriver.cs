@@ -76,11 +76,15 @@ namespace MahjongPrototype.Tests.TestSupport.Features.UiInput
             set => reflection.SetProperty(controls.TargetTileInput, "text", value);
         }
 
-        public int TargetTileStringPosition =>
-            (int)reflection.GetProperty(controls.TargetTileInput, "stringPosition");
+        public int TargetTileSelectionAnchorPosition =>
+            (int)reflection.GetProperty(
+                controls.TargetTileInput,
+                "selectionStringAnchorPosition");
 
-        public int TargetTileStringSelectPosition =>
-            (int)reflection.GetProperty(controls.TargetTileInput, "stringSelectPosition");
+        public int TargetTileSelectionFocusPosition =>
+            (int)reflection.GetProperty(
+                controls.TargetTileInput,
+                "selectionStringFocusPosition");
 
         public static MahjongUiInputControllerTestDriver Create(string rootName)
         {
@@ -240,13 +244,16 @@ namespace MahjongPrototype.Tests.TestSupport.Features.UiInput
             reflection.Invoke(controller, "SetGameplayInputInteractable", interactable);
         }
 
-        public void SetTargetTileSelection(int position, int selectPosition)
+        public void SetTargetTileSelection(int anchorPosition, int focusPosition)
         {
-            reflection.SetProperty(controls.TargetTileInput, "stringPosition", position);
             reflection.SetProperty(
                 controls.TargetTileInput,
-                "stringSelectPosition",
-                selectPosition);
+                "selectionStringAnchorPosition",
+                anchorPosition);
+            reflection.SetProperty(
+                controls.TargetTileInput,
+                "selectionStringFocusPosition",
+                focusPosition);
         }
 
         public void SetAutoSortInteractable(bool interactable)
