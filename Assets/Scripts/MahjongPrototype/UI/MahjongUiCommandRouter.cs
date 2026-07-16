@@ -167,7 +167,11 @@ namespace MahjongPrototype.UI
             if (!TryGetGameFlow("Cannot activate skill because MahjongGameFlow is not assigned."))
                 return;
 
-            gameFlow.RequestForceDrawSkill(targetTileText);
+            MahjongGameState state = gameFlow.CurrentState;
+            if (state == null || !TryGetLocalActor(state, out _, out SeatId actorSeat))
+                return;
+
+            gameFlow.RequestForceDrawSkillForSeat(actorSeat, targetTileText);
         }
 
         private void HandleAutoSortChanged(bool enabled)

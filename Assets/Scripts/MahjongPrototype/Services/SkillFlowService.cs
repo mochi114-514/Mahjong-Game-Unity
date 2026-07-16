@@ -65,6 +65,29 @@ namespace MahjongPrototype.Services
             return SkillFlowResult.Reserved(reservation);
         }
 
+        /// <summary>
+        /// Reports whether ForceDraw can be requested for the seat in the
+        /// current match phase. Tile text validation remains an execution-time
+        /// concern so editing an incomplete input never disables the field.
+        /// </summary>
+        public bool CanRequestForceDraw(MahjongGameState gameState, SeatId ownerSeat)
+        {
+            if (gameState == null ||
+                gameState.IsRoundEnded ||
+                gameState.IsWinDecisionPending ||
+                gameState.IsReactionWindowPending ||
+                gameState.TurnPhase == TurnPhase.WaitingForDiscardAfterCall ||
+                gameState.IsReachDiscardSelectionPending ||
+                !IsActiveSeat(gameState, ownerSeat) ||
+                reservationService.HasReservation(ownerSeat) ||
+                gameState.HasActiveSkillEffect(ownerSeat, SkillEffectKind.ForceDrawTile))
+            {
+                return false;
+            }
+
+            return true;
+        }
+
         public SkillFlowResult ResolveReservedBeforeDraw(MahjongGameState gameState, SeatId seat)
         {
             if (gameState == null || gameState.IsRoundEnded || gameState.IsWinDecisionPending ||

@@ -98,7 +98,7 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void SetGameplayInputInteractable_ControlsOnlyGameplayInputs()
+        public void SetGameplayInputInteractable_ControlsOnlyGameplayButtons()
         {
             using (MahjongUiInputControllerTestDriver driver =
                 MahjongUiInputControllerTestDriver.Create("InputControllerInteractableTest"))
@@ -111,11 +111,29 @@ namespace MahjongPrototype.Tests
 
                 Assert.That(driver.DrawInteractable, Is.False);
                 Assert.That(driver.ForceDrawSkillInteractable, Is.False);
-                Assert.That(driver.TargetTileInputInteractable, Is.False);
+                Assert.That(driver.TargetTileInputInteractable, Is.True);
                 Assert.That(driver.AutoSortInteractable, Is.True);
                 Assert.That(driver.RetryInteractable, Is.True);
                 Assert.That(driver.CancelReachInteractable, Is.True);
                 Assert.That(driver.RoundResultConfirmInteractable, Is.True);
+            }
+        }
+
+        [Test]
+        public void SetGameplayInputInteractable_PreservesTargetTileTextAndSelection()
+        {
+            using (MahjongUiInputControllerTestDriver driver =
+                MahjongUiInputControllerTestDriver.Create("InputControllerTargetTilePreservationTest"))
+            {
+                driver.TargetTileText = "5m";
+                driver.SetTargetTileSelection(1, 2);
+
+                driver.SetGameplayInputInteractable(false);
+
+                Assert.That(driver.TargetTileInputInteractable, Is.True);
+                Assert.That(driver.TargetTileText, Is.EqualTo("5m"));
+                Assert.That(driver.TargetTileStringPosition, Is.EqualTo(1));
+                Assert.That(driver.TargetTileStringSelectPosition, Is.EqualTo(2));
             }
         }
 
@@ -396,7 +414,7 @@ namespace MahjongPrototype.Tests
     public sealed class MahjongPrototypeUiManagerInteractionTests
     {
         [Test]
-        public void RefreshInteractionState_OtherTurn_KeepsControlAreaInteractableAndSelfTilesDisabled()
+        public void RefreshInteractionState_OtherTurn_DisablesDrawButAllowsSkillReservationAndSelfTilesDisabled()
         {
             using (Driver driver = Driver.Create())
             {
@@ -404,7 +422,7 @@ namespace MahjongPrototype.Tests
 
                 driver.RefreshInteraction();
 
-                Assert.That(driver.DrawInteractable, Is.True);
+                Assert.That(driver.DrawInteractable, Is.False);
                 Assert.That(driver.ForceDrawSkillInteractable, Is.True);
                 Assert.That(driver.TargetTileInputInteractable, Is.True);
                 Assert.That(driver.AutoSortInteractable, Is.True);
@@ -414,7 +432,7 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void RefreshInteractionState_SelfTurn_KeepsControlAreaAndSelfTilesInteractable()
+        public void RefreshInteractionState_SelfTurnWithDrawnTile_DisablesDrawButKeepsSkillAndSelfTilesInteractable()
         {
             using (Driver driver = Driver.Create())
             {
@@ -422,7 +440,7 @@ namespace MahjongPrototype.Tests
 
                 driver.RefreshInteraction();
 
-                Assert.That(driver.DrawInteractable, Is.True);
+                Assert.That(driver.DrawInteractable, Is.False);
                 Assert.That(driver.ForceDrawSkillInteractable, Is.True);
                 Assert.That(driver.TargetTileInputInteractable, Is.True);
                 Assert.That(driver.AutoSortInteractable, Is.True);
@@ -441,7 +459,7 @@ namespace MahjongPrototype.Tests
 
                 driver.RefreshInteraction();
 
-                Assert.That(driver.DrawInteractable, Is.True);
+                Assert.That(driver.DrawInteractable, Is.False);
                 Assert.That(driver.ForceDrawSkillInteractable, Is.True);
                 Assert.That(driver.TargetTileInputInteractable, Is.True);
                 Assert.That(driver.AutoSortInteractable, Is.False);
@@ -462,8 +480,9 @@ namespace MahjongPrototype.Tests
 
                 Assert.That(driver.DrawInteractable, Is.False);
                 Assert.That(driver.ForceDrawSkillInteractable, Is.False);
-                Assert.That(driver.TargetTileInputInteractable, Is.False);
+                Assert.That(driver.TargetTileInputInteractable, Is.True);
                 Assert.That(driver.AutoSortInteractable, Is.False);
+                Assert.That(driver.CancelReachInteractable, Is.True);
                 Assert.That(driver.FirstSelfHandTileInteractable, Is.True);
                 Assert.That(driver.SecondSelfHandTileInteractable, Is.False);
                 Assert.That(driver.SelfDrawnTileInteractable, Is.False);
@@ -471,12 +490,67 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void RefreshInteractionState_LockedStatesKeepControlAreaNotInteractable()
+        public void RefreshInteractionState_LockedStatesDisableButtonsButKeepTargetTileInputEditable()
         {
             AssertControlAreaLocked(driver => driver.BeginWinDecision());
             AssertControlAreaLocked(driver => driver.BeginReachDiscardSelection());
             AssertControlAreaLocked(driver => driver.MarkRoundEnded());
-            AssertControlAreaLocked(driver => driver.DeclareReachWaitingForDraw());
+        }
+
+        [Test]
+        public void RefreshInteractionState_ReachWaitingForDraw_EnablesDrawAndForceDrawSkillSeparately()
+        {
+            using (Driver driver = Driver.Create())
+            {
+                driver.PrepareNormalSelfTurn();
+                driver.DeclareReachWaitingForDraw();
+
+                driver.RefreshInteraction();
+
+                Assert.That(driver.DrawInteractable, Is.True);
+                Assert.That(driver.ForceDrawSkillInteractable, Is.True);
+                Assert.That(driver.TargetTileInputInteractable, Is.True);
+            }
+        }
+
+        [Test]
+        public void RefreshInteractionState_PreservesTargetTileTextAndSelectionAcrossStateTransitions()
+        {
+            using (Driver driver = Driver.Create())
+            {
+                driver.PrepareNormalSelfTurn();
+                driver.TargetTileText = "5m";
+                driver.SetTargetTileSelection(1, 2);
+
+                driver.RefreshInteraction();
+                driver.BeginReachDiscardSelection();
+                driver.RefreshInteraction();
+                driver.BeginWinDecision();
+                driver.RefreshInteraction();
+
+                Assert.That(driver.TargetTileInputInteractable, Is.True);
+                Assert.That(driver.TargetTileText, Is.EqualTo("5m"));
+                Assert.That(driver.TargetTileStringPosition, Is.EqualTo(1));
+                Assert.That(driver.TargetTileStringSelectPosition, Is.EqualTo(2));
+            }
+        }
+
+        [Test]
+        public void OtherTurn_ForceDrawSkillCommand_ReservesSkillForViewContextLocalSeat()
+        {
+            using (Driver driver = Driver.Create())
+            {
+                driver.PrepareNormalOtherTurn();
+                driver.TargetTileText = "5m";
+                driver.EnableCommandRouting();
+                driver.RefreshInteraction();
+
+                driver.ClickForceDrawSkill();
+                driver.RefreshInteraction();
+
+                Assert.That(driver.HasForceDrawReservationForSelf, Is.True);
+                Assert.That(driver.ForceDrawSkillInteractable, Is.False);
+            }
         }
 
         [Test]
@@ -492,7 +566,7 @@ namespace MahjongPrototype.Tests
                 driver.ClickDraw();
 
                 Snapshot after = driver.CaptureSnapshot();
-                Assert.That(driver.DrawInteractable, Is.True);
+                Assert.That(driver.DrawInteractable, Is.False);
                 Assert.That(after.CurrentTurnName, Is.EqualTo(before.CurrentTurnName));
                 Assert.That(after.TurnIndex, Is.EqualTo(before.TurnIndex));
                 Assert.That(after.SelfHandCount, Is.EqualTo(before.SelfHandCount));
@@ -513,7 +587,7 @@ namespace MahjongPrototype.Tests
 
                 Assert.That(driver.DrawInteractable, Is.False);
                 Assert.That(driver.ForceDrawSkillInteractable, Is.False);
-                Assert.That(driver.TargetTileInputInteractable, Is.False);
+                Assert.That(driver.TargetTileInputInteractable, Is.True);
             }
         }
 
@@ -625,6 +699,30 @@ namespace MahjongPrototype.Tests
             public bool AutoSortInteractable => autoSortToggle.interactable;
             public bool TargetTileInputInteractable =>
                 (bool)reflection.GetProperty(targetTileInput, "interactable");
+            public bool CancelReachInteractable =>
+                ((Button)reflection.GetPrivateField(inputController, "cancelReachButton")).interactable;
+            public string TargetTileText
+            {
+                get => (string)reflection.GetProperty(targetTileInput, "text");
+                set => reflection.SetProperty(targetTileInput, "text", value);
+            }
+            public int TargetTileStringPosition =>
+                (int)reflection.GetProperty(targetTileInput, "stringPosition");
+            public int TargetTileStringSelectPosition =>
+                (int)reflection.GetProperty(targetTileInput, "stringSelectPosition");
+            public bool HasForceDrawReservationForSelf
+            {
+                get
+                {
+                    object reservationService = reflection.GetPrivateField(
+                        session.GameFlow,
+                        "skillReservationService");
+                    return (bool)reflection.Invoke(
+                        reservationService,
+                        "HasReservation",
+                        session.DataFactory.ParseSeat("East"));
+                }
+            }
             public bool FirstSelfHandTileInteractable => TileInteractable(FirstSelfHandTile);
             public bool SecondSelfHandTileInteractable => TileInteractable(SelfHandTileAt(1));
             public bool SelfDrawnTileInteractable => TileInteractable(SelfDrawnTile);
@@ -753,6 +851,17 @@ namespace MahjongPrototype.Tests
             public void ClickDraw()
             {
                 drawButton.onClick.Invoke();
+            }
+
+            public void ClickForceDrawSkill()
+            {
+                forceDrawSkillButton.onClick.Invoke();
+            }
+
+            public void SetTargetTileSelection(int position, int selectPosition)
+            {
+                reflection.SetProperty(targetTileInput, "stringPosition", position);
+                reflection.SetProperty(targetTileInput, "stringSelectPosition", selectPosition);
             }
 
             public Snapshot CaptureSnapshot()

@@ -342,14 +342,23 @@ namespace MahjongPrototype.UI
 
         public void SetGameplayInputInteractable(bool interactable)
         {
+            // PROTOTYPE: Kept for direct legacy callers. TargetTileInput is
+            // intentionally excluded so temporary game-state refreshes never
+            // interrupt its IME composition or selection.
+            SetDrawButtonInteractable(interactable);
+            SetForceDrawSkillButtonInteractable(interactable);
+        }
+
+        public void SetDrawButtonInteractable(bool interactable)
+        {
             if (drawButton != null)
                 drawButton.interactable = interactable;
+        }
 
+        public void SetForceDrawSkillButtonInteractable(bool interactable)
+        {
             if (forceDrawSkillButton != null)
                 forceDrawSkillButton.interactable = interactable;
-
-            if (targetTileInput != null)
-                targetTileInput.interactable = interactable;
         }
 
         public void SetAutoSortInteractable(bool interactable)

@@ -768,6 +768,15 @@ namespace MahjongPrototype
                 targetTileCode));
         }
 
+        public bool CanRequestForceDrawSkillForSeat(SeatId ownerSeat)
+        {
+            if (gameState == null)
+                return false;
+
+            EnsureSkillFlowService();
+            return skillFlowService.CanRequestForceDraw(gameState, ownerSeat);
+        }
+
         public void RequestSetAutoSortEnabled(bool enabled)
         {
             if (autoSortEnabled == enabled)

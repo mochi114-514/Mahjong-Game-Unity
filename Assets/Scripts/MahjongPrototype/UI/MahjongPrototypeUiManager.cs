@@ -941,12 +941,14 @@ namespace MahjongPrototype.UI
         private void RefreshInteractionState(MahjongGameState state)
         {
             bool canUseSelfTileInput = CanUseSelfGameplayInput(state);
-            bool canUseControlPanelInput = CanUseControlAreaInput(state);
+            bool canUseDrawInput = CanUseDrawInput(state);
+            bool canUseForceDrawSkillInput = CanUseForceDrawSkillInput(state);
             bool canUseAutoSortInput = CanUseAutoSortInput(state);
 
             if (inputController != null)
             {
-                inputController.SetGameplayInputInteractable(canUseControlPanelInput);
+                inputController.SetDrawButtonInteractable(canUseDrawInput);
+                inputController.SetForceDrawSkillButtonInteractable(canUseForceDrawSkillInput);
                 inputController.SetAutoSortInteractable(canUseAutoSortInput);
             }
 
@@ -973,15 +975,26 @@ namespace MahjongPrototype.UI
                 !state.IsInteractionLocked;
         }
 
-        private bool CanUseControlAreaInput(MahjongGameState state)
+        private bool CanUseDrawInput(MahjongGameState state)
         {
             return gameFlow != null &&
                 state != null &&
-                !state.IsWinDecisionPending &&
-                !state.IsReactionWindowPending &&
+                TryGetSelfSeat(state, out SeatId selfSeat) &&
+                state.CurrentTurn == selfSeat &&
                 !state.IsRoundEnded &&
+                !state.IsWinDecisionPending &&
+                !state.IsReachDecisionPending &&
                 !state.IsReachDiscardSelectionPending &&
-                !IsDeclaredReachWaitingForDraw(state);
+                !state.GetPlayerSeat(selfSeat).HasDrawnTile &&
+                (state.TurnPhase == TurnPhase.WaitingForDraw ||
+                    state.TurnPhase == TurnPhase.WaitingForRinshanDraw);
+        }
+
+        private bool CanUseForceDrawSkillInput(MahjongGameState state)
+        {
+            return gameFlow != null &&
+                TryGetSelfSeat(state, out SeatId selfSeat) &&
+                gameFlow.CanRequestForceDrawSkillForSeat(selfSeat);
         }
 
         private static bool CanUseAutoSortInput(MahjongGameState state)
@@ -989,16 +1002,6 @@ namespace MahjongPrototype.UI
             return state != null &&
                 !state.IsReachDecisionPending &&
                 !state.IsReachDiscardSelectionPending;
-        }
-
-        private bool IsDeclaredReachWaitingForDraw(MahjongGameState state)
-        {
-            return state != null &&
-                TryGetSelfSeat(state, out SeatId selfSeat) &&
-                state.CurrentTurn == selfSeat &&
-                !state.IsInteractionLocked &&
-                state.GetPlayerSeat(selfSeat).IsReachDeclared &&
-                !state.GetPlayerSeat(selfSeat).HasDrawnTile;
         }
 
         private bool IsSelfSeat(SeatId seat)

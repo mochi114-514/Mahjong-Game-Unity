@@ -75,8 +75,15 @@ namespace MahjongPrototype.Tests.TestSupport.Features.UiInput
 
         public string TargetTileText
         {
+            get => (string)reflection.GetProperty(controls.TargetTileInput, "text");
             set => reflection.SetProperty(controls.TargetTileInput, "text", value);
         }
+
+        public int TargetTileStringPosition =>
+            (int)reflection.GetProperty(controls.TargetTileInput, "stringPosition");
+
+        public int TargetTileStringSelectPosition =>
+            (int)reflection.GetProperty(controls.TargetTileInput, "stringSelectPosition");
 
         public static MahjongUiInputControllerTestDriver Create(string rootName)
         {
@@ -234,6 +241,15 @@ namespace MahjongPrototype.Tests.TestSupport.Features.UiInput
         public void SetGameplayInputInteractable(bool interactable)
         {
             reflection.Invoke(controller, "SetGameplayInputInteractable", interactable);
+        }
+
+        public void SetTargetTileSelection(int position, int selectPosition)
+        {
+            reflection.SetProperty(controls.TargetTileInput, "stringPosition", position);
+            reflection.SetProperty(
+                controls.TargetTileInput,
+                "stringSelectPosition",
+                selectPosition);
         }
 
         public void SetAutoSortInteractable(bool interactable)
