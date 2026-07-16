@@ -219,6 +219,19 @@ namespace MahjongPrototype.Domain
             ParticipantType participantType = playerId == SelfPlayerId
                 ? ParticipantType.LocalHuman
                 : ParticipantType.Cpu;
+            AssignPlayerToSeat(playerId, seat, participantType);
+        }
+
+        /// <summary>
+        /// Applies the current round's compatibility projection. The shared
+        /// participant configuration remains match-lifetime data outside this
+        /// round state while existing rules continue to read SeatSlot.ParticipantType.
+        /// </summary>
+        public void AssignPlayerToSeat(
+            PlayerId playerId,
+            SeatId seat,
+            ParticipantType participantType)
+        {
             ClearPlayerFromSeatSlots(playerId);
             GetSeatSlot(seat).AssignPlayer(playerId, participantType);
         }

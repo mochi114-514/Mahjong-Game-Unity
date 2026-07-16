@@ -75,9 +75,15 @@ namespace MahjongPrototype
         private MahjongFlowEventPublisher eventPublisher;
         private MahjongGameState gameState;
         private AutoDiscardDrawnTileController autoDiscardDrawnTileController;
+        private readonly MatchStartValidator matchStartValidator = new MatchStartValidator();
+        private MatchRoster matchRoster;
+        private DecisionProviderRegistry decisionProviderRegistry;
 
         public MahjongGameState CurrentState => gameState;
         public MahjongEventNotifier EventNotifier => eventNotifier;
+        public MatchRoster MatchRoster => matchRoster;
+        public DecisionProviderRegistry DecisionProviderRegistry => decisionProviderRegistry;
+        public MatchStartValidationResult LastMatchStartValidationResult { get; private set; }
         public bool IsWinDecisionPending => gameState != null && gameState.IsWinDecisionPending;
         public bool IsAutoSortEnabled => autoSortEnabled;
         public bool IsInteractionLocked => gameState != null && gameState.IsInteractionLocked;
@@ -171,16 +177,54 @@ namespace MahjongPrototype
         [ContextMenu("Prototype/Start New Round")]
         public void StartNewRound()
         {
-            EnsureRoundLifecycleService();
-            SeatId initialSelfSeat = ResolveSelfSeat();
-            StartRound(roundLifecycleService.GetInitialWindProgress(), true, initialSelfSeat);
+            TryStartNewRound();
         }
 
-        private void StartRound(
+        /// <summary>
+        /// Starts a new match round after validating the match-lifetime roster
+        /// and answer routes. The existing void entry point remains for scene
+        /// and UI compatibility; callers that need the reason can use this API.
+        /// </summary>
+        public MatchStartValidationResult TryStartNewRound()
+        {
+            EnsureRoundLifecycleService();
+            SeatId initialSelfSeat = ResolveSelfSeat();
+            return StartRound(
+                roundLifecycleService.GetInitialWindProgress(),
+                true,
+                initialSelfSeat);
+        }
+
+        /// <summary>
+        /// Replaces the match-lifetime configuration. It is intentionally only
+        /// consumed when starting a round; current decision handling remains on
+        /// the legacy paths during this migration phase.
+        /// </summary>
+        public void ConfigureMatch(
+            MatchRoster roster,
+            DecisionProviderRegistry providerRegistry)
+        {
+            matchRoster = roster ?? throw new System.ArgumentNullException(nameof(roster));
+            decisionProviderRegistry = providerRegistry ??
+                throw new System.ArgumentNullException(nameof(providerRegistry));
+        }
+
+        private MatchStartValidationResult StartRound(
             WindProgress windProgress,
             bool notifyRunStarted,
             SeatId selfSeat)
         {
+            EnsureMatchConfiguration();
+            MatchStartValidationResult validationResult = matchStartValidator.Validate(
+                matchRoster,
+                decisionProviderRegistry);
+            LastMatchStartValidationResult = validationResult;
+            if (!validationResult.IsValid)
+            {
+                Warn($"Match start rejected: {validationResult.FailureReason}");
+                return validationResult;
+            }
+
             CacheReferences();
             EnsureCpuTurnController();
             InitializeEvaluators();
@@ -203,7 +247,8 @@ namespace MahjongPrototype
                 windProgress,
                 seed,
                 selfSeat,
-                participantCount);
+                matchRoster,
+                decisionProviderRegistry);
             gameState = setupResult.GameState;
 
             EventPublisher.NotifySeatSlotsAssigned();
@@ -212,6 +257,7 @@ namespace MahjongPrototype
             DealInitialHands();
             EventPublisher.NotifyRoundSetupCompleted();
             StartTurn(gameState.CurrentTurn, gameState.TurnIndex);
+            return validationResult;
         }
 
         public void RetryPrototype()
@@ -226,6 +272,17 @@ namespace MahjongPrototype
             RoundResult result = roundLifecycleService.GetPendingRoundResult(gameState);
             if (result == null)
                 return;
+
+            EnsureMatchConfiguration();
+            MatchStartValidationResult validationResult = matchStartValidator.Validate(
+                matchRoster,
+                decisionProviderRegistry);
+            LastMatchStartValidationResult = validationResult;
+            if (!validationResult.IsValid)
+            {
+                Warn($"Next round start rejected: {validationResult.FailureReason}");
+                return;
+            }
 
             EventPublisher.NotifyRoundResultConfirmed(result);
             RoundLifecycleTransition transition =
@@ -1985,6 +2042,36 @@ namespace MahjongPrototype
 
             // PROTOTYPE: Keep the reach auto-discard coroutine separate from game progression.
             autoDiscardDrawnTileController = gameObject.AddComponent<AutoDiscardDrawnTileController>();
+        }
+
+        private void EnsureMatchConfiguration()
+        {
+            if (matchRoster != null || decisionProviderRegistry != null)
+                return;
+
+            List<MatchParticipant> participants = new List<MatchParticipant>();
+            List<DecisionProviderRegistration> registrations =
+                new List<DecisionProviderRegistration>();
+            for (int playerIndex = 1; playerIndex <= participantCount; playerIndex++)
+            {
+                PlayerId playerId = (PlayerId)playerIndex;
+                // PROTOTYPE: Preserve the scene's current LocalHuman + CPU
+                // setup by translating its former ParticipantType meaning once
+                // at match creation. Future scene configuration will construct
+                // MatchRoster and DecisionProviderRegistry directly.
+                ParticipantType legacyParticipantType = playerId == PlayerId.Player1
+                    ? ParticipantType.LocalHuman
+                    : ParticipantType.Cpu;
+                participants.Add(ParticipantTypeAdapter.ToMatchParticipant(
+                    playerId,
+                    legacyParticipantType));
+                registrations.Add(ParticipantTypeAdapter.ToDecisionProviderRegistration(
+                    playerId,
+                    legacyParticipantType));
+            }
+
+            matchRoster = new MatchRoster(participants);
+            decisionProviderRegistry = new DecisionProviderRegistry(registrations);
         }
 
         private void NormalizeParticipantCount()
