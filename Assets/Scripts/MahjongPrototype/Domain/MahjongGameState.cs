@@ -438,6 +438,37 @@ namespace MahjongPrototype.Domain
             return true;
         }
 
+        /// <summary>
+        /// Commits only the declaration state of a ron chosen by the
+        /// multi-seat reaction answer path.  Round completion and notifications
+        /// deliberately remain the responsibility of MahjongGameFlow after it
+        /// receives the resulting ReactionWindowResolution.
+        /// </summary>
+        internal bool TryCommitReactionRon(
+            ReactionWindow expectedWindow,
+            ReactionWindowCandidate candidate,
+            out string reason)
+        {
+            reason = string.Empty;
+            if (!IsReactionWindowPending || reactionWindow == null ||
+                !ReferenceEquals(reactionWindow, expectedWindow) ||
+                !reactionWindow.IsAcceptingAnswers)
+            {
+                reason = "ReactionRonWindowMissing";
+                return false;
+            }
+
+            if (!ContainsPendingRonCandidate(reactionWindow, candidate))
+            {
+                reason = "ReactionRonCandidateMissing";
+                return false;
+            }
+
+            candidate.Declare();
+            reactionWindow.CloseCandidatesExcept(candidate);
+            return true;
+        }
+
         internal bool TryCommitAnkan(
             SeatId seat,
             Tile tile,
@@ -1094,6 +1125,25 @@ namespace MahjongPrototype.Domain
                 (candidate.Kind != ReactionKind.Pon &&
                     candidate.Kind != ReactionKind.Daiminkan &&
                     candidate.Kind != ReactionKind.Chi))
+            {
+                return false;
+            }
+
+            for (int i = 0; i < window.Candidates.Count; i++)
+            {
+                if (ReferenceEquals(window.Candidates[i], candidate))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool ContainsPendingRonCandidate(
+            ReactionWindow window,
+            ReactionWindowCandidate candidate)
+        {
+            if (candidate == null || !candidate.IsPending ||
+                candidate.Kind != ReactionKind.Ron)
             {
                 return false;
             }

@@ -419,6 +419,24 @@ namespace MahjongPrototype.Domain
             }
         }
 
+        /// <summary>
+        /// Finishes every pending candidate except the declaration selected by a
+        /// seat-answer resolution.  Unlike <see cref="CloseMeldCallsExcept"/>,
+        /// this also closes ron candidates, because the multi-seat path has
+        /// already collected every seat's answer before choosing one result.
+        /// </summary>
+        internal void CloseCandidatesExcept(ReactionWindowCandidate declaredCandidate)
+        {
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                ReactionWindowCandidate candidate = candidates[i];
+                if (candidate == declaredCandidate || !candidate.IsPending)
+                    continue;
+
+                candidate.Decline();
+            }
+        }
+
         internal bool TryBeginResolution()
         {
             if (!IsAcceptingAnswers)
