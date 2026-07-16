@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
@@ -128,11 +129,97 @@ namespace MahjongPrototype.Tests
 
         private static object Invoke(object target, string methodName, params object[] args)
         {
-            MethodInfo method = target.GetType().GetMethod(
-                methodName,
+            object[] invocationArgs = args ?? Array.Empty<object>();
+            MethodInfo[] methods = target.GetType().GetMethods(
                 BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-            Assert.That(method, Is.Not.Null);
-            return method.Invoke(target, args);
+            List<MethodInfo> matchingMethods = new List<MethodInfo>();
+
+            for (int i = 0; i < methods.Length; i++)
+            {
+                MethodInfo method = methods[i];
+                if (method.Name != methodName || method.ContainsGenericParameters ||
+                    !AreRuntimeArgumentsCompatible(method.GetParameters(), invocationArgs))
+                {
+                    continue;
+                }
+
+                matchingMethods.Add(method);
+            }
+
+            if (matchingMethods.Count == 0)
+            {
+                Assert.Fail(
+                    $"Method not found: {target.GetType().FullName}.{methodName}" +
+                    $"({DescribeArgumentTypes(invocationArgs)}).");
+                return null;
+            }
+            if (matchingMethods.Count != 1)
+            {
+                Assert.Fail(
+                    $"Ambiguous method match: {target.GetType().FullName}.{methodName}" +
+                    $"({DescribeArgumentTypes(invocationArgs)}). Candidates: " +
+                    DescribeMethods(matchingMethods));
+                return null;
+            }
+
+            return matchingMethods[0].Invoke(target, invocationArgs);
+        }
+
+        private static bool AreRuntimeArgumentsCompatible(
+            ParameterInfo[] parameters,
+            object[] arguments)
+        {
+            if (parameters.Length != arguments.Length)
+                return false;
+
+            for (int i = 0; i < parameters.Length; i++)
+            {
+                Type parameterType = parameters[i].ParameterType;
+                if (parameterType.IsByRef)
+                    return false;
+
+                object argument = arguments[i];
+                if (argument == null)
+                {
+                    if (parameterType.IsValueType &&
+                        Nullable.GetUnderlyingType(parameterType) == null)
+                    {
+                        return false;
+                    }
+
+                    continue;
+                }
+
+                if (!parameterType.IsInstanceOfType(argument))
+                    return false;
+            }
+
+            return true;
+        }
+
+        private static string DescribeArgumentTypes(object[] arguments)
+        {
+            string[] argumentTypes = new string[arguments.Length];
+            for (int i = 0; i < arguments.Length; i++)
+                argumentTypes[i] = arguments[i]?.GetType().FullName ?? "null";
+
+            return string.Join(", ", argumentTypes);
+        }
+
+        private static string DescribeMethods(IReadOnlyList<MethodInfo> methods)
+        {
+            string[] descriptions = new string[methods.Count];
+            for (int i = 0; i < methods.Count; i++)
+            {
+                ParameterInfo[] parameters = methods[i].GetParameters();
+                string[] parameterTypes = new string[parameters.Length];
+                for (int parameterIndex = 0; parameterIndex < parameters.Length; parameterIndex++)
+                    parameterTypes[parameterIndex] = parameters[parameterIndex].ParameterType.FullName;
+
+                descriptions[i] = $"{methods[i].Name}({string.Join(", ", parameterTypes)})";
+            }
+
+            return string.Join("; ", descriptions);
         }
 
         private static object GetProperty(object target, string propertyName)
