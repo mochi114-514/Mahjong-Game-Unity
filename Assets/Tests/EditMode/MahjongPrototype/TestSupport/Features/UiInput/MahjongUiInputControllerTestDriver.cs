@@ -11,9 +11,6 @@ namespace MahjongPrototype.Tests.TestSupport.Features.UiInput
     {
         private const string ControllerTypeName =
             "MahjongPrototype.UI.MahjongUiInputController, Assembly-CSharp";
-        private const string TmpInputFieldTypeName =
-            "TMPro.TMP_InputField, Unity.TextMeshPro";
-
         private readonly ReflectionTestAccess reflection;
         private readonly UnityObjectTestOwner owner;
         private readonly GameObject root;
@@ -350,9 +347,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.UiInput
                 Transform parent,
                 string name)
             {
-                GameObject gameObject = new GameObject(name);
-                gameObject.transform.SetParent(parent);
-                return gameObject.AddComponent(reflection.RequireType(TmpInputFieldTypeName));
+                return TmpInputFieldTestFactory.Create(reflection, parent, name);
             }
         }
     }

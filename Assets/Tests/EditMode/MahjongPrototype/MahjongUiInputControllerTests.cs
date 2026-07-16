@@ -128,6 +128,10 @@ namespace MahjongPrototype.Tests
                 driver.TargetTileText = "5m";
                 driver.SetTargetTileSelection(1, 2);
 
+                Assert.That(driver.TargetTileText, Is.EqualTo("5m"));
+                Assert.That(driver.TargetTileStringPosition, Is.EqualTo(1));
+                Assert.That(driver.TargetTileStringSelectPosition, Is.EqualTo(2));
+
                 driver.SetGameplayInputInteractable(false);
 
                 Assert.That(driver.TargetTileInputInteractable, Is.True);
@@ -522,6 +526,10 @@ namespace MahjongPrototype.Tests
                 driver.TargetTileText = "5m";
                 driver.SetTargetTileSelection(1, 2);
 
+                Assert.That(driver.TargetTileText, Is.EqualTo("5m"));
+                Assert.That(driver.TargetTileStringPosition, Is.EqualTo(1));
+                Assert.That(driver.TargetTileStringSelectPosition, Is.EqualTo(2));
+
                 driver.RefreshInteraction();
                 driver.BeginReachDiscardSelection();
                 driver.RefreshInteraction();
@@ -645,9 +653,6 @@ namespace MahjongPrototype.Tests
                 "MahjongPrototype.Services.ReachDiscardCandidate, Assembly-CSharp";
             private const string DiscardSourceTypeName =
                 "MahjongPrototype.Domain.DiscardSource, Assembly-CSharp";
-            private const string TmpInputFieldTypeName =
-                "TMPro.TMP_InputField, Unity.TextMeshPro";
-
             private readonly UnityObjectTestOwner owner;
             private readonly ReflectionTestAccess reflection;
             private readonly CollectionTestAccess collections;
@@ -998,7 +1003,7 @@ namespace MahjongPrototype.Tests
                 drawButton = CreateButton(inputObject.transform, "Draw");
                 forceDrawSkillButton = CreateButton(inputObject.transform, "ForceDrawSkill");
                 autoSortToggle = CreateToggle(inputObject.transform, "AutoSort");
-                targetTileInput = CreateInput(inputObject.transform, "TargetTile");
+                targetTileInput = CreateInput(reflection, inputObject.transform, "TargetTile");
 
                 reflection.SetPrivateField(controller, "drawButton", drawButton);
                 reflection.SetPrivateField(controller, "forceDrawSkillButton", forceDrawSkillButton);
@@ -1107,10 +1112,12 @@ namespace MahjongPrototype.Tests
                 return CreateChild(parent, name).AddComponent<Toggle>();
             }
 
-            private static Component CreateInput(Transform parent, string name)
+            private static Component CreateInput(
+                ReflectionTestAccess reflection,
+                Transform parent,
+                string name)
             {
-                return CreateChild(parent, name)
-                    .AddComponent(Type.GetType(TmpInputFieldTypeName, true));
+                return TmpInputFieldTestFactory.Create(reflection, parent, name);
             }
 
             private static GameObject CreateChild(Transform parent, string name)
