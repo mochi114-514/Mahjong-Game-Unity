@@ -203,6 +203,104 @@ namespace MahjongPrototype.Tests
                 Assert.That(driver.AutoSortEventCount, Is.EqualTo(0));
             }
         }
+
+        [Test]
+        public void ReactionResponseBindings_CaptureTheOriginalRequestIdentity_ForRonAndPass()
+        {
+            using (MahjongUiInputControllerTestDriver driver =
+                MahjongUiInputControllerTestDriver.Create("ReactionInputBindingTest"))
+            {
+                long actualRequestId = 0;
+                int actualWindowId = 0;
+                string actualKind = null;
+                int? actualChiOptionId = -1;
+                EventInfo eventInfo = driver.Controller.GetType().GetEvent(
+                    "ReactionResponseRequested");
+                Assert.That(eventInfo, Is.Not.Null);
+                eventInfo.AddEventHandler(
+                    driver.Controller,
+                    CreateReactionInputHandler(
+                        eventInfo.EventHandlerType,
+                        (requestId, windowId, kind, chiOptionId) =>
+                        {
+                            actualRequestId = requestId;
+                            actualWindowId = windowId;
+                            actualKind = kind;
+                            actualChiOptionId = chiOptionId;
+                        }));
+
+                driver.SubscribeAllRequestEvents();
+                driver.Reflection.Invoke(
+                    driver.Controller,
+                    "SetReactionResponseBindings",
+                    801L,
+                    41,
+                    true,
+                    false,
+                    false);
+                driver.EnableController();
+
+                driver.ClickWin();
+                Assert.That(actualRequestId, Is.EqualTo(801));
+                Assert.That(actualWindowId, Is.EqualTo(41));
+                Assert.That(actualKind, Is.EqualTo("Ron"));
+                Assert.That(actualChiOptionId, Is.Null);
+                Assert.That(driver.WinCount, Is.EqualTo(0));
+
+                driver.ClickDeclineWin();
+                Assert.That(actualRequestId, Is.EqualTo(801));
+                Assert.That(actualWindowId, Is.EqualTo(41));
+                Assert.That(actualKind, Is.EqualTo("Pass"));
+                Assert.That(actualChiOptionId, Is.Null);
+                Assert.That(driver.DeclineWinCount, Is.EqualTo(0));
+            }
+        }
+
+        private static Delegate CreateReactionInputHandler(
+            Type handlerType,
+            Action<long, int, string, int?> recorder)
+        {
+            ParameterInfo[] parameters = handlerType.GetMethod("Invoke").GetParameters();
+            ParameterExpression requestId = Expression.Parameter(
+                parameters[0].ParameterType,
+                "requestId");
+            ParameterExpression windowId = Expression.Parameter(
+                parameters[1].ParameterType,
+                "windowId");
+            ParameterExpression kind = Expression.Parameter(
+                parameters[2].ParameterType,
+                "kind");
+            ParameterExpression chiOptionId = Expression.Parameter(
+                parameters[3].ParameterType,
+                "chiOptionId");
+            MethodInfo record = typeof(MahjongUiInputControllerTests).GetMethod(
+                nameof(RecordReactionInput),
+                BindingFlags.Static | BindingFlags.NonPublic);
+            MethodCallExpression body = Expression.Call(
+                record,
+                Expression.Constant(recorder),
+                requestId,
+                windowId,
+                Expression.Convert(kind, typeof(object)),
+                chiOptionId);
+            return Expression.Lambda(
+                handlerType,
+                body,
+                requestId,
+                windowId,
+                kind,
+                chiOptionId).Compile();
+        }
+
+        private static void RecordReactionInput(
+            Action<long, int, string, int?> recorder,
+            long requestId,
+            int windowId,
+            object kind,
+            int? chiOptionId)
+        {
+            recorder(requestId, windowId, kind.ToString(), chiOptionId);
+        }
     }
 
     public sealed class MahjongMeldCallDecisionControllerTests
@@ -331,8 +429,184 @@ namespace MahjongPrototype.Tests
                 Assert.That(requestedKind, Is.EqualTo("Kan"));
                 Assert.That(requestedOptionId, Is.EqualTo(33));
 
+                // When ron shares a request with meld calls, the win panel
+                // owns Pass. The meld panel keeps the meld choices but must
+                // not expose a second pass button.
+                reflection.Invoke(
+                    controller,
+                    "SetReactionMeldCallDecision",
+                    true,
+                    false,
+                    options,
+                    calledTile,
+                    false);
+                Assert.That(decisionRoot.activeSelf, Is.True);
+                Assert.That(ponButton.gameObject.activeSelf, Is.True);
+                Assert.That(declineButton.gameObject.activeSelf, Is.False);
+
+                reflection.Invoke(
+                    controller,
+                    "SetReactionMeldCallDecision",
+                    true,
+                    false,
+                    options,
+                    calledTile,
+                    true);
+                Assert.That(declineButton.gameObject.activeSelf, Is.True);
+
                 reflection.Invoke(controller, "SetMeldCallDecision", false, null, null);
                 Assert.That(decisionRoot.activeSelf, Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void ReactionMeldButtons_EmitTheRequestIdentityThatCreatedThem()
+        {
+            ReflectionTestAccess reflection = new ReflectionTestAccess();
+            MahjongTestTypes types = new MahjongTestTypes(reflection);
+            MahjongTestDataFactory dataFactory = new MahjongTestDataFactory(reflection, types);
+            GameObject root = new GameObject("ReactionMeldCallDecisionIdentityTestRoot");
+            root.SetActive(false);
+            try
+            {
+                Component inputController = root.AddComponent(
+                    reflection.RequireType(InputControllerTypeName));
+                Component controller = root.AddComponent(
+                    reflection.RequireType(ControllerTypeName));
+                Type tmpTextType = reflection.RequireType(TmpTextTypeName);
+                GameObject decisionRoot = new GameObject(
+                    "MeldCallDecisionRoot",
+                    typeof(RectTransform));
+                decisionRoot.transform.SetParent(root.transform);
+                Button ponButton = CreateButton(
+                    reflection,
+                    tmpTextType,
+                    decisionRoot.transform,
+                    "PonButton",
+                    "ポン");
+                Button declineButton = CreateButton(
+                    reflection,
+                    tmpTextType,
+                    decisionRoot.transform,
+                    "DeclineButton",
+                    "パス");
+                reflection.SetPrivateField(controller, "ponDecisionRoot", decisionRoot);
+                reflection.SetPrivateField(controller, "ponButton", ponButton);
+                reflection.SetPrivateField(controller, "declineButton", declineButton);
+                reflection.SetPrivateField(controller, "inputController", inputController);
+
+                long actualRequestId = 0;
+                int actualWindowId = 0;
+                string actualKind = null;
+                int? actualChiOptionId = null;
+                EventInfo eventInfo = inputController.GetType().GetEvent(
+                    "ReactionResponseRequested");
+                Assert.That(eventInfo, Is.Not.Null);
+                eventInfo.AddEventHandler(
+                    inputController,
+                    CreateReactionResponseHandler(
+                        eventInfo.EventHandlerType,
+                        (requestId, windowId, kind, chiOptionId) =>
+                        {
+                            actualRequestId = requestId;
+                            actualWindowId = windowId;
+                            actualKind = kind;
+                            actualChiOptionId = chiOptionId;
+                        }));
+
+                object calledTile = dataFactory.CreateTile("5m");
+                IList options = CreateChiOptions(reflection, dataFactory, calledTile);
+                reflection.Invoke(
+                    controller,
+                    "SetReactionMeldCallDecision",
+                    901L,
+                    71,
+                    false,
+                    true,
+                    options,
+                    calledTile,
+                    true);
+
+                FindButton(decisionRoot.transform, "ChiOption_4").onClick.Invoke();
+                Assert.That(actualRequestId, Is.EqualTo(901));
+                Assert.That(actualWindowId, Is.EqualTo(71));
+                Assert.That(actualKind, Is.EqualTo("Chi"));
+                Assert.That(actualChiOptionId, Is.EqualTo(4));
+
+                FindButton(decisionRoot.transform, "Daiminkan").onClick.Invoke();
+                Assert.That(actualRequestId, Is.EqualTo(901));
+                Assert.That(actualWindowId, Is.EqualTo(71));
+                Assert.That(actualKind, Is.EqualTo("Daiminkan"));
+                Assert.That(actualChiOptionId, Is.Null);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void ClearReactionMeldCallDecision_RemovesDynamicButtonsAndRequestIdentity()
+        {
+            ReflectionTestAccess reflection = new ReflectionTestAccess();
+            MahjongTestTypes types = new MahjongTestTypes(reflection);
+            MahjongTestDataFactory dataFactory = new MahjongTestDataFactory(reflection, types);
+            GameObject root = new GameObject("ReactionMeldCallDecisionCleanupTestRoot");
+            root.SetActive(false);
+            try
+            {
+                Component inputController = root.AddComponent(
+                    reflection.RequireType(InputControllerTypeName));
+                Component controller = root.AddComponent(
+                    reflection.RequireType(ControllerTypeName));
+                Type tmpTextType = reflection.RequireType(TmpTextTypeName);
+                GameObject decisionRoot = new GameObject(
+                    "MeldCallDecisionRoot",
+                    typeof(RectTransform));
+                decisionRoot.transform.SetParent(root.transform);
+                Button ponButton = CreateButton(
+                    reflection,
+                    tmpTextType,
+                    decisionRoot.transform,
+                    "PonButton",
+                    "繝昴Φ");
+                Button declineButton = CreateButton(
+                    reflection,
+                    tmpTextType,
+                    decisionRoot.transform,
+                    "DeclineButton",
+                    "繝代せ");
+                reflection.SetPrivateField(controller, "ponDecisionRoot", decisionRoot);
+                reflection.SetPrivateField(controller, "ponButton", ponButton);
+                reflection.SetPrivateField(controller, "declineButton", declineButton);
+                reflection.SetPrivateField(controller, "inputController", inputController);
+
+                object calledTile = dataFactory.CreateTile("5m");
+                reflection.Invoke(
+                    controller,
+                    "SetReactionMeldCallDecision",
+                    901L,
+                    71,
+                    false,
+                    true,
+                    CreateChiOptions(reflection, dataFactory, calledTile),
+                    calledTile,
+                    true);
+                Assert.That(FindButton(decisionRoot.transform, "ChiOption_4"), Is.Not.Null);
+                Assert.That(FindButton(decisionRoot.transform, "Daiminkan"), Is.Not.Null);
+
+                reflection.Invoke(controller, "ClearReactionMeldCallDecision");
+
+                Assert.That(decisionRoot.activeSelf, Is.False);
+                Assert.That(FindButton(decisionRoot.transform, "ChiOption_4"), Is.Null);
+                Assert.That(FindButton(decisionRoot.transform, "Daiminkan"), Is.Null);
+                Assert.That(
+                    (bool)reflection.GetPrivateField(controller, "hasReactionRequest"),
+                    Is.False);
             }
             finally
             {
@@ -384,6 +658,52 @@ namespace MahjongPrototype.Tests
         private static void RecordMeldCall(Action<string, int> recorder, object kind, int optionId)
         {
             recorder(kind.ToString(), optionId);
+        }
+
+        private static Delegate CreateReactionResponseHandler(
+            Type handlerType,
+            Action<long, int, string, int?> recorder)
+        {
+            ParameterInfo[] parameters = handlerType.GetMethod("Invoke").GetParameters();
+            ParameterExpression requestId = Expression.Parameter(
+                parameters[0].ParameterType,
+                "requestId");
+            ParameterExpression windowId = Expression.Parameter(
+                parameters[1].ParameterType,
+                "windowId");
+            ParameterExpression kind = Expression.Parameter(
+                parameters[2].ParameterType,
+                "kind");
+            ParameterExpression chiOptionId = Expression.Parameter(
+                parameters[3].ParameterType,
+                "chiOptionId");
+            MethodInfo record = typeof(MahjongMeldCallDecisionControllerTests).GetMethod(
+                nameof(RecordReactionResponse),
+                BindingFlags.Static | BindingFlags.NonPublic);
+            MethodCallExpression body = Expression.Call(
+                record,
+                Expression.Constant(recorder),
+                requestId,
+                windowId,
+                Expression.Convert(kind, typeof(object)),
+                chiOptionId);
+            return Expression.Lambda(
+                handlerType,
+                body,
+                requestId,
+                windowId,
+                kind,
+                chiOptionId).Compile();
+        }
+
+        private static void RecordReactionResponse(
+            Action<long, int, string, int?> recorder,
+            long requestId,
+            int windowId,
+            object kind,
+            int? chiOptionId)
+        {
+            recorder(requestId, windowId, kind.ToString(), chiOptionId);
         }
 
         private static Button CreateButton(

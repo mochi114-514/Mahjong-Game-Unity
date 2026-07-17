@@ -2,6 +2,7 @@ using System;
 using MahjongPrototype.Domain;
 using TMPro;
 using UnityEngine;
+using UnityEngine.Events;
 using UnityEngine.UI;
 
 namespace MahjongPrototype.UI
@@ -48,6 +49,10 @@ namespace MahjongPrototype.UI
         private bool warnedMissingDeclineReachButton;
         private bool warnedMissingCancelReachButton;
         private bool warnedMissingRoundResultConfirmButton;
+        private UnityAction reactionWinAction;
+        private UnityAction reactionDeclineWinAction;
+        private UnityAction reactionPonAction;
+        private UnityAction reactionDeclinePonAction;
 
         public event Action DrawRequested;
         public event Action<string> ForceDrawSkillRequested;
@@ -59,6 +64,8 @@ namespace MahjongPrototype.UI
         public event Action DeclinePonRequested;
         public event Action<MeldCallKind, int> MeldCallRequested;
         public event Action DeclineMeldCallsRequested;
+        public event Action<long, int, ReactionWindowSeatAnswerKind, int?>
+            ReactionResponseRequested;
         public event Action<SelfKanKind, int, int> SelfKanRequested;
         public event Action DeclineSelfKanRequested;
         public event Action ReachRequested;
@@ -73,6 +80,7 @@ namespace MahjongPrototype.UI
 
         private void OnDisable()
         {
+            ClearReactionResponseBindings();
             UnregisterButtonListeners();
         }
 
@@ -266,22 +274,34 @@ namespace MahjongPrototype.UI
 
         private void HandleWinClicked()
         {
+            if (reactionWinAction != null)
+                return;
+
             WinRequested?.Invoke();
         }
 
         private void HandleDeclineWinClicked()
         {
+            if (reactionDeclineWinAction != null)
+                return;
+
             DeclineWinRequested?.Invoke();
         }
 
         private void HandlePonClicked()
         {
+            if (reactionPonAction != null)
+                return;
+
             PonRequested?.Invoke();
             RequestMeldCall(MeldCallKind.Pon, 0);
         }
 
         private void HandleDeclinePonClicked()
         {
+            if (reactionDeclinePonAction != null)
+                return;
+
             DeclinePonRequested?.Invoke();
             RequestDeclineMeldCalls();
         }
@@ -294,6 +314,93 @@ namespace MahjongPrototype.UI
         public void RequestDeclineMeldCalls()
         {
             DeclineMeldCallsRequested?.Invoke();
+        }
+
+        /// <summary>
+        /// Binds the static reaction buttons to one immutable request identity.
+        /// The lambdas deliberately capture the supplied ids so a delayed UI
+        /// callback from a closed window cannot be rewritten as a response to
+        /// a newer window.
+        /// </summary>
+        public void SetReactionResponseBindings(
+            long requestId,
+            int windowId,
+            bool showRon,
+            bool showPon,
+            bool showMeldPass)
+        {
+            ClearReactionResponseBindings();
+            if (requestId <= 0 || windowId <= 0)
+                return;
+
+            if (showRon && winButton != null)
+            {
+                reactionWinAction = () => RequestReactionResponse(
+                    requestId,
+                    windowId,
+                    ReactionWindowSeatAnswerKind.Ron,
+                    null);
+                winButton.onClick.AddListener(reactionWinAction);
+            }
+
+            if (showRon && declineWinButton != null)
+            {
+                reactionDeclineWinAction = () => RequestReactionResponse(
+                    requestId,
+                    windowId,
+                    ReactionWindowSeatAnswerKind.Pass,
+                    null);
+                declineWinButton.onClick.AddListener(reactionDeclineWinAction);
+            }
+            else if (showMeldPass && declinePonButton != null)
+            {
+                reactionDeclinePonAction = () => RequestReactionResponse(
+                    requestId,
+                    windowId,
+                    ReactionWindowSeatAnswerKind.Pass,
+                    null);
+                declinePonButton.onClick.AddListener(reactionDeclinePonAction);
+            }
+
+            if (showPon && ponButton != null)
+            {
+                reactionPonAction = () => RequestReactionResponse(
+                    requestId,
+                    windowId,
+                    ReactionWindowSeatAnswerKind.Pon,
+                    null);
+                ponButton.onClick.AddListener(reactionPonAction);
+            }
+        }
+
+        public void ClearReactionResponseBindings()
+        {
+            if (reactionWinAction != null && winButton != null)
+                winButton.onClick.RemoveListener(reactionWinAction);
+            if (reactionDeclineWinAction != null && declineWinButton != null)
+                declineWinButton.onClick.RemoveListener(reactionDeclineWinAction);
+            if (reactionPonAction != null && ponButton != null)
+                ponButton.onClick.RemoveListener(reactionPonAction);
+            if (reactionDeclinePonAction != null && declinePonButton != null)
+                declinePonButton.onClick.RemoveListener(reactionDeclinePonAction);
+
+            reactionWinAction = null;
+            reactionDeclineWinAction = null;
+            reactionPonAction = null;
+            reactionDeclinePonAction = null;
+        }
+
+        public void RequestReactionResponse(
+            long requestId,
+            int windowId,
+            ReactionWindowSeatAnswerKind kind,
+            int? chiOptionId = null)
+        {
+            ReactionResponseRequested?.Invoke(
+                requestId,
+                windowId,
+                kind,
+                chiOptionId);
         }
 
         public void RequestSelfKan(

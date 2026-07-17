@@ -22,9 +22,32 @@ namespace MahjongPrototype.UI
         private bool warnedMissingPonButton;
         private bool warnedMissingInputController;
         private UnityAction selfKanDeclineAction;
+        private bool hasReactionRequest;
+        private long reactionRequestId;
+        private int reactionWindowId;
+
+        private void OnDisable()
+        {
+            ClearReactionMeldCallDecision();
+        }
+
+        /// <summary>
+        /// Removes the provider-bound reaction controls. This is used when a
+        /// reaction window closes or its UI host is disabled, so dynamically
+        /// created chi/daiminkan buttons cannot outlive their request.
+        /// </summary>
+        public void ClearReactionMeldCallDecision()
+        {
+            ClearReactionRequest();
+            ClearDynamicMeldButtons();
+            ConfigureSelfKanDecline(false);
+            if (ponDecisionRoot != null)
+                ponDecisionRoot.SetActive(false);
+        }
 
         public void SetPonDecision(bool visible, Tile? calledTile)
         {
+            ClearReactionRequest();
             SetMeldCallDecision(visible, false, null, null, null, false, calledTile);
         }
 
@@ -33,6 +56,7 @@ namespace MahjongPrototype.UI
             IReadOnlyList<ChiOption> chiOptions,
             Tile? calledTile)
         {
+            ClearReactionRequest();
             SetMeldCallDecision(showPon, false, chiOptions, null, null, false, calledTile);
         }
 
@@ -44,6 +68,7 @@ namespace MahjongPrototype.UI
             IReadOnlyList<Tile> ankanCandidates,
             Tile? calledTile)
         {
+            ClearReactionRequest();
             SetMeldCallDecision(
                 showPon,
                 showDaiminkan,
@@ -54,7 +79,83 @@ namespace MahjongPrototype.UI
                 calledTile);
         }
 
+        /// <summary>
+        /// Displays the meld portion of one immutable reaction request.
+        /// The caller can keep the single pass action on the ron panel when
+        /// ron and meld choices are offered together.
+        /// </summary>
+        public void SetReactionMeldCallDecision(
+            bool showPon,
+            bool showDaiminkan,
+            IReadOnlyList<ChiOption> chiOptions,
+            Tile? calledTile,
+            bool showPass)
+        {
+            ClearReactionRequest();
+            SetReactionMeldCallDecision(
+                0,
+                0,
+                showPon,
+                showDaiminkan,
+                chiOptions,
+                calledTile,
+                showPass);
+        }
+
+        /// <summary>
+        /// Displays a reaction request whose dynamic buttons retain the
+        /// request/window identity that created them.
+        /// </summary>
+        public void SetReactionMeldCallDecision(
+            long requestId,
+            int windowId,
+            bool showPon,
+            bool showDaiminkan,
+            IReadOnlyList<ChiOption> chiOptions,
+            Tile? calledTile,
+            bool showPass)
+        {
+            hasReactionRequest = requestId > 0 && windowId > 0;
+            reactionRequestId = requestId;
+            reactionWindowId = windowId;
+            SetMeldCallDecisionCore(
+                showPon,
+                showDaiminkan,
+                chiOptions,
+                null,
+                null,
+                false,
+                calledTile);
+
+            if (declineButton == null)
+                return;
+
+            declineButton.gameObject.SetActive(showPass);
+            if (showPass)
+                SetButtonLabel(declineButton, "パス");
+        }
+
         public void SetMeldCallDecision(
+            bool showPon,
+            bool showDaiminkan,
+            IReadOnlyList<ChiOption> chiOptions,
+            IReadOnlyList<Tile> ankanCandidates,
+            IReadOnlyList<SelfKanCandidate> selfKanCandidates,
+            bool showSelfKanDecline,
+            Tile? calledTile)
+        {
+            ClearReactionRequest();
+            SetMeldCallDecisionCore(
+                showPon,
+                showDaiminkan,
+                chiOptions,
+                ankanCandidates,
+                selfKanCandidates,
+                showSelfKanDecline,
+                calledTile);
+        }
+
+        private void SetMeldCallDecisionCore(
             bool showPon,
             bool showDaiminkan,
             IReadOnlyList<ChiOption> chiOptions,
@@ -200,8 +301,25 @@ namespace MahjongPrototype.UI
             if (declineButton != null)
                 button.transform.SetSiblingIndex(declineButton.transform.GetSiblingIndex());
             button.onClick.RemoveAllListeners();
-            button.onClick.AddListener(
-                () => inputController.RequestMeldCall(kind, optionId));
+            if (hasReactionRequest &&
+                TryMapReactionAnswerKind(kind, out ReactionWindowSeatAnswerKind answerKind))
+            {
+                long requestId = reactionRequestId;
+                int windowId = reactionWindowId;
+                button.onClick.AddListener(
+                    () => inputController.RequestReactionResponse(
+                        requestId,
+                        windowId,
+                        answerKind,
+                        answerKind == ReactionWindowSeatAnswerKind.Chi
+                            ? optionId
+                            : (int?)null));
+            }
+            else
+            {
+                button.onClick.AddListener(
+                    () => inputController.RequestMeldCall(kind, optionId));
+            }
             button.gameObject.SetActive(true);
             SetButtonLabel(button, label);
             dynamicMeldButtons.Add(button);
@@ -260,6 +378,34 @@ namespace MahjongPrototype.UI
                 labels[i] = tiles[i].ToString();
 
             return string.Join(" ", labels);
+        }
+
+        private void ClearReactionRequest()
+        {
+            hasReactionRequest = false;
+            reactionRequestId = 0;
+            reactionWindowId = 0;
+        }
+
+        private static bool TryMapReactionAnswerKind(
+            MeldCallKind meldCallKind,
+            out ReactionWindowSeatAnswerKind answerKind)
+        {
+            switch (meldCallKind)
+            {
+                case MeldCallKind.Pon:
+                    answerKind = ReactionWindowSeatAnswerKind.Pon;
+                    return true;
+                case MeldCallKind.Chi:
+                    answerKind = ReactionWindowSeatAnswerKind.Chi;
+                    return true;
+                case MeldCallKind.Kan:
+                    answerKind = ReactionWindowSeatAnswerKind.Daiminkan;
+                    return true;
+                default:
+                    answerKind = default;
+                    return false;
+            }
         }
 
         private void WarnMissingOnce(ref bool warned, string message)

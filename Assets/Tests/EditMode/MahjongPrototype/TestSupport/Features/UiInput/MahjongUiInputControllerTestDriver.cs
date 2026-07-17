@@ -45,6 +45,8 @@ namespace MahjongPrototype.Tests.TestSupport.Features.UiInput
         public int CancelReachCount { get; private set; }
         public int RoundResultConfirmCount { get; private set; }
         public int AutoSortEventCount { get; private set; }
+        public ReflectionTestAccess Reflection => reflection;
+        public Component Controller => controller;
 
         public bool DrawInteractable => controls.DrawButton.interactable;
         public bool ForceDrawSkillInteractable => controls.ForceDrawSkillButton.interactable;

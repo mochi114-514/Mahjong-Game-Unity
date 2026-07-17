@@ -56,9 +56,9 @@ namespace MahjongPrototype.Services
                 winDecisionService.EvaluateRon(gameState, sourceDiscard);
             List<ReactionWindowCandidate> candidates =
                 new List<ReactionWindowCandidate>();
-            if (evaluation.RonCandidate.HasValue)
+            for (int i = 0; i < evaluation.RonCandidates.Count; i++)
             {
-                RonWinCandidate ronCandidate = evaluation.RonCandidate.Value;
+                RonWinCandidate ronCandidate = evaluation.RonCandidates[i];
                 candidates.Add(new ReactionWindowCandidate(
                     ronCandidate.Seat,
                     ReactionKind.Ron,
@@ -100,9 +100,9 @@ namespace MahjongPrototype.Services
                 true);
             List<ReactionWindowCandidate> candidates =
                 new List<ReactionWindowCandidate>();
-            if (evaluation.RonCandidate.HasValue)
+            for (int i = 0; i < evaluation.RonCandidates.Count; i++)
             {
-                RonWinCandidate ronCandidate = evaluation.RonCandidate.Value;
+                RonWinCandidate ronCandidate = evaluation.RonCandidates[i];
                 candidates.Add(new ReactionWindowCandidate(
                     ronCandidate.Seat,
                     ReactionKind.Ron,

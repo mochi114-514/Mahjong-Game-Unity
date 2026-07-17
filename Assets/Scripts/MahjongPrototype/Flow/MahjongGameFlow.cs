@@ -82,6 +82,17 @@ namespace MahjongPrototype
         private MatchRoster matchRoster;
         private DecisionProviderRegistry decisionProviderRegistry;
         private DecisionCoordinator decisionCoordinator;
+        private readonly ReactionWindowSeatAnswerResolver
+            reactionWindowSeatAnswerResolver = new ReactionWindowSeatAnswerResolver();
+        private readonly ReactionWindowSeatAnswerDeclarationService
+            reactionWindowSeatAnswerDeclarationService =
+                new ReactionWindowSeatAnswerDeclarationService();
+        private readonly Dictionary<long, PendingReactionDecision>
+            pendingReactionDecisionsByRequestId =
+                new Dictionary<long, PendingReactionDecision>();
+        private ReactionWindowSeatAnswerCollection reactionWindowSeatAnswers;
+        private ReactionWindow reactionWindowAwaitingRequestRetry;
+        private long nextReactionDecisionRequestId = 1;
         private MahjongViewContext viewContext = new MahjongViewContext(PlayerId.Player1);
 
         public MahjongGameState CurrentState => gameState;
@@ -94,6 +105,55 @@ namespace MahjongPrototype
         public bool IsWinDecisionPending => gameState != null && gameState.IsWinDecisionPending;
         public bool IsAutoSortEnabled => autoSortEnabled;
         public bool IsInteractionLocked => gameState != null && gameState.IsInteractionLocked;
+
+        /// <summary>
+        /// Returns the immutable reaction request currently waiting for the
+        /// given local player. This intentionally exposes no ReactionWindow or
+        /// ReactionWindowCandidate to the UI/provider layer.
+        /// </summary>
+        public bool TryGetPendingReactionDecisionRequest(
+            PlayerId playerId,
+            out DecisionRequest request)
+        {
+            request = null;
+            if (gameState == null || reactionWindowSeatAnswers == null ||
+                !ReferenceEquals(
+                    gameState.CurrentReactionWindow,
+                    reactionWindowSeatAnswers.ReactionWindow))
+            {
+                return false;
+            }
+
+            foreach (PendingReactionDecision pending in
+                     pendingReactionDecisionsByRequestId.Values)
+            {
+                if (pending.Request.PlayerId == playerId)
+                {
+                    request = pending.Request;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Gives the local UI its configured provider endpoint, so the UI can
+        /// submit an immutable response through the coordinator instead of
+        /// invoking a direct reaction declaration API.
+        /// </summary>
+        public bool TryGetLocalUiDecisionProvider(
+            PlayerId playerId,
+            out LocalUiDecisionProvider provider)
+        {
+            provider = null;
+            return decisionProviderRegistry != null &&
+                decisionProviderRegistry.TryResolve(
+                    playerId,
+                    out DecisionProviderRegistration registration) &&
+                registration.Provider is LocalUiDecisionProvider localProvider &&
+                (provider = localProvider) != null;
+        }
 
         private MahjongFlowEventPublisher EventPublisher =>
             eventPublisher ??= new MahjongFlowEventPublisher(() => eventNotifier, Warn);
@@ -184,19 +244,122 @@ namespace MahjongPrototype
                 return DecisionResponseResult.Rejected("DecisionResponseMissing");
             if (gameState == null)
                 return DecisionResponseResult.Rejected("GameStateMissing");
+            if (!System.Enum.IsDefined(typeof(SeatId), response.ActorSeat))
+                return DecisionResponseResult.Rejected("PlayerSeatMismatch");
 
             SeatSlot actorSlot = gameState.GetSeatSlot(response.ActorSeat);
             if (!actorSlot.HasPlayer || actorSlot.PlayerId != response.PlayerId)
                 return DecisionResponseResult.Rejected("PlayerSeatMismatch");
+
+            // A reaction is owned by the reaction window, not the active turn.
+            // It must therefore be handled before the normal current-turn
+            // identity checks used by existing decision kinds.
+            if (response.Kind == DecisionKind.Reaction)
+                return TryExecuteReactionDecisionResponse(response);
+
             if (gameState.CurrentTurn != response.ActorSeat)
                 return DecisionResponseResult.Rejected("NotCurrentTurn");
             if (gameState.TurnIndex != response.TurnIndex)
                 return DecisionResponseResult.Rejected("StaleTurnIndex");
 
-            // PROTOTYPE: Existing decisions keep their direct, atomic paths.
-            // Delayed declaration/commit handling will be moved here only when
-            // ReactionWindow gains multi-seat response support.
+            // PROTOTYPE: Non-reaction decisions keep their existing direct,
+            // atomic paths until their own coordinator migration.
             return DecisionResponseResult.Rejected("DecisionKindNotIntegrated");
+        }
+
+        private DecisionResponseResult TryExecuteReactionDecisionResponse(
+            DecisionResponse response)
+        {
+            if (!pendingReactionDecisionsByRequestId.TryGetValue(
+                    response.RequestId,
+                    out PendingReactionDecision pending))
+            {
+                return DecisionResponseResult.Rejected("ReactionDecisionRequestMissing");
+            }
+
+            DecisionRequest request = pending.Request;
+            if (!MatchesDecisionIdentity(request, response))
+                return DecisionResponseResult.Rejected("DecisionResponseIdentityMismatch");
+            if (!request.TryValidateResponsePayload(response, out string validationReason))
+                return DecisionResponseResult.Rejected(validationReason);
+
+            ReactionWindow reactionWindow = gameState.CurrentReactionWindow;
+            if (reactionWindowSeatAnswers == null || reactionWindow == null ||
+                !ReferenceEquals(reactionWindow, pending.ReactionWindow) ||
+                !ReferenceEquals(
+                    reactionWindow,
+                    reactionWindowSeatAnswers.ReactionWindow) ||
+                !reactionWindow.IsAcceptingAnswers ||
+                request.Reaction == null ||
+                request.Reaction.WindowId != reactionWindow.WindowId)
+            {
+                ClearReactionSeatAnswerState(pending.WindowId);
+                return DecisionResponseResult.Rejected("ReactionWindowStale");
+            }
+
+            ReactionDecisionResponse reaction = response.Reaction;
+            ReactionWindowSeatAnswer answer = new ReactionWindowSeatAnswer(
+                reaction.WindowId,
+                response.ActorSeat,
+                reaction.Kind,
+                reaction.ChiOptionId);
+            ReactionWindowSeatAnswerRegistrationResult registration =
+                reactionWindowSeatAnswers.TryRegister(answer);
+            if (!registration.Accepted)
+                return DecisionResponseResult.Rejected(registration.Reason);
+
+            pendingReactionDecisionsByRequestId.Remove(response.RequestId);
+            ReactionWindowCandidate answeredCandidate = null;
+            if (answer.Kind != ReactionWindowSeatAnswerKind.Pass)
+            {
+                reactionWindowSeatAnswers.TryGetDeclaredCandidate(
+                    answer,
+                    out answeredCandidate);
+            }
+
+            EventPublisher.NotifyReactionWindowAnswered(
+                ReactionWindowAnswerResult.AcceptedAnswer(
+                    reactionWindow.WindowId,
+                    answeredCandidate,
+                    ReactionWindowResolution.Pending(
+                        reactionWindow.WindowId,
+                        reactionWindow.Source)));
+
+            if (reactionWindowSeatAnswers.HasUnansweredSeats)
+                return DecisionResponseResult.Succeeded();
+
+            ReactionWindowSeatAnswerResolution answerResolution =
+                reactionWindowSeatAnswerResolver.Resolve(
+                    reactionWindowSeatAnswers,
+                    gameState.ActiveTurnSeats);
+            ReactionWindowSeatAnswerPreparationResult preparation =
+                reactionWindowSeatAnswerDeclarationService.Prepare(
+                    gameState,
+                    reactionWindowSeatAnswers,
+                    answerResolution);
+            if (!preparation.Prepared)
+            {
+                ScheduleReactionSeatAnswerRequestRetry(reactionWindow);
+                NotifyTurnBlocked("ReactionBlocked", preparation.Reason);
+                return DecisionResponseResult.Rejected(preparation.Reason);
+            }
+
+            ReactionWindowSeatAnswerCommitResult commit =
+                reactionWindowSeatAnswerDeclarationService.Commit(
+                    gameState,
+                    preparation.PreparedDeclaration);
+            if (!commit.Committed)
+            {
+                ScheduleReactionSeatAnswerRequestRetry(reactionWindow);
+                NotifyTurnBlocked("ReactionBlocked", commit.Reason);
+                return DecisionResponseResult.Rejected(commit.Reason);
+            }
+
+            ApplyDeclinedReactionRonFuriten(reactionWindowSeatAnswers);
+            if (!ResolveReactionWindow(commit.Resolution))
+                return DecisionResponseResult.Rejected("ReactionWindowResolutionFailed");
+
+            return DecisionResponseResult.Succeeded();
         }
 
         public FuritenEvaluationResultSet EvaluateAllFuriten()
@@ -247,11 +410,12 @@ namespace MahjongPrototype
             // Provider callbacks may be synchronous. Pumping only from the
             // authority update keeps them from re-entering authority logic.
             decisionCoordinator?.Pump();
+            TryResumeReactionSeatAnswerRequests();
         }
 
         private void OnDisable()
         {
-            decisionCoordinator?.CancelAll();
+            CancelPendingDecisions();
             CancelPendingAutoDiscardDrawnTile();
         }
 
@@ -288,14 +452,14 @@ namespace MahjongPrototype
 
         /// <summary>
         /// Replaces the match-lifetime configuration. It is intentionally only
-        /// consumed when starting a round; current decision handling remains on
-        /// the legacy paths during this migration phase.
+        /// consumed when starting a round; non-reaction decision handling
+        /// remains on the legacy paths during this migration phase.
         /// </summary>
         public void ConfigureMatch(
             MatchRoster roster,
             DecisionProviderRegistry providerRegistry)
         {
-            decisionCoordinator?.CancelAll();
+            CancelPendingDecisions();
             matchRoster = roster ?? throw new System.ArgumentNullException(nameof(roster));
             decisionProviderRegistry = providerRegistry ??
                 throw new System.ArgumentNullException(nameof(providerRegistry));
@@ -858,6 +1022,17 @@ namespace MahjongPrototype
         {
             if (!CanUseGameState())
                 return false;
+            if (IsReactionSeatAnswerPathActiveOrRetryScheduled() &&
+                !TryEnterLegacyReactionWindowPath(
+                    actorSeat,
+                    reactionWindowId,
+                    ReactionKind.Ron,
+                    true,
+                    out string legacyReason))
+            {
+                NotifyTurnBlocked("ReactionBlocked", legacyReason);
+                return false;
+            }
 
             EnsureReactionWindowService();
             ReactionWindowAnswerResult answer = reactionWindowService.DeclareRon(
@@ -877,6 +1052,17 @@ namespace MahjongPrototype
         {
             if (!CanUseGameState())
                 return false;
+            if (IsReactionSeatAnswerPathActiveOrRetryScheduled() &&
+                !TryEnterLegacyReactionWindowPath(
+                    actorSeat,
+                    reactionWindowId,
+                    ReactionKind.Ron,
+                    true,
+                    out string legacyReason))
+            {
+                NotifyTurnBlocked("ReactionBlocked", legacyReason);
+                return false;
+            }
 
             EnsureReactionWindowService();
             ReactionWindowAnswerResult answer = reactionWindowService.DeclineRon(
@@ -943,6 +1129,34 @@ namespace MahjongPrototype
         {
             if (!CanUseGameState())
                 return false;
+            if (IsReactionSeatAnswerPathActiveOrRetryScheduled())
+            {
+                if (!TryGetReactionKind(kind, out ReactionKind reactionKind))
+                {
+                    NotifyTurnBlocked("ReactionBlocked", "MeldCallKindUnsupported");
+                    return false;
+                }
+
+                if (!IsLegacyMeldCallAvailable(
+                        gameState.CurrentReactionWindow,
+                        actorSeat,
+                        reactionKind))
+                {
+                    NotifyTurnBlocked("ReactionBlocked", "MeldCallKindUnavailable");
+                    return false;
+                }
+
+                if (!TryEnterLegacyReactionWindowPath(
+                        actorSeat,
+                        reactionWindowId,
+                        reactionKind,
+                        false,
+                        out string legacyReason))
+                {
+                    NotifyTurnBlocked("ReactionBlocked", legacyReason);
+                    return false;
+                }
+            }
 
             EnsureReactionWindowService();
             ReactionWindowAnswerResult answer = reactionWindowService.DeclareCall(
@@ -1098,6 +1312,17 @@ namespace MahjongPrototype
         {
             if (!CanUseGameState())
                 return false;
+            if (IsReactionSeatAnswerPathActiveOrRetryScheduled() &&
+                !TryEnterLegacyReactionWindowPath(
+                    actorSeat,
+                    reactionWindowId,
+                    ReactionKind.Pon,
+                    true,
+                    out string legacyReason))
+            {
+                NotifyTurnBlocked("ReactionBlocked", legacyReason);
+                return false;
+            }
 
             EnsureReactionWindowService();
             ReactionWindowAnswerResult answer = reactionWindowService.DeclinePon(
@@ -1117,6 +1342,27 @@ namespace MahjongPrototype
         {
             if (!CanUseGameState())
                 return false;
+            if (IsReactionSeatAnswerPathActiveOrRetryScheduled())
+            {
+                if (!HasAnyLegacyMeldCallAvailable(
+                        gameState.CurrentReactionWindow,
+                        actorSeat))
+                {
+                    NotifyTurnBlocked("ReactionBlocked", "MeldCallKindUnavailable");
+                    return false;
+                }
+
+                if (!TryEnterLegacyReactionWindowPath(
+                    actorSeat,
+                    reactionWindowId,
+                    null,
+                    false,
+                    out string legacyReason))
+                {
+                    NotifyTurnBlocked("ReactionBlocked", legacyReason);
+                    return false;
+                }
+            }
 
             EnsureReactionWindowService();
             ReactionWindowAnswerResult answer = reactionWindowService.DeclineMeldCalls(
@@ -1320,6 +1566,15 @@ namespace MahjongPrototype
             cpuTurnController?.CancelPendingTurn();
             CancelPendingAutoDiscardDrawnTile();
 
+            if (!start.Resolution.IsResolved && start.ReactionWindow != null &&
+                !TryBeginReactionSeatAnswerRequests(
+                    start.ReactionWindow,
+                    out string reactionRequestReason))
+            {
+                NotifyTurnBlocked("ReactionBlocked", reactionRequestReason);
+                ScheduleReactionSeatAnswerRequestRetry(start.ReactionWindow);
+            }
+
             EventPublisher.NotifyTurnDebug(
                 "DiscardCompleted",
                 $"phase={gameState.TurnPhase}; discardTile={record.Tile}",
@@ -1362,6 +1617,14 @@ namespace MahjongPrototype
 
             cpuTurnController?.CancelPendingTurn();
             CancelPendingAutoDiscardDrawnTile();
+            if (!start.Resolution.IsResolved &&
+                !TryBeginReactionSeatAnswerRequests(
+                    start.ReactionWindow,
+                    out string reactionRequestReason))
+            {
+                NotifyKanBlocked(candidate.Seat, candidate.Tile, reactionRequestReason);
+                ScheduleReactionSeatAnswerRequestRetry(start.ReactionWindow);
+            }
             EventPublisher.NotifyTurnDebug(
                 "KakanDeclaredPending",
                 $"windowId={start.ReactionWindow.WindowId}; caller={candidate.Seat}; tile={candidate.Tile}; candidates={start.ReactionWindow.Candidates.Count}",
@@ -1416,6 +1679,10 @@ namespace MahjongPrototype
             {
                 return false;
             }
+
+            // A closing window must not leave provider callbacks or immutable
+            // request projections alive for delayed responses.
+            ClearReactionSeatAnswerState(resolution.WindowId);
 
             if (!gameState.CompleteReactionWindowResolution(resolution.WindowId))
                 return false;
@@ -2229,6 +2496,588 @@ namespace MahjongPrototype
             autoDiscardDrawnTileController = gameObject.AddComponent<AutoDiscardDrawnTileController>();
         }
 
+        private bool IsReactionSeatAnswerCollectionActive()
+        {
+            return gameState != null && reactionWindowSeatAnswers != null &&
+                gameState.IsReactionWindowPending &&
+                ReferenceEquals(
+                    gameState.CurrentReactionWindow,
+                    reactionWindowSeatAnswers.ReactionWindow);
+        }
+
+        private bool IsReactionSeatAnswerPathActiveOrRetryScheduled()
+        {
+            if (IsReactionSeatAnswerCollectionActive())
+                return true;
+
+            return gameState != null &&
+                reactionWindowAwaitingRequestRetry != null &&
+                gameState.IsReactionWindowPending &&
+                reactionWindowAwaitingRequestRetry.IsAcceptingAnswers &&
+                ReferenceEquals(
+                    gameState.CurrentReactionWindow,
+                    reactionWindowAwaitingRequestRetry);
+        }
+
+        /// <summary>
+        /// The direct declaration APIs remain a compatibility surface for the
+        /// existing serial ReactionWindow tests and integrations.  A normal
+        /// Local UI response never calls them; it uses the request-bound
+        /// provider path instead.  When a compatible direct call is made,
+        /// release the multi-seat provider requests before resuming the
+        /// established serial service path.
+        /// </summary>
+        private bool TryEnterLegacyReactionWindowPath(
+            SeatId actorSeat,
+            int reactionWindowId,
+            ReactionKind? expectedKind,
+            bool requireCurrentCandidate,
+            out string reason)
+        {
+            reason = string.Empty;
+            ReactionWindow reactionWindow = gameState != null
+                ? gameState.CurrentReactionWindow
+                : null;
+            if (!IsReactionSeatAnswerPathActiveOrRetryScheduled() ||
+                reactionWindow == null ||
+                reactionWindow.WindowId != reactionWindowId)
+            {
+                reason = "ReactionWindowStale";
+                return false;
+            }
+
+            if (expectedKind.HasValue)
+            {
+                ReactionWindowCandidate candidate = requireCurrentCandidate
+                    ? reactionWindow.PendingCandidate
+                    : FindPendingReactionCandidate(
+                        reactionWindow,
+                        actorSeat,
+                        expectedKind.Value);
+                if (candidate == null || candidate.Seat != actorSeat ||
+                    candidate.Kind != expectedKind.Value)
+                {
+                    reason = requireCurrentCandidate
+                        ? "ReactionKindMismatch"
+                        : "ReactionCandidateMissing";
+                    return false;
+                }
+            }
+            else if (!HasPendingMeldCandidate(reactionWindow, actorSeat))
+            {
+                reason = "MeldCallCandidateMissing";
+                return false;
+            }
+
+            if (reactionWindowSeatAnswers != null &&
+                ReferenceEquals(
+                    reactionWindowSeatAnswers.ReactionWindow,
+                    reactionWindow) &&
+                reactionWindowSeatAnswers.RegisteredAnswers.Count > 0)
+            {
+                reason = "ReactionSeatAnswersPending";
+                return false;
+            }
+
+            ClearReactionSeatAnswerState(reactionWindow.WindowId);
+            return true;
+        }
+
+        private static bool TryGetReactionKind(
+            MeldCallKind meldCallKind,
+            out ReactionKind reactionKind)
+        {
+            switch (meldCallKind)
+            {
+                case MeldCallKind.Pon:
+                    reactionKind = ReactionKind.Pon;
+                    return true;
+                case MeldCallKind.Chi:
+                    reactionKind = ReactionKind.Chi;
+                    return true;
+                case MeldCallKind.Kan:
+                    reactionKind = ReactionKind.Daiminkan;
+                    return true;
+                default:
+                    reactionKind = default;
+                    return false;
+            }
+        }
+
+        private static bool IsLegacyMeldCallAvailable(
+            ReactionWindow reactionWindow,
+            SeatId seat,
+            ReactionKind kind)
+        {
+            if (reactionWindow == null || !reactionWindow.IsAcceptingAnswers ||
+                reactionWindow.PendingRonCandidate != null)
+            {
+                return false;
+            }
+
+            bool hasAnyPon = HasPendingReactionCandidate(
+                reactionWindow,
+                null,
+                ReactionKind.Pon);
+            bool hasAnyDaiminkan = HasPendingReactionCandidate(
+                reactionWindow,
+                null,
+                ReactionKind.Daiminkan);
+            bool hasSeatPon = HasPendingReactionCandidate(
+                reactionWindow,
+                seat,
+                ReactionKind.Pon);
+            bool hasSeatDaiminkan = HasPendingReactionCandidate(
+                reactionWindow,
+                seat,
+                ReactionKind.Daiminkan);
+
+            switch (kind)
+            {
+                case ReactionKind.Pon:
+                    return hasSeatPon;
+                case ReactionKind.Daiminkan:
+                    return hasSeatDaiminkan;
+                case ReactionKind.Chi:
+                    return HasPendingReactionCandidate(
+                        reactionWindow,
+                        seat,
+                        ReactionKind.Chi) &&
+                        ((!hasAnyPon && !hasAnyDaiminkan) ||
+                         hasSeatPon || hasSeatDaiminkan);
+                default:
+                    return false;
+            }
+        }
+
+        private static bool HasAnyLegacyMeldCallAvailable(
+            ReactionWindow reactionWindow,
+            SeatId seat)
+        {
+            return IsLegacyMeldCallAvailable(
+                       reactionWindow,
+                       seat,
+                       ReactionKind.Pon) ||
+                IsLegacyMeldCallAvailable(
+                    reactionWindow,
+                    seat,
+                    ReactionKind.Daiminkan) ||
+                IsLegacyMeldCallAvailable(
+                    reactionWindow,
+                    seat,
+                    ReactionKind.Chi);
+        }
+
+        private static bool HasPendingMeldCandidate(
+            ReactionWindow reactionWindow,
+            SeatId seat)
+        {
+            return HasPendingReactionCandidate(
+                       reactionWindow,
+                       seat,
+                       ReactionKind.Pon) ||
+                HasPendingReactionCandidate(
+                    reactionWindow,
+                    seat,
+                    ReactionKind.Daiminkan) ||
+                HasPendingReactionCandidate(
+                    reactionWindow,
+                    seat,
+                    ReactionKind.Chi);
+        }
+
+        private static ReactionWindowCandidate FindPendingReactionCandidate(
+            ReactionWindow reactionWindow,
+            SeatId seat,
+            ReactionKind kind)
+        {
+            if (reactionWindow == null)
+                return null;
+
+            for (int i = 0; i < reactionWindow.Candidates.Count; i++)
+            {
+                ReactionWindowCandidate candidate = reactionWindow.Candidates[i];
+                if (candidate != null && candidate.IsPending &&
+                    candidate.Seat == seat && candidate.Kind == kind)
+                {
+                    return candidate;
+                }
+            }
+
+            return null;
+        }
+
+        private static bool HasPendingReactionCandidate(
+            ReactionWindow reactionWindow,
+            SeatId? seat,
+            ReactionKind kind)
+        {
+            if (reactionWindow == null)
+                return false;
+
+            for (int i = 0; i < reactionWindow.Candidates.Count; i++)
+            {
+                ReactionWindowCandidate candidate = reactionWindow.Candidates[i];
+                if (candidate != null && candidate.IsPending &&
+                    candidate.Kind == kind &&
+                    (!seat.HasValue || candidate.Seat == seat.Value))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private void ScheduleReactionSeatAnswerRequestRetry(
+            ReactionWindow reactionWindow)
+        {
+            if (reactionWindow == null)
+                return;
+
+            ClearReactionSeatAnswerState(reactionWindow.WindowId);
+            if (gameState != null && gameState.IsReactionWindowPending &&
+                ReferenceEquals(gameState.CurrentReactionWindow, reactionWindow) &&
+                reactionWindow.IsAcceptingAnswers)
+            {
+                reactionWindowAwaitingRequestRetry = reactionWindow;
+            }
+        }
+
+        private void TryResumeReactionSeatAnswerRequests()
+        {
+            ReactionWindow reactionWindow = reactionWindowAwaitingRequestRetry;
+            if (reactionWindow == null)
+                return;
+
+            if (gameState == null || !gameState.IsReactionWindowPending ||
+                !ReferenceEquals(gameState.CurrentReactionWindow, reactionWindow) ||
+                !reactionWindow.IsAcceptingAnswers)
+            {
+                reactionWindowAwaitingRequestRetry = null;
+                return;
+            }
+
+            reactionWindowAwaitingRequestRetry = null;
+            if (TryBeginReactionSeatAnswerRequests(
+                    reactionWindow,
+                    out _))
+            {
+                // The window itself is unchanged, but its provider-facing
+                // requests were rebuilt. Reuse the established notification
+                // so the existing local UI refreshes from the new immutable
+                // request identities.
+                EventPublisher.NotifyReactionWindowStarted(reactionWindow);
+                return;
+            }
+
+            reactionWindowAwaitingRequestRetry = reactionWindow;
+        }
+
+        private bool TryBeginReactionSeatAnswerRequests(
+            ReactionWindow reactionWindow,
+            out string reason)
+        {
+            reason = string.Empty;
+            if (gameState == null || reactionWindow == null ||
+                !gameState.IsReactionWindowPending ||
+                !ReferenceEquals(gameState.CurrentReactionWindow, reactionWindow) ||
+                !reactionWindow.IsAcceptingAnswers)
+            {
+                reason = "ReactionWindowMissing";
+                return false;
+            }
+
+            EnsureDecisionCoordinator();
+            if (decisionCoordinator == null)
+            {
+                reason = "DecisionCoordinatorMissing";
+                return false;
+            }
+
+            ClearReactionSeatAnswerState();
+            ReactionWindowSeatAnswerCollection answers;
+            try
+            {
+                answers = new ReactionWindowSeatAnswerCollection(reactionWindow);
+            }
+            catch (System.ArgumentException)
+            {
+                reason = "ReactionCandidateInvalid";
+                return false;
+            }
+            if (answers.TargetSeats.Count <= 0)
+            {
+                reason = "ReactionCandidateMissing";
+                return false;
+            }
+
+            reactionWindowSeatAnswers = answers;
+            for (int i = 0; i < answers.TargetSeats.Count; i++)
+            {
+                SeatId seat = answers.TargetSeats[i];
+                SeatSlot slot = gameState.GetSeatSlot(seat);
+                if (!slot.HasPlayer)
+                {
+                    reason = "ReactionPlayerMissing";
+                    ClearReactionSeatAnswerState(reactionWindow.WindowId);
+                    return false;
+                }
+
+                ReactionDecisionRequest reactionRequest;
+                try
+                {
+                    reactionRequest = CreateReactionDecisionRequest(
+                        reactionWindow,
+                        seat);
+                }
+                catch (System.ArgumentException)
+                {
+                    reason = "ReactionDecisionRequestInvalid";
+                    ClearReactionSeatAnswerState(reactionWindow.WindowId);
+                    return false;
+                }
+
+                DecisionRequest request = new DecisionRequest(
+                    AllocateReactionDecisionRequestId(),
+                    DecisionKind.Reaction,
+                    slot.PlayerId.Value,
+                    seat,
+                    reactionWindow.TurnIndex,
+                    reactionRequest);
+                pendingReactionDecisionsByRequestId.Add(
+                    request.RequestId,
+                    new PendingReactionDecision(request, reactionWindow));
+
+                DecisionResponseResult requestResult = decisionCoordinator.Request(request);
+                if (!requestResult.Accepted)
+                {
+                    pendingReactionDecisionsByRequestId.Remove(request.RequestId);
+                    reason = requestResult.Reason;
+                    ClearReactionSeatAnswerState(reactionWindow.WindowId);
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static ReactionDecisionRequest CreateReactionDecisionRequest(
+            ReactionWindow reactionWindow,
+            SeatId seat)
+        {
+            List<ReactionDecisionOption> options =
+                new List<ReactionDecisionOption>
+                {
+                    new ReactionDecisionOption(ReactionWindowSeatAnswerKind.Pass)
+                };
+
+            AddReactionDecisionOption(
+                options,
+                reactionWindow,
+                seat,
+                ReactionKind.Ron);
+            AddReactionDecisionOption(
+                options,
+                reactionWindow,
+                seat,
+                ReactionKind.Pon);
+            AddReactionDecisionOption(
+                options,
+                reactionWindow,
+                seat,
+                ReactionKind.Daiminkan);
+            AddReactionDecisionOption(
+                options,
+                reactionWindow,
+                seat,
+                ReactionKind.Chi);
+
+            return new ReactionDecisionRequest(
+                reactionWindow.WindowId,
+                reactionWindow.Source.Kind,
+                reactionWindow.Source.ActorSeat,
+                reactionWindow.Source.Tile,
+                reactionWindow.Source.TurnIndex,
+                options);
+        }
+
+        private static void AddReactionDecisionOption(
+            List<ReactionDecisionOption> options,
+            ReactionWindow reactionWindow,
+            SeatId seat,
+            ReactionKind kind)
+        {
+            if (kind == ReactionKind.Chi)
+            {
+                AddChiReactionDecisionOption(options, reactionWindow, seat);
+                return;
+            }
+
+            ReactionWindowCandidate candidate = null;
+            for (int i = 0; i < reactionWindow.Candidates.Count; i++)
+            {
+                ReactionWindowCandidate current = reactionWindow.Candidates[i];
+                if (current != null && current.Seat == seat &&
+                    current.Kind == kind && current.IsPending)
+                {
+                    candidate = current;
+                    break;
+                }
+            }
+
+            if (candidate == null)
+                return;
+
+            switch (kind)
+            {
+                case ReactionKind.Ron:
+                    options.Add(new ReactionDecisionOption(
+                        ReactionWindowSeatAnswerKind.Ron));
+                    break;
+                case ReactionKind.Pon:
+                    options.Add(new ReactionDecisionOption(
+                        ReactionWindowSeatAnswerKind.Pon));
+                    break;
+                case ReactionKind.Daiminkan:
+                    options.Add(new ReactionDecisionOption(
+                        ReactionWindowSeatAnswerKind.Daiminkan));
+                    break;
+            }
+        }
+
+        private static void AddChiReactionDecisionOption(
+            List<ReactionDecisionOption> options,
+            ReactionWindow reactionWindow,
+            SeatId seat)
+        {
+            Dictionary<int, ReactionDecisionChiOption> optionsById =
+                new Dictionary<int, ReactionDecisionChiOption>();
+            for (int i = 0; i < reactionWindow.Candidates.Count; i++)
+            {
+                ReactionWindowCandidate candidate = reactionWindow.Candidates[i];
+                if (candidate == null || candidate.Seat != seat ||
+                    candidate.Kind != ReactionKind.Chi || !candidate.IsPending ||
+                    candidate.ChiDetail == null)
+                {
+                    continue;
+                }
+
+                for (int optionIndex = 0;
+                     optionIndex < candidate.ChiDetail.Options.Count;
+                     optionIndex++)
+                {
+                    ChiOption chiOption = candidate.ChiDetail.Options[optionIndex];
+                    if (chiOption == null)
+                        continue;
+
+                    if (optionsById.ContainsKey(chiOption.OptionId))
+                    {
+                        throw new System.ArgumentException(
+                            "Reaction window chi option ids must be unique per seat.",
+                            nameof(reactionWindow));
+                    }
+
+                    optionsById.Add(
+                        chiOption.OptionId,
+                        new ReactionDecisionChiOption(
+                            chiOption.OptionId,
+                            chiOption.HandTiles,
+                            chiOption.MeldTiles));
+                }
+            }
+
+            if (optionsById.Count <= 0)
+                return;
+
+            List<ReactionDecisionChiOption> chiOptions =
+                new List<ReactionDecisionChiOption>(optionsById.Values);
+            chiOptions.Sort((left, right) =>
+                left.OptionId.CompareTo(right.OptionId));
+            options.Add(new ReactionDecisionOption(
+                ReactionWindowSeatAnswerKind.Chi,
+                chiOptions));
+        }
+
+        private long AllocateReactionDecisionRequestId()
+        {
+            long requestId = nextReactionDecisionRequestId;
+            nextReactionDecisionRequestId =
+                nextReactionDecisionRequestId == long.MaxValue
+                    ? 1
+                    : nextReactionDecisionRequestId + 1;
+            return requestId;
+        }
+
+        private void ApplyDeclinedReactionRonFuriten(
+            ReactionWindowSeatAnswerCollection answers)
+        {
+            if (answers == null || winDecisionService == null)
+                return;
+
+            ReactionWindow reactionWindow = answers.ReactionWindow;
+            for (int i = 0; i < reactionWindow.Candidates.Count; i++)
+            {
+                ReactionWindowCandidate candidate = reactionWindow.Candidates[i];
+                if (candidate == null || candidate.Kind != ReactionKind.Ron ||
+                    !answers.TryGetRegisteredAnswer(
+                        candidate.Seat,
+                        out ReactionWindowSeatAnswer answer) ||
+                    answer.Kind == ReactionWindowSeatAnswerKind.Ron)
+                {
+                    continue;
+                }
+
+                winDecisionService.MarkDeclinedRonFuriten(
+                    gameState,
+                    candidate.Seat);
+            }
+        }
+
+        private void ClearReactionSeatAnswerState(int? windowId = null)
+        {
+            List<long> requestIdsToClear = new List<long>();
+            foreach (KeyValuePair<long, PendingReactionDecision> pair in
+                     pendingReactionDecisionsByRequestId)
+            {
+                if (!windowId.HasValue || pair.Value.WindowId == windowId.Value)
+                    requestIdsToClear.Add(pair.Key);
+            }
+
+            for (int i = 0; i < requestIdsToClear.Count; i++)
+            {
+                long requestId = requestIdsToClear[i];
+                decisionCoordinator?.Cancel(requestId);
+                pendingReactionDecisionsByRequestId.Remove(requestId);
+            }
+
+            if (!windowId.HasValue ||
+                (reactionWindowSeatAnswers != null &&
+                    reactionWindowSeatAnswers.WindowId == windowId.Value))
+            {
+                reactionWindowSeatAnswers = null;
+            }
+
+            if (!windowId.HasValue ||
+                (reactionWindowAwaitingRequestRetry != null &&
+                    reactionWindowAwaitingRequestRetry.WindowId == windowId.Value))
+            {
+                reactionWindowAwaitingRequestRetry = null;
+            }
+        }
+
+        private static bool MatchesDecisionIdentity(
+            DecisionRequest request,
+            DecisionResponse response)
+        {
+            return request != null && response != null &&
+                request.RequestId == response.RequestId &&
+                request.Kind == response.Kind &&
+                request.PlayerId == response.PlayerId &&
+                request.ActorSeat == response.ActorSeat &&
+                request.TurnIndex == response.TurnIndex;
+        }
+
         private void EnsureDecisionCoordinator()
         {
             EnsureMatchConfiguration();
@@ -2240,6 +3089,25 @@ namespace MahjongPrototype
         private void CancelPendingDecisions()
         {
             decisionCoordinator?.CancelAll();
+            ClearReactionSeatAnswerState();
+        }
+
+        private readonly struct PendingReactionDecision
+        {
+            public PendingReactionDecision(
+                DecisionRequest request,
+                ReactionWindow reactionWindow)
+            {
+                Request = request ?? throw new System.ArgumentNullException(nameof(request));
+                ReactionWindow = reactionWindow ??
+                    throw new System.ArgumentNullException(nameof(reactionWindow));
+            }
+
+            public DecisionRequest Request { get; }
+            public ReactionWindow ReactionWindow { get; }
+            public int WindowId => Request.Reaction != null
+                ? Request.Reaction.WindowId
+                : 0;
         }
 
         private void EnsureMatchConfiguration()

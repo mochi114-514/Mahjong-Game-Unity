@@ -73,8 +73,6 @@ namespace MahjongPrototype.UI
         private bool warnedMissingLogPreviewController;
         private bool warnedMissingZeroHanTenpaiController;
         private bool warnedMissingFuritenController;
-        private readonly MeldCallService meldCallService = new MeldCallService();
-
         private void Reset()
         {
             CacheReferences();
@@ -124,6 +122,8 @@ namespace MahjongPrototype.UI
         private void OnDisable()
         {
             UnsubscribeNotifications();
+            inputController?.ClearReactionResponseBindings();
+            ponDecisionController?.ClearReactionMeldCallDecision();
         }
 
         public void Refresh(MahjongGameState state)
@@ -135,6 +135,7 @@ namespace MahjongPrototype.UI
         {
             if (state == null)
             {
+                inputController?.ClearReactionResponseBindings();
                 ClearRoundResultUi();
                 RefreshTableCenterUi(null);
                 RefreshPonDecision(null);
@@ -169,6 +170,7 @@ namespace MahjongPrototype.UI
             if (gameFlow == null)
             {
                 WarnMissingOnce(ref warnedMissingFlow, "MahjongGameFlow is not assigned.");
+                inputController?.ClearReactionResponseBindings();
                 ClearRoundResultUi();
                 RefreshPonDecision(null);
                 ClearZeroHanTenpaiUi();
@@ -467,7 +469,6 @@ namespace MahjongPrototype.UI
         private void HandleReactionWindowAnswered(ReactionWindowAnswerResult _)
         {
             RefreshGlobalStatus();
-            RefreshPonDecisionUi();
             RefreshWinDecisionUi();
             RefreshPonDecisionUi();
             RefreshInteractionUi();
@@ -758,17 +759,41 @@ namespace MahjongPrototype.UI
             if (winDecisionController == null)
                 EnsureWinDecisionController();
 
-            if (winDecisionController != null)
+            if (winDecisionController == null)
             {
-                bool showSelfWinDecision =
-                    state != null &&
-                    state.IsWinDecisionPending &&
-                    IsSelfSeat(state.WinDecisionSeat);
-                WinType? winType = showSelfWinDecision
-                    ? state.WinDecisionType
-                    : null;
-                winDecisionController.SetWinDecision(showSelfWinDecision, winType);
+                inputController?.ClearReactionResponseBindings();
+                return;
             }
+
+            if (TryGetSelfReactionDecisionRequest(state, out DecisionRequest request))
+            {
+                ReactionDecisionRequest reaction = request.Reaction;
+                bool showRon = reaction.Allows(ReactionWindowSeatAnswerKind.Ron);
+                inputController?.SetReactionResponseBindings(
+                    request.RequestId,
+                    reaction.WindowId,
+                    showRon,
+                    reaction.Allows(ReactionWindowSeatAnswerKind.Pon),
+                    !showRon &&
+                    (reaction.Allows(ReactionWindowSeatAnswerKind.Pon) ||
+                     reaction.Allows(ReactionWindowSeatAnswerKind.Daiminkan) ||
+                     reaction.Allows(ReactionWindowSeatAnswerKind.Chi)));
+                winDecisionController.SetWinDecision(
+                    showRon,
+                    showRon ? WinType.Ron : null);
+                return;
+            }
+
+            inputController?.ClearReactionResponseBindings();
+
+            bool showSelfWinDecision =
+                state != null &&
+                state.IsWinDecisionPending &&
+                IsSelfSeat(state.WinDecisionSeat);
+            WinType? winType = showSelfWinDecision
+                ? state.WinDecisionType
+                : null;
+            winDecisionController.SetWinDecision(showSelfWinDecision, winType);
         }
 
         private void RefreshWinDecisionUi()
@@ -776,6 +801,8 @@ namespace MahjongPrototype.UI
             MahjongGameState state = gameFlow != null ? gameFlow.CurrentState : null;
             if (state != null)
                 RefreshWinDecision(state);
+            else
+                inputController?.ClearReactionResponseBindings();
         }
 
         private void RefreshPonDecision(MahjongGameState state)
@@ -786,9 +813,6 @@ namespace MahjongPrototype.UI
             if (ponDecisionController == null)
                 return;
 
-            ReactionWindow reactionWindow = state != null
-                ? state.CurrentReactionWindow
-                : null;
             if (state == null)
             {
                 ponDecisionController.SetMeldCallDecision(
@@ -803,78 +827,94 @@ namespace MahjongPrototype.UI
             }
 
             if (!TryGetSelfSeat(state, out SeatId selfSeat))
-                return;
-
-            if (reactionWindow == null)
             {
-                IReadOnlyList<SelfKanCandidate> selfKanCandidates = gameFlow != null
-                    ? gameFlow.GetSelfKanCandidatesForSeat(selfSeat)
-                    : null;
                 ponDecisionController.SetMeldCallDecision(
                     false,
                     false,
                     null,
                     null,
-                    selfKanCandidates,
-                    state.IsSelfKanDecisionPending &&
-                    state.CurrentSelfKanDecision != null &&
-                    state.CurrentSelfKanDecision.Seat == selfSeat,
+                    null,
+                    false,
                     null);
                 return;
             }
 
-            IReadOnlyList<MeldCallKind> availableKinds =
-                meldCallService.GetAvailableKinds(reactionWindow, selfSeat);
-            bool showPon = ContainsMeldCallKind(availableKinds, MeldCallKind.Pon);
-            bool showDaiminkan = ContainsMeldCallKind(
-                availableKinds,
-                MeldCallKind.Kan);
-            IReadOnlyList<ChiOption> chiOptions = ContainsMeldCallKind(
-                    availableKinds,
-                    MeldCallKind.Chi)
-                ? FindSelfChiOptions(reactionWindow, selfSeat)
+            if (TryGetSelfReactionDecisionRequest(state, out DecisionRequest request))
+            {
+                ReactionDecisionRequest reaction = request.Reaction;
+                bool showRon = reaction.Allows(ReactionWindowSeatAnswerKind.Ron);
+                bool showPon = reaction.Allows(ReactionWindowSeatAnswerKind.Pon);
+                bool showDaiminkan = reaction.Allows(
+                    ReactionWindowSeatAnswerKind.Daiminkan);
+                IReadOnlyList<ChiOption> chiOptions = CreateReactionChiOptions(reaction);
+                ponDecisionController.SetReactionMeldCallDecision(
+                    request.RequestId,
+                    reaction.WindowId,
+                    showPon,
+                    showDaiminkan,
+                    chiOptions,
+                    reaction.SourceTile,
+                    !showRon);
+                return;
+            }
+
+            // The normal local UI must not derive reaction choices from a
+            // mutable window. If a request is no longer pending, hide the
+            // reaction controls until the existing lifecycle closes it.
+            if (state.IsReactionWindowPending)
+            {
+                ponDecisionController.SetMeldCallDecision(
+                    false,
+                    false,
+                    null,
+                    null,
+                    null,
+                    false,
+                    null);
+                return;
+            }
+
+            IReadOnlyList<SelfKanCandidate> selfKanCandidates = gameFlow != null
+                ? gameFlow.GetSelfKanCandidatesForSeat(selfSeat)
                 : null;
             ponDecisionController.SetMeldCallDecision(
-                showPon,
-                showDaiminkan,
-                chiOptions,
-                null,
-                null,
                 false,
-                reactionWindow.Source.Tile);
+                false,
+                null,
+                null,
+                selfKanCandidates,
+                state.IsSelfKanDecisionPending &&
+                state.CurrentSelfKanDecision != null &&
+                state.CurrentSelfKanDecision.Seat == selfSeat,
+                null);
         }
 
-        private static bool ContainsMeldCallKind(
-            IReadOnlyList<MeldCallKind> kinds,
-            MeldCallKind expectedKind)
+        private static IReadOnlyList<ChiOption> CreateReactionChiOptions(
+            ReactionDecisionRequest reaction)
         {
-            if (kinds == null)
-                return false;
-
-            for (int i = 0; i < kinds.Count; i++)
+            if (reaction == null ||
+                !reaction.Allows(ReactionWindowSeatAnswerKind.Chi))
             {
-                if (kinds[i] == expectedKind)
-                    return true;
+                return null;
             }
 
-            return false;
-        }
-
-        private static IReadOnlyList<ChiOption> FindSelfChiOptions(
-            ReactionWindow reactionWindow,
-            SeatId selfSeat)
-        {
-            for (int i = 0; i < reactionWindow.Candidates.Count; i++)
+            IReadOnlyList<ReactionDecisionChiOption> sourceOptions =
+                reaction.GetChiOptions();
+            List<ChiOption> options = new List<ChiOption>(sourceOptions.Count);
+            for (int i = 0; i < sourceOptions.Count; i++)
             {
-                ReactionWindowCandidate candidate = reactionWindow.Candidates[i];
-                if (candidate.Seat == selfSeat && candidate.Kind == ReactionKind.Chi &&
-                    candidate.IsPending && candidate.ChiDetail != null)
-                {
-                    return candidate.ChiDetail.Options;
-                }
+                ReactionDecisionChiOption option = sourceOptions[i];
+                if (option == null)
+                    continue;
+
+                options.Add(new ChiOption(
+                    option.OptionId,
+                    reaction.SourceTile,
+                    option.HandTiles,
+                    option.MeldTiles));
             }
 
-            return null;
+            return options;
         }
 
         private void RefreshPonDecisionUi()
@@ -1027,6 +1067,27 @@ namespace MahjongPrototype.UI
                 gameFlow != null &&
                 gameFlow.ViewContext != null &&
                 gameFlow.ViewContext.TryGetSelfSeat(state, out selfSeat);
+        }
+
+        private bool TryGetSelfReactionDecisionRequest(
+            MahjongGameState state,
+            out DecisionRequest request)
+        {
+            request = null;
+            if (state == null || gameFlow == null || gameFlow.ViewContext == null ||
+                !TryGetSelfSeat(state, out SeatId selfSeat) ||
+                !gameFlow.TryGetPendingReactionDecisionRequest(
+                    gameFlow.ViewContext.LocalPlayerId,
+                    out DecisionRequest pending) ||
+                pending.Kind != DecisionKind.Reaction || pending.Reaction == null ||
+                pending.PlayerId != gameFlow.ViewContext.LocalPlayerId ||
+                pending.ActorSeat != selfSeat)
+            {
+                return false;
+            }
+
+            request = pending;
+            return true;
         }
 
         private void ApplyReachDiscardCandidateInteractable(MahjongGameState state)

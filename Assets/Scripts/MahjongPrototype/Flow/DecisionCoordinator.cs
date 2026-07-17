@@ -60,6 +60,12 @@ namespace MahjongPrototype
                 return DecisionResponseResult.Rejected("DecisionRequestMissingOrCancelled");
             if (!Matches(pending.Request, response))
                 return DecisionResponseResult.Rejected("DecisionResponseIdentityMismatch");
+            // Validate the immutable provider-facing payload before removing
+            // the pending callback. This lets a Local UI correct an invalid
+            // reaction choice and submit again without changing authority
+            // state.
+            if (!pending.Request.TryValidateResponsePayload(response, out string reason))
+                return DecisionResponseResult.Rejected(reason);
 
             pendingById.Remove(response.RequestId);
             queuedResponses.Enqueue(response);

@@ -138,9 +138,11 @@ namespace MahjongPrototype.Services
 
             FuritenEvaluationResultSet furitenResults = furitenEvaluator.EvaluateAll(gameState);
             List<WinCheckNotification> notifications = new List<WinCheckNotification>();
-            RonWinCandidate? candidate = null;
+            List<RonWinCandidate> candidates = new List<RonWinCandidate>();
 
-            // PROTOTYPE: only local participants currently receive the single ron decision.
+            // PROTOTYPE: CPU response collection remains outside the reaction
+            // decision path. Every eligible Local UI seat is still evaluated
+            // so the authority can collect simultaneous seat responses.
             for (int i = 0; i < gameState.SeatSlots.Count; i++)
             {
                 SeatSlot slot = gameState.SeatSlots[i];
@@ -180,11 +182,13 @@ namespace MahjongPrototype.Services
                 if (!canDeclareWin)
                     continue;
 
-                candidate = new RonWinCandidate(slot.Wind, evaluationResult);
-                break;
+                candidates.Add(new RonWinCandidate(slot.Wind, evaluationResult));
             }
 
-            return new WinDecisionEvaluation(notifications, candidate.HasValue, candidate);
+            return new WinDecisionEvaluation(
+                notifications,
+                candidates.Count > 0,
+                candidates);
         }
 
         public WinDecisionDeclineResult Decline(MahjongGameState gameState)
@@ -356,19 +360,42 @@ namespace MahjongPrototype.Services
     public readonly struct WinDecisionEvaluation
     {
         public static WinDecisionEvaluation None => new WinDecisionEvaluation(
-            Array.Empty<WinCheckNotification>(), false, null);
+            Array.Empty<WinCheckNotification>(),
+            false,
+            Array.Empty<RonWinCandidate>());
         public WinDecisionEvaluation(
             IReadOnlyList<WinCheckNotification> notifications,
             bool decisionStarted,
             RonWinCandidate? ronCandidate = null)
+            : this(
+                notifications,
+                decisionStarted,
+                ronCandidate.HasValue
+                    ? new[] { ronCandidate.Value }
+                    : Array.Empty<RonWinCandidate>())
+        {
+        }
+
+        public WinDecisionEvaluation(
+            IReadOnlyList<WinCheckNotification> notifications,
+            bool decisionStarted,
+            IReadOnlyList<RonWinCandidate> ronCandidates)
         {
             Notifications = notifications ?? Array.Empty<WinCheckNotification>();
             DecisionStarted = decisionStarted;
-            RonCandidate = ronCandidate;
+            List<RonWinCandidate> copiedCandidates = ronCandidates != null
+                ? new List<RonWinCandidate>(ronCandidates)
+                : new List<RonWinCandidate>();
+            RonCandidates = copiedCandidates.AsReadOnly();
+            // Compatibility projection for existing serial reaction callers.
+            RonCandidate = RonCandidates.Count > 0
+                ? RonCandidates[0]
+                : (RonWinCandidate?)null;
         }
         public IReadOnlyList<WinCheckNotification> Notifications { get; }
         public bool DecisionStarted { get; }
         public RonWinCandidate? RonCandidate { get; }
+        public IReadOnlyList<RonWinCandidate> RonCandidates { get; }
     }
 
     public readonly struct RonWinCandidate

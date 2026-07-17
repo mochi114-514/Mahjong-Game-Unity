@@ -99,6 +99,7 @@ namespace MahjongPrototype.UI
             inputController.DeclineWinRequested += HandleDeclineWinRequested;
             inputController.MeldCallRequested += HandleMeldCallRequested;
             inputController.DeclineMeldCallsRequested += HandleDeclineMeldCallsRequested;
+            inputController.ReactionResponseRequested += HandleReactionResponseRequested;
             inputController.SelfKanRequested += HandleSelfKanRequested;
             inputController.DeclineSelfKanRequested += HandleDeclineSelfKanRequested;
             inputController.ReachRequested += HandleReachRequested;
@@ -121,6 +122,7 @@ namespace MahjongPrototype.UI
             subscribedInputController.DeclineWinRequested -= HandleDeclineWinRequested;
             subscribedInputController.MeldCallRequested -= HandleMeldCallRequested;
             subscribedInputController.DeclineMeldCallsRequested -= HandleDeclineMeldCallsRequested;
+            subscribedInputController.ReactionResponseRequested -= HandleReactionResponseRequested;
             subscribedInputController.SelfKanRequested -= HandleSelfKanRequested;
             subscribedInputController.DeclineSelfKanRequested -= HandleDeclineSelfKanRequested;
             subscribedInputController.ReachRequested -= HandleReachRequested;
@@ -196,14 +198,11 @@ namespace MahjongPrototype.UI
                 return;
 
             MahjongGameState state = gameFlow.CurrentState;
-            if (state != null && state.IsReactionWindowPending &&
-                TryGetLocalActor(state, out _, out SeatId reactionSeat))
-            {
-                // Ron is still committed through the existing atomic reaction
-                // path until multi-seat decision responses are introduced.
-                gameFlow.TryRequestDeclareWinForSeat(reactionSeat);
+            // Bound ReactionResponseRequested callbacks carry the original
+            // request identity. Generic win input must never synthesize a
+            // response for whichever window happens to be current now.
+            if (state != null && state.IsReactionWindowPending)
                 return;
-            }
 
             TryExecuteLocalTurnCommand(MahjongAuthorityCommandKind.DeclareWin);
         }
@@ -211,6 +210,10 @@ namespace MahjongPrototype.UI
         private void HandleDeclineWinRequested()
         {
             if (!TryGetGameFlow("Cannot decline win because MahjongGameFlow is not assigned."))
+                return;
+
+            MahjongGameState state = gameFlow.CurrentState;
+            if (state != null && state.IsReactionWindowPending)
                 return;
 
             gameFlow.RequestDeclineWin();
@@ -222,23 +225,14 @@ namespace MahjongPrototype.UI
                 return;
 
             MahjongGameState state = gameFlow.CurrentState;
-            ReactionWindow reactionWindow = state != null ? state.CurrentReactionWindow : null;
+            if (state != null && state.IsReactionWindowPending)
+                return;
+
             if (state == null || !TryGetLocalActor(state, out _, out SeatId actorSeat))
                 return;
 
-            if (reactionWindow == null)
-            {
-                if (kind == MeldCallKind.Kan)
-                    gameFlow.TryRequestDeclareAnkanForSeat(actorSeat, optionId);
-
-                return;
-            }
-
-            gameFlow.TryRequestDeclareMeldCallForSeat(
-                actorSeat,
-                reactionWindow.WindowId,
-                kind,
-                optionId);
+            if (kind == MeldCallKind.Kan)
+                gameFlow.TryRequestDeclareAnkanForSeat(actorSeat, optionId);
         }
 
         private void HandleDeclineMeldCallsRequested()
@@ -247,14 +241,26 @@ namespace MahjongPrototype.UI
                 return;
 
             MahjongGameState state = gameFlow.CurrentState;
-            ReactionWindow reactionWindow = state != null ? state.CurrentReactionWindow : null;
-            if (state == null || reactionWindow == null ||
-                !TryGetLocalActor(state, out _, out SeatId actorSeat))
+            // A reaction pass is emitted only by an identity-bound request
+            // callback; it must not fall through to the legacy direct path.
+            if (state != null && state.IsReactionWindowPending)
+                return;
+        }
+
+        private void HandleReactionResponseRequested(
+            long requestId,
+            int windowId,
+            ReactionWindowSeatAnswerKind kind,
+            int? chiOptionId)
+        {
+            if (!TryGetGameFlow("Cannot submit reaction response because MahjongGameFlow is not assigned."))
                 return;
 
-            gameFlow.TryRequestDeclineMeldCallsForSeat(
-                actorSeat,
-                reactionWindow.WindowId);
+            TrySubmitBoundReactionResponse(
+                requestId,
+                windowId,
+                kind,
+                chiOptionId);
         }
 
         private void HandleSelfKanRequested(
@@ -355,6 +361,44 @@ namespace MahjongPrototype.UI
                 seat,
                 state.TurnIndex,
                 handIndex)).Accepted;
+        }
+
+        private bool TrySubmitBoundReactionResponse(
+            long requestId,
+            int windowId,
+            ReactionWindowSeatAnswerKind kind,
+            int? chiOptionId)
+        {
+            MahjongGameState state = gameFlow != null ? gameFlow.CurrentState : null;
+            if (state == null || !TryGetLocalActor(state, out PlayerId playerId, out SeatId seat) ||
+                !gameFlow.TryGetPendingReactionDecisionRequest(playerId, out DecisionRequest request))
+            {
+                return false;
+            }
+
+            if (request.Kind != DecisionKind.Reaction || request.Reaction == null ||
+                request.PlayerId != playerId || request.ActorSeat != seat ||
+                request.RequestId != requestId || request.Reaction.WindowId != windowId ||
+                !request.Reaction.Allows(kind) ||
+                !gameFlow.TryGetLocalUiDecisionProvider(
+                    playerId,
+                    out LocalUiDecisionProvider provider))
+            {
+                return false;
+            }
+
+            DecisionResponse response = new DecisionResponse(
+                request.RequestId,
+                DecisionKind.Reaction,
+                playerId,
+                seat,
+                request.TurnIndex,
+                true,
+                new ReactionDecisionResponse(
+                    request.Reaction.WindowId,
+                    kind,
+                    chiOptionId));
+            return provider.TrySubmitResponse(response);
         }
 
         private bool TryGetLocalActor(
