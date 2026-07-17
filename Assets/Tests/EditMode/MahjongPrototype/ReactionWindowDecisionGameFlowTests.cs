@@ -1,6 +1,8 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq.Expressions;
+using System.Reflection;
 using MahjongPrototype.Tests.TestSupport.Core;
 using MahjongPrototype.Tests.TestSupport.Mahjong;
 using NUnit.Framework;
@@ -30,6 +32,8 @@ namespace MahjongPrototype.Tests
             "MahjongPrototype.Domain.ReactionDecisionResponse, Assembly-CSharp";
         private const string ReactionWindowSeatAnswerKindTypeName =
             "MahjongPrototype.Domain.ReactionWindowSeatAnswerKind, Assembly-CSharp";
+        private const string ReactionWindowSeatAnswerTypeName =
+            "MahjongPrototype.Domain.ReactionWindowSeatAnswer, Assembly-CSharp";
         private const string ReactionWindowCandidateTypeName =
             "MahjongPrototype.Domain.ReactionWindowCandidate, Assembly-CSharp";
         private const string ReactionKindTypeName =
@@ -344,6 +348,99 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
+        public void QueuedSeatAnswer_BlocksLegacyFallback_ThenPumpsThroughTheNewPath()
+        {
+            using (Scenario scenario = CreateScenario())
+            {
+                scenario.Session.DataFactory.AddHandTiles(
+                    scenario.Session.DataFactory.GetPlayerSeat(
+                        scenario.CurrentState,
+                        scenario.FirstTargetSeat.ToString()),
+                    "5m",
+                    "5m");
+                object ponCandidate = CreatePonCandidate(
+                    scenario,
+                    scenario.FirstTargetSeat);
+                object window = BeginDiscardWindow(scenario, ponCandidate);
+                BeginRequests(scenario, window);
+
+                QueueResponse(
+                    scenario,
+                    scenario.FirstTargetSeat,
+                    "Pon");
+                object coordinator = scenario.Reflection.GetProperty(
+                    scenario.GameFlow,
+                    "DecisionCoordinator");
+                int windowId = (int)scenario.Reflection.GetProperty(window, "WindowId");
+
+                Assert.That(
+                    (bool)scenario.Reflection.Invoke(
+                        scenario.GameFlow,
+                        "TryRequestDeclarePonForSeat",
+                        scenario.FirstTargetSeat,
+                        windowId),
+                    Is.False,
+                    "A queued seat answer must prevent switching the same window to the serial path.");
+                Assert.That(
+                    (int)scenario.Reflection.GetProperty(coordinator, "QueuedResponseCount"),
+                    Is.EqualTo(1));
+                Assert.That(CandidateState(scenario, ponCandidate), Is.EqualTo("Pending"));
+                Assert.That(scenario.Session.Query.MeldCount(
+                    scenario.FirstTargetSeat.ToString()), Is.EqualTo(0));
+
+                scenario.Reflection.Invoke(coordinator, "Pump");
+
+                Assert.That(CandidateState(scenario, ponCandidate), Is.EqualTo("Declared"));
+                Assert.That(scenario.Session.Query.MeldCount(
+                    scenario.FirstTargetSeat.ToString()), Is.EqualTo(1));
+                Assert.That(
+                    scenario.Reflection.GetProperty(
+                        scenario.CurrentState,
+                        "CurrentReactionWindow"),
+                    Is.Null);
+            }
+        }
+
+        [Test]
+        public void CoordinatorCancel_RemovesAQueuedReactionResponseBeforePump()
+        {
+            using (Scenario scenario = CreateScenario())
+            {
+                object candidate = CreatePonCandidate(
+                    scenario,
+                    scenario.FirstTargetSeat);
+                object window = BeginDiscardWindow(scenario, candidate);
+                BeginRequests(scenario, window);
+                object request = QueueResponse(
+                    scenario,
+                    scenario.FirstTargetSeat,
+                    "Pass");
+                object coordinator = scenario.Reflection.GetProperty(
+                    scenario.GameFlow,
+                    "DecisionCoordinator");
+
+                Assert.That(
+                    (bool)scenario.Reflection.Invoke(
+                        coordinator,
+                        "Cancel",
+                        scenario.Reflection.GetProperty(request, "RequestId")),
+                    Is.True);
+                Assert.That(
+                    (int)scenario.Reflection.GetProperty(coordinator, "QueuedResponseCount"),
+                    Is.EqualTo(0));
+
+                scenario.Reflection.Invoke(coordinator, "Pump");
+
+                Assert.That(CandidateState(scenario, candidate), Is.EqualTo("Pending"));
+                Assert.That(
+                    scenario.Reflection.GetProperty(
+                        scenario.CurrentState,
+                        "CurrentReactionWindow"),
+                    Is.SameAs(window));
+            }
+        }
+
+        [Test]
         public void LocalUiReactionInput_UsesProviderAndCoordinator_AndRejectsCapturedIdsFromClosedWindow()
         {
             using (Scenario scenario = CreateScenario())
@@ -506,6 +603,13 @@ namespace MahjongPrototype.Tests
 
                 Assert.That(CandidateState(scenario, nearestRon), Is.EqualTo("Declared"));
                 Assert.That(CandidateState(scenario, fartherRon), Is.EqualTo("Declined"));
+                Assert.That(
+                    scenario.Session.Query.IsTemporaryFuriten(nearestSeat.ToString()),
+                    Is.False);
+                Assert.That(
+                    scenario.Session.Query.IsTemporaryFuriten(fartherSeat.ToString()),
+                    Is.False,
+                    "A Ron answer must not become pass furiten when another Ron seat is selected.");
             }
         }
 
@@ -676,6 +780,211 @@ namespace MahjongPrototype.Tests
                         "TryExecuteDecisionResponse",
                         validResponse),
                     "ReactionDecisionRequestMissing");
+            }
+        }
+
+        [Test]
+        public void AuthorityRejectedQueuedResponse_ReissuesAUsableReactionRequest()
+        {
+            using (Scenario scenario = CreateScenario())
+            {
+                object candidate = CreatePonCandidate(
+                    scenario,
+                    scenario.FirstTargetSeat);
+                object window = BeginDiscardWindow(scenario, candidate);
+                BeginRequests(scenario, window);
+                object originalRequest = GetPendingRequest(
+                    scenario,
+                    scenario.FirstTargetSeat);
+                object answers = scenario.Reflection.GetPrivateField(
+                    scenario.GameFlow,
+                    "reactionWindowSeatAnswers");
+                object preRegisteredAnswer = scenario.Reflection.CreateInstance(
+                    scenario.Reflection.RequireType(ReactionWindowSeatAnswerTypeName),
+                    scenario.Reflection.GetProperty(window, "WindowId"),
+                    scenario.FirstTargetSeat,
+                    Enum.Parse(
+                        scenario.Reflection.RequireType(
+                            ReactionWindowSeatAnswerKindTypeName),
+                        "Pass"),
+                    null);
+                object registration = scenario.Reflection.Invoke(
+                    answers,
+                    "TryRegister",
+                    preRegisteredAnswer);
+                Assert.That(
+                    (bool)scenario.Reflection.GetProperty(registration, "Accepted"),
+                    Is.True);
+
+                QueueResponse(scenario, scenario.FirstTargetSeat, "Pass");
+                object coordinator = scenario.Reflection.GetProperty(
+                    scenario.GameFlow,
+                    "DecisionCoordinator");
+                scenario.Reflection.Invoke(coordinator, "Pump");
+
+                Assert.That(
+                    scenario.Reflection.GetPrivateField(
+                        scenario.GameFlow,
+                        "reactionWindowAwaitingRequestRetry"),
+                    Is.SameAs(window));
+                Assert.That(
+                    (int)scenario.Reflection.GetProperty(coordinator, "PendingCount"),
+                    Is.EqualTo(0));
+
+                scenario.Reflection.Invoke(
+                    scenario.GameFlow,
+                    "TryResumeReactionSeatAnswerRequests");
+                object retriedRequest = GetPendingRequest(
+                    scenario,
+                    scenario.FirstTargetSeat);
+                Assert.That(
+                    scenario.Reflection.GetProperty(retriedRequest, "RequestId"),
+                    Is.Not.EqualTo(
+                        scenario.Reflection.GetProperty(originalRequest, "RequestId")));
+
+                SubmitAndPump(scenario, scenario.FirstTargetSeat, "Pass");
+
+                Assert.That(CandidateState(scenario, candidate), Is.EqualTo("Declined"));
+                Assert.That(
+                    scenario.Reflection.GetProperty(
+                        scenario.CurrentState,
+                        "CurrentReactionWindow"),
+                    Is.Null);
+            }
+        }
+
+        [Test]
+        public void NonPendingCandidate_DoesNotLeaveAnEndlessReactionRequestRetry()
+        {
+            using (Scenario scenario = CreateScenario())
+            using (EventSequenceRecorder events = new EventSequenceRecorder(
+                scenario.Session.EventNotifier,
+                "ReactionWindowAnswered"))
+            {
+                object candidate = CreatePonCandidate(
+                    scenario,
+                    scenario.FirstTargetSeat);
+                object window = BeginDiscardWindow(scenario, candidate);
+                BeginRequests(scenario, window);
+                scenario.Reflection.Invoke(candidate, "Decline");
+
+                SubmitAndPump(scenario, scenario.FirstTargetSeat, "Pass");
+
+                Assert.That(
+                    scenario.Reflection.GetPrivateField(
+                        scenario.GameFlow,
+                        "reactionWindowAwaitingRequestRetry"),
+                    Is.Null);
+                Assert.That(
+                    (int)scenario.Reflection.GetProperty(
+                        scenario.Reflection.GetProperty(
+                            scenario.GameFlow,
+                            "DecisionCoordinator"),
+                        "PendingCount"),
+                    Is.EqualTo(0));
+                Assert.That(events.Count("ReactionWindowAnswered"), Is.EqualTo(0));
+
+                scenario.Reflection.Invoke(
+                    scenario.GameFlow,
+                    "TryResumeReactionSeatAnswerRequests");
+                scenario.Reflection.Invoke(
+                    scenario.GameFlow,
+                    "TryResumeReactionSeatAnswerRequests");
+
+                Assert.That(
+                    scenario.Reflection.GetPrivateField(
+                        scenario.GameFlow,
+                        "reactionWindowAwaitingRequestRetry"),
+                    Is.Null);
+                Assert.That(
+                    scenario.Reflection.GetProperty(
+                        scenario.CurrentState,
+                        "CurrentReactionWindow"),
+                    Is.SameAs(window));
+                Assert.That(CandidateState(scenario, candidate), Is.EqualTo("Declined"));
+            }
+        }
+
+        [Test]
+        public void PrepareFailure_RetriesWithoutDuplicateAnswerNotifications_AndAppliesRonPassFuritenOnce()
+        {
+            using (Scenario scenario = CreateScenario())
+            using (EventSequenceRecorder events = new EventSequenceRecorder(
+                scenario.Session.EventNotifier,
+                "ReactionWindowAnswered",
+                "ReactionWindowResolved",
+                "ReactionWindowClosed"))
+            {
+                object ronCandidate = CreateRonCandidate(
+                    scenario,
+                    scenario.FirstTargetSeat);
+                object ponCandidate = CreatePonCandidate(
+                    scenario,
+                    scenario.SecondTargetSeat);
+                object window = BeginDiscardWindow(
+                    scenario,
+                    ronCandidate,
+                    ponCandidate);
+                BeginRequests(scenario, window);
+
+                SubmitAndPump(scenario, scenario.FirstTargetSeat, "Pass");
+                SubmitAndPump(scenario, scenario.SecondTargetSeat, "Pon");
+
+                Assert.That(events.Count("ReactionWindowAnswered"), Is.EqualTo(1));
+                Assert.That(CandidateState(scenario, ronCandidate), Is.EqualTo("Pending"));
+                Assert.That(CandidateState(scenario, ponCandidate), Is.EqualTo("Pending"));
+                Assert.That(
+                    scenario.Reflection.GetPrivateField(
+                        scenario.GameFlow,
+                        "reactionWindowAwaitingRequestRetry"),
+                    Is.SameAs(window));
+                Assert.That(
+                    scenario.Session.Query.IsTemporaryFuriten(
+                        scenario.FirstTargetSeat.ToString()),
+                    Is.False);
+
+                scenario.Session.DataFactory.AddHandTiles(
+                    scenario.Session.DataFactory.GetPlayerSeat(
+                        scenario.CurrentState,
+                        scenario.SecondTargetSeat.ToString()),
+                    "5m",
+                    "5m");
+                scenario.Reflection.Invoke(
+                    scenario.GameFlow,
+                    "TryResumeReactionSeatAnswerRequests");
+
+                SubmitAndPump(scenario, scenario.FirstTargetSeat, "Pass");
+                Assert.That(
+                    events.Count("ReactionWindowAnswered"),
+                    Is.EqualTo(1),
+                    "The previously notified intermediate seat must not be notified again.");
+                SubmitAndPump(scenario, scenario.SecondTargetSeat, "Pon");
+
+                Assert.That(events.Count("ReactionWindowAnswered"), Is.EqualTo(2));
+                Assert.That(events.Count("ReactionWindowResolved"), Is.EqualTo(1));
+                Assert.That(events.Count("ReactionWindowClosed"), Is.EqualTo(1));
+                Assert.That(
+                    events.LastIndexOf("ReactionWindowAnswered"),
+                    Is.LessThan(events.IndexOf("ReactionWindowResolved")),
+                    events.Describe());
+                Assert.That(
+                    events.IndexOf("ReactionWindowResolved"),
+                    Is.LessThan(events.IndexOf("ReactionWindowClosed")),
+                    events.Describe());
+                Assert.That(
+                    scenario.Session.Query.IsTemporaryFuriten(
+                        scenario.FirstTargetSeat.ToString()),
+                    Is.True);
+                Assert.That(
+                    scenario.Session.Query.IsTemporaryFuriten(
+                        scenario.SecondTargetSeat.ToString()),
+                    Is.False);
+                Assert.That(CandidateState(scenario, ronCandidate), Is.EqualTo("Declined"));
+                Assert.That(CandidateState(scenario, ponCandidate), Is.EqualTo("Declared"));
+                Assert.That(
+                    scenario.Session.Query.MeldCount(
+                        scenario.SecondTargetSeat.ToString()),
+                    Is.EqualTo(1));
             }
         }
 
@@ -949,6 +1258,18 @@ namespace MahjongPrototype.Tests
             string answerKind,
             int? chiOptionId = null)
         {
+            QueueResponse(scenario, seat, answerKind, chiOptionId);
+            scenario.Reflection.Invoke(
+                scenario.Reflection.GetProperty(scenario.GameFlow, "DecisionCoordinator"),
+                "Pump");
+        }
+
+        private static object QueueResponse(
+            Scenario scenario,
+            object seat,
+            string answerKind,
+            int? chiOptionId = null)
+        {
             object request = GetPendingRequest(scenario, seat);
             object response = CreateResponse(
                 scenario,
@@ -961,9 +1282,7 @@ namespace MahjongPrototype.Tests
                     "TrySubmitResponse",
                     response),
                 Is.True);
-            scenario.Reflection.Invoke(
-                scenario.Reflection.GetProperty(scenario.GameFlow, "DecisionCoordinator"),
-                "Pump");
+            return request;
         }
 
         private static object CreateResponse(
@@ -1161,6 +1480,114 @@ namespace MahjongPrototype.Tests
             ReflectionTestAccess reflection = new ReflectionTestAccess();
             Assert.That((bool)reflection.GetProperty(result, "Accepted"), Is.False);
             Assert.That((string)reflection.GetProperty(result, "Reason"), Is.EqualTo(expectedReason));
+        }
+
+        private sealed class EventSequenceRecorder : IDisposable
+        {
+            private readonly List<string> names = new List<string>();
+            private readonly List<EventCallbackSubscription> subscriptions =
+                new List<EventCallbackSubscription>();
+
+            public EventSequenceRecorder(object eventSource, params string[] eventNames)
+            {
+                for (int i = 0; i < eventNames.Length; i++)
+                {
+                    string eventName = eventNames[i];
+                    subscriptions.Add(EventCallbackSubscription.Create(
+                        eventSource,
+                        eventName,
+                        () => names.Add(eventName)));
+                }
+            }
+
+            public int Count(string eventName)
+            {
+                int count = 0;
+                for (int i = 0; i < names.Count; i++)
+                {
+                    if (names[i] == eventName)
+                        count++;
+                }
+
+                return count;
+            }
+
+            public int IndexOf(string eventName)
+            {
+                return names.IndexOf(eventName);
+            }
+
+            public int LastIndexOf(string eventName)
+            {
+                return names.LastIndexOf(eventName);
+            }
+
+            public string Describe()
+            {
+                return string.Join(" -> ", names);
+            }
+
+            public void Dispose()
+            {
+                for (int i = subscriptions.Count - 1; i >= 0; i--)
+                    subscriptions[i].Dispose();
+            }
+        }
+
+        private sealed class EventCallbackSubscription : IDisposable
+        {
+            private readonly object eventSource;
+            private readonly EventInfo eventInfo;
+            private readonly Delegate handler;
+
+            private EventCallbackSubscription(
+                object eventSource,
+                EventInfo eventInfo,
+                Delegate handler)
+            {
+                this.eventSource = eventSource;
+                this.eventInfo = eventInfo;
+                this.handler = handler;
+            }
+
+            public static EventCallbackSubscription Create(
+                object eventSource,
+                string eventName,
+                Action callback)
+            {
+                Assert.That(eventSource, Is.Not.Null);
+                Assert.That(callback, Is.Not.Null);
+
+                EventInfo eventInfo = eventSource.GetType().GetEvent(
+                    eventName,
+                    BindingFlags.Public | BindingFlags.Instance);
+                Assert.That(eventInfo, Is.Not.Null, $"Event not found: {eventName}");
+
+                ParameterInfo[] parameterInfos = eventInfo.EventHandlerType
+                    .GetMethod("Invoke")
+                    .GetParameters();
+                ParameterExpression[] parameters =
+                    new ParameterExpression[parameterInfos.Length];
+                for (int i = 0; i < parameterInfos.Length; i++)
+                {
+                    parameters[i] = Expression.Parameter(
+                        parameterInfos[i].ParameterType,
+                        parameterInfos[i].Name);
+                }
+
+                MethodInfo callbackInvoke = typeof(Action).GetMethod(nameof(Action.Invoke));
+                Delegate handler = Expression.Lambda(
+                    eventInfo.EventHandlerType,
+                    Expression.Call(Expression.Constant(callback), callbackInvoke),
+                    parameters).Compile();
+                eventInfo.AddEventHandler(eventSource, handler);
+                return new EventCallbackSubscription(eventSource, eventInfo, handler);
+            }
+
+            public void Dispose()
+            {
+                eventInfo.RemoveEventHandler(eventSource, handler);
+            }
         }
 
         private sealed class Scenario : IDisposable

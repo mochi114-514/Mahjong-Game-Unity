@@ -15,7 +15,8 @@ namespace MahjongPrototype
     public sealed class MahjongGameFlow : MonoBehaviour,
         ICpuTurnGateway,
         IMahjongAuthorityCommandPort,
-        IMahjongAuthorityDecisionPort
+        IMahjongAuthorityDecisionPort,
+        IReactionDecisionResponseRejectionHandler
     {
         [Header("Prototype Players")]
         [SerializeField, Range(1, 4)] private int participantCount = 1;
@@ -90,8 +91,11 @@ namespace MahjongPrototype
         private readonly Dictionary<long, PendingReactionDecision>
             pendingReactionDecisionsByRequestId =
                 new Dictionary<long, PendingReactionDecision>();
+        private readonly HashSet<SeatId> notifiedReactionAnswerSeats =
+            new HashSet<SeatId>();
         private ReactionWindowSeatAnswerCollection reactionWindowSeatAnswers;
         private ReactionWindow reactionWindowAwaitingRequestRetry;
+        private int notifiedReactionAnswerWindowId;
         private long nextReactionDecisionRequestId = 1;
         private MahjongViewContext viewContext = new MahjongViewContext(PlayerId.Player1);
 
@@ -317,16 +321,19 @@ namespace MahjongPrototype
                     out answeredCandidate);
             }
 
-            EventPublisher.NotifyReactionWindowAnswered(
+            ReactionWindowAnswerResult answeredNotification =
                 ReactionWindowAnswerResult.AcceptedAnswer(
                     reactionWindow.WindowId,
                     answeredCandidate,
                     ReactionWindowResolution.Pending(
                         reactionWindow.WindowId,
-                        reactionWindow.Source)));
+                        reactionWindow.Source));
 
             if (reactionWindowSeatAnswers.HasUnansweredSeats)
+            {
+                NotifyReactionWindowAnsweredOnce(answer.Seat, answeredNotification);
                 return DecisionResponseResult.Succeeded();
+            }
 
             ReactionWindowSeatAnswerResolution answerResolution =
                 reactionWindowSeatAnswerResolver.Resolve(
@@ -339,8 +346,14 @@ namespace MahjongPrototype
                     answerResolution);
             if (!preparation.Prepared)
             {
-                ScheduleReactionSeatAnswerRequestRetry(reactionWindow);
-                NotifyTurnBlocked("ReactionBlocked", preparation.Reason);
+                bool retryScheduled = TryScheduleReactionSeatAnswerRequestRetry(
+                    reactionWindow,
+                    out string retryReason);
+                NotifyTurnBlocked(
+                    "ReactionBlocked",
+                    retryScheduled || string.IsNullOrEmpty(retryReason)
+                        ? preparation.Reason
+                        : retryReason);
                 return DecisionResponseResult.Rejected(preparation.Reason);
             }
 
@@ -350,16 +363,48 @@ namespace MahjongPrototype
                     preparation.PreparedDeclaration);
             if (!commit.Committed)
             {
-                ScheduleReactionSeatAnswerRequestRetry(reactionWindow);
-                NotifyTurnBlocked("ReactionBlocked", commit.Reason);
+                bool retryScheduled = TryScheduleReactionSeatAnswerRequestRetry(
+                    reactionWindow,
+                    out string retryReason);
+                NotifyTurnBlocked(
+                    "ReactionBlocked",
+                    retryScheduled || string.IsNullOrEmpty(retryReason)
+                        ? commit.Reason
+                        : retryReason);
                 return DecisionResponseResult.Rejected(commit.Reason);
             }
 
-            ApplyDeclinedReactionRonFuriten(reactionWindowSeatAnswers);
+            NotifyReactionWindowAnsweredOnce(answer.Seat, answeredNotification);
+            winDecisionService.ApplyDeclinedReactionRonFuriten(
+                gameState,
+                reactionWindowSeatAnswers);
             if (!ResolveReactionWindow(commit.Resolution))
                 return DecisionResponseResult.Rejected("ReactionWindowResolutionFailed");
 
             return DecisionResponseResult.Succeeded();
+        }
+
+        public void HandleRejectedReactionDecisionResponse(
+            DecisionResponse response,
+            DecisionResponseResult result)
+        {
+            if (response == null || response.Kind != DecisionKind.Reaction ||
+                result.Accepted ||
+                !pendingReactionDecisionsByRequestId.TryGetValue(
+                    response.RequestId,
+                    out PendingReactionDecision pending))
+            {
+                return;
+            }
+
+            bool retryScheduled = TryScheduleReactionSeatAnswerRequestRetry(
+                pending.ReactionWindow,
+                out string retryReason);
+            if (!retryScheduled && !string.IsNullOrEmpty(retryReason) &&
+                retryReason != "ReactionWindowStale")
+            {
+                NotifyTurnBlocked("ReactionBlocked", retryReason);
+            }
         }
 
         public FuritenEvaluationResultSet EvaluateAllFuriten()
@@ -2579,6 +2624,40 @@ namespace MahjongPrototype
                 return false;
             }
 
+            bool hasProviderWaitingRequest = false;
+            foreach (KeyValuePair<long, PendingReactionDecision> pair in
+                     pendingReactionDecisionsByRequestId)
+            {
+                if (pair.Value.WindowId != reactionWindowId)
+                    continue;
+
+                if (decisionCoordinator != null &&
+                    decisionCoordinator.IsResponseQueued(pair.Key))
+                {
+                    reason = "ReactionSeatAnswerQueued";
+                    return false;
+                }
+
+                if (decisionCoordinator == null ||
+                    !decisionCoordinator.IsPending(pair.Key))
+                {
+                    reason = "ReactionDecisionRequestUnavailable";
+                    return false;
+                }
+
+                hasProviderWaitingRequest = true;
+            }
+
+            if (reactionWindowSeatAnswers != null &&
+                ReferenceEquals(
+                    reactionWindowSeatAnswers.ReactionWindow,
+                    reactionWindow) &&
+                !hasProviderWaitingRequest)
+            {
+                reason = "ReactionDecisionRequestUnavailable";
+                return false;
+            }
+
             ClearReactionSeatAnswerState(reactionWindow.WindowId);
             return true;
         }
@@ -2729,19 +2808,70 @@ namespace MahjongPrototype
             return false;
         }
 
+        private static bool TryValidateReactionSeatAnswerCandidateState(
+            ReactionWindow reactionWindow,
+            out string reason)
+        {
+            reason = string.Empty;
+            if (reactionWindow == null || reactionWindow.Candidates.Count <= 0)
+            {
+                reason = "ReactionCandidateMissing";
+                return false;
+            }
+
+            for (int i = 0; i < reactionWindow.Candidates.Count; i++)
+            {
+                ReactionWindowCandidate candidate = reactionWindow.Candidates[i];
+                if (candidate == null)
+                {
+                    reason = "ReactionCandidateInvalid";
+                    return false;
+                }
+                if (!candidate.IsPending)
+                {
+                    reason = "ReactionCandidateStateChanged";
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
         private void ScheduleReactionSeatAnswerRequestRetry(
             ReactionWindow reactionWindow)
         {
+            TryScheduleReactionSeatAnswerRequestRetry(reactionWindow, out _);
+        }
+
+        private bool TryScheduleReactionSeatAnswerRequestRetry(
+            ReactionWindow reactionWindow,
+            out string reason)
+        {
+            reason = string.Empty;
             if (reactionWindow == null)
-                return;
+            {
+                reason = "ReactionWindowStale";
+                return false;
+            }
 
             ClearReactionSeatAnswerState(reactionWindow.WindowId);
-            if (gameState != null && gameState.IsReactionWindowPending &&
-                ReferenceEquals(gameState.CurrentReactionWindow, reactionWindow) &&
-                reactionWindow.IsAcceptingAnswers)
+            if (gameState == null || !gameState.IsReactionWindowPending ||
+                !ReferenceEquals(gameState.CurrentReactionWindow, reactionWindow) ||
+                !reactionWindow.IsAcceptingAnswers)
             {
-                reactionWindowAwaitingRequestRetry = reactionWindow;
+                reason = "ReactionWindowStale";
+                return false;
             }
+
+            if (!TryValidateReactionSeatAnswerCandidateState(
+                    reactionWindow,
+                    out reason))
+            {
+                return false;
+            }
+
+            reactionWindowAwaitingRequestRetry = reactionWindow;
+            return true;
         }
 
         private void TryResumeReactionSeatAnswerRequests()
@@ -2761,7 +2891,7 @@ namespace MahjongPrototype
             reactionWindowAwaitingRequestRetry = null;
             if (TryBeginReactionSeatAnswerRequests(
                     reactionWindow,
-                    out _))
+                    out string requestReason))
             {
                 // The window itself is unchanged, but its provider-facing
                 // requests were rebuilt. Reuse the established notification
@@ -2771,7 +2901,19 @@ namespace MahjongPrototype
                 return;
             }
 
-            reactionWindowAwaitingRequestRetry = reactionWindow;
+            bool retryScheduled = TryScheduleReactionSeatAnswerRequestRetry(
+                reactionWindow,
+                out string retryReason);
+            if (!retryScheduled && !string.IsNullOrEmpty(retryReason) &&
+                retryReason != "ReactionWindowStale")
+            {
+                NotifyTurnBlocked("ReactionBlocked", retryReason);
+            }
+            else if (!retryScheduled && !string.IsNullOrEmpty(requestReason) &&
+                requestReason != "ReactionWindowMissing")
+            {
+                NotifyTurnBlocked("ReactionBlocked", requestReason);
+            }
         }
 
         private bool TryBeginReactionSeatAnswerRequests(
@@ -2788,6 +2930,14 @@ namespace MahjongPrototype
                 return false;
             }
 
+            if (!TryValidateReactionSeatAnswerCandidateState(
+                    reactionWindow,
+                    out reason))
+            {
+                ClearReactionSeatAnswerState(reactionWindow.WindowId);
+                return false;
+            }
+
             EnsureDecisionCoordinator();
             if (decisionCoordinator == null)
             {
@@ -2795,6 +2945,7 @@ namespace MahjongPrototype
                 return false;
             }
 
+            EnsureReactionAnswerNotificationWindow(reactionWindow.WindowId);
             ClearReactionSeatAnswerState();
             ReactionWindowSeatAnswerCollection answers;
             try
@@ -3009,29 +3160,22 @@ namespace MahjongPrototype
             return requestId;
         }
 
-        private void ApplyDeclinedReactionRonFuriten(
-            ReactionWindowSeatAnswerCollection answers)
+        private void EnsureReactionAnswerNotificationWindow(int windowId)
         {
-            if (answers == null || winDecisionService == null)
+            if (notifiedReactionAnswerWindowId == windowId)
                 return;
 
-            ReactionWindow reactionWindow = answers.ReactionWindow;
-            for (int i = 0; i < reactionWindow.Candidates.Count; i++)
-            {
-                ReactionWindowCandidate candidate = reactionWindow.Candidates[i];
-                if (candidate == null || candidate.Kind != ReactionKind.Ron ||
-                    !answers.TryGetRegisteredAnswer(
-                        candidate.Seat,
-                        out ReactionWindowSeatAnswer answer) ||
-                    answer.Kind == ReactionWindowSeatAnswerKind.Ron)
-                {
-                    continue;
-                }
+            notifiedReactionAnswerWindowId = windowId;
+            notifiedReactionAnswerSeats.Clear();
+        }
 
-                winDecisionService.MarkDeclinedRonFuriten(
-                    gameState,
-                    candidate.Seat);
-            }
+        private void NotifyReactionWindowAnsweredOnce(
+            SeatId seat,
+            ReactionWindowAnswerResult answer)
+        {
+            EnsureReactionAnswerNotificationWindow(answer.WindowId);
+            if (notifiedReactionAnswerSeats.Add(seat))
+                EventPublisher.NotifyReactionWindowAnswered(answer);
         }
 
         private void ClearReactionSeatAnswerState(int? windowId = null)
@@ -3090,6 +3234,8 @@ namespace MahjongPrototype
         {
             decisionCoordinator?.CancelAll();
             ClearReactionSeatAnswerState();
+            notifiedReactionAnswerWindowId = 0;
+            notifiedReactionAnswerSeats.Clear();
         }
 
         private readonly struct PendingReactionDecision

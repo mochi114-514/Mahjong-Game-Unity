@@ -223,6 +223,36 @@ namespace MahjongPrototype.Services
                 playerSeat.MarkTemporaryFuriten();
         }
 
+        /// <summary>
+        /// Applies pass furiten only to ron-capable seats whose final seat
+        /// answer was not Ron. A Ron answer remains exempt even when another
+        /// Ron seat wins the prototype priority tie.
+        /// </summary>
+        public void ApplyDeclinedReactionRonFuriten(
+            MahjongGameState gameState,
+            ReactionWindowSeatAnswerCollection answers)
+        {
+            if (gameState == null || answers == null)
+                return;
+
+            IReadOnlyList<ReactionWindowCandidate> candidates =
+                answers.ReactionWindow.Candidates;
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                ReactionWindowCandidate candidate = candidates[i];
+                if (candidate == null || candidate.Kind != ReactionKind.Ron ||
+                    !answers.TryGetRegisteredAnswer(
+                        candidate.Seat,
+                        out ReactionWindowSeatAnswer answer) ||
+                    answer.Kind == ReactionWindowSeatAnswerKind.Ron)
+                {
+                    continue;
+                }
+
+                MarkDeclinedRonFuriten(gameState, candidate.Seat);
+            }
+        }
+
         public void SetPending(MahjongGameState gameState, bool isPending, SeatId seat, int turnIndex)
         {
             if (gameState == null)

@@ -450,4 +450,15 @@ namespace MahjongPrototype.Domain
     {
         DecisionResponseResult TryExecuteDecisionResponse(DecisionResponse response);
     }
+
+    /// <summary>
+    /// Receives only reaction responses that were accepted and queued by the
+    /// coordinator but rejected when the authority later executed them.
+    /// </summary>
+    public interface IReactionDecisionResponseRejectionHandler
+    {
+        void HandleRejectedReactionDecisionResponse(
+            DecisionResponse response,
+            DecisionResponseResult result);
+    }
 }

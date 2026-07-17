@@ -16,8 +16,9 @@ namespace MahjongPrototype
         private readonly IMahjongAuthorityDecisionPort authority;
         private readonly Dictionary<long, PendingDecision> pendingById =
             new Dictionary<long, PendingDecision>();
-        private readonly Queue<DecisionResponse> queuedResponses =
-            new Queue<DecisionResponse>();
+        private readonly Queue<long> queuedRequestIds = new Queue<long>();
+        private readonly Dictionary<long, DecisionResponse> queuedResponsesByRequestId =
+            new Dictionary<long, DecisionResponse>();
         private bool isPumping;
 
         public DecisionCoordinator(
@@ -30,13 +31,24 @@ namespace MahjongPrototype
         }
 
         public int PendingCount => pendingById.Count;
-        public int QueuedResponseCount => queuedResponses.Count;
+        public int QueuedResponseCount => queuedResponsesByRequestId.Count;
+
+        public bool IsPending(long requestId)
+        {
+            return pendingById.ContainsKey(requestId);
+        }
+
+        public bool IsResponseQueued(long requestId)
+        {
+            return queuedResponsesByRequestId.ContainsKey(requestId);
+        }
 
         public DecisionResponseResult Request(DecisionRequest request)
         {
             if (request == null)
                 return DecisionResponseResult.Rejected("DecisionRequestMissing");
-            if (pendingById.ContainsKey(request.RequestId))
+            if (pendingById.ContainsKey(request.RequestId) ||
+                queuedResponsesByRequestId.ContainsKey(request.RequestId))
                 return DecisionResponseResult.Rejected("DuplicateDecisionRequestId");
             if (!providerRegistry.TryResolve(request.PlayerId, out DecisionProviderRegistration registration))
                 return DecisionResponseResult.Rejected("DecisionProviderMissing");
@@ -68,7 +80,8 @@ namespace MahjongPrototype
                 return DecisionResponseResult.Rejected(reason);
 
             pendingById.Remove(response.RequestId);
-            queuedResponses.Enqueue(response);
+            queuedResponsesByRequestId.Add(response.RequestId, response);
+            queuedRequestIds.Enqueue(response.RequestId);
             return DecisionResponseResult.Succeeded();
         }
 
@@ -80,8 +93,25 @@ namespace MahjongPrototype
             isPumping = true;
             try
             {
-                while (queuedResponses.Count > 0)
-                    authority.TryExecuteDecisionResponse(queuedResponses.Dequeue());
+                while (queuedRequestIds.Count > 0)
+                {
+                    long requestId = queuedRequestIds.Dequeue();
+                    if (!queuedResponsesByRequestId.TryGetValue(
+                            requestId,
+                            out DecisionResponse response))
+                    {
+                        continue;
+                    }
+
+                    queuedResponsesByRequestId.Remove(requestId);
+                    DecisionResponseResult result =
+                        authority.TryExecuteDecisionResponse(response);
+                    if (!result.Accepted && response.Kind == DecisionKind.Reaction &&
+                        authority is IReactionDecisionResponseRejectionHandler handler)
+                    {
+                        handler.HandleRejectedReactionDecisionResponse(response, result);
+                    }
+                }
             }
             finally
             {
@@ -91,8 +121,11 @@ namespace MahjongPrototype
 
         public bool Cancel(long requestId)
         {
+            bool cancelled = queuedResponsesByRequestId.Remove(requestId);
+            if (cancelled)
+                RemoveQueuedRequestId(requestId);
             if (!pendingById.TryGetValue(requestId, out PendingDecision pending))
-                return false;
+                return cancelled;
 
             pendingById.Remove(requestId);
             pending.Provider.CancelDecision(requestId);
@@ -103,9 +136,21 @@ namespace MahjongPrototype
         {
             List<PendingDecision> pending = new List<PendingDecision>(pendingById.Values);
             pendingById.Clear();
-            queuedResponses.Clear();
+            queuedRequestIds.Clear();
+            queuedResponsesByRequestId.Clear();
             for (int i = 0; i < pending.Count; i++)
                 pending[i].Provider.CancelDecision(pending[i].Request.RequestId);
+        }
+
+        private void RemoveQueuedRequestId(long requestId)
+        {
+            int queuedCount = queuedRequestIds.Count;
+            for (int i = 0; i < queuedCount; i++)
+            {
+                long queuedRequestId = queuedRequestIds.Dequeue();
+                if (queuedRequestId != requestId)
+                    queuedRequestIds.Enqueue(queuedRequestId);
+            }
         }
 
         private static bool Matches(DecisionRequest request, DecisionResponse response)
