@@ -286,7 +286,8 @@ namespace MahjongPrototype.Tests
                 Enum.Parse(types.PlayerId, playerId),
                 seat,
                 turnIndex,
-                -1);
+                -1,
+                null);
         }
 
         private static object CreateCoordinator(

@@ -75,6 +75,7 @@ namespace MahjongPrototype.Tests
                 driver.RequestSelfDiscardDrawnTile();
 
                 yield return null;
+                driver.PumpDecisionCoordinator();
                 yield return null;
 
                 Assert.That(driver.IsRoundEnded, Is.True);
@@ -101,6 +102,7 @@ namespace MahjongPrototype.Tests
                 driver.RequestSelfDiscardDrawnTile();
 
                 yield return null;
+                driver.PumpDecisionCoordinator();
                 yield return null;
 
                 Assert.That(driver.IsRoundEnded, Is.True);

@@ -86,6 +86,19 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Turn
         public void RequestDeclareWin() => Commands.RequestDeclareWin();
         public void RequestDeclineWin() => Commands.RequestDeclineWin();
 
+        /// <summary>
+        /// Advances queued provider answers at the same authority boundary as
+        /// MahjongGameFlow.Update. EditMode coroutine tests use this after a
+        /// CPU action has returned, so they do not rely on Unity update order
+        /// to resolve an asynchronous decision response.
+        /// </summary>
+        public void PumpDecisionCoordinator()
+        {
+            object coordinator = Reflection.GetProperty(GameFlow, "DecisionCoordinator");
+            if (coordinator != null)
+                Reflection.Invoke(coordinator, "Pump");
+        }
+
         public void StartCurrentTurnAgain()
         {
             Commands.StartTurn(CurrentTurnName, TurnIndex);
