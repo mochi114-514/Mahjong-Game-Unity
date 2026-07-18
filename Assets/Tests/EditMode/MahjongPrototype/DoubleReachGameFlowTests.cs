@@ -23,6 +23,22 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
+        public void ReachDeclarationAfterCallOnOwnFirstDiscard_StoresNormalReach()
+        {
+            using (Driver driver = Driver.Create(2))
+            {
+                driver.PrepareReachableDrawForEast();
+                driver.MarkCallOccurred();
+
+                driver.DeclareReachWithHandDiscard(12);
+
+                Assert.That(driver.IsReachDeclared("East"), Is.True);
+                Assert.That(driver.IsDoubleReachDeclared("East"), Is.False);
+                Assert.That(driver.IsIppatsuEligible("East"), Is.True);
+            }
+        }
+
+        [Test]
         public void ReachDeclarationOnOwnSecondDiscard_StoresNormalReach()
         {
             using (Driver driver = Driver.Create(2))
@@ -174,6 +190,11 @@ namespace MahjongPrototype.Tests
             public void StartNewRound()
             {
                 session.Commands.StartNewRound();
+            }
+
+            public void MarkCallOccurred()
+            {
+                session.Reflection.Invoke(session.CurrentState, "MarkCallOccurred");
             }
 
             public void PrepareReachableDrawForEast()

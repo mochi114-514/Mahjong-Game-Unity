@@ -43,5 +43,25 @@ namespace MahjongPrototype.Services
             BeginTurn(gameState, nextSeat);
             return nextSeat;
         }
+
+        public void BeginTurnAfterCall(MahjongGameState gameState, SeatId seat)
+        {
+            if (gameState == null)
+                throw new ArgumentNullException(nameof(gameState));
+
+            gameState.CurrentTurn = seat;
+            gameState.TurnIndex++;
+            gameState.EnterWaitingForDiscardAfterCall();
+        }
+
+        public void BeginTurnAfterKan(MahjongGameState gameState, SeatId seat)
+        {
+            if (gameState == null)
+                throw new ArgumentNullException(nameof(gameState));
+
+            gameState.CurrentTurn = seat;
+            gameState.TurnIndex++;
+            gameState.EnterWaitingForRinshanDraw();
+        }
     }
 }

@@ -1,0 +1,936 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq.Expressions;
+using System.Reflection;
+using System.Text.RegularExpressions;
+using MahjongPrototype.Tests.TestSupport.Core;
+using MahjongPrototype.Tests.TestSupport.Mahjong;
+using NUnit.Framework;
+using UnityEngine;
+using UnityEngine.TestTools;
+
+namespace MahjongPrototype.Tests
+{
+    public sealed class ReactionWindowGameFlowTests
+    {
+        [Test]
+        public void HandDiscardAndDrawnTileDiscard_BothStartReactionWindowBeforeResolution()
+        {
+            Assert.That(CaptureReactionSourceAfterDiscard(false), Is.EqualTo("Hand"));
+            Assert.That(CaptureReactionSourceAfterDiscard(true), Is.EqualTo("DrawnTile"));
+        }
+
+        [Test]
+        public void NoReaction_ResolvesOnceThenAdvancesAfterReactionNotifications()
+        {
+            using (MahjongGameFlowTestSession session = CreateSession(1))
+            using (EventSequenceRecorder events = new EventSequenceRecorder(
+                session.EventNotifier,
+                "TileDiscarded",
+                "ReactionWindowStarted",
+                "ReactionWindowResolved",
+                "ReactionWindowClosed",
+                "TurnStarted"))
+            {
+                events.ReactionWindowPendingProvider =
+                    () => session.Query.IsReactionWindowPending;
+                session.Commands.StartNewRound();
+                session.DataFactory.SetDrawnTile(session.CurrentState, "East", "2m");
+
+                session.Commands.RequestDiscardDrawnTile();
+
+                Assert.That(session.Query.IsReactionWindowPending, Is.False);
+                Assert.That(session.Query.CurrentReactionWindow, Is.Null);
+                Assert.That(session.Query.CurrentTurnName, Is.EqualTo("East"));
+                Assert.That(session.Query.TurnIndex, Is.EqualTo(2));
+                Assert.That(events.WasReactionWindowPendingWhenTileDiscarded, Is.True);
+                Assert.That(events.Count("ReactionWindowStarted"), Is.EqualTo(1));
+                Assert.That(events.Count("ReactionWindowResolved"), Is.EqualTo(1));
+                Assert.That(events.Count("ReactionWindowClosed"), Is.EqualTo(1));
+                Assert.That(
+                    events.IndexOf("ReactionWindowStarted"),
+                    Is.LessThan(events.IndexOf("ReactionWindowResolved")),
+                    events.Describe());
+                Assert.That(
+                    events.LastIndexOf("TurnStarted"),
+                    Is.LessThan(events.IndexOf("ReactionWindowResolved")),
+                    events.Describe());
+            }
+        }
+
+        [Test]
+        public void FinalReactionNotifications_RejectReentrantMeldDeclarations()
+        {
+            using (MahjongGameFlowTestSession session = CreatePonSession(false))
+            {
+                int windowId = session.Query.ReactionWindowId;
+                object reactionWindow = session.Query.CurrentReactionWindow;
+                bool answeredReentryAccepted = true;
+                bool resolvedReentryAccepted = true;
+
+                using (EventCallbackSubscription answered = EventCallbackSubscription.Create(
+                    session.EventNotifier,
+                    "ReactionWindowAnswered",
+                    () =>
+                    {
+                        answeredReentryAccepted = session.Commands.TryRequestDeclarePonForSeat(
+                            "East",
+                            windowId);
+                    }))
+                using (EventCallbackSubscription resolved = EventCallbackSubscription.Create(
+                    session.EventNotifier,
+                    "ReactionWindowResolved",
+                    () =>
+                    {
+                        resolvedReentryAccepted = session.Commands.TryRequestDeclarePonForSeat(
+                            "East",
+                            windowId);
+                    }))
+                {
+                    Assert.That(session.Commands.TryRequestDeclarePonForSeat("East", windowId), Is.True);
+                }
+
+                Assert.That(answeredReentryAccepted, Is.False);
+                Assert.That(resolvedReentryAccepted, Is.False);
+                Assert.That(session.Query.CurrentReactionWindow, Is.Null);
+                Assert.That(session.Query.TurnPhaseName, Is.EqualTo("WaitingForDiscardAfterCall"));
+                Assert.That(session.Reflection.GetProperty(reactionWindow, "State").ToString(), Is.EqualTo("Closed"));
+            }
+        }
+
+        [Test]
+        public void ReactionWindowClosed_DoesNotExposeWaitingForDrawToTheOldDiscarder()
+        {
+            using (MahjongGameFlowTestSession session = CreatePonSession(false))
+            {
+                int windowId = session.Query.ReactionWindowId;
+                int turnIndex = session.Query.TurnIndex;
+                bool oldDiscarderDrew = true;
+
+                using (EventCallbackSubscription closed = EventCallbackSubscription.Create(
+                    session.EventNotifier,
+                    "ReactionWindowClosed",
+                    () => oldDiscarderDrew = session.Commands.TryRequestDrawForSeat("West")))
+                {
+                    Assert.That(session.Commands.TryRequestDeclarePonForSeat("East", windowId), Is.True);
+                }
+
+                Assert.That(oldDiscarderDrew, Is.False);
+                Assert.That(session.Query.CurrentTurnName, Is.EqualTo("East"));
+                Assert.That(session.Query.TurnIndex, Is.EqualTo(turnIndex + 1));
+                Assert.That(session.Query.TurnPhaseName, Is.EqualTo("WaitingForDiscardAfterCall"));
+            }
+        }
+
+        [Test]
+        public void ReactionWindowNotificationException_DoesNotBlockLaterSubscribersOrFinalState()
+        {
+            using (MahjongGameFlowTestSession session = CreatePonSession(false))
+            {
+                int windowId = session.Query.ReactionWindowId;
+                int laterSubscriberCount = 0;
+
+                using (EventCallbackSubscription throwingSubscriber = EventCallbackSubscription.Create(
+                    session.EventNotifier,
+                    "ReactionWindowResolved",
+                    () => throw new InvalidOperationException("ReactionWindowResolved subscriber failure")))
+                using (EventCallbackSubscription laterSubscriber = EventCallbackSubscription.Create(
+                    session.EventNotifier,
+                    "ReactionWindowResolved",
+                    () => laterSubscriberCount++))
+                {
+                    LogAssert.Expect(
+                        LogType.Exception,
+                        new Regex("^InvalidOperationException: ReactionWindowResolved subscriber failure"));
+                    Assert.That(session.Commands.TryRequestDeclarePonForSeat("East", windowId), Is.True);
+                }
+
+                Assert.That(laterSubscriberCount, Is.EqualTo(1));
+                Assert.That(session.Query.CurrentReactionWindow, Is.Null);
+                Assert.That(session.Query.CurrentTurnName, Is.EqualTo("East"));
+                Assert.That(session.Query.TurnPhaseName, Is.EqualTo("WaitingForDiscardAfterCall"));
+                Assert.That(HasCallOccurred(session), Is.True);
+            }
+        }
+
+        [Test]
+        public void OldAndDuplicateReactionWindowResolutions_AreRejected()
+        {
+            using (MahjongGameFlowTestSession session = CreatePonSession(false))
+            using (EventSequenceRecorder events = new EventSequenceRecorder(
+                session.EventNotifier,
+                "ReactionWindowResolved"))
+            {
+                int windowId = session.Query.ReactionWindowId;
+                object sourceDiscard = session.Query.DiscardAt(0);
+
+                Assert.That(session.Commands.TryRequestDeclarePonForSeat("East", windowId), Is.True);
+                object completedResolution = events.FirstPayload("ReactionWindowResolved");
+                int completedWindowId = (int)session.Reflection.GetProperty(
+                    completedResolution,
+                    "WindowId");
+                Assert.That(completedWindowId, Is.EqualTo(windowId));
+                Assert.That(
+                    session.Reflection.Invoke(session.GameFlow, "ResolveReactionWindow", completedResolution),
+                    Is.False);
+
+                Type candidateType = Type.GetType(
+                    "MahjongPrototype.Domain.ReactionWindowCandidate, Assembly-CSharp",
+                    true);
+                object emptyCandidates = Activator.CreateInstance(
+                    typeof(List<>).MakeGenericType(candidateType));
+                object currentWindow = session.Reflection.Invoke(
+                    session.CurrentState,
+                    "BeginReactionWindow",
+                    sourceDiscard,
+                    emptyCandidates);
+
+                Assert.That(session.Query.IsReactionWindowPending, Is.True);
+                Assert.That(
+                    session.Reflection.Invoke(session.GameFlow, "ResolveReactionWindow", completedResolution),
+                    Is.False);
+                Assert.That(
+                    session.Reflection.GetProperty(currentWindow, "State").ToString(),
+                    Is.EqualTo("AcceptingAnswers"));
+                Assert.That(session.Query.ReactionWindowId, Is.Not.EqualTo(completedWindowId));
+            }
+        }
+
+        [Test]
+        public void PendingRon_RejectsWrongStaleAndDuplicateAnswers_ThenDeclineAdvancesOnce()
+        {
+            using (MahjongGameFlowTestSession session = CreateRonSession())
+            using (EventSequenceRecorder events = new EventSequenceRecorder(
+                session.EventNotifier,
+                "ReactionWindowAnswered",
+                "WinDeclined",
+                "ReactionWindowResolved",
+                "ReactionWindowClosed"))
+            {
+                int turnIndex = session.Query.TurnIndex;
+                int windowId = session.Query.ReactionWindowId;
+
+                Assert.That(session.Query.IsReactionWindowPending, Is.True);
+                Assert.That(session.Query.TurnPhaseName, Is.EqualTo("ReactionWindow"));
+                Assert.That(session.Query.CurrentTurnName, Is.EqualTo("West"));
+                Assert.That(session.Query.TurnIndex, Is.EqualTo(turnIndex));
+                Assert.That(HasCallOccurred(session), Is.False);
+                Assert.That(session.Query.ReactionWindowCandidateCount, Is.EqualTo(1));
+                Assert.That(session.Query.ReactionWindowSourceSeatName, Is.EqualTo("West"));
+                Assert.That(session.Query.ReactionWindowSourceTileCode, Is.EqualTo("5m"));
+
+                Assert.That(session.Commands.TryRequestDeclineRonForSeat("West", windowId), Is.False);
+                Assert.That(session.Commands.TryRequestDeclineRonForSeat("East", windowId + 1), Is.False);
+                Assert.That(session.Query.IsReactionWindowPending, Is.True);
+
+                Assert.That(session.Commands.TryRequestDeclineRonForSeat("East", windowId), Is.True);
+
+                Assert.That(session.Query.IsReactionWindowPending, Is.False);
+                Assert.That(session.Query.CurrentTurnName, Is.EqualTo("East"));
+                Assert.That(session.Query.TurnIndex, Is.EqualTo(turnIndex + 1));
+                Assert.That(HasCallOccurred(session), Is.False);
+                Assert.That(session.Commands.TryRequestDeclineRonForSeat("East", windowId), Is.False);
+                Assert.That(session.Query.TurnIndex, Is.EqualTo(turnIndex + 1));
+                Assert.That(events.Count("ReactionWindowAnswered"), Is.EqualTo(1));
+                Assert.That(events.Count("ReactionWindowResolved"), Is.EqualTo(1));
+                Assert.That(events.Count("ReactionWindowClosed"), Is.EqualTo(1));
+                Assert.That(events.IndexOf("ReactionWindowAnswered"), Is.LessThan(events.IndexOf("WinDeclined")));
+                Assert.That(events.IndexOf("WinDeclined"), Is.LessThan(events.IndexOf("ReactionWindowResolved")));
+            }
+        }
+
+        [Test]
+        public void PendingRon_BlocksNormalDrawAndSkill_AndRonDeclarationEndsRound()
+        {
+            using (MahjongGameFlowTestSession session = CreateRonSession())
+            {
+                int windowId = session.Query.ReactionWindowId;
+
+                Assert.That(session.Commands.TryRequestDrawForSeat("West"), Is.False);
+                session.Commands.RequestForceDrawSkillForSeat("West", "5m");
+                Assert.That(session.Query.ActiveSkillEffectCount, Is.EqualTo(0));
+                Assert.That(session.Query.IsInteractionLocked, Is.True);
+
+                Assert.That(session.Commands.TryRequestDeclareRonForSeat("East", windowId), Is.True);
+
+                Assert.That(session.Query.IsReactionWindowPending, Is.False);
+                Assert.That(HasCallOccurred(session), Is.False);
+                Assert.That(session.Query.IsRoundResultPending, Is.True);
+                Assert.That(session.Query.RoundResultTypeName, Is.EqualTo("Win"));
+                Assert.That(session.Query.RoundResultWinnerSeatNameOrNull, Is.EqualTo("East"));
+                Assert.That(session.Query.RoundResultWinTypeNameOrNull, Is.EqualTo("Ron"));
+                Assert.That(session.Query.RoundResultSourceSeatNameOrNull, Is.EqualTo("West"));
+                Assert.That(session.Query.RoundResultWinningTileCodeOrNull, Is.EqualTo("5m"));
+            }
+        }
+
+        [Test]
+        public void RetryPrototype_DiscardsPendingReactionWindowData()
+        {
+            using (MahjongGameFlowTestSession session = CreateRonSession())
+            {
+                Assert.That(session.Query.IsReactionWindowPending, Is.True);
+
+                session.Commands.RetryPrototype();
+
+                Assert.That(session.Query.IsReactionWindowPending, Is.False);
+                Assert.That(session.Query.CurrentReactionWindow, Is.Null);
+            }
+        }
+
+        [Test]
+        public void PonCandidate_RequiresTwoMatchingTiles_AndPonCreatesPersistentClaimedMeld()
+        {
+            using (MahjongGameFlowTestSession session = CreatePonSession(false))
+            {
+                int windowId = session.Query.ReactionWindowId;
+                int turnIndex = session.Query.TurnIndex;
+                int sourceDiscardId = session.Query.LastDiscardId;
+                object sourcePlayerSeat = session.Query.GetPlayerSeat("West");
+                session.Reflection.Invoke(sourcePlayerSeat, "DeclareReach", turnIndex);
+
+                Assert.That(HasCallOccurred(session), Is.False);
+                Assert.That(
+                    (bool)session.Reflection.GetProperty(sourcePlayerSeat, "IsIppatsuEligible"),
+                    Is.True);
+                Assert.That(session.Query.ReactionWindowCandidateCount, Is.EqualTo(1));
+                Assert.That(session.Query.ReactionWindowCandidateKindAt(0), Is.EqualTo("Pon"));
+                Assert.That(session.Commands.TryRequestDeclareRonForSeat("East", windowId), Is.False);
+                Assert.That(session.Commands.TryRequestDeclarePonForSeat("West", windowId), Is.False);
+                Assert.That(session.Commands.TryRequestDeclarePonForSeat("East", windowId + 1), Is.False);
+                Assert.That(HasCallOccurred(session), Is.False);
+
+                Assert.That(session.Commands.TryRequestDeclarePonForSeat("East", windowId), Is.True);
+
+                Assert.That(session.Query.IsReactionWindowPending, Is.False);
+                Assert.That(HasCallOccurred(session), Is.True);
+                Assert.That(
+                    (bool)session.Reflection.GetProperty(sourcePlayerSeat, "IsIppatsuEligible"),
+                    Is.False);
+                Assert.That(session.Query.CurrentTurnName, Is.EqualTo("East"));
+                Assert.That(session.Query.TurnIndex, Is.EqualTo(turnIndex + 1));
+                Assert.That(session.Query.TurnPhaseName, Is.EqualTo("WaitingForDiscardAfterCall"));
+                Assert.That(session.Query.HasDrawnTile("East"), Is.False);
+                Assert.That(session.Query.HandCount("East"), Is.EqualTo(11));
+                Assert.That(session.Query.MeldCount("East"), Is.EqualTo(1));
+                Assert.That(session.Query.IsClosed("East"), Is.False);
+                Assert.That(session.Query.TryGetDiscardClaim(sourceDiscardId, out object claim), Is.True);
+                Assert.That(session.Reflection.GetProperty(claim, "ClaimingSeat").ToString(), Is.EqualTo("East"));
+                Assert.That(CountDiscardsWithId(session, sourceDiscardId), Is.EqualTo(1));
+
+                object meld = session.Query.MeldAt("East", 0);
+                Assert.That(session.Reflection.GetProperty(meld, "Type").ToString(), Is.EqualTo("Pon"));
+                Assert.That(session.Collections.Count(session.Reflection.GetProperty(meld, "PhysicalTiles")), Is.EqualTo(3));
+                Assert.That(session.Reflection.GetProperty(meld, "SourceSeat").ToString(), Is.EqualTo("West"));
+                Assert.That((int)session.Reflection.GetProperty(meld, "SourceDiscardId"), Is.EqualTo(sourceDiscardId));
+            }
+        }
+
+        [Test]
+        public void PonAfterCallDiscard_AddsOneDiscardAndAdvancesWithoutReachAutoDiscard()
+        {
+            using (MahjongGameFlowTestSession session = CreatePonSession(false))
+            {
+                int windowId = session.Query.ReactionWindowId;
+                int turnIndex = session.Query.TurnIndex;
+                int sourceDiscardId = session.Query.LastDiscardId;
+
+                Assert.That(session.Commands.TryRequestDeclarePonForSeat("East", windowId), Is.True);
+                Assert.That(session.Query.TurnPhaseName, Is.EqualTo("WaitingForDiscardAfterCall"));
+                Assert.That(CountDiscardsWithId(session, sourceDiscardId), Is.EqualTo(1));
+
+                session.DataFactory.SetParticipantType(
+                    session.CurrentState,
+                    "West",
+                    "RemoteHuman");
+                int discardCountBeforePostCallDiscard = session.Query.DiscardCount;
+                session.Commands.RequestDiscard(0);
+
+                Assert.That(
+                    session.Query.DiscardCount,
+                    Is.EqualTo(discardCountBeforePostCallDiscard + 1));
+                Assert.That(CountDiscardsWithId(session, sourceDiscardId), Is.EqualTo(1));
+                Assert.That(session.Query.CurrentTurnName, Is.EqualTo("West"));
+                Assert.That(session.Query.TurnIndex, Is.EqualTo(turnIndex + 2));
+                Assert.That(session.Query.TurnPhaseName, Is.EqualTo("WaitingForDraw"));
+            }
+        }
+
+        [Test]
+        public void ChiCandidate_UsesCommonGameFlowAndEntersPostCallDiscard()
+        {
+            using (MahjongGameFlowTestSession session = CreateChiSession())
+            {
+                int turnIndex = session.Query.TurnIndex;
+                object sourcePlayerSeat = session.Query.GetPlayerSeat("West");
+                session.Reflection.Invoke(sourcePlayerSeat, "DeclareReach", turnIndex);
+                int windowId = session.Query.ReactionWindowId;
+
+                Assert.That(session.Query.ReactionWindowCandidateCount, Is.EqualTo(2));
+                Assert.That(session.Query.ReactionWindowCandidateKindAt(0), Is.EqualTo("Pon"));
+                Assert.That(session.Query.ReactionWindowCandidateKindAt(1), Is.EqualTo("Chi"));
+
+                Assert.That(session.Commands.TryRequestDeclareChiForSeat("East", windowId, 3), Is.True);
+
+                Assert.That(session.Query.IsReactionWindowPending, Is.False);
+                Assert.That(HasCallOccurred(session), Is.True);
+                Assert.That(
+                    (bool)session.Reflection.GetProperty(sourcePlayerSeat, "IsIppatsuEligible"),
+                    Is.False);
+                Assert.That(session.Query.CurrentTurnName, Is.EqualTo("East"));
+                Assert.That(session.Query.TurnIndex, Is.EqualTo(turnIndex + 1));
+                Assert.That(session.Query.TurnPhaseName, Is.EqualTo("WaitingForDiscardAfterCall"));
+                Assert.That(session.Query.HasDrawnTile("East"), Is.False);
+                Assert.That(session.Query.HandCount("East"), Is.EqualTo(11));
+                Assert.That(session.Query.MeldCount("East"), Is.EqualTo(1));
+
+                object meld = session.Query.MeldAt("East", 0);
+                Assert.That(session.Reflection.GetProperty(meld, "Type").ToString(), Is.EqualTo("Chi"));
+                Assert.That(
+                    session.Collections.Count(session.Reflection.GetProperty(meld, "PhysicalTiles")),
+                    Is.EqualTo(3));
+            }
+        }
+
+        [Test]
+        public void NormalReactionWindow_CollectsChiOnlyCandidateWithAllOptions()
+        {
+            using (MahjongGameFlowTestSession session = CreateChiOnlySession())
+            {
+                Assert.That(session.Query.ReactionWindowCandidateCount, Is.EqualTo(1));
+                Assert.That(session.Query.ReactionWindowCandidateKindAt(0), Is.EqualTo("Chi"));
+
+                object candidate = session.Collections.Item(
+                    session.Reflection.GetProperty(
+                        session.Query.CurrentReactionWindow,
+                        "Candidates"),
+                    0);
+                object chiDetail = session.Reflection.GetProperty(candidate, "ChiDetail");
+                Assert.That(
+                    session.Collections.Count(session.Reflection.GetProperty(chiDetail, "Options")),
+                    Is.EqualTo(3));
+            }
+        }
+
+        [Test]
+        public void DeclineMeldCalls_DeclinesPonAndChiTogetherThenAdvances()
+        {
+            using (MahjongGameFlowTestSession session = CreateChiSession())
+            {
+                int turnIndex = session.Query.TurnIndex;
+                int windowId = session.Query.ReactionWindowId;
+
+                Assert.That(
+                    session.Commands.TryRequestDeclineMeldCallsForSeat("East", windowId),
+                    Is.True);
+
+                Assert.That(session.Query.IsReactionWindowPending, Is.False);
+                Assert.That(HasCallOccurred(session), Is.False);
+                Assert.That(session.Query.CurrentTurnName, Is.EqualTo("East"));
+                Assert.That(session.Query.TurnIndex, Is.EqualTo(turnIndex + 1));
+                Assert.That(session.Query.TurnPhaseName, Is.EqualTo("WaitingForDraw"));
+            }
+        }
+
+        [Test]
+        public void RonDecline_LeavesChiCandidateUntilItIsDeclined_AndAppliesOnlyRonFuriten()
+        {
+            using (MahjongGameFlowTestSession session = CreateRonAndChiSession())
+            {
+                int turnIndex = session.Query.TurnIndex;
+                int windowId = session.Query.ReactionWindowId;
+
+                Assert.That(session.Query.ReactionWindowCandidateCount, Is.EqualTo(2));
+                Assert.That(session.Query.ReactionWindowCandidateKindAt(0), Is.EqualTo("Ron"));
+                Assert.That(session.Query.ReactionWindowCandidateKindAt(1), Is.EqualTo("Chi"));
+
+                Assert.That(session.Commands.TryRequestDeclineRonForSeat("East", windowId), Is.True);
+                Assert.That(session.Query.IsReactionWindowPending, Is.True);
+                Assert.That(session.Query.IsTemporaryFuriten("East"), Is.True);
+                Assert.That(session.Query.CurrentTurnName, Is.EqualTo("West"));
+                Assert.That(session.Query.TurnIndex, Is.EqualTo(turnIndex));
+                Assert.That(
+                    session.Reflection.GetProperty(
+                        session.Collections.Item(
+                            session.Reflection.GetProperty(
+                                session.Query.CurrentReactionWindow,
+                                "Candidates"),
+                            1),
+                        "ResponseState").ToString(),
+                    Is.EqualTo("Pending"));
+                Assert.That(session.Commands.TryRequestDeclineRonForSeat("East", windowId), Is.False);
+
+                Assert.That(
+                    session.Commands.TryRequestDeclineMeldCallsForSeat("East", windowId),
+                    Is.True);
+                Assert.That(session.Query.IsReactionWindowPending, Is.False);
+                Assert.That(session.Query.MeldCount("East"), Is.EqualTo(0));
+                Assert.That(session.Query.IsTemporaryFuriten("East"), Is.True);
+                Assert.That(HasCallOccurred(session), Is.False);
+                Assert.That(session.Query.CurrentTurnName, Is.EqualTo("East"));
+                Assert.That(session.Query.TurnIndex, Is.EqualTo(turnIndex + 1));
+                Assert.That(session.Query.TurnPhaseName, Is.EqualTo("WaitingForDraw"));
+            }
+        }
+
+        [Test]
+        public void RonAndChi_RonDeclarationResolvesTheWinWithoutDecliningChi()
+        {
+            using (MahjongGameFlowTestSession session = CreateRonAndChiSession())
+            {
+                int windowId = session.Query.ReactionWindowId;
+
+                Assert.That(session.Query.ReactionWindowCandidateCount, Is.EqualTo(2));
+                Assert.That(session.Query.ReactionWindowCandidateKindAt(0), Is.EqualTo("Ron"));
+                Assert.That(session.Query.ReactionWindowCandidateKindAt(1), Is.EqualTo("Chi"));
+
+                Assert.That(session.Commands.TryRequestDeclareRonForSeat("East", windowId), Is.True);
+
+                Assert.That(session.Query.IsReactionWindowPending, Is.False);
+                Assert.That(session.Query.IsRoundResultPending, Is.True);
+                Assert.That(session.Query.RoundResultTypeName, Is.EqualTo("Win"));
+                Assert.That(session.Query.RoundResultWinnerSeatNameOrNull, Is.EqualTo("East"));
+                Assert.That(session.Query.RoundResultWinTypeNameOrNull, Is.EqualTo("Ron"));
+            }
+        }
+
+        [Test]
+        public void PonSuccess_NewRoundAndRetryResetHasCallOccurred()
+        {
+            using (MahjongGameFlowTestSession session = CreatePonSession(false))
+            {
+                Assert.That(session.Commands.TryRequestDeclarePonForSeat(
+                    "East",
+                    session.Query.ReactionWindowId), Is.True);
+                Assert.That(HasCallOccurred(session), Is.True);
+
+                session.Commands.StartNewRound();
+                Assert.That(HasCallOccurred(session), Is.False);
+
+                session.DataFactory.AddHandTiles(
+                    session.Query.GetPlayerSeat("East"),
+                    "5m", "5m", "1m", "2m", "3m", "4p", "5p", "6p", "2s", "3s", "4s", "E", "S");
+                session.DataFactory.SetCurrentTurn(session.CurrentState, "West");
+                session.DataFactory.SetDrawnTile(session.CurrentState, "West", "5m");
+                Assert.That(session.Commands.TryRequestDiscardDrawnTileForSeat("West"), Is.True);
+                Assert.That(session.Commands.TryRequestDeclarePonForSeat(
+                    "East",
+                    session.Query.ReactionWindowId), Is.True);
+                Assert.That(HasCallOccurred(session), Is.True);
+
+                session.Commands.RetryPrototype();
+                Assert.That(HasCallOccurred(session), Is.False);
+            }
+        }
+
+        [Test]
+        public void PonCandidate_DoesNotAppearWithOnlyOneMatchingTile()
+        {
+            using (MahjongGameFlowTestSession session = CreateSession(2))
+            {
+                session.Commands.StartNewRound();
+                session.DataFactory.AddHandTiles(
+                    session.Query.GetPlayerSeat("East"),
+                    "5m", "1m", "1m", "1m", "9m", "5p", "6p", "7p", "2s", "3s", "4s", "E", "S");
+                session.DataFactory.SetCurrentTurn(session.CurrentState, "West");
+                session.DataFactory.SetDrawnTile(session.CurrentState, "West", "5m");
+
+                Assert.That(session.Commands.TryRequestDiscardDrawnTileForSeat("West"), Is.True);
+                Assert.That(session.Query.IsReactionWindowPending, Is.False);
+                Assert.That(session.Query.CurrentTurnName, Is.EqualTo("East"));
+            }
+        }
+
+        [Test]
+        public void OpenPonHand_CanUseReducedConcealedTilesForStandardWin()
+        {
+            using (MahjongGameFlowTestSession session = CreateSession(1))
+            {
+                Type playerMeldType = session.Reflection.RequireType(
+                    "MahjongPrototype.Domain.PlayerMeld, Assembly-CSharp");
+                IList melds = (IList)Activator.CreateInstance(
+                    typeof(List<>).MakeGenericType(playerMeldType));
+                object meld = session.Reflection.InvokeStatic(
+                    playerMeldType,
+                    "CreatePon",
+                    session.DataFactory.CreateTileArray("5m", "5m", "5m"),
+                    session.DataFactory.ParseSeat("East"),
+                    session.DataFactory.ParseSeat("West"),
+                    session.DataFactory.CreateTile("5m"),
+                    1);
+                melds.Add(meld);
+
+                object winChecker = session.Reflection.CreateInstance(
+                    session.Reflection.RequireType("MahjongPrototype.Services.WinChecker, Assembly-CSharp"));
+                bool canWin = (bool)session.Reflection.Invoke(
+                    winChecker,
+                    "CanWinWithTile",
+                    session.DataFactory.CreateTileArray(
+                        "2m", "3m", "4m",
+                        "3p", "4p", "5p",
+                        "6s", "6s",
+                        "6p", "6p"),
+                    session.DataFactory.CreateTile("6s"),
+                    melds);
+
+                Assert.That(canWin, Is.True);
+            }
+        }
+
+        private static string CaptureReactionSourceAfterDiscard(bool discardDrawnTile)
+        {
+            using (MahjongGameFlowTestSession session = CreateSession(1))
+            using (EventSequenceRecorder events = new EventSequenceRecorder(
+                session.EventNotifier,
+                "ReactionWindowStarted"))
+            {
+                session.Commands.StartNewRound();
+                if (discardDrawnTile)
+                {
+                    session.DataFactory.SetDrawnTile(session.CurrentState, "East", "2m");
+                    session.Commands.RequestDiscardDrawnTile();
+                }
+                else
+                {
+                    session.DataFactory.AddHandTiles(
+                        session.Query.GetPlayerSeat("East"),
+                        "1m");
+                    session.DataFactory.SetDrawnTile(session.CurrentState, "East", "2m");
+                    session.Commands.RequestDiscard(0);
+                }
+
+                object reactionWindow = events.FirstPayload("ReactionWindowStarted");
+                object discard = session.Reflection.GetProperty(reactionWindow, "SourceDiscard");
+                return session.Reflection.GetProperty(discard, "Source").ToString();
+            }
+        }
+
+        private static MahjongGameFlowTestSession CreateRonSession()
+        {
+            MahjongGameFlowTestSession session = CreateSession(2);
+            session.Commands.StartNewRound();
+            session.DataFactory.AddHandTiles(
+                session.Query.GetPlayerSeat("East"),
+                "2p", "3p", "4p",
+                "5p", "6p", "7p",
+                "2s", "3s", "4s",
+                "6s", "7s", "8s",
+                "5m");
+            session.DataFactory.SetCurrentTurn(session.CurrentState, "West");
+            session.DataFactory.SetDrawnTile(session.CurrentState, "West", "5m");
+
+            Assert.That(session.Commands.TryRequestDiscardDrawnTileForSeat("West"), Is.True);
+            return session;
+        }
+
+        private static MahjongGameFlowTestSession CreatePonSession(bool includeRonCandidate)
+        {
+            MahjongGameFlowTestSession session = CreateSession(2);
+            session.Commands.StartNewRound();
+            string[] handTiles = includeRonCandidate
+                ? new[]
+                {
+                    "5m", "5m", "2m", "3m", "4m", "3p", "4p", "5p", "4s", "5s", "6s", "6p", "6p"
+                }
+                : new[]
+                {
+                    "5m", "5m", "1m", "2m", "3m", "4p", "5p", "6p", "2s", "3s", "4s", "E", "S"
+                };
+            session.DataFactory.AddHandTiles(
+                session.Query.GetPlayerSeat("East"),
+                handTiles);
+            session.DataFactory.SetCurrentTurn(session.CurrentState, "West");
+            session.DataFactory.SetDrawnTile(session.CurrentState, "West", "5m");
+
+            Assert.That(session.Commands.TryRequestDiscardDrawnTileForSeat("West"), Is.True);
+            return session;
+        }
+
+        private static MahjongGameFlowTestSession CreateRonAndChiSession()
+        {
+            MahjongGameFlowTestSession session = CreateSession(2);
+            session.Commands.StartNewRound();
+            session.DataFactory.AddHandTiles(
+                session.Query.GetPlayerSeat("East"),
+                "2m", "3m", "4m",
+                "2p", "3p", "4p",
+                "5p", "6p", "7p",
+                "2s", "3s", "4s",
+                "5m");
+            session.DataFactory.SetCurrentTurn(session.CurrentState, "West");
+            session.DataFactory.SetDrawnTile(session.CurrentState, "West", "5m");
+
+            Assert.That(session.Commands.TryRequestDiscardDrawnTileForSeat("West"), Is.True);
+            return session;
+        }
+
+        private static MahjongGameFlowTestSession CreateChiSession()
+        {
+            MahjongGameFlowTestSession session = CreateSession(2);
+            session.Commands.StartNewRound();
+            session.DataFactory.AddHandTiles(
+                session.Query.GetPlayerSeat("East"),
+                "3m", "4m", "5m", "5m", "1m", "2m", "3p", "4p", "5p", "2s", "3s", "4s", "E");
+            session.DataFactory.SetCurrentTurn(session.CurrentState, "West");
+            session.DataFactory.SetDrawnTile(session.CurrentState, "West", "5m");
+
+            Assert.That(session.Commands.TryRequestDiscardDrawnTileForSeat("West"), Is.True);
+            return session;
+        }
+
+        private static MahjongGameFlowTestSession CreateChiOnlySession()
+        {
+            MahjongGameFlowTestSession session = CreateSession(2);
+            session.Commands.StartNewRound();
+            session.DataFactory.AddHandTiles(
+                session.Query.GetPlayerSeat("East"),
+                "1m", "2m", "3m", "4m", "6m", "7m", "3p", "4p", "5p", "2s", "3s", "4s", "E");
+            session.DataFactory.SetCurrentTurn(session.CurrentState, "West");
+            session.DataFactory.SetDrawnTile(session.CurrentState, "West", "5m");
+
+            Assert.That(session.Commands.TryRequestDiscardDrawnTileForSeat("West"), Is.True);
+            return session;
+        }
+
+        private static bool HasCallOccurred(MahjongGameFlowTestSession session)
+        {
+            return (bool)session.Reflection.GetProperty(
+                session.CurrentState,
+                "HasCallOccurred");
+        }
+
+        private static int CountDiscardsWithId(
+            MahjongGameFlowTestSession session,
+            int discardId)
+        {
+            int count = 0;
+            for (int i = 0; i < session.Query.DiscardCount; i++)
+            {
+                int currentDiscardId = (int)session.Reflection.GetProperty(
+                    session.Query.DiscardAt(i),
+                    "Id");
+                if (currentDiscardId == discardId)
+                    count++;
+            }
+
+            return count;
+        }
+
+        private static MahjongGameFlowTestSession CreateSession(int participantCount)
+        {
+            ReflectionTestAccess reflection = new ReflectionTestAccess();
+            CollectionTestAccess collections = new CollectionTestAccess(reflection);
+            MahjongTestTypes types = new MahjongTestTypes(reflection);
+            MahjongTestDataFactory dataFactory = new MahjongTestDataFactory(reflection, types);
+            object catalog = MahjongTestCatalogFactory.CreateStandardGameFlowYakuCatalog(dataFactory);
+            MahjongGameFlowTestSession session = MahjongGameFlowTestSession.Create(
+                new MahjongGameFlowTestOptions
+                {
+                    RootName = "ReactionWindowGameFlowTest",
+                    AddEventNotifier = true,
+                    LogWarnings = false,
+                    ParticipantCount = participantCount,
+                    InitialHandTileCount = 0,
+                    AutoStart = false,
+                    UseFixedRandomSeed = true,
+                    FixedRandomSeed = 12345,
+                    EnableAutoDraw = false,
+                    AutoDiscardDrawnTileDelaySeconds = 0f,
+                    RandomizeSelfSeat = false,
+                    FixedSelfSeatName = "East",
+                    YakuDefinitionCatalog = catalog
+                },
+                reflection,
+                collections,
+                types,
+                dataFactory);
+            session.RegisterOwnedScriptableObject(catalog);
+            return session;
+        }
+
+        private sealed class EventSequenceRecorder : IDisposable
+        {
+            private readonly object eventSource;
+            private readonly List<string> names = new List<string>();
+            private readonly List<object> payloads = new List<object>();
+            private readonly List<EventSubscription> subscriptions = new List<EventSubscription>();
+
+            public EventSequenceRecorder(object eventSource, params string[] eventNames)
+            {
+                this.eventSource = eventSource;
+                for (int i = 0; i < eventNames.Length; i++)
+                    Subscribe(eventNames[i]);
+            }
+
+            public Func<bool> ReactionWindowPendingProvider { get; set; }
+            public bool WasReactionWindowPendingWhenTileDiscarded { get; private set; }
+
+            public int Count(string eventName)
+            {
+                int count = 0;
+                for (int i = 0; i < names.Count; i++)
+                {
+                    if (names[i] == eventName)
+                        count++;
+                }
+
+                return count;
+            }
+
+            public int IndexOf(string eventName)
+            {
+                int index = names.IndexOf(eventName);
+                Assert.That(index, Is.GreaterThanOrEqualTo(0), $"Event not found: {eventName}");
+                return index;
+            }
+
+            public int LastIndexOf(string eventName)
+            {
+                int index = names.LastIndexOf(eventName);
+                Assert.That(index, Is.GreaterThanOrEqualTo(0), $"Event not found: {eventName}");
+                return index;
+            }
+
+            public object FirstPayload(string eventName)
+            {
+                int index = IndexOf(eventName);
+                return payloads[index];
+            }
+
+            public string Describe()
+            {
+                return string.Join(" -> ", names);
+            }
+
+            public void Dispose()
+            {
+                for (int i = subscriptions.Count - 1; i >= 0; i--)
+                    subscriptions[i].Remove(eventSource);
+
+                subscriptions.Clear();
+            }
+
+            private void Subscribe(string eventName)
+            {
+                EventInfo eventInfo = eventSource.GetType().GetEvent(
+                    eventName,
+                    BindingFlags.Public | BindingFlags.Instance);
+                Assert.That(eventInfo, Is.Not.Null, $"Event not found: {eventName}");
+                Delegate handler = CreateHandler(eventInfo.EventHandlerType, eventName);
+                eventInfo.AddEventHandler(eventSource, handler);
+                subscriptions.Add(new EventSubscription(eventInfo, handler));
+            }
+
+            private Delegate CreateHandler(Type eventHandlerType, string eventName)
+            {
+                ParameterInfo[] parameterInfos = eventHandlerType.GetMethod("Invoke").GetParameters();
+                ParameterExpression[] parameters = new ParameterExpression[parameterInfos.Length];
+                for (int i = 0; i < parameterInfos.Length; i++)
+                {
+                    parameters[i] = Expression.Parameter(
+                        parameterInfos[i].ParameterType,
+                        parameterInfos[i].Name);
+                }
+
+                Expression payload = parameters.Length <= 0
+                    ? Expression.Constant(null, typeof(object))
+                    : Expression.Convert(parameters[0], typeof(object));
+                MethodInfo record = GetType().GetMethod(
+                    nameof(Record),
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                MethodCallExpression body = Expression.Call(
+                    Expression.Constant(this),
+                    record,
+                    Expression.Constant(eventName),
+                    payload);
+                return Expression.Lambda(eventHandlerType, body, parameters).Compile();
+            }
+
+            private void Record(string eventName, object payload)
+            {
+                if (eventName == "TileDiscarded" &&
+                    ReactionWindowPendingProvider != null)
+                {
+                    WasReactionWindowPendingWhenTileDiscarded =
+                        ReactionWindowPendingProvider();
+                }
+
+                names.Add(eventName);
+                payloads.Add(payload);
+            }
+
+            private readonly struct EventSubscription
+            {
+                public EventSubscription(EventInfo eventInfo, Delegate handler)
+                {
+                    EventInfo = eventInfo;
+                    Handler = handler;
+                }
+
+                private EventInfo EventInfo { get; }
+                private Delegate Handler { get; }
+
+                public void Remove(object source)
+                {
+                    EventInfo.RemoveEventHandler(source, Handler);
+                }
+            }
+        }
+
+        private sealed class EventCallbackSubscription : IDisposable
+        {
+            private readonly object eventSource;
+            private readonly EventInfo eventInfo;
+            private readonly Delegate handler;
+
+            private EventCallbackSubscription(
+                object eventSource,
+                EventInfo eventInfo,
+                Delegate handler)
+            {
+                this.eventSource = eventSource;
+                this.eventInfo = eventInfo;
+                this.handler = handler;
+            }
+
+            public static EventCallbackSubscription Create(
+                object eventSource,
+                string eventName,
+                Action callback)
+            {
+                Assert.That(eventSource, Is.Not.Null);
+                Assert.That(callback, Is.Not.Null);
+
+                EventInfo eventInfo = eventSource.GetType().GetEvent(
+                    eventName,
+                    BindingFlags.Public | BindingFlags.Instance);
+                Assert.That(eventInfo, Is.Not.Null, $"Event not found: {eventName}");
+
+                ParameterInfo[] parameterInfos = eventInfo.EventHandlerType
+                    .GetMethod("Invoke")
+                    .GetParameters();
+                ParameterExpression[] parameters = new ParameterExpression[parameterInfos.Length];
+                for (int i = 0; i < parameterInfos.Length; i++)
+                {
+                    parameters[i] = Expression.Parameter(
+                        parameterInfos[i].ParameterType,
+                        parameterInfos[i].Name);
+                }
+
+                MethodInfo callbackInvoke = typeof(Action).GetMethod(nameof(Action.Invoke));
+                Delegate handler = Expression.Lambda(
+                    eventInfo.EventHandlerType,
+                    Expression.Call(Expression.Constant(callback), callbackInvoke),
+                    parameters).Compile();
+                eventInfo.AddEventHandler(eventSource, handler);
+                return new EventCallbackSubscription(eventSource, eventInfo, handler);
+            }
+
+            public void Dispose()
+            {
+                eventInfo.RemoveEventHandler(eventSource, handler);
+            }
+        }
+    }
+}

@@ -1,5 +1,8 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.Linq.Expressions;
+using System.Reflection;
 using MahjongPrototype.Tests.TestSupport.Features.UiInput;
 using MahjongPrototype.Tests.TestSupport.Core;
 using MahjongPrototype.Tests.TestSupport.Mahjong;
@@ -95,7 +98,7 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void SetGameplayInputInteractable_ControlsOnlyGameplayInputs()
+        public void SetGameplayInputInteractable_ControlsOnlyGameplayButtons()
         {
             using (MahjongUiInputControllerTestDriver driver =
                 MahjongUiInputControllerTestDriver.Create("InputControllerInteractableTest"))
@@ -108,11 +111,33 @@ namespace MahjongPrototype.Tests
 
                 Assert.That(driver.DrawInteractable, Is.False);
                 Assert.That(driver.ForceDrawSkillInteractable, Is.False);
-                Assert.That(driver.TargetTileInputInteractable, Is.False);
+                Assert.That(driver.TargetTileInputInteractable, Is.True);
                 Assert.That(driver.AutoSortInteractable, Is.True);
                 Assert.That(driver.RetryInteractable, Is.True);
                 Assert.That(driver.CancelReachInteractable, Is.True);
                 Assert.That(driver.RoundResultConfirmInteractable, Is.True);
+            }
+        }
+
+        [Test]
+        public void SetGameplayInputInteractable_PreservesTargetTileTextAndSelection()
+        {
+            using (MahjongUiInputControllerTestDriver driver =
+                MahjongUiInputControllerTestDriver.Create("InputControllerTargetTilePreservationTest"))
+            {
+                driver.TargetTileText = "5m";
+                driver.SetTargetTileSelection(1, 2);
+
+                Assert.That(driver.TargetTileText, Is.EqualTo("5m"));
+                Assert.That(driver.TargetTileSelectionAnchorPosition, Is.EqualTo(1));
+                Assert.That(driver.TargetTileSelectionFocusPosition, Is.EqualTo(2));
+
+                driver.SetGameplayInputInteractable(false);
+
+                Assert.That(driver.TargetTileInputInteractable, Is.True);
+                Assert.That(driver.TargetTileText, Is.EqualTo("5m"));
+                Assert.That(driver.TargetTileSelectionAnchorPosition, Is.EqualTo(1));
+                Assert.That(driver.TargetTileSelectionFocusPosition, Is.EqualTo(2));
             }
         }
 
@@ -178,12 +203,542 @@ namespace MahjongPrototype.Tests
                 Assert.That(driver.AutoSortEventCount, Is.EqualTo(0));
             }
         }
+
+        [Test]
+        public void ReactionResponseBindings_CaptureTheOriginalRequestIdentity_ForRonAndPass()
+        {
+            using (MahjongUiInputControllerTestDriver driver =
+                MahjongUiInputControllerTestDriver.Create("ReactionInputBindingTest"))
+            {
+                long actualRequestId = 0;
+                int actualWindowId = 0;
+                string actualKind = null;
+                int? actualChiOptionId = -1;
+                EventInfo eventInfo = driver.Controller.GetType().GetEvent(
+                    "ReactionResponseRequested");
+                Assert.That(eventInfo, Is.Not.Null);
+                eventInfo.AddEventHandler(
+                    driver.Controller,
+                    CreateReactionInputHandler(
+                        eventInfo.EventHandlerType,
+                        (requestId, windowId, kind, chiOptionId) =>
+                        {
+                            actualRequestId = requestId;
+                            actualWindowId = windowId;
+                            actualKind = kind;
+                            actualChiOptionId = chiOptionId;
+                        }));
+
+                driver.SubscribeAllRequestEvents();
+                driver.Reflection.Invoke(
+                    driver.Controller,
+                    "SetReactionResponseBindings",
+                    801L,
+                    41,
+                    true,
+                    false,
+                    false);
+                driver.EnableController();
+
+                driver.ClickWin();
+                Assert.That(actualRequestId, Is.EqualTo(801));
+                Assert.That(actualWindowId, Is.EqualTo(41));
+                Assert.That(actualKind, Is.EqualTo("Ron"));
+                Assert.That(actualChiOptionId, Is.Null);
+                Assert.That(driver.WinCount, Is.EqualTo(0));
+
+                driver.ClickDeclineWin();
+                Assert.That(actualRequestId, Is.EqualTo(801));
+                Assert.That(actualWindowId, Is.EqualTo(41));
+                Assert.That(actualKind, Is.EqualTo("Pass"));
+                Assert.That(actualChiOptionId, Is.Null);
+                Assert.That(driver.DeclineWinCount, Is.EqualTo(0));
+            }
+        }
+
+        private static Delegate CreateReactionInputHandler(
+            Type handlerType,
+            Action<long, int, string, int?> recorder)
+        {
+            ParameterInfo[] parameters = handlerType.GetMethod("Invoke").GetParameters();
+            ParameterExpression requestId = Expression.Parameter(
+                parameters[0].ParameterType,
+                "requestId");
+            ParameterExpression windowId = Expression.Parameter(
+                parameters[1].ParameterType,
+                "windowId");
+            ParameterExpression kind = Expression.Parameter(
+                parameters[2].ParameterType,
+                "kind");
+            ParameterExpression chiOptionId = Expression.Parameter(
+                parameters[3].ParameterType,
+                "chiOptionId");
+            MethodInfo record = typeof(MahjongUiInputControllerTests).GetMethod(
+                nameof(RecordReactionInput),
+                BindingFlags.Static | BindingFlags.NonPublic);
+            MethodCallExpression body = Expression.Call(
+                record,
+                Expression.Constant(recorder),
+                requestId,
+                windowId,
+                Expression.Convert(kind, typeof(object)),
+                chiOptionId);
+            return Expression.Lambda(
+                handlerType,
+                body,
+                requestId,
+                windowId,
+                kind,
+                chiOptionId).Compile();
+        }
+
+        private static void RecordReactionInput(
+            Action<long, int, string, int?> recorder,
+            long requestId,
+            int windowId,
+            object kind,
+            int? chiOptionId)
+        {
+            recorder(requestId, windowId, kind.ToString(), chiOptionId);
+        }
+    }
+
+    public sealed class MahjongMeldCallDecisionControllerTests
+    {
+        private const string ControllerTypeName =
+            "MahjongPrototype.UI.MahjongPonDecisionController, Assembly-CSharp";
+        private const string InputControllerTypeName =
+            "MahjongPrototype.UI.MahjongUiInputController, Assembly-CSharp";
+        private const string ChiOptionTypeName =
+            "MahjongPrototype.Domain.ChiOption, Assembly-CSharp";
+        private const string TmpTextTypeName =
+            "TMPro.TextMeshProUGUI, Unity.TextMeshPro";
+
+        [Test]
+        public void SetMeldCallDecision_ShowsPonAndEveryChiOption_AndRoutesTheSelectedOptionId()
+        {
+            ReflectionTestAccess reflection = new ReflectionTestAccess();
+            MahjongTestTypes types = new MahjongTestTypes(reflection);
+            MahjongTestDataFactory dataFactory = new MahjongTestDataFactory(reflection, types);
+            GameObject root = new GameObject("MeldCallDecisionTestRoot");
+            root.SetActive(false);
+            try
+            {
+                Component inputController = root.AddComponent(
+                    reflection.RequireType(InputControllerTypeName));
+                Component controller = root.AddComponent(
+                    reflection.RequireType(ControllerTypeName));
+                Type tmpTextType = reflection.RequireType(TmpTextTypeName);
+                GameObject decisionRoot = new GameObject(
+                    "MeldCallDecisionRoot",
+                    typeof(RectTransform));
+                decisionRoot.transform.SetParent(root.transform);
+                Button ponButton = CreateButton(
+                    reflection,
+                    tmpTextType,
+                    decisionRoot.transform,
+                    "PonButton",
+                    "ポン");
+                Button declineButton = CreateButton(
+                    reflection,
+                    tmpTextType,
+                    decisionRoot.transform,
+                    "DeclineButton",
+                    "拒否");
+                reflection.SetPrivateField(controller, "ponDecisionRoot", decisionRoot);
+                reflection.SetPrivateField(controller, "ponButton", ponButton);
+                reflection.SetPrivateField(controller, "declineButton", declineButton);
+                reflection.SetPrivateField(controller, "inputController", inputController);
+
+                string requestedKind = null;
+                int requestedOptionId = 0;
+                EventInfo eventInfo = inputController.GetType().GetEvent("MeldCallRequested");
+                Assert.That(eventInfo, Is.Not.Null);
+                Delegate handler = CreateMeldCallHandler(
+                    eventInfo.EventHandlerType,
+                    (kind, optionId) =>
+                    {
+                        requestedKind = kind;
+                        requestedOptionId = optionId;
+                    });
+                eventInfo.AddEventHandler(inputController, handler);
+
+                object calledTile = dataFactory.CreateTile("5m");
+                IList options = CreateChiOptions(reflection, dataFactory, calledTile);
+                reflection.Invoke(
+                    controller,
+                    "SetMeldCallDecision",
+                    false,
+                    options,
+                    calledTile);
+
+                Assert.That(decisionRoot.activeSelf, Is.True);
+                Assert.That(ponButton.gameObject.activeSelf, Is.False);
+                Assert.That(declineButton.gameObject.activeSelf, Is.True);
+
+                reflection.Invoke(
+                    controller,
+                    "SetMeldCallDecision",
+                    true,
+                    options,
+                    calledTile);
+                Assert.That(ponButton.gameObject.activeSelf, Is.True);
+                Button secondChiButton = FindButton(decisionRoot.transform, "ChiOption_4");
+                Assert.That(secondChiButton, Is.Not.Null);
+                Component label = secondChiButton.transform.Find("Text").GetComponent(tmpTextType);
+                Assert.That(
+                    reflection.GetProperty(label, "text"),
+                    Is.EqualTo("チー 4m 5m 6m"));
+
+                secondChiButton.onClick.Invoke();
+
+                Assert.That(requestedKind, Is.EqualTo("Chi"));
+                Assert.That(requestedOptionId, Is.EqualTo(4));
+
+                IList ankanCandidates = (IList)Activator.CreateInstance(
+                    typeof(List<>).MakeGenericType(calledTile.GetType()));
+                ankanCandidates.Add(dataFactory.CreateTile("P"));
+                ankanCandidates.Add(dataFactory.CreateTile("C"));
+                reflection.Invoke(
+                    controller,
+                    "SetMeldCallDecision",
+                    false,
+                    true,
+                    null,
+                    ankanCandidates,
+                    calledTile);
+
+                Button daiminkanButton = FindButton(decisionRoot.transform, "Daiminkan");
+                Assert.That(daiminkanButton, Is.Not.Null);
+                daiminkanButton.onClick.Invoke();
+                Assert.That(requestedKind, Is.EqualTo("Kan"));
+                Assert.That(requestedOptionId, Is.EqualTo(0));
+
+                reflection.Invoke(
+                    controller,
+                    "SetMeldCallDecision",
+                    false,
+                    false,
+                    null,
+                    ankanCandidates,
+                    null);
+                Assert.That(declineButton.gameObject.activeSelf, Is.False);
+                Button redDragonAnkanButton = FindButton(decisionRoot.transform, "Ankan_33");
+                Assert.That(redDragonAnkanButton, Is.Not.Null);
+                redDragonAnkanButton.onClick.Invoke();
+                Assert.That(requestedKind, Is.EqualTo("Kan"));
+                Assert.That(requestedOptionId, Is.EqualTo(33));
+
+                // When ron shares a request with meld calls, the win panel
+                // owns Pass. The meld panel keeps the meld choices but must
+                // not expose a second pass button.
+                reflection.Invoke(
+                    controller,
+                    "SetReactionMeldCallDecision",
+                    true,
+                    false,
+                    options,
+                    calledTile,
+                    false);
+                Assert.That(decisionRoot.activeSelf, Is.True);
+                Assert.That(ponButton.gameObject.activeSelf, Is.True);
+                Assert.That(declineButton.gameObject.activeSelf, Is.False);
+
+                reflection.Invoke(
+                    controller,
+                    "SetReactionMeldCallDecision",
+                    true,
+                    false,
+                    options,
+                    calledTile,
+                    true);
+                Assert.That(declineButton.gameObject.activeSelf, Is.True);
+
+                reflection.Invoke(controller, "SetMeldCallDecision", false, null, null);
+                Assert.That(decisionRoot.activeSelf, Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void ReactionMeldButtons_EmitTheRequestIdentityThatCreatedThem()
+        {
+            ReflectionTestAccess reflection = new ReflectionTestAccess();
+            MahjongTestTypes types = new MahjongTestTypes(reflection);
+            MahjongTestDataFactory dataFactory = new MahjongTestDataFactory(reflection, types);
+            GameObject root = new GameObject("ReactionMeldCallDecisionIdentityTestRoot");
+            root.SetActive(false);
+            try
+            {
+                Component inputController = root.AddComponent(
+                    reflection.RequireType(InputControllerTypeName));
+                Component controller = root.AddComponent(
+                    reflection.RequireType(ControllerTypeName));
+                Type tmpTextType = reflection.RequireType(TmpTextTypeName);
+                GameObject decisionRoot = new GameObject(
+                    "MeldCallDecisionRoot",
+                    typeof(RectTransform));
+                decisionRoot.transform.SetParent(root.transform);
+                Button ponButton = CreateButton(
+                    reflection,
+                    tmpTextType,
+                    decisionRoot.transform,
+                    "PonButton",
+                    "ポン");
+                Button declineButton = CreateButton(
+                    reflection,
+                    tmpTextType,
+                    decisionRoot.transform,
+                    "DeclineButton",
+                    "パス");
+                reflection.SetPrivateField(controller, "ponDecisionRoot", decisionRoot);
+                reflection.SetPrivateField(controller, "ponButton", ponButton);
+                reflection.SetPrivateField(controller, "declineButton", declineButton);
+                reflection.SetPrivateField(controller, "inputController", inputController);
+
+                long actualRequestId = 0;
+                int actualWindowId = 0;
+                string actualKind = null;
+                int? actualChiOptionId = null;
+                EventInfo eventInfo = inputController.GetType().GetEvent(
+                    "ReactionResponseRequested");
+                Assert.That(eventInfo, Is.Not.Null);
+                eventInfo.AddEventHandler(
+                    inputController,
+                    CreateReactionResponseHandler(
+                        eventInfo.EventHandlerType,
+                        (requestId, windowId, kind, chiOptionId) =>
+                        {
+                            actualRequestId = requestId;
+                            actualWindowId = windowId;
+                            actualKind = kind;
+                            actualChiOptionId = chiOptionId;
+                        }));
+
+                object calledTile = dataFactory.CreateTile("5m");
+                IList options = CreateChiOptions(reflection, dataFactory, calledTile);
+                reflection.Invoke(
+                    controller,
+                    "SetReactionMeldCallDecision",
+                    901L,
+                    71,
+                    false,
+                    true,
+                    options,
+                    calledTile,
+                    true);
+
+                FindButton(decisionRoot.transform, "ChiOption_4").onClick.Invoke();
+                Assert.That(actualRequestId, Is.EqualTo(901));
+                Assert.That(actualWindowId, Is.EqualTo(71));
+                Assert.That(actualKind, Is.EqualTo("Chi"));
+                Assert.That(actualChiOptionId, Is.EqualTo(4));
+
+                FindButton(decisionRoot.transform, "Daiminkan").onClick.Invoke();
+                Assert.That(actualRequestId, Is.EqualTo(901));
+                Assert.That(actualWindowId, Is.EqualTo(71));
+                Assert.That(actualKind, Is.EqualTo("Daiminkan"));
+                Assert.That(actualChiOptionId, Is.Null);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void ClearReactionMeldCallDecision_RemovesDynamicButtonsAndRequestIdentity()
+        {
+            ReflectionTestAccess reflection = new ReflectionTestAccess();
+            MahjongTestTypes types = new MahjongTestTypes(reflection);
+            MahjongTestDataFactory dataFactory = new MahjongTestDataFactory(reflection, types);
+            GameObject root = new GameObject("ReactionMeldCallDecisionCleanupTestRoot");
+            root.SetActive(false);
+            try
+            {
+                Component inputController = root.AddComponent(
+                    reflection.RequireType(InputControllerTypeName));
+                Component controller = root.AddComponent(
+                    reflection.RequireType(ControllerTypeName));
+                Type tmpTextType = reflection.RequireType(TmpTextTypeName);
+                GameObject decisionRoot = new GameObject(
+                    "MeldCallDecisionRoot",
+                    typeof(RectTransform));
+                decisionRoot.transform.SetParent(root.transform);
+                Button ponButton = CreateButton(
+                    reflection,
+                    tmpTextType,
+                    decisionRoot.transform,
+                    "PonButton",
+                    "繝昴Φ");
+                Button declineButton = CreateButton(
+                    reflection,
+                    tmpTextType,
+                    decisionRoot.transform,
+                    "DeclineButton",
+                    "繝代せ");
+                reflection.SetPrivateField(controller, "ponDecisionRoot", decisionRoot);
+                reflection.SetPrivateField(controller, "ponButton", ponButton);
+                reflection.SetPrivateField(controller, "declineButton", declineButton);
+                reflection.SetPrivateField(controller, "inputController", inputController);
+
+                object calledTile = dataFactory.CreateTile("5m");
+                reflection.Invoke(
+                    controller,
+                    "SetReactionMeldCallDecision",
+                    901L,
+                    71,
+                    false,
+                    true,
+                    CreateChiOptions(reflection, dataFactory, calledTile),
+                    calledTile,
+                    true);
+                Assert.That(FindButton(decisionRoot.transform, "ChiOption_4"), Is.Not.Null);
+                Assert.That(FindButton(decisionRoot.transform, "Daiminkan"), Is.Not.Null);
+
+                reflection.Invoke(controller, "ClearReactionMeldCallDecision");
+
+                Assert.That(decisionRoot.activeSelf, Is.False);
+                Assert.That(FindButton(decisionRoot.transform, "ChiOption_4"), Is.Null);
+                Assert.That(FindButton(decisionRoot.transform, "Daiminkan"), Is.Null);
+                Assert.That(
+                    (bool)reflection.GetPrivateField(controller, "hasReactionRequest"),
+                    Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        private static IList CreateChiOptions(
+            ReflectionTestAccess reflection,
+            MahjongTestDataFactory dataFactory,
+            object calledTile)
+        {
+            Type chiOptionType = reflection.RequireType(ChiOptionTypeName);
+            IList options = (IList)Activator.CreateInstance(
+                typeof(List<>).MakeGenericType(chiOptionType));
+            options.Add(reflection.CreateInstance(
+                chiOptionType,
+                3,
+                calledTile,
+                dataFactory.CreateTileArrayFromText("3m 4m"),
+                dataFactory.CreateTileArrayFromText("3m 4m 5m")));
+            options.Add(reflection.CreateInstance(
+                chiOptionType,
+                4,
+                calledTile,
+                dataFactory.CreateTileArrayFromText("4m 6m"),
+                dataFactory.CreateTileArrayFromText("4m 5m 6m")));
+            return options;
+        }
+
+        private static Delegate CreateMeldCallHandler(
+            Type handlerType,
+            Action<string, int> recorder)
+        {
+            ParameterInfo[] parameters = handlerType.GetMethod("Invoke").GetParameters();
+            ParameterExpression kind = Expression.Parameter(parameters[0].ParameterType, "kind");
+            ParameterExpression optionId = Expression.Parameter(parameters[1].ParameterType, "optionId");
+            MethodInfo record = typeof(MahjongMeldCallDecisionControllerTests).GetMethod(
+                nameof(RecordMeldCall),
+                BindingFlags.Static | BindingFlags.NonPublic);
+            MethodCallExpression body = Expression.Call(
+                record,
+                Expression.Constant(recorder),
+                Expression.Convert(kind, typeof(object)),
+                optionId);
+            return Expression.Lambda(handlerType, body, kind, optionId).Compile();
+        }
+
+        private static void RecordMeldCall(Action<string, int> recorder, object kind, int optionId)
+        {
+            recorder(kind.ToString(), optionId);
+        }
+
+        private static Delegate CreateReactionResponseHandler(
+            Type handlerType,
+            Action<long, int, string, int?> recorder)
+        {
+            ParameterInfo[] parameters = handlerType.GetMethod("Invoke").GetParameters();
+            ParameterExpression requestId = Expression.Parameter(
+                parameters[0].ParameterType,
+                "requestId");
+            ParameterExpression windowId = Expression.Parameter(
+                parameters[1].ParameterType,
+                "windowId");
+            ParameterExpression kind = Expression.Parameter(
+                parameters[2].ParameterType,
+                "kind");
+            ParameterExpression chiOptionId = Expression.Parameter(
+                parameters[3].ParameterType,
+                "chiOptionId");
+            MethodInfo record = typeof(MahjongMeldCallDecisionControllerTests).GetMethod(
+                nameof(RecordReactionResponse),
+                BindingFlags.Static | BindingFlags.NonPublic);
+            MethodCallExpression body = Expression.Call(
+                record,
+                Expression.Constant(recorder),
+                requestId,
+                windowId,
+                Expression.Convert(kind, typeof(object)),
+                chiOptionId);
+            return Expression.Lambda(
+                handlerType,
+                body,
+                requestId,
+                windowId,
+                kind,
+                chiOptionId).Compile();
+        }
+
+        private static void RecordReactionResponse(
+            Action<long, int, string, int?> recorder,
+            long requestId,
+            int windowId,
+            object kind,
+            int? chiOptionId)
+        {
+            recorder(requestId, windowId, kind.ToString(), chiOptionId);
+        }
+
+        private static Button CreateButton(
+            ReflectionTestAccess reflection,
+            Type tmpTextType,
+            Transform parent,
+            string name,
+            string label)
+        {
+            GameObject buttonObject = new GameObject(
+                name,
+                typeof(RectTransform),
+                typeof(Image),
+                typeof(Button));
+            buttonObject.transform.SetParent(parent);
+            GameObject textObject = new GameObject(
+                "Text",
+                typeof(RectTransform),
+                tmpTextType);
+            textObject.transform.SetParent(buttonObject.transform);
+            reflection.SetProperty(textObject.GetComponent(tmpTextType), "text", label);
+            return buttonObject.GetComponent<Button>();
+        }
+
+        private static Button FindButton(Transform parent, string name)
+        {
+            Transform child = parent.Find(name);
+            return child != null ? child.GetComponent<Button>() : null;
+        }
     }
 
     public sealed class MahjongPrototypeUiManagerInteractionTests
     {
         [Test]
-        public void RefreshInteractionState_OtherTurn_KeepsControlAreaInteractableAndSelfTilesDisabled()
+        public void RefreshInteractionState_OtherTurn_DisablesDrawButAllowsSkillReservationAndSelfTilesDisabled()
         {
             using (Driver driver = Driver.Create())
             {
@@ -191,7 +746,7 @@ namespace MahjongPrototype.Tests
 
                 driver.RefreshInteraction();
 
-                Assert.That(driver.DrawInteractable, Is.True);
+                Assert.That(driver.DrawInteractable, Is.False);
                 Assert.That(driver.ForceDrawSkillInteractable, Is.True);
                 Assert.That(driver.TargetTileInputInteractable, Is.True);
                 Assert.That(driver.AutoSortInteractable, Is.True);
@@ -201,7 +756,7 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void RefreshInteractionState_SelfTurn_KeepsControlAreaAndSelfTilesInteractable()
+        public void RefreshInteractionState_SelfTurnWithDrawnTile_DisablesDrawButKeepsSkillAndSelfTilesInteractable()
         {
             using (Driver driver = Driver.Create())
             {
@@ -209,7 +764,7 @@ namespace MahjongPrototype.Tests
 
                 driver.RefreshInteraction();
 
-                Assert.That(driver.DrawInteractable, Is.True);
+                Assert.That(driver.DrawInteractable, Is.False);
                 Assert.That(driver.ForceDrawSkillInteractable, Is.True);
                 Assert.That(driver.TargetTileInputInteractable, Is.True);
                 Assert.That(driver.AutoSortInteractable, Is.True);
@@ -228,7 +783,7 @@ namespace MahjongPrototype.Tests
 
                 driver.RefreshInteraction();
 
-                Assert.That(driver.DrawInteractable, Is.True);
+                Assert.That(driver.DrawInteractable, Is.False);
                 Assert.That(driver.ForceDrawSkillInteractable, Is.True);
                 Assert.That(driver.TargetTileInputInteractable, Is.True);
                 Assert.That(driver.AutoSortInteractable, Is.False);
@@ -238,7 +793,7 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void RefreshInteractionState_ReachDiscardSelection_LocksControlAreaAndEnablesOnlyCandidates()
+        public void RefreshInteractionState_ReachDiscardSelection_KeepsForceDrawSkillAndCancelEnabledWithCandidates()
         {
             using (Driver driver = Driver.Create())
             {
@@ -248,9 +803,10 @@ namespace MahjongPrototype.Tests
                 driver.RefreshInteraction();
 
                 Assert.That(driver.DrawInteractable, Is.False);
-                Assert.That(driver.ForceDrawSkillInteractable, Is.False);
-                Assert.That(driver.TargetTileInputInteractable, Is.False);
+                Assert.That(driver.ForceDrawSkillInteractable, Is.True);
+                Assert.That(driver.TargetTileInputInteractable, Is.True);
                 Assert.That(driver.AutoSortInteractable, Is.False);
+                Assert.That(driver.CancelReachInteractable, Is.True);
                 Assert.That(driver.FirstSelfHandTileInteractable, Is.True);
                 Assert.That(driver.SecondSelfHandTileInteractable, Is.False);
                 Assert.That(driver.SelfDrawnTileInteractable, Is.False);
@@ -258,12 +814,101 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void RefreshInteractionState_LockedStatesKeepControlAreaNotInteractable()
+        public void RefreshInteractionState_LockedStatesDisableButtonsButKeepTargetTileInputEditable()
         {
             AssertControlAreaLocked(driver => driver.BeginWinDecision());
-            AssertControlAreaLocked(driver => driver.BeginReachDiscardSelection());
             AssertControlAreaLocked(driver => driver.MarkRoundEnded());
-            AssertControlAreaLocked(driver => driver.DeclareReachWaitingForDraw());
+        }
+
+        [Test]
+        public void ReachDiscardSelection_ForceDrawSkillKeepsCandidatesAndDisablesButtonImmediately()
+        {
+            using (Driver driver = Driver.Create())
+            {
+                driver.PrepareNormalSelfTurn();
+                driver.BeginReachDiscardSelection();
+                driver.TargetTileText = "5m";
+                driver.EnableUiNotifications();
+                driver.EnableCommandRouting();
+                driver.RefreshInteraction();
+                int candidateCountBefore = driver.ReachDiscardCandidateCount;
+
+                Assert.That(driver.CancelReachInteractable, Is.True);
+                Assert.That(driver.ForceDrawSkillInteractable, Is.True);
+                Assert.That(driver.FirstSelfHandTileInteractable, Is.True);
+
+                driver.ClickForceDrawSkill();
+
+                Assert.That(driver.ActiveSkillEffectCount, Is.EqualTo(1));
+                Assert.That(driver.IsReachDiscardSelectionPending, Is.True);
+                Assert.That(driver.ReachDiscardCandidateCount, Is.EqualTo(candidateCountBefore));
+                Assert.That(driver.DrawInteractable, Is.False);
+                Assert.That(driver.ForceDrawSkillInteractable, Is.False);
+                Assert.That(driver.AutoSortInteractable, Is.False);
+                Assert.That(driver.TargetTileInputInteractable, Is.True);
+                Assert.That(driver.CancelReachInteractable, Is.True);
+                Assert.That(driver.FirstSelfHandTileInteractable, Is.True);
+            }
+        }
+
+        [Test]
+        public void RefreshInteractionState_ReachWaitingForDraw_EnablesDrawAndForceDrawSkillSeparately()
+        {
+            using (Driver driver = Driver.Create())
+            {
+                driver.PrepareNormalSelfTurn();
+                driver.DeclareReachWaitingForDraw();
+
+                driver.RefreshInteraction();
+
+                Assert.That(driver.DrawInteractable, Is.True);
+                Assert.That(driver.ForceDrawSkillInteractable, Is.True);
+                Assert.That(driver.TargetTileInputInteractable, Is.True);
+            }
+        }
+
+        [Test]
+        public void RefreshInteractionState_PreservesTargetTileTextAndSelectionAcrossStateTransitions()
+        {
+            using (Driver driver = Driver.Create())
+            {
+                driver.PrepareNormalSelfTurn();
+                driver.TargetTileText = "5m";
+                driver.SetTargetTileSelection(1, 2);
+
+                Assert.That(driver.TargetTileText, Is.EqualTo("5m"));
+                Assert.That(driver.TargetTileSelectionAnchorPosition, Is.EqualTo(1));
+                Assert.That(driver.TargetTileSelectionFocusPosition, Is.EqualTo(2));
+
+                driver.RefreshInteraction();
+                driver.BeginReachDiscardSelection();
+                driver.RefreshInteraction();
+                driver.BeginWinDecision();
+                driver.RefreshInteraction();
+
+                Assert.That(driver.TargetTileInputInteractable, Is.True);
+                Assert.That(driver.TargetTileText, Is.EqualTo("5m"));
+                Assert.That(driver.TargetTileSelectionAnchorPosition, Is.EqualTo(1));
+                Assert.That(driver.TargetTileSelectionFocusPosition, Is.EqualTo(2));
+            }
+        }
+
+        [Test]
+        public void OtherTurn_ForceDrawSkillCommand_ReservesSkillForViewContextLocalSeat()
+        {
+            using (Driver driver = Driver.Create())
+            {
+                driver.PrepareNormalOtherTurn();
+                driver.TargetTileText = "5m";
+                driver.EnableUiNotifications();
+                driver.EnableCommandRouting();
+                driver.RefreshInteraction();
+
+                driver.ClickForceDrawSkill();
+
+                Assert.That(driver.HasForceDrawReservationForSelf, Is.True);
+                Assert.That(driver.ForceDrawSkillInteractable, Is.False);
+            }
         }
 
         [Test]
@@ -279,7 +924,7 @@ namespace MahjongPrototype.Tests
                 driver.ClickDraw();
 
                 Snapshot after = driver.CaptureSnapshot();
-                Assert.That(driver.DrawInteractable, Is.True);
+                Assert.That(driver.DrawInteractable, Is.False);
                 Assert.That(after.CurrentTurnName, Is.EqualTo(before.CurrentTurnName));
                 Assert.That(after.TurnIndex, Is.EqualTo(before.TurnIndex));
                 Assert.That(after.SelfHandCount, Is.EqualTo(before.SelfHandCount));
@@ -300,7 +945,7 @@ namespace MahjongPrototype.Tests
 
                 Assert.That(driver.DrawInteractable, Is.False);
                 Assert.That(driver.ForceDrawSkillInteractable, Is.False);
-                Assert.That(driver.TargetTileInputInteractable, Is.False);
+                Assert.That(driver.TargetTileInputInteractable, Is.True);
             }
         }
 
@@ -348,6 +993,8 @@ namespace MahjongPrototype.Tests
                 "MahjongPrototype.UI3D.Mahjong3DDrawnTileView, Assembly-CSharp";
             private const string DiscardRiverViewTypeName =
                 "MahjongPrototype.UI3D.Mahjong3DDiscardRiverView, Assembly-CSharp";
+            private const string OpenMeldViewTypeName =
+                "MahjongPrototype.UI3D.Mahjong3DOpenMeldView, Assembly-CSharp";
             private const string TileViewTypeName =
                 "MahjongPrototype.UI3D.Mahjong3DTileView, Assembly-CSharp";
             private const string TileFaceCatalogTypeName =
@@ -356,9 +1003,6 @@ namespace MahjongPrototype.Tests
                 "MahjongPrototype.Services.ReachDiscardCandidate, Assembly-CSharp";
             private const string DiscardSourceTypeName =
                 "MahjongPrototype.Domain.DiscardSource, Assembly-CSharp";
-            private const string TmpInputFieldTypeName =
-                "TMPro.TMP_InputField, Unity.TextMeshPro";
-
             private readonly UnityObjectTestOwner owner;
             private readonly ReflectionTestAccess reflection;
             private readonly CollectionTestAccess collections;
@@ -373,6 +1017,7 @@ namespace MahjongPrototype.Tests
             private readonly Toggle autoSortToggle;
             private readonly Component targetTileInput;
             private bool commandRoutingEnabled;
+            private bool uiNotificationsEnabled;
             private bool disposed;
 
             private Driver(
@@ -410,6 +1055,39 @@ namespace MahjongPrototype.Tests
             public bool AutoSortInteractable => autoSortToggle.interactable;
             public bool TargetTileInputInteractable =>
                 (bool)reflection.GetProperty(targetTileInput, "interactable");
+            public bool IsReachDiscardSelectionPending =>
+                (bool)reflection.GetProperty(State, "IsReachDiscardSelectionPending");
+            public int ReachDiscardCandidateCount => collections.Count(
+                reflection.GetProperty(State, "ReachDiscardCandidates"));
+            public int ActiveSkillEffectCount => session.Query.ActiveSkillEffectCount;
+            public bool CancelReachInteractable =>
+                ((Button)reflection.GetPrivateField(inputController, "cancelReachButton")).interactable;
+            public string TargetTileText
+            {
+                get => (string)reflection.GetProperty(targetTileInput, "text");
+                set => reflection.SetProperty(targetTileInput, "text", value);
+            }
+            public int TargetTileSelectionAnchorPosition =>
+                (int)reflection.GetProperty(
+                    targetTileInput,
+                    "selectionStringAnchorPosition");
+            public int TargetTileSelectionFocusPosition =>
+                (int)reflection.GetProperty(
+                    targetTileInput,
+                    "selectionStringFocusPosition");
+            public bool HasForceDrawReservationForSelf
+            {
+                get
+                {
+                    object reservationService = reflection.GetPrivateField(
+                        session.GameFlow,
+                        "skillReservationService");
+                    return (bool)reflection.Invoke(
+                        reservationService,
+                        "HasReservation",
+                        session.DataFactory.ParseSeat("East"));
+                }
+            }
             public bool FirstSelfHandTileInteractable => TileInteractable(FirstSelfHandTile);
             public bool SecondSelfHandTileInteractable => TileInteractable(SelfHandTileAt(1));
             public bool SelfDrawnTileInteractable => TileInteractable(SelfDrawnTile);
@@ -424,7 +1102,7 @@ namespace MahjongPrototype.Tests
                 MahjongGameFlowTestOptions options = new MahjongGameFlowTestOptions
                 {
                     RootName = "MahjongPrototypeUiManagerInteractionTest",
-                    AddEventNotifier = false,
+                    AddEventNotifier = true,
                     LogWarnings = false,
                     ParticipantCount = 2,
                     InitialHandTileCount = 0,
@@ -535,9 +1213,36 @@ namespace MahjongPrototype.Tests
                 commandRoutingEnabled = true;
             }
 
+            public void EnableUiNotifications()
+            {
+                if (uiNotificationsEnabled)
+                    return;
+
+                reflection.SetPrivateField(uiManager, "eventNotifier", session.EventNotifier);
+                reflection.Invoke(uiManager, "SubscribeNotifications");
+                uiNotificationsEnabled = true;
+            }
+
             public void ClickDraw()
             {
                 drawButton.onClick.Invoke();
+            }
+
+            public void ClickForceDrawSkill()
+            {
+                forceDrawSkillButton.onClick.Invoke();
+            }
+
+            public void SetTargetTileSelection(int anchorPosition, int focusPosition)
+            {
+                reflection.SetProperty(
+                    targetTileInput,
+                    "selectionStringAnchorPosition",
+                    anchorPosition);
+                reflection.SetProperty(
+                    targetTileInput,
+                    "selectionStringFocusPosition",
+                    focusPosition);
             }
 
             public Snapshot CaptureSnapshot()
@@ -557,6 +1262,9 @@ namespace MahjongPrototype.Tests
                     return;
 
                 disposed = true;
+
+                if (uiNotificationsEnabled)
+                    reflection.Invoke(uiManager, "UnsubscribeNotifications");
 
                 if (commandRoutingEnabled)
                 {
@@ -674,7 +1382,7 @@ namespace MahjongPrototype.Tests
                 drawButton = CreateButton(inputObject.transform, "Draw");
                 forceDrawSkillButton = CreateButton(inputObject.transform, "ForceDrawSkill");
                 autoSortToggle = CreateToggle(inputObject.transform, "AutoSort");
-                targetTileInput = CreateInput(inputObject.transform, "TargetTile");
+                targetTileInput = CreateInput(reflection, inputObject.transform, "TargetTile");
 
                 reflection.SetPrivateField(controller, "drawButton", drawButton);
                 reflection.SetPrivateField(controller, "forceDrawSkillButton", forceDrawSkillButton);
@@ -727,13 +1435,18 @@ namespace MahjongPrototype.Tests
                 Component discardRiverView =
                     CreateChild(selfController.transform, "DiscardRiverView")
                     .AddComponent(reflection.RequireType(DiscardRiverViewTypeName));
+                Component openMeldView =
+                    CreateChild(selfController.transform, "OpenMeldView")
+                    .AddComponent(reflection.RequireType(OpenMeldViewTypeName));
 
                 reflection.SetPrivateField(handView, "tilePrefab", tilePrefab);
                 reflection.SetPrivateField(drawnTileView, "tilePrefab", tilePrefab);
                 reflection.SetPrivateField(discardRiverView, "tilePrefab", tilePrefab);
+                reflection.SetPrivateField(openMeldView, "tilePrefab", tilePrefab);
                 reflection.SetPrivateField(selfController, "handView", handView);
                 reflection.SetPrivateField(selfController, "drawnTileView", drawnTileView);
                 reflection.SetPrivateField(selfController, "discardRiverView", discardRiverView);
+                reflection.SetPrivateField(selfController, "openMeldView", openMeldView);
                 reflection.SetPrivateField(presenter, "selfBottomPlayerUiController", selfController);
                 return presenter;
             }
@@ -778,10 +1491,12 @@ namespace MahjongPrototype.Tests
                 return CreateChild(parent, name).AddComponent<Toggle>();
             }
 
-            private static Component CreateInput(Transform parent, string name)
+            private static Component CreateInput(
+                ReflectionTestAccess reflection,
+                Transform parent,
+                string name)
             {
-                return CreateChild(parent, name)
-                    .AddComponent(Type.GetType(TmpInputFieldTypeName, true));
+                return TmpInputFieldTestFactory.Create(reflection, parent, name);
             }
 
             private static GameObject CreateChild(Transform parent, string name)

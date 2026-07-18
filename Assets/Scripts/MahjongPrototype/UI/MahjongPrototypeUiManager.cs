@@ -42,6 +42,9 @@ namespace MahjongPrototype.UI
         [Header("Win Decision")]
         [SerializeField] private MahjongWinDecisionController winDecisionController;
 
+        [Header("Pon Decision")]
+        [SerializeField] private MahjongPonDecisionController ponDecisionController;
+
         [Header("Reach Decision")]
         [SerializeField] private MahjongReachDecisionController reachDecisionController;
 
@@ -64,12 +67,12 @@ namespace MahjongPrototype.UI
         private bool warnedMissingInputController;
         private bool warnedMissingCommandRouter;
         private bool warnedMissingWinDecisionController;
+        private bool warnedMissingPonDecisionController;
         private bool warnedMissingReachDecisionController;
         private bool warnedMissingRoundResultController;
         private bool warnedMissingLogPreviewController;
         private bool warnedMissingZeroHanTenpaiController;
         private bool warnedMissingFuritenController;
-
         private void Reset()
         {
             CacheReferences();
@@ -88,6 +91,7 @@ namespace MahjongPrototype.UI
             EnsureCommandRouter();
             SyncAutoSortToggleFromFlow();
             EnsureWinDecisionController();
+            EnsurePonDecisionController();
             EnsureReachDecisionController();
             EnsureRoundResultController();
             EnsureLogPreviewController();
@@ -105,6 +109,7 @@ namespace MahjongPrototype.UI
             EnsureCommandRouter();
             SyncAutoSortToggleFromFlow();
             EnsureWinDecisionController();
+            EnsurePonDecisionController();
             EnsureReachDecisionController();
             EnsureRoundResultController();
             EnsureLogPreviewController();
@@ -117,6 +122,8 @@ namespace MahjongPrototype.UI
         private void OnDisable()
         {
             UnsubscribeNotifications();
+            inputController?.ClearReactionResponseBindings();
+            ponDecisionController?.ClearReactionMeldCallDecision();
         }
 
         public void Refresh(MahjongGameState state)
@@ -128,8 +135,10 @@ namespace MahjongPrototype.UI
         {
             if (state == null)
             {
+                inputController?.ClearReactionResponseBindings();
                 ClearRoundResultUi();
                 RefreshTableCenterUi(null);
+                RefreshPonDecision(null);
                 ClearZeroHanTenpaiUi();
                 ClearFuritenUi();
                 return;
@@ -139,6 +148,7 @@ namespace MahjongPrototype.UI
             RefreshTableCenterUi(state);
             RefreshPlayerArea3D(state);
             RefreshWinDecision(state);
+            RefreshPonDecision(state);
             RefreshReachDecision(state);
             RefreshRoundResult(state);
             RefreshInteractionState(state);
@@ -160,7 +170,9 @@ namespace MahjongPrototype.UI
             if (gameFlow == null)
             {
                 WarnMissingOnce(ref warnedMissingFlow, "MahjongGameFlow is not assigned.");
+                inputController?.ClearReactionResponseBindings();
                 ClearRoundResultUi();
+                RefreshPonDecision(null);
                 ClearZeroHanTenpaiUi();
                 ClearFuritenUi();
                 return;
@@ -220,7 +232,13 @@ namespace MahjongPrototype.UI
             eventNotifier.TurnStarted += HandleTurnStarted;
             eventNotifier.TileDrawn += HandleTileDrawn;
             eventNotifier.TileDiscarded += HandleTileDiscarded;
+            eventNotifier.ReactionWindowStarted += HandleReactionWindowChanged;
+            eventNotifier.ReactionWindowAnswered += HandleReactionWindowAnswered;
+            eventNotifier.ReactionWindowResolved += HandleReactionWindowResolved;
+            eventNotifier.ReactionWindowClosed += HandleReactionWindowClosed;
+            eventNotifier.MeldDeclared += HandleMeldDeclared;
             eventNotifier.SkillActivated += HandleSkillActivated;
+            eventNotifier.SkillReserved += HandleSkillReserved;
             eventNotifier.SkillEffectRegistered += HandleSkillEffectRegistered;
             eventNotifier.SkillEffectResolved += HandleSkillEffectResolved;
             eventNotifier.SkillEffectExpired += HandleSkillEffectExpired;
@@ -228,6 +246,7 @@ namespace MahjongPrototype.UI
             eventNotifier.WinDeclared += HandleWinDeclared;
             eventNotifier.WinDeclined += HandleWinDeclined;
             eventNotifier.ReachDecisionStarted += HandleReachDecisionStarted;
+            eventNotifier.SelfKanDecisionStarted += HandleSelfKanDecisionStarted;
             eventNotifier.ReachDiscardSelectionStarted += HandleReachDiscardSelectionStarted;
             eventNotifier.ReachDiscardSelectionCanceled += HandleReachDiscardSelectionCanceled;
             eventNotifier.ReachDeclared += HandleReachDeclared;
@@ -249,7 +268,13 @@ namespace MahjongPrototype.UI
             eventNotifier.TurnStarted -= HandleTurnStarted;
             eventNotifier.TileDrawn -= HandleTileDrawn;
             eventNotifier.TileDiscarded -= HandleTileDiscarded;
+            eventNotifier.ReactionWindowStarted -= HandleReactionWindowChanged;
+            eventNotifier.ReactionWindowAnswered -= HandleReactionWindowAnswered;
+            eventNotifier.ReactionWindowResolved -= HandleReactionWindowResolved;
+            eventNotifier.ReactionWindowClosed -= HandleReactionWindowClosed;
+            eventNotifier.MeldDeclared -= HandleMeldDeclared;
             eventNotifier.SkillActivated -= HandleSkillActivated;
+            eventNotifier.SkillReserved -= HandleSkillReserved;
             eventNotifier.SkillEffectRegistered -= HandleSkillEffectRegistered;
             eventNotifier.SkillEffectResolved -= HandleSkillEffectResolved;
             eventNotifier.SkillEffectExpired -= HandleSkillEffectExpired;
@@ -257,6 +282,7 @@ namespace MahjongPrototype.UI
             eventNotifier.WinDeclared -= HandleWinDeclared;
             eventNotifier.WinDeclined -= HandleWinDeclined;
             eventNotifier.ReachDecisionStarted -= HandleReachDecisionStarted;
+            eventNotifier.SelfKanDecisionStarted -= HandleSelfKanDecisionStarted;
             eventNotifier.ReachDiscardSelectionStarted -= HandleReachDiscardSelectionStarted;
             eventNotifier.ReachDiscardSelectionCanceled -= HandleReachDiscardSelectionCanceled;
             eventNotifier.ReachDeclared -= HandleReachDeclared;
@@ -350,6 +376,16 @@ namespace MahjongPrototype.UI
                 "MahjongWinDecisionController is not assigned. Add it to the UI GameObject and assign WinDecisionArea and its buttons.");
         }
 
+        private void EnsurePonDecisionController()
+        {
+            if (ponDecisionController != null)
+                return;
+
+            WarnMissingOnce(
+                ref warnedMissingPonDecisionController,
+                "MahjongPonDecisionController is not assigned. Assign its dedicated pon decision area in the Inspector.");
+        }
+
         private void EnsureReachDecisionController()
         {
             if (reachDecisionController != null)
@@ -384,6 +420,7 @@ namespace MahjongPrototype.UI
         {
             RefreshGlobalStatus();
             RefreshWinDecisionUi();
+            RefreshPonDecisionUi();
             RefreshReachDecisionUi();
             RefreshInteractionUi();
         }
@@ -420,14 +457,78 @@ namespace MahjongPrototype.UI
             }
         }
 
+        private void HandleReactionWindowChanged(ReactionWindow _)
+        {
+            RefreshGlobalStatus();
+            RefreshWinDecisionUi();
+            RefreshPonDecisionUi();
+            RefreshReachDecisionUi();
+            RefreshInteractionUi();
+        }
+
+        private void HandleReactionWindowAnswered(ReactionWindowAnswerResult _)
+        {
+            RefreshGlobalStatus();
+            RefreshWinDecisionUi();
+            RefreshPonDecisionUi();
+            RefreshInteractionUi();
+        }
+
+        private void HandleReactionWindowResolved(ReactionWindowResolution resolution)
+        {
+            if ((resolution.Type == ReactionWindowResolutionType.PonDeclared ||
+                 resolution.Type == ReactionWindowResolutionType.ChiDeclared ||
+                 resolution.Type == ReactionWindowResolutionType.DaiminkanDeclared) &&
+                resolution.Candidate != null)
+            {
+                RefreshPlayerHandForSeat(resolution.Candidate.Seat);
+                RefreshPlayerDiscardRiverForSeat(resolution.SourceDiscard.ActorSeat);
+                RefreshPlayerOpenMeldsForSeat(resolution.Candidate.Seat);
+            }
+
+            RefreshGlobalStatus();
+            RefreshWinDecisionUi();
+            RefreshPonDecisionUi();
+            RefreshInteractionUi();
+        }
+
+        private void HandleMeldDeclared(PlayerMeld meld)
+        {
+            if (meld == null)
+                return;
+
+            RefreshPlayerHandForSeat(meld.OwnerSeat);
+            RefreshPlayerDrawnTileForSeat(meld.OwnerSeat);
+            RefreshPlayerOpenMeldsForSeat(meld.OwnerSeat);
+            RefreshGlobalStatus();
+            RefreshPonDecisionUi();
+            RefreshInteractionUi();
+        }
+
+        private void HandleReactionWindowClosed(int _)
+        {
+            RefreshGlobalStatus();
+            RefreshWinDecisionUi();
+            RefreshPonDecisionUi();
+            RefreshReachDecisionUi();
+            RefreshInteractionUi();
+        }
+
         private void HandleSkillActivated(SeatId _, ActiveSkillEffect __)
         {
             RefreshGlobalStatus();
+            RefreshInteractionUi();
+        }
+
+        private void HandleSkillReserved(PendingSkillReservation _)
+        {
+            RefreshInteractionUi();
         }
 
         private void HandleSkillEffectRegistered(ActiveSkillEffect _)
         {
             RefreshGlobalStatus();
+            RefreshInteractionUi();
         }
 
         private void HandleSkillEffectResolved(DrawResult _)
@@ -444,6 +545,7 @@ namespace MahjongPrototype.UI
         {
             RefreshGlobalStatus();
             RefreshWinDecisionUi();
+            RefreshPonDecisionUi();
             RefreshReachDecisionUi();
             RefreshInteractionUi();
 
@@ -463,6 +565,7 @@ namespace MahjongPrototype.UI
         {
             RefreshGlobalStatus();
             RefreshWinDecisionUi();
+            RefreshPonDecisionUi();
             RefreshReachDecisionUi();
             RefreshInteractionUi();
 
@@ -474,6 +577,13 @@ namespace MahjongPrototype.UI
         {
             RefreshGlobalStatus();
             RefreshReachDecisionUi();
+            RefreshInteractionUi();
+        }
+
+        private void HandleSelfKanDecisionStarted(SeatId _, int __)
+        {
+            RefreshGlobalStatus();
+            RefreshPonDecisionUi();
             RefreshInteractionUi();
         }
 
@@ -559,13 +669,19 @@ namespace MahjongPrototype.UI
             if (playerArea3DPresenter == null)
                 return;
 
+            if (gameFlow != null)
+                playerArea3DPresenter.SetViewContext(gameFlow.ViewContext);
             playerArea3DPresenter.Refresh(state, CanUseSelfGameplayInput(state));
         }
 
         private void RefreshTableCenterUi(MahjongGameState state)
         {
             if (tableCenterUiController != null)
+            {
+                if (gameFlow != null)
+                    tableCenterUiController.SetViewContext(gameFlow.ViewContext);
                 tableCenterUiController.Refresh(state);
+            }
         }
 
         private void RefreshPlayerHand3DForSeat(MahjongGameState state, SeatId seat)
@@ -573,6 +689,7 @@ namespace MahjongPrototype.UI
             if (playerArea3DPresenter == null)
                 return;
 
+            ConfigurePresentationViewContext();
             playerArea3DPresenter.RefreshHandForSeat(state, seat, CanUseSelfGameplayInput(state));
         }
 
@@ -581,6 +698,7 @@ namespace MahjongPrototype.UI
             if (playerArea3DPresenter == null)
                 return;
 
+            ConfigurePresentationViewContext();
             playerArea3DPresenter.RefreshDrawnTileForSeat(state, seat, CanUseSelfGameplayInput(state));
         }
 
@@ -589,6 +707,7 @@ namespace MahjongPrototype.UI
             if (playerArea3DPresenter == null)
                 return;
 
+            ConfigurePresentationViewContext();
             playerArea3DPresenter.RefreshDiscardRiverForSeat(state, seat);
         }
 
@@ -619,22 +738,70 @@ namespace MahjongPrototype.UI
             RefreshPlayerDiscardRiver3DForSeat(state, seat);
         }
 
+        private void RefreshPlayerOpenMeldsForSeat(SeatId seat)
+        {
+            MahjongGameState state = gameFlow != null ? gameFlow.CurrentState : null;
+            if (state == null || playerArea3DPresenter == null)
+                return;
+
+            ConfigurePresentationViewContext();
+            playerArea3DPresenter.RefreshOpenMeldsForSeat(state, seat);
+        }
+
+        private void ConfigurePresentationViewContext()
+        {
+            if (gameFlow != null && playerArea3DPresenter != null)
+                playerArea3DPresenter.SetViewContext(gameFlow.ViewContext);
+        }
+
         private void RefreshWinDecision(MahjongGameState state)
         {
             if (winDecisionController == null)
                 EnsureWinDecisionController();
 
-            if (winDecisionController != null)
+            if (winDecisionController == null)
             {
-                bool showSelfWinDecision =
-                    state != null &&
-                    state.IsWinDecisionPending &&
-                    state.WinDecisionSeat == state.SelfSeat;
-                WinType? winType = showSelfWinDecision
-                    ? state.WinDecisionType
-                    : null;
-                winDecisionController.SetWinDecision(showSelfWinDecision, winType);
+                inputController?.ClearReactionResponseBindings();
+                inputController?.ClearWinDecisionResponseBindings();
+                return;
             }
+
+            if (TryGetSelfReactionDecisionRequest(state, out DecisionRequest request))
+            {
+                inputController?.ClearWinDecisionResponseBindings();
+                ReactionDecisionRequest reaction = request.Reaction;
+                bool showRon = reaction.Allows(ReactionWindowSeatAnswerKind.Ron);
+                inputController?.SetReactionResponseBindings(
+                    request.RequestId,
+                    reaction.WindowId,
+                    showRon,
+                    reaction.Allows(ReactionWindowSeatAnswerKind.Pon),
+                    !showRon &&
+                    (reaction.Allows(ReactionWindowSeatAnswerKind.Pon) ||
+                     reaction.Allows(ReactionWindowSeatAnswerKind.Daiminkan) ||
+                     reaction.Allows(ReactionWindowSeatAnswerKind.Chi)));
+                winDecisionController.SetWinDecision(
+                    showRon,
+                    showRon ? WinType.Ron : null);
+                return;
+            }
+
+            inputController?.ClearReactionResponseBindings();
+            if (TryGetSelfDecisionRequest(
+                    state,
+                    DecisionKind.WinDeclaration,
+                    out DecisionRequest winRequest) &&
+                winRequest.WinDeclaration != null)
+            {
+                inputController?.SetWinDecisionResponseBindings(winRequest.RequestId);
+                winDecisionController.SetWinDecision(
+                    true,
+                    winRequest.WinDeclaration.WinType);
+                return;
+            }
+
+            inputController?.ClearWinDecisionResponseBindings();
+            winDecisionController.SetWinDecision(false, null);
         }
 
         private void RefreshWinDecisionUi()
@@ -642,6 +809,136 @@ namespace MahjongPrototype.UI
             MahjongGameState state = gameFlow != null ? gameFlow.CurrentState : null;
             if (state != null)
                 RefreshWinDecision(state);
+            else
+            {
+                inputController?.ClearReactionResponseBindings();
+                inputController?.ClearWinDecisionResponseBindings();
+            }
+        }
+
+        private void RefreshPonDecision(MahjongGameState state)
+        {
+            if (ponDecisionController == null)
+                EnsurePonDecisionController();
+
+            if (ponDecisionController == null)
+                return;
+
+            if (state == null)
+            {
+                ponDecisionController.SetMeldCallDecision(
+                    false,
+                    false,
+                    null,
+                    null,
+                    null,
+                    false,
+                    null);
+                return;
+            }
+
+            if (!TryGetSelfSeat(state, out SeatId selfSeat))
+            {
+                ponDecisionController.SetMeldCallDecision(
+                    false,
+                    false,
+                    null,
+                    null,
+                    null,
+                    false,
+                    null);
+                return;
+            }
+
+            if (TryGetSelfReactionDecisionRequest(state, out DecisionRequest request))
+            {
+                ReactionDecisionRequest reaction = request.Reaction;
+                bool showRon = reaction.Allows(ReactionWindowSeatAnswerKind.Ron);
+                bool showPon = reaction.Allows(ReactionWindowSeatAnswerKind.Pon);
+                bool showDaiminkan = reaction.Allows(
+                    ReactionWindowSeatAnswerKind.Daiminkan);
+                IReadOnlyList<ChiOption> chiOptions = CreateReactionChiOptions(reaction);
+                ponDecisionController.SetReactionMeldCallDecision(
+                    request.RequestId,
+                    reaction.WindowId,
+                    showPon,
+                    showDaiminkan,
+                    chiOptions,
+                    reaction.SourceTile,
+                    !showRon);
+                return;
+            }
+
+            if (TryGetSelfDecisionRequest(
+                    state,
+                    DecisionKind.SelfKan,
+                    out DecisionRequest selfKanRequest) &&
+                selfKanRequest.SelfKan != null)
+            {
+                ponDecisionController.SetSelfKanDecision(
+                    selfKanRequest.RequestId,
+                    selfKanRequest.SelfKan);
+                return;
+            }
+
+            // The normal local UI must not derive reaction choices from a
+            // mutable window. If a request is no longer pending, hide the
+            // reaction controls until the existing lifecycle closes it.
+            if (state.IsReactionWindowPending)
+            {
+                ponDecisionController.SetMeldCallDecision(
+                    false,
+                    false,
+                    null,
+                    null,
+                    null,
+                    false,
+                    null);
+                return;
+            }
+
+            ponDecisionController.SetMeldCallDecision(
+                false,
+                false,
+                null,
+                null,
+                null,
+                false,
+                null);
+        }
+
+        private static IReadOnlyList<ChiOption> CreateReactionChiOptions(
+            ReactionDecisionRequest reaction)
+        {
+            if (reaction == null ||
+                !reaction.Allows(ReactionWindowSeatAnswerKind.Chi))
+            {
+                return null;
+            }
+
+            IReadOnlyList<ReactionDecisionChiOption> sourceOptions =
+                reaction.GetChiOptions();
+            List<ChiOption> options = new List<ChiOption>(sourceOptions.Count);
+            for (int i = 0; i < sourceOptions.Count; i++)
+            {
+                ReactionDecisionChiOption option = sourceOptions[i];
+                if (option == null)
+                    continue;
+
+                options.Add(new ChiOption(
+                    option.OptionId,
+                    reaction.SourceTile,
+                    option.HandTiles,
+                    option.MeldTiles));
+            }
+
+            return options;
+        }
+
+        private void RefreshPonDecisionUi()
+        {
+            MahjongGameState state = gameFlow != null ? gameFlow.CurrentState : null;
+            RefreshPonDecision(state);
         }
 
         private void RefreshReachDecision(MahjongGameState state)
@@ -651,14 +948,19 @@ namespace MahjongPrototype.UI
 
             if (reachDecisionController != null)
             {
-                bool showSelfReachDecision =
-                    state != null &&
-                    state.IsReachDecisionPending &&
-                    state.ReachDecisionSeat == state.SelfSeat;
+                bool showSelfReachDecision = TryGetSelfDecisionRequest(
+                    state,
+                    DecisionKind.Reach,
+                    out DecisionRequest reachRequest);
+                if (showSelfReachDecision)
+                    inputController?.SetReachDecisionResponseBindings(reachRequest.RequestId);
+                else
+                    inputController?.ClearReachDecisionResponseBindings();
+
                 bool showSelfReachCancel =
                     state != null &&
                     state.IsReachDiscardSelectionPending &&
-                    state.ReachDecisionSeat == state.SelfSeat;
+                    IsSelfSeat(state.ReachDecisionSeat);
                 reachDecisionController.SetReachUiVisible(showSelfReachDecision, showSelfReachCancel);
             }
         }
@@ -711,12 +1013,14 @@ namespace MahjongPrototype.UI
         private void RefreshInteractionState(MahjongGameState state)
         {
             bool canUseSelfTileInput = CanUseSelfGameplayInput(state);
-            bool canUseControlPanelInput = CanUseControlAreaInput(state);
+            bool canUseDrawInput = CanUseDrawInput(state);
+            bool canUseForceDrawSkillInput = CanUseForceDrawSkillInput(state);
             bool canUseAutoSortInput = CanUseAutoSortInput(state);
 
             if (inputController != null)
             {
-                inputController.SetGameplayInputInteractable(canUseControlPanelInput);
+                inputController.SetDrawButtonInteractable(canUseDrawInput);
+                inputController.SetForceDrawSkillButtonInteractable(canUseForceDrawSkillInput);
                 inputController.SetAutoSortInteractable(canUseAutoSortInput);
             }
 
@@ -738,18 +1042,31 @@ namespace MahjongPrototype.UI
         {
             return gameFlow != null &&
                 state != null &&
-                state.IsSelfTurn &&
+                TryGetSelfSeat(state, out SeatId selfSeat) &&
+                state.CurrentTurn == selfSeat &&
                 !state.IsInteractionLocked;
         }
 
-        private bool CanUseControlAreaInput(MahjongGameState state)
+        private bool CanUseDrawInput(MahjongGameState state)
         {
             return gameFlow != null &&
                 state != null &&
-                !state.IsWinDecisionPending &&
+                TryGetSelfSeat(state, out SeatId selfSeat) &&
+                state.CurrentTurn == selfSeat &&
                 !state.IsRoundEnded &&
+                !state.IsWinDecisionPending &&
+                !state.IsReachDecisionPending &&
                 !state.IsReachDiscardSelectionPending &&
-                !IsDeclaredReachWaitingForDraw(state);
+                !state.GetPlayerSeat(selfSeat).HasDrawnTile &&
+                (state.TurnPhase == TurnPhase.WaitingForDraw ||
+                    state.TurnPhase == TurnPhase.WaitingForRinshanDraw);
+        }
+
+        private bool CanUseForceDrawSkillInput(MahjongGameState state)
+        {
+            return gameFlow != null &&
+                TryGetSelfSeat(state, out SeatId selfSeat) &&
+                gameFlow.CanRequestForceDrawSkillForSeat(selfSeat);
         }
 
         private static bool CanUseAutoSortInput(MahjongGameState state)
@@ -759,26 +1076,73 @@ namespace MahjongPrototype.UI
                 !state.IsReachDiscardSelectionPending;
         }
 
-        private static bool IsDeclaredReachWaitingForDraw(MahjongGameState state)
-        {
-            return state != null &&
-                state.IsSelfTurn &&
-                !state.IsInteractionLocked &&
-                state.GetPlayerSeat(state.SelfSeat).IsReachDeclared &&
-                !state.GetPlayerSeat(state.SelfSeat).HasDrawnTile;
-        }
-
         private bool IsSelfSeat(SeatId seat)
         {
             MahjongGameState state = gameFlow != null ? gameFlow.CurrentState : null;
-            return state != null && state.IsSelfSeat(seat);
+            return state != null && TryGetSelfSeat(state, out SeatId selfSeat) &&
+                selfSeat == seat;
+        }
+
+        private bool TryGetSelfSeat(MahjongGameState state, out SeatId selfSeat)
+        {
+            selfSeat = default;
+            return state != null &&
+                gameFlow != null &&
+                gameFlow.ViewContext != null &&
+                gameFlow.ViewContext.TryGetSelfSeat(state, out selfSeat);
+        }
+
+        private bool TryGetSelfReactionDecisionRequest(
+            MahjongGameState state,
+            out DecisionRequest request)
+        {
+            request = null;
+            if (state == null || gameFlow == null || gameFlow.ViewContext == null ||
+                !TryGetSelfSeat(state, out SeatId selfSeat) ||
+                !gameFlow.TryGetPendingReactionDecisionRequest(
+                    gameFlow.ViewContext.LocalPlayerId,
+                    out DecisionRequest pending) ||
+                pending.Kind != DecisionKind.Reaction || pending.Reaction == null ||
+                pending.PlayerId != gameFlow.ViewContext.LocalPlayerId ||
+                pending.ActorSeat != selfSeat)
+            {
+                return false;
+            }
+
+            request = pending;
+            return true;
+        }
+
+        private bool TryGetSelfDecisionRequest(
+            MahjongGameState state,
+            DecisionKind kind,
+            out DecisionRequest request)
+        {
+            request = null;
+            if (state == null || gameFlow == null || gameFlow.ViewContext == null ||
+                !TryGetSelfSeat(state, out SeatId selfSeat) ||
+                !gameFlow.TryGetPendingDecisionRequest(
+                    gameFlow.ViewContext.LocalPlayerId,
+                    kind,
+                    out DecisionRequest pending) ||
+                pending.Kind != kind ||
+                pending.PlayerId != gameFlow.ViewContext.LocalPlayerId ||
+                pending.ActorSeat != selfSeat ||
+                pending.TurnIndex != state.TurnIndex)
+            {
+                return false;
+            }
+
+            request = pending;
+            return true;
         }
 
         private void ApplyReachDiscardCandidateInteractable(MahjongGameState state)
         {
             if (state == null ||
                 !state.IsReachDiscardSelectionPending ||
-                state.ReachDecisionSeat != state.SelfSeat)
+                !TryGetSelfSeat(state, out SeatId selfSeat) ||
+                state.ReachDecisionSeat != selfSeat)
             {
                 if (playerArea3DPresenter != null && state != null)
                     playerArea3DPresenter.ClearSelfTileDimmed(state);
@@ -815,7 +1179,10 @@ namespace MahjongPrototype.UI
             if (state == null || state.IsReachDiscardSelectionPending)
                 return;
 
-            PlayerSeat selfPlayerSeat = state.GetPlayerSeat(state.SelfSeat);
+            if (!TryGetSelfSeat(state, out SeatId selfSeat))
+                return;
+
+            PlayerSeat selfPlayerSeat = state.GetPlayerSeat(selfSeat);
             if (!selfPlayerSeat.IsReachDeclared)
                 return;
 
@@ -921,8 +1288,9 @@ namespace MahjongPrototype.UI
             FuritenEvaluationResultSet resultSet = gameFlow.EvaluateAllFuriten();
             bool shouldShow =
                 resultSet != null &&
+                TryGetSelfSeat(state, out SeatId selfSeat) &&
                 resultSet.TryGet(
-                    state.SelfSeat,
+                    selfSeat,
                     out FuritenSeatEvaluationResult result) &&
                 result.IsEvaluated &&
                 result.IsFuriten;

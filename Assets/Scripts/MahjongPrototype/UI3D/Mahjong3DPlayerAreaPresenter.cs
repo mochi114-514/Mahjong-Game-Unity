@@ -20,9 +20,20 @@ namespace MahjongPrototype.UI3D
         private readonly HashSet<Mahjong3DPlayerUiController> handEventSubscribedControllers =
             new HashSet<Mahjong3DPlayerUiController>();
         private Mahjong3DPlayerUiController drawnTileSubscribedController;
+        private MahjongViewContext viewContext;
 
         public event Action<SeatId, int> HandTileClicked;
         public event Action DrawnTileClicked;
+
+        /// <summary>
+        /// Sets the terminal-local point of view used to map data seats to
+        /// presentation slots. The state-level self fields remain only as a
+        /// compatibility fallback for callers that have not migrated yet.
+        /// </summary>
+        public void SetViewContext(MahjongViewContext context)
+        {
+            viewContext = context ?? throw new ArgumentNullException(nameof(context));
+        }
 
         private void Reset()
         {
@@ -58,6 +69,7 @@ namespace MahjongPrototype.UI3D
             RefreshHand(state, canUseSelfInput);
             RefreshDrawnTile(state, canUseSelfInput);
             RefreshDiscardRiver(state);
+            RefreshOpenMelds(state);
         }
 
         public void RefreshHand(MahjongGameState state, bool canUseSelfInput)
@@ -76,12 +88,12 @@ namespace MahjongPrototype.UI3D
                 if (seatSlot.IsEmpty)
                     continue;
 
-                ViewSlot viewSlot = SeatToViewSlotResolver.Resolve(state.SelfSeat, dataSeat);
+                ViewSlot viewSlot = SeatToViewSlotResolver.Resolve(GetSelfSeat(state), dataSeat);
                 Mahjong3DPlayerUiController controller = GetPlayerUiController(viewSlot);
                 if (controller == null)
                     continue;
 
-                bool isSelf = seatSlot.PlayerId == state.SelfPlayerId;
+                bool isSelf = IsSelfPlayer(state, seatSlot.PlayerId);
                 controller.RenderHand(
                     state.GetPlayerSeat(dataSeat).Hand.GetTiles(),
                     dataSeat,
@@ -99,7 +111,7 @@ namespace MahjongPrototype.UI3D
                 return;
 
             SeatSlot seatSlot = state.GetSeatSlot(seat);
-            ViewSlot viewSlot = SeatToViewSlotResolver.Resolve(state.SelfSeat, seat);
+            ViewSlot viewSlot = SeatToViewSlotResolver.Resolve(GetSelfSeat(state), seat);
             Mahjong3DPlayerUiController controller = GetPlayerUiController(viewSlot);
             if (controller == null)
                 return;
@@ -110,7 +122,7 @@ namespace MahjongPrototype.UI3D
                 return;
             }
 
-            bool isSelf = seatSlot.PlayerId == state.SelfPlayerId;
+            bool isSelf = IsSelfPlayer(state, seatSlot.PlayerId);
             controller.RenderHand(
                 state.GetPlayerSeat(seat).Hand.GetTiles(),
                 seat,
@@ -142,7 +154,7 @@ namespace MahjongPrototype.UI3D
                 if (seatSlot.IsEmpty)
                     continue;
 
-                ViewSlot viewSlot = SeatToViewSlotResolver.Resolve(state.SelfSeat, seat);
+                ViewSlot viewSlot = SeatToViewSlotResolver.Resolve(GetSelfSeat(state), seat);
                 RefreshDrawnTileForSeat(state, seat, canUseSelfInput);
                 renderedViewSlots.Add(viewSlot);
             }
@@ -156,7 +168,7 @@ namespace MahjongPrototype.UI3D
                 return;
 
             SeatSlot seatSlot = state.GetSeatSlot(seat);
-            ViewSlot viewSlot = SeatToViewSlotResolver.Resolve(state.SelfSeat, seat);
+            ViewSlot viewSlot = SeatToViewSlotResolver.Resolve(GetSelfSeat(state), seat);
             Mahjong3DPlayerUiController controller = GetPlayerUiController(viewSlot);
             if (controller == null)
                 return;
@@ -167,7 +179,7 @@ namespace MahjongPrototype.UI3D
                 return;
             }
 
-            bool isSelf = seatSlot.PlayerId == state.SelfPlayerId;
+            bool isSelf = IsSelfPlayer(state, seatSlot.PlayerId);
             Tile? drawnTile = state.GetPlayerSeat(seat).DrawnTile;
             if (drawnTile.HasValue)
             {
@@ -206,12 +218,12 @@ namespace MahjongPrototype.UI3D
                 if (seatSlot.IsEmpty)
                     continue;
 
-                ViewSlot viewSlot = SeatToViewSlotResolver.Resolve(state.SelfSeat, seat);
+                ViewSlot viewSlot = SeatToViewSlotResolver.Resolve(GetSelfSeat(state), seat);
                 Mahjong3DPlayerUiController controller = GetPlayerUiController(viewSlot);
                 if (controller == null)
                     continue;
 
-                controller.RenderDiscardRiver(state.Discards, seat);
+                RenderDiscardRiver(controller, state, seat);
                 renderedViewSlots.Add(viewSlot);
             }
 
@@ -224,7 +236,7 @@ namespace MahjongPrototype.UI3D
                 return;
 
             SeatSlot seatSlot = state.GetSeatSlot(seat);
-            ViewSlot viewSlot = SeatToViewSlotResolver.Resolve(state.SelfSeat, seat);
+            ViewSlot viewSlot = SeatToViewSlotResolver.Resolve(GetSelfSeat(state), seat);
             Mahjong3DPlayerUiController controller = GetPlayerUiController(viewSlot);
             if (controller == null)
                 return;
@@ -235,7 +247,21 @@ namespace MahjongPrototype.UI3D
                 return;
             }
 
-            controller.RenderDiscardRiver(state.Discards, seat);
+            RenderDiscardRiver(controller, state, seat);
+        }
+
+        private static void RenderDiscardRiver(
+            Mahjong3DPlayerUiController controller,
+            MahjongGameState state,
+            SeatId seat)
+        {
+            PlayerSeat playerSeat = state.GetPlayerSeat(seat);
+            controller.RenderDiscardRiver(
+                state.Discards,
+                state.DiscardClaims,
+                seat,
+                playerSeat.IsReachDeclared,
+                playerSeat.ReachDeclaredTurnIndex);
         }
 
         public void ClearDiscardRivers()
@@ -246,12 +272,68 @@ namespace MahjongPrototype.UI3D
             ClearDiscardRiver(ViewSlot.PreviousRight);
         }
 
+        public void RefreshOpenMelds(MahjongGameState state)
+        {
+            if (state == null)
+                return;
+
+            CachePlayerUiControllerReferences();
+
+            HashSet<ViewSlot> renderedViewSlots = new HashSet<ViewSlot>();
+            IReadOnlyList<SeatId> displaySeats = state.OccupiedSeats;
+            for (int i = 0; i < displaySeats.Count; i++)
+            {
+                SeatId seat = displaySeats[i];
+                SeatSlot seatSlot = state.GetSeatSlot(seat);
+                if (seatSlot.IsEmpty)
+                    continue;
+
+                ViewSlot viewSlot = SeatToViewSlotResolver.Resolve(GetSelfSeat(state), seat);
+                Mahjong3DPlayerUiController controller = GetPlayerUiController(viewSlot);
+                if (controller == null)
+                    continue;
+
+                controller.RenderOpenMelds(state.GetPlayerSeat(seat).Melds);
+                renderedViewSlots.Add(viewSlot);
+            }
+
+            ClearUnrenderedOpenMelds(renderedViewSlots);
+        }
+
+        public void RefreshOpenMeldsForSeat(MahjongGameState state, SeatId seat)
+        {
+            if (state == null)
+                return;
+
+            SeatSlot seatSlot = state.GetSeatSlot(seat);
+            ViewSlot viewSlot = SeatToViewSlotResolver.Resolve(GetSelfSeat(state), seat);
+            Mahjong3DPlayerUiController controller = GetPlayerUiController(viewSlot);
+            if (controller == null)
+                return;
+
+            if (seatSlot.IsEmpty)
+            {
+                controller.ClearOpenMelds();
+                return;
+            }
+
+            controller.RenderOpenMelds(state.GetPlayerSeat(seat).Melds);
+        }
+
+        public void ClearOpenMelds()
+        {
+            ClearOpenMelds(ViewSlot.SelfBottom);
+            ClearOpenMelds(ViewSlot.NextLeft);
+            ClearOpenMelds(ViewSlot.AcrossTop);
+            ClearOpenMelds(ViewSlot.PreviousRight);
+        }
+
         public void SetSelfInteractable(MahjongGameState state, bool interactable)
         {
             if (state == null)
                 return;
 
-            ViewSlot selfViewSlot = SeatToViewSlotResolver.Resolve(state.SelfSeat, state.SelfSeat);
+            ViewSlot selfViewSlot = SeatToViewSlotResolver.Resolve(GetSelfSeat(state), GetSelfSeat(state));
             Mahjong3DPlayerUiController controller = GetPlayerUiController(selfViewSlot);
             if (controller == null)
                 return;
@@ -267,7 +349,7 @@ namespace MahjongPrototype.UI3D
             if (state == null)
                 return;
 
-            ViewSlot selfViewSlot = SeatToViewSlotResolver.Resolve(state.SelfSeat, state.SelfSeat);
+            ViewSlot selfViewSlot = SeatToViewSlotResolver.Resolve(GetSelfSeat(state), GetSelfSeat(state));
             Mahjong3DPlayerUiController controller = GetPlayerUiController(selfViewSlot);
             if (controller != null)
                 controller.SetHandTileInteractableByIndices(handIndices);
@@ -278,7 +360,7 @@ namespace MahjongPrototype.UI3D
             if (state == null)
                 return;
 
-            ViewSlot selfViewSlot = SeatToViewSlotResolver.Resolve(state.SelfSeat, state.SelfSeat);
+            ViewSlot selfViewSlot = SeatToViewSlotResolver.Resolve(GetSelfSeat(state), GetSelfSeat(state));
             Mahjong3DPlayerUiController controller = GetPlayerUiController(selfViewSlot);
             if (controller != null)
                 controller.SetDrawnTileInteractable(interactable);
@@ -292,7 +374,7 @@ namespace MahjongPrototype.UI3D
             if (state == null)
                 return;
 
-            ViewSlot selfViewSlot = SeatToViewSlotResolver.Resolve(state.SelfSeat, state.SelfSeat);
+            ViewSlot selfViewSlot = SeatToViewSlotResolver.Resolve(GetSelfSeat(state), GetSelfSeat(state));
             Mahjong3DPlayerUiController controller = GetPlayerUiController(selfViewSlot);
             if (controller == null)
                 return;
@@ -306,7 +388,7 @@ namespace MahjongPrototype.UI3D
             if (state == null)
                 return;
 
-            ViewSlot selfViewSlot = SeatToViewSlotResolver.Resolve(state.SelfSeat, state.SelfSeat);
+            ViewSlot selfViewSlot = SeatToViewSlotResolver.Resolve(GetSelfSeat(state), GetSelfSeat(state));
             Mahjong3DPlayerUiController controller = GetPlayerUiController(selfViewSlot);
             if (controller != null)
                 controller.ClearDimmedTiles();
@@ -335,7 +417,25 @@ namespace MahjongPrototype.UI3D
             if (state == null)
                 return;
 
-            RefreshHandForSeat(state, state.SelfSeat, canUseSelfInput);
+            RefreshHandForSeat(state, GetSelfSeat(state), canUseSelfInput);
+        }
+
+        private SeatId GetSelfSeat(MahjongGameState state)
+        {
+            if (viewContext != null && viewContext.TryGetSelfSeat(state, out SeatId selfSeat))
+                return selfSeat;
+
+            // PROTOTYPE: Keep direct presenter callers working while their
+            // owner is migrated to MahjongViewContext.
+            return state.SelfSeat;
+        }
+
+        private bool IsSelfPlayer(MahjongGameState state, PlayerId? playerId)
+        {
+            return playerId.HasValue &&
+                (viewContext != null
+                    ? playerId.Value == viewContext.LocalPlayerId
+                    : playerId.Value == state.SelfPlayerId);
         }
 
         public void ClearSelfBottomHand()
@@ -509,6 +609,29 @@ namespace MahjongPrototype.UI3D
             Mahjong3DPlayerUiController controller = GetPlayerUiController(viewSlot);
             if (controller != null)
                 controller.ClearDiscardRiver();
+        }
+
+        private void ClearUnrenderedOpenMelds(HashSet<ViewSlot> renderedViewSlots)
+        {
+            ClearOpenMeldsIfUnrendered(ViewSlot.SelfBottom, renderedViewSlots);
+            ClearOpenMeldsIfUnrendered(ViewSlot.NextLeft, renderedViewSlots);
+            ClearOpenMeldsIfUnrendered(ViewSlot.AcrossTop, renderedViewSlots);
+            ClearOpenMeldsIfUnrendered(ViewSlot.PreviousRight, renderedViewSlots);
+        }
+
+        private void ClearOpenMeldsIfUnrendered(
+            ViewSlot viewSlot,
+            HashSet<ViewSlot> renderedViewSlots)
+        {
+            if (!renderedViewSlots.Contains(viewSlot))
+                ClearOpenMelds(viewSlot);
+        }
+
+        private void ClearOpenMelds(ViewSlot viewSlot)
+        {
+            Mahjong3DPlayerUiController controller = GetPlayerUiController(viewSlot);
+            if (controller != null)
+                controller.ClearOpenMelds();
         }
     }
 }

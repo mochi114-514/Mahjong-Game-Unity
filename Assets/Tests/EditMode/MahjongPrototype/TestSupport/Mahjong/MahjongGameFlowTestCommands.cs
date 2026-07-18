@@ -88,6 +88,119 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
             reflection.Invoke(GameFlow, "RequestDeclineWin");
         }
 
+        public bool TryRequestDeclareRonForSeat(string seatName, int reactionWindowId)
+        {
+            return (bool)reflection.Invoke(
+                GameFlow,
+                "TryRequestDeclareRonForSeat",
+                dataFactory.ParseSeat(seatName),
+                reactionWindowId);
+        }
+
+        public bool TryRequestDeclineRonForSeat(string seatName, int reactionWindowId)
+        {
+            return (bool)reflection.Invoke(
+                GameFlow,
+                "TryRequestDeclineRonForSeat",
+                dataFactory.ParseSeat(seatName),
+                reactionWindowId);
+        }
+
+        public bool TryRequestDeclarePonForSeat(string seatName, int reactionWindowId)
+        {
+            return (bool)reflection.Invoke(
+                GameFlow,
+                "TryRequestDeclarePonForSeat",
+                dataFactory.ParseSeat(seatName),
+                reactionWindowId);
+        }
+
+        public bool TryRequestDeclareDaiminkanForSeat(string seatName, int reactionWindowId)
+        {
+            return (bool)reflection.Invoke(
+                GameFlow,
+                "TryRequestDeclareDaiminkanForSeat",
+                dataFactory.ParseSeat(seatName),
+                reactionWindowId);
+        }
+
+        public bool TryRequestDeclareAnkanForSeat(string seatName, string tileCode)
+        {
+            return (bool)reflection.Invoke(
+                GameFlow,
+                "TryRequestDeclareAnkanForSeat",
+                dataFactory.ParseSeat(seatName),
+                dataFactory.CreateTile(tileCode));
+        }
+
+        public object GetAnkanCandidatesForSeat(string seatName)
+        {
+            return reflection.Invoke(
+                GameFlow,
+                "GetAnkanCandidatesForSeat",
+                dataFactory.ParseSeat(seatName));
+        }
+
+        public object GetSelfKanCandidatesForSeat(string seatName)
+        {
+            return reflection.Invoke(
+                GameFlow,
+                "GetSelfKanCandidatesForSeat",
+                dataFactory.ParseSeat(seatName));
+        }
+
+        public bool TryRequestDeclareKakanForSeat(
+            string seatName,
+            string tileCode,
+            int sourcePonMeldIndex)
+        {
+            return (bool)reflection.Invoke(
+                GameFlow,
+                "TryRequestDeclareKakanForSeat",
+                dataFactory.ParseSeat(seatName),
+                (int)reflection.GetProperty(dataFactory.CreateTile(tileCode), "TypeIndex"),
+                sourcePonMeldIndex);
+        }
+
+        public bool TryRequestDeclineSelfKanForSeat(string seatName)
+        {
+            return (bool)reflection.Invoke(
+                GameFlow,
+                "TryRequestDeclineSelfKanForSeat",
+                dataFactory.ParseSeat(seatName));
+        }
+
+        public bool TryRequestDeclareChiForSeat(
+            string seatName,
+            int reactionWindowId,
+            int optionId)
+        {
+            return (bool)reflection.Invoke(
+                GameFlow,
+                "TryRequestDeclareChiForSeat",
+                dataFactory.ParseSeat(seatName),
+                reactionWindowId,
+                optionId);
+        }
+
+        public bool TryRequestDeclinePonForSeat(string seatName, int reactionWindowId)
+        {
+            return (bool)reflection.Invoke(
+                GameFlow,
+                "TryRequestDeclinePonForSeat",
+                dataFactory.ParseSeat(seatName),
+                reactionWindowId);
+        }
+
+        public bool TryRequestDeclineMeldCallsForSeat(string seatName, int reactionWindowId)
+        {
+            return (bool)reflection.Invoke(
+                GameFlow,
+                "TryRequestDeclineMeldCallsForSeat",
+                dataFactory.ParseSeat(seatName),
+                reactionWindowId);
+        }
+
         public void RequestAdvanceFromRoundResult()
         {
             reflection.Invoke(GameFlow, "RequestAdvanceFromRoundResult");
@@ -101,6 +214,15 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
         public void CheckWinPrototype()
         {
             reflection.Invoke(GameFlow, "CheckWinPrototype");
+        }
+
+        public void ResolveAfterDraw(string seatName, bool isRinshanDraw = false)
+        {
+            reflection.Invoke(
+                GameFlow,
+                "ResolveAfterDraw",
+                dataFactory.ParseSeat(seatName),
+                isRinshanDraw);
         }
 
         public void DealInitialHands()

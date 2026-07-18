@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using MahjongPrototype.Domain;
 
@@ -22,8 +23,30 @@ namespace MahjongPrototype.Services
             IReadOnlyList<Tile> handTiles,
             Tile winningTile)
         {
-            if (!TryBuildTileCounts(handTiles, BaseHandTileCount, out int[] baseCounts) ||
+            return AnalyzeWithTile(handTiles, winningTile, Array.Empty<PlayerMeld>());
+        }
+
+        public WinningHandAnalysisResult AnalyzeWithTile(
+            IReadOnlyList<Tile> handTiles,
+            Tile winningTile,
+            IReadOnlyList<PlayerMeld> melds)
+        {
+            if (!PlayerMeldRules.TryGetExpectedConcealedTileCount(
+                    BaseHandTileCount,
+                    melds,
+                    out int expectedConcealedTileCount) ||
+                !TryBuildTileCounts(
+                    handTiles,
+                    expectedConcealedTileCount,
+                    melds,
+                    out int[] concealedBaseCounts) ||
                 !winningTile.IsValid)
+                return WinningHandAnalysisResult.NotWin;
+
+            int[] structuralBaseCounts = BuildCombinedStructuralTileCounts(
+                concealedBaseCounts,
+                melds);
+            if (structuralBaseCounts == null)
                 return WinningHandAnalysisResult.NotWin;
 
             List<Tile> completedTiles = new List<Tile>(handTiles.Count + 1);
@@ -31,7 +54,9 @@ namespace MahjongPrototype.Services
                 completedTiles.Add(handTiles[i]);
 
             completedTiles.Add(winningTile);
-            WinningHandAnalysisResult completedAnalysis = AnalyzeCompletedHand(completedTiles);
+            WinningHandAnalysisResult completedAnalysis = AnalyzeCompletedHand(
+                completedTiles,
+                melds);
             if (!completedAnalysis.CanWin)
                 return completedAnalysis;
 
@@ -39,7 +64,7 @@ namespace MahjongPrototype.Services
                 AnalyzeStandardWinningInterpretations(
                     completedAnalysis.StandardDecompositions,
                     winningTile,
-                    baseCounts);
+                    structuralBaseCounts);
 
             return new WinningHandAnalysisResult(
                 completedAnalysis.StandardDecompositions,
@@ -50,13 +75,33 @@ namespace MahjongPrototype.Services
 
         public WinningHandAnalysisResult AnalyzeCompletedHand(IReadOnlyList<Tile> tiles)
         {
-            if (!TryBuildTileCounts(tiles, WinningHandTileCount, out int[] counts))
+            return AnalyzeCompletedHand(tiles, Array.Empty<PlayerMeld>());
+        }
+
+        public WinningHandAnalysisResult AnalyzeCompletedHand(
+            IReadOnlyList<Tile> tiles,
+            IReadOnlyList<PlayerMeld> melds)
+        {
+            if (!PlayerMeldRules.TryGetExpectedConcealedTileCount(
+                    WinningHandTileCount,
+                    melds,
+                    out int expectedConcealedTileCount) ||
+                !TryBuildTileCounts(
+                    tiles,
+                    expectedConcealedTileCount,
+                    melds,
+                    out int[] counts) ||
+                !TryConvertPlayerMelds(melds, out List<HandMeld> fixedMelds))
                 return WinningHandAnalysisResult.NotWin;
 
             List<StandardHandDecomposition> standardDecompositions =
-                AnalyzeStandardHandDecompositions(counts);
-            SevenPairsAnalysis sevenPairsAnalysis = AnalyzeSevenPairs(counts);
-            ThirteenOrphansAnalysis thirteenOrphansAnalysis = AnalyzeThirteenOrphans(counts);
+                AnalyzeStandardHandDecompositions(counts, fixedMelds);
+            SevenPairsAnalysis sevenPairsAnalysis = fixedMelds.Count == 0
+                ? AnalyzeSevenPairs(counts)
+                : SevenPairsAnalysis.NotWin;
+            ThirteenOrphansAnalysis thirteenOrphansAnalysis = fixedMelds.Count == 0
+                ? AnalyzeThirteenOrphans(counts)
+                : ThirteenOrphansAnalysis.NotWin;
 
             return new WinningHandAnalysisResult(
                 standardDecompositions,
@@ -67,11 +112,13 @@ namespace MahjongPrototype.Services
         private static bool TryBuildTileCounts(
             IReadOnlyList<Tile> tiles,
             int expectedTileCount,
+            IReadOnlyList<PlayerMeld> melds,
             out int[] counts)
         {
             counts = new int[TileTypeCount];
 
-            if (tiles == null || tiles.Count != expectedTileCount)
+            if (tiles == null || expectedTileCount < 0 || tiles.Count != expectedTileCount ||
+                !TryValidatePlayerMelds(melds))
                 return false;
 
             for (int i = 0; i < tiles.Count; i++)
@@ -86,7 +133,18 @@ namespace MahjongPrototype.Services
                     return false;
             }
 
-            return true;
+            int[] allTileCounts = (int[])counts.Clone();
+            return PlayerMeldRules.TryAddPhysicalTileCounts(melds, allTileCounts, 4);
+        }
+
+        private static int[] BuildCombinedStructuralTileCounts(
+            int[] concealedTileCounts,
+            IReadOnlyList<PlayerMeld> melds)
+        {
+            int[] combinedTileCounts = (int[])concealedTileCounts.Clone();
+            return PlayerMeldRules.TryAddStructuralTileCounts(melds, combinedTileCounts, 4)
+                ? combinedTileCounts
+                : null;
         }
 
         private static List<StandardWinningInterpretation> AnalyzeStandardWinningInterpretations(
@@ -158,7 +216,7 @@ namespace MahjongPrototype.Services
             for (int i = 0; i < decomposition.Melds.Count; i++)
             {
                 HandMeld meld = decomposition.Melds[i];
-                if (!ContainsTile(meld, winningTile))
+                if (meld.IsFixed || !ContainsTile(meld, winningTile))
                     continue;
 
                 WaitType waitType = DetermineWaitType(meld, winningTile);
@@ -282,7 +340,8 @@ namespace MahjongPrototype.Services
         }
 
         private static List<StandardHandDecomposition> AnalyzeStandardHandDecompositions(
-            int[] sourceCounts)
+            int[] sourceCounts,
+            IReadOnlyList<HandMeld> fixedMelds)
         {
             List<StandardHandDecomposition> decompositions =
                 new List<StandardHandDecomposition>();
@@ -300,6 +359,7 @@ namespace MahjongPrototype.Services
                     counts,
                     pairIndex,
                     new List<HandMeld>(),
+                    fixedMelds,
                     decompositions,
                     seenKeys);
             }
@@ -311,19 +371,25 @@ namespace MahjongPrototype.Services
             int[] counts,
             int pairIndex,
             List<HandMeld> currentMelds,
+            IReadOnlyList<HandMeld> fixedMelds,
             List<StandardHandDecomposition> decompositions,
             HashSet<string> seenKeys)
         {
             int index = FindFirstRemainingTileIndex(counts);
             if (index < 0)
             {
-                if (currentMelds.Count == 4)
-                    AddDecomposition(pairIndex, currentMelds, decompositions, seenKeys);
+                if (currentMelds.Count + fixedMelds.Count == 4)
+                    AddDecomposition(
+                        pairIndex,
+                        currentMelds,
+                        fixedMelds,
+                        decompositions,
+                        seenKeys);
 
                 return;
             }
 
-            if (currentMelds.Count >= 4)
+            if (currentMelds.Count + fixedMelds.Count >= 4)
                 return;
 
             if (counts[index] >= 3)
@@ -331,7 +397,13 @@ namespace MahjongPrototype.Services
                 counts[index] -= 3;
                 currentMelds.Add(CreateTriplet(index));
 
-                SearchMelds(counts, pairIndex, currentMelds, decompositions, seenKeys);
+                SearchMelds(
+                    counts,
+                    pairIndex,
+                    currentMelds,
+                    fixedMelds,
+                    decompositions,
+                    seenKeys);
 
                 currentMelds.RemoveAt(currentMelds.Count - 1);
                 counts[index] += 3;
@@ -346,7 +418,13 @@ namespace MahjongPrototype.Services
                 counts[index + 2]--;
                 currentMelds.Add(CreateSequence(index));
 
-                SearchMelds(counts, pairIndex, currentMelds, decompositions, seenKeys);
+                SearchMelds(
+                    counts,
+                    pairIndex,
+                    currentMelds,
+                    fixedMelds,
+                    decompositions,
+                    seenKeys);
 
                 currentMelds.RemoveAt(currentMelds.Count - 1);
                 counts[index]++;
@@ -358,17 +436,74 @@ namespace MahjongPrototype.Services
         private static void AddDecomposition(
             int pairIndex,
             IReadOnlyList<HandMeld> melds,
+            IReadOnlyList<HandMeld> fixedMelds,
             List<StandardHandDecomposition> decompositions,
             HashSet<string> seenKeys)
         {
-            string key = BuildDecompositionKey(pairIndex, melds);
+            List<HandMeld> allMelds = new List<HandMeld>(
+                fixedMelds.Count + melds.Count);
+            for (int i = 0; i < fixedMelds.Count; i++)
+                allMelds.Add(fixedMelds[i]);
+            for (int i = 0; i < melds.Count; i++)
+                allMelds.Add(melds[i]);
+
+            string key = BuildDecompositionKey(pairIndex, allMelds);
             if (!seenKeys.Add(key))
                 return;
 
             decompositions.Add(
                 new StandardHandDecomposition(
                     TileFromTypeIndex(pairIndex),
-                    melds));
+                    allMelds));
+        }
+
+        private static bool TryValidatePlayerMelds(IReadOnlyList<PlayerMeld> melds)
+        {
+            if (!PlayerMeldRules.TryGetStructuralMeldCount(melds, out int meldCount) ||
+                meldCount > 4)
+            {
+                return false;
+            }
+
+            if (melds == null)
+                return true;
+
+            for (int i = 0; i < melds.Count; i++)
+            {
+                PlayerMeld meld = melds[i];
+                if (meld == null || meld.StructuralMeldCount != 1 ||
+                    meld.StructuralTileCount != 3 ||
+                    (meld.PhysicalTileCount != 3 && meld.PhysicalTileCount != 4))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool TryConvertPlayerMelds(
+            IReadOnlyList<PlayerMeld> melds,
+            out List<HandMeld> fixedMelds)
+        {
+            fixedMelds = new List<HandMeld>();
+            if (!TryValidatePlayerMelds(melds))
+                return false;
+            if (melds == null)
+                return true;
+
+            for (int i = 0; i < melds.Count; i++)
+            {
+                PlayerMeld meld = melds[i];
+                fixedMelds.Add(
+                    new HandMeld(
+                        meld.StructuralType,
+                        meld.StructuralTiles,
+                        true,
+                        meld.IsOpen));
+            }
+
+            return true;
         }
 
         private static SevenPairsAnalysis AnalyzeSevenPairs(int[] counts)
@@ -493,6 +628,8 @@ namespace MahjongPrototype.Services
         private static string BuildMeldKey(HandMeld meld)
         {
             string prefix = meld.Type == MeldType.Sequence ? "S" : "T";
+            if (meld.IsFixed)
+                prefix += meld.IsOpen ? "O" : "C";
             return prefix + meld.Tiles[0].TypeIndex;
         }
 

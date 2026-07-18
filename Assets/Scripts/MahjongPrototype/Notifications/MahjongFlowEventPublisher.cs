@@ -76,6 +76,36 @@ namespace MahjongPrototype.Notifications
             notifierProvider()?.NotifyTileDiscarded(record);
         }
 
+        public void NotifyReactionWindowStarted(ReactionWindow reactionWindow)
+        {
+            notifierProvider()?.NotifyReactionWindowStarted(reactionWindow);
+        }
+
+        public void NotifyReactionWindowAnswered(ReactionWindowAnswerResult result)
+        {
+            notifierProvider()?.NotifyReactionWindowAnswered(result);
+        }
+
+        public void NotifyReactionWindowResolved(ReactionWindowResolution resolution)
+        {
+            notifierProvider()?.NotifyReactionWindowResolved(resolution);
+        }
+
+        public void NotifyReactionWindowClosed(int windowId)
+        {
+            notifierProvider()?.NotifyReactionWindowClosed(windowId);
+        }
+
+        public void NotifyMeldDeclared(PlayerMeld meld)
+        {
+            notifierProvider()?.NotifyMeldDeclared(meld);
+        }
+
+        public void NotifySelfKanDecisionStarted(SeatId seat, int turnIndex)
+        {
+            notifierProvider()?.NotifySelfKanDecisionStarted(seat, turnIndex);
+        }
+
         public void NotifySkillActivated(SeatId actorSeat, ActiveSkillEffect effect)
         {
             notifierProvider()?.NotifySkillActivated(actorSeat, effect);

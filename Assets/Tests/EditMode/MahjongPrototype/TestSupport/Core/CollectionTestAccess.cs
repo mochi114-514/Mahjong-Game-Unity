@@ -1,3 +1,4 @@
+using System;
 using System.Reflection;
 using NUnit.Framework;
 
@@ -14,12 +15,18 @@ namespace MahjongPrototype.Tests.TestSupport.Core
 
         public int Count(object collection)
         {
+            if (collection is Array array)
+                return array.Length;
+
             return (int)reflection.GetProperty(collection, "Count");
         }
 
         public object Item(object collection, int index)
         {
             Assert.That(collection, Is.Not.Null, "Cannot read an item from a null collection.");
+
+            if (collection is Array array)
+                return array.GetValue(index);
 
             PropertyInfo itemProperty = collection.GetType().GetProperty("Item");
             Assert.That(

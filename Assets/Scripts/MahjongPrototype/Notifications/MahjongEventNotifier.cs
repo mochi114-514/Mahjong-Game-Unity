@@ -16,6 +16,11 @@ namespace MahjongPrototype.Notifications
         public event Action<SeatId, int> TurnStarted;
         public event Action<DrawResult> TileDrawn;
         public event Action<DiscardRecord> TileDiscarded;
+        public event Action<ReactionWindow> ReactionWindowStarted;
+        public event Action<ReactionWindowAnswerResult> ReactionWindowAnswered;
+        public event Action<ReactionWindowResolution> ReactionWindowResolved;
+        public event Action<int> ReactionWindowClosed;
+        public event Action<PlayerMeld> MeldDeclared;
         public event Action<SeatId, ActiveSkillEffect> SkillActivated;
         public event Action<ActiveSkillEffect> SkillEffectRegistered;
         public event Action<DrawResult> SkillEffectResolved;
@@ -24,6 +29,7 @@ namespace MahjongPrototype.Notifications
         public event Action<SeatId, int> WinDeclared;
         public event Action<SeatId, int> WinDeclined;
         public event Action<SeatId, int> ReachDecisionStarted;
+        public event Action<SeatId, int> SelfKanDecisionStarted;
         public event Action<SeatId, int> ReachDiscardSelectionStarted;
         public event Action<SeatId, int> ReachDiscardSelectionCanceled;
         public event Action<SeatId, int> ReachDeclared;
@@ -73,19 +79,59 @@ namespace MahjongPrototype.Notifications
 
         public void NotifyTurnStarted(SeatId seat, int turnIndex)
         {
-            TurnStarted?.Invoke(seat, turnIndex);
+            NotifySubscribers(TurnStarted, seat, turnIndex, nameof(TurnStarted));
             NotifyAny();
         }
 
         public void NotifyTileDrawn(DrawResult drawResult)
         {
-            TileDrawn?.Invoke(drawResult);
+            NotifyReactionSubscribers(TileDrawn, drawResult, nameof(TileDrawn));
             NotifyAny();
         }
 
         public void NotifyTileDiscarded(DiscardRecord discardRecord)
         {
             TileDiscarded?.Invoke(discardRecord);
+            NotifyAny();
+        }
+
+        public void NotifyReactionWindowStarted(ReactionWindow reactionWindow)
+        {
+            NotifyReactionSubscribers(ReactionWindowStarted, reactionWindow, nameof(ReactionWindowStarted));
+            NotifyAny();
+        }
+
+        public void NotifyReactionWindowAnswered(ReactionWindowAnswerResult result)
+        {
+            NotifyReactionSubscribers(ReactionWindowAnswered, result, nameof(ReactionWindowAnswered));
+            NotifyAny();
+        }
+
+        public void NotifyReactionWindowResolved(ReactionWindowResolution resolution)
+        {
+            NotifyReactionSubscribers(ReactionWindowResolved, resolution, nameof(ReactionWindowResolved));
+            NotifyAny();
+        }
+
+        public void NotifyReactionWindowClosed(int windowId)
+        {
+            NotifyReactionSubscribers(ReactionWindowClosed, windowId, nameof(ReactionWindowClosed));
+            NotifyAny();
+        }
+
+        public void NotifyMeldDeclared(PlayerMeld meld)
+        {
+            NotifyReactionSubscribers(MeldDeclared, meld, nameof(MeldDeclared));
+            NotifyAny();
+        }
+
+        public void NotifySelfKanDecisionStarted(SeatId seat, int turnIndex)
+        {
+            NotifySubscribers(
+                SelfKanDecisionStarted,
+                seat,
+                turnIndex,
+                nameof(SelfKanDecisionStarted));
             NotifyAny();
         }
 
@@ -204,7 +250,14 @@ namespace MahjongPrototype.Notifications
             Tile? tile = null,
             int? turnIndex = null)
         {
-            TurnDebug?.Invoke(eventName, message, seat, tile, turnIndex);
+            NotifySubscribers(
+                TurnDebug,
+                eventName,
+                message,
+                seat,
+                tile,
+                turnIndex,
+                nameof(TurnDebug));
             NotifyAny();
         }
 
@@ -295,7 +348,109 @@ namespace MahjongPrototype.Notifications
 
         private void NotifyAny()
         {
-            AnyEventNotified?.Invoke();
+            Delegate[] subscribers = AnyEventNotified?.GetInvocationList();
+            if (subscribers == null)
+                return;
+
+            for (int i = 0; i < subscribers.Length; i++)
+            {
+                try
+                {
+                    ((Action)subscribers[i])();
+                }
+                catch (Exception exception)
+                {
+                    Debug.LogException(exception, this);
+                }
+            }
+        }
+
+        private void NotifyReactionSubscribers<T>(
+            Action<T> notification,
+            T payload,
+            string notificationName)
+        {
+            if (notification == null)
+                return;
+
+            Delegate[] subscribers = notification.GetInvocationList();
+            for (int i = 0; i < subscribers.Length; i++)
+            {
+                try
+                {
+                    ((Action<T>)subscribers[i])(payload);
+                }
+                catch (Exception exception)
+                {
+                    Debug.LogException(
+                        new InvalidOperationException(
+                            $"Reaction notification subscriber failed. Event={notificationName}",
+                            exception),
+                        this);
+                }
+            }
+        }
+
+        private void NotifySubscribers<TFirst, TSecond>(
+            Action<TFirst, TSecond> notification,
+            TFirst first,
+            TSecond second,
+            string notificationName)
+        {
+            if (notification == null)
+                return;
+
+            Delegate[] subscribers = notification.GetInvocationList();
+            for (int i = 0; i < subscribers.Length; i++)
+            {
+                try
+                {
+                    ((Action<TFirst, TSecond>)subscribers[i])(first, second);
+                }
+                catch (Exception exception)
+                {
+                    Debug.LogException(
+                        new InvalidOperationException(
+                            $"Notification subscriber failed. Event={notificationName}",
+                            exception),
+                        this);
+                }
+            }
+        }
+
+        private void NotifySubscribers<TFirst, TSecond, TThird, TFourth, TFifth>(
+            Action<TFirst, TSecond, TThird, TFourth, TFifth> notification,
+            TFirst first,
+            TSecond second,
+            TThird third,
+            TFourth fourth,
+            TFifth fifth,
+            string notificationName)
+        {
+            if (notification == null)
+                return;
+
+            Delegate[] subscribers = notification.GetInvocationList();
+            for (int i = 0; i < subscribers.Length; i++)
+            {
+                try
+                {
+                    ((Action<TFirst, TSecond, TThird, TFourth, TFifth>)subscribers[i])(
+                        first,
+                        second,
+                        third,
+                        fourth,
+                        fifth);
+                }
+                catch (Exception exception)
+                {
+                    Debug.LogException(
+                        new InvalidOperationException(
+                            $"Notification subscriber failed. Event={notificationName}",
+                            exception),
+                        this);
+                }
+            }
         }
     }
 }

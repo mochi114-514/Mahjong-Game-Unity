@@ -5,7 +5,7 @@ namespace MahjongPrototype.Services
 {
     public sealed class FuritenEvaluator
     {
-        private const int RequiredHandTileCount = 13;
+        private const int BaseHandTileCount = 13;
         private const int TileTypeCount = 34;
         private const int FirstPinTypeIndex = 9;
         private const int FirstSouTypeIndex = 18;
@@ -55,7 +55,7 @@ namespace MahjongPrototype.Services
                 return FuritenSeatEvaluationResult.NotEvaluated(seat);
 
             IReadOnlyList<Tile> handTiles = playerSeat.Hand.GetTiles();
-            if (!TryBuildTypeCounts(handTiles, out int[] typeCounts))
+            if (!TryBuildTypeCounts(handTiles, playerSeat.Melds, out int[] typeCounts))
                 return FuritenSeatEvaluationResult.NotEvaluated(seat);
 
             bool[] selfDiscardedTypeIndices = BuildSelfDiscardedTypeIndices(
@@ -70,7 +70,10 @@ namespace MahjongPrototype.Services
                     continue;
 
                 Tile winningTile = CreateTileFromTypeIndex(typeIndex);
-                if (!winChecker.CanWinWithTile(handTiles, winningTile))
+                if (!winChecker.CanWinWithTile(
+                        handTiles,
+                        winningTile,
+                        playerSeat.Melds))
                     continue;
 
                 isTenpai = true;
@@ -88,11 +91,16 @@ namespace MahjongPrototype.Services
 
         private static bool TryBuildTypeCounts(
             IReadOnlyList<Tile> handTiles,
+            IReadOnlyList<PlayerMeld> melds,
             out int[] typeCounts)
         {
             typeCounts = new int[TileTypeCount];
 
-            if (handTiles == null || handTiles.Count != RequiredHandTileCount)
+            if (!PlayerMeldRules.TryGetExpectedConcealedTileCount(
+                    BaseHandTileCount,
+                    melds,
+                    out int expectedConcealedTileCount) ||
+                handTiles == null || handTiles.Count != expectedConcealedTileCount)
                 return false;
 
             for (int i = 0; i < handTiles.Count; i++)
@@ -107,7 +115,7 @@ namespace MahjongPrototype.Services
                     return false;
             }
 
-            return true;
+            return PlayerMeldRules.TryAddPhysicalTileCounts(melds, typeCounts, 4);
         }
 
         private static bool[] BuildSelfDiscardedTypeIndices(

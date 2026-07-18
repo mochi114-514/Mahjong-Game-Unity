@@ -60,6 +60,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Turn
 
         public void StartNewRound() => support.StartNewRound();
         public void RequestSelfDiscardDrawnTile() => support.RequestDiscardDrawnTile();
+        public void PumpDecisionCoordinator() => support.PumpDecisionCoordinator();
         public void RetryPrototype() => support.RetryPrototype();
         public void SetRoundEnded(bool value) => support.SetRoundEnded(value);
 

@@ -18,7 +18,25 @@ namespace MahjongPrototype.Domain
             int turnIndex,
             DiscardSource source,
             bool isLastLiveWallDiscard)
+            : this(
+                0,
+                actorSeat,
+                tile,
+                turnIndex,
+                source,
+                isLastLiveWallDiscard)
         {
+        }
+
+        public DiscardRecord(
+            int id,
+            SeatId actorSeat,
+            Tile tile,
+            int turnIndex,
+            DiscardSource source,
+            bool isLastLiveWallDiscard)
+        {
+            Id = id;
             ActorSeat = actorSeat;
             Tile = tile;
             TurnIndex = turnIndex;
@@ -26,15 +44,27 @@ namespace MahjongPrototype.Domain
             IsLastLiveWallDiscard = isLastLiveWallDiscard;
         }
 
+        public int Id { get; }
         public SeatId ActorSeat { get; }
         public Tile Tile { get; }
         public int TurnIndex { get; }
         public DiscardSource Source { get; }
         public bool IsLastLiveWallDiscard { get; }
 
+        internal DiscardRecord WithId(int id)
+        {
+            return new DiscardRecord(
+                id,
+                ActorSeat,
+                Tile,
+                TurnIndex,
+                Source,
+                IsLastLiveWallDiscard);
+        }
+
         public override string ToString()
         {
-            return $"{ActorSeat}:{Tile}@{TurnIndex}";
+            return $"#{Id}:{ActorSeat}:{Tile}@{TurnIndex}";
         }
     }
 }

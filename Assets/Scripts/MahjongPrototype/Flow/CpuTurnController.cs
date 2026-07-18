@@ -23,18 +23,20 @@ namespace MahjongPrototype
         public void TryStartCpuTurn(
             ICpuTurnGateway gateway,
             MahjongGameState gameState,
+            PlayerId playerId,
             SeatId seat,
             int turnIndex)
         {
             CancelPendingTurn();
 
-            if (!IsSameCpuTurn(gateway, gameState, seat, turnIndex))
+            if (!IsSameCpuTurn(gateway, gameState, playerId, seat, turnIndex))
                 return;
 
             int startedOperationVersion = operationVersion;
             StartCoroutine(RunCpuTurn(
                 gateway,
                 gameState,
+                playerId,
                 seat,
                 turnIndex,
                 startedOperationVersion));
@@ -46,30 +48,10 @@ namespace MahjongPrototype
             StopAllCoroutines();
         }
 
-        public bool TryRespondToWinDecision(
-            ICpuTurnGateway gateway,
-            MahjongGameState gameState,
-            SeatId seat,
-            int turnIndex)
-        {
-            if (gateway == null ||
-                gameState == null ||
-                !gateway.IsSameGameStateAndTurn(gameState, seat, turnIndex) ||
-                gameState.IsRoundEnded ||
-                !gameState.IsWinDecisionPending ||
-                gameState.WinDecisionSeat != seat ||
-                gameState.WinDecisionTurnIndex != turnIndex)
-            {
-                return false;
-            }
-
-            // PROTOTYPE: CPU declares every legal self-draw win decision.
-            return gateway.RequestDeclareWinForCpu(seat);
-        }
-
         private IEnumerator RunCpuTurn(
             ICpuTurnGateway gateway,
             MahjongGameState gameState,
+            PlayerId playerId,
             SeatId seat,
             int turnIndex,
             int startedOperationVersion)
@@ -77,13 +59,14 @@ namespace MahjongPrototype
             PlayerSeat playerSeat = gameState.GetPlayerSeat(seat);
             if (!playerSeat.HasDrawnTile)
             {
-                if (!gateway.RequestDrawForCpu(seat))
+                if (!gateway.RequestDrawForCpu(playerId, seat, turnIndex))
                     yield break;
             }
 
             if (!IsSameCpuTurn(
                     gateway,
                     gameState,
+                    playerId,
                     seat,
                     turnIndex,
                     startedOperationVersion))
@@ -100,6 +83,7 @@ namespace MahjongPrototype
             if (!IsSameCpuTurn(
                     gateway,
                     gameState,
+                    playerId,
                     seat,
                     turnIndex,
                     startedOperationVersion))
@@ -111,18 +95,20 @@ namespace MahjongPrototype
                 yield break;
 
             // PROTOTYPE: The first CPU implementation always discards its drawn tile.
-            gateway.RequestDiscardDrawnTileForCpu(seat);
+            gateway.RequestDiscardDrawnTileForCpu(playerId, seat, turnIndex);
         }
 
         private bool IsSameCpuTurn(
             ICpuTurnGateway gateway,
             MahjongGameState gameState,
+            PlayerId playerId,
             SeatId seat,
             int turnIndex)
         {
             return IsSameCpuTurn(
                 gateway,
                 gameState,
+                playerId,
                 seat,
                 turnIndex,
                 operationVersion);
@@ -131,6 +117,7 @@ namespace MahjongPrototype
         private bool IsSameCpuTurn(
             ICpuTurnGateway gateway,
             MahjongGameState gameState,
+            PlayerId playerId,
             SeatId seat,
             int turnIndex,
             int startedOperationVersion)
@@ -138,7 +125,7 @@ namespace MahjongPrototype
             if (gateway == null ||
                 gameState == null ||
                 startedOperationVersion != operationVersion ||
-                !gateway.IsSameGameStateAndTurn(gameState, seat, turnIndex) ||
+                !gateway.IsSameGameStateAndTurn(gameState, playerId, seat, turnIndex) ||
                 (gameState.TurnPhase != TurnPhase.WaitingForDraw &&
                     gameState.TurnPhase != TurnPhase.WaitingForDiscard))
             {

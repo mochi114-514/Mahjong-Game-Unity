@@ -26,6 +26,12 @@ namespace MahjongPrototype.UI3D
         private bool warnedMissingWindTextReferences;
         private bool warnedMissingWallPointText;
         private bool warnedMissingWindProgressText;
+        private MahjongViewContext viewContext;
+
+        public void SetViewContext(MahjongViewContext context)
+        {
+            viewContext = context ?? throw new System.ArgumentNullException(nameof(context));
+        }
 
         public void Refresh(MahjongGameState state)
         {
@@ -59,8 +65,17 @@ namespace MahjongPrototype.UI3D
 
         private void SetWindTextForSeat(MahjongGameState state, SeatId seat)
         {
-            ViewSlot viewSlot = SeatToViewSlotResolver.Resolve(state.SelfSeat, seat);
+            ViewSlot viewSlot = SeatToViewSlotResolver.Resolve(GetSelfSeat(state), seat);
             SetText(GetWindText(viewSlot), ToJapaneseWind(seat));
+        }
+
+        private SeatId GetSelfSeat(MahjongGameState state)
+        {
+            if (viewContext != null && viewContext.TryGetSelfSeat(state, out SeatId selfSeat))
+                return selfSeat;
+
+            // PROTOTYPE: Retained only for direct legacy presenter callers.
+            return state.SelfSeat;
         }
 
         private void SetWallPointText(MahjongGameState state)

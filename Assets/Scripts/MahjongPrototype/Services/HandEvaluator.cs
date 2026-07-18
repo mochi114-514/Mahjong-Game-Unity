@@ -109,6 +109,18 @@ namespace MahjongPrototype.Services
                 context.WinType == WinType.Tsumo && context.IsClosed,
                 context.IsClosed);
             EvaluateLastTileYaku(context, yakus);
+            TryAddYaku(
+                yakus,
+                YakuKind.RinshanKaihou,
+                context.WinType == WinType.Tsumo &&
+                context.IsRinshanDraw &&
+                !context.IsLastLiveWallDraw,
+                context.IsClosed);
+            TryAddYaku(
+                yakus,
+                YakuKind.Chankan,
+                context.WinType == WinType.Ron && context.IsChankan,
+                context.IsClosed);
             TryAddYaku(yakus, YakuKind.Tanyao, IsTanyao(context), context.IsClosed);
             EvaluateFirstTurnYakuman(context, yakus);
         }
@@ -188,6 +200,8 @@ namespace MahjongPrototype.Services
             EvaluateDragonGroupYaku(context, candidate, yakus);
             EvaluateWindGroupYaku(context, candidate, yakus);
             EvaluateConcealedTripletYaku(context, candidate, yakus);
+            EvaluateToitoiYaku(context, candidate, yakus);
+            EvaluateKanYaku(context, candidate, yakus);
             EvaluateSanshokuDoujunYaku(context, candidate, yakus);
             EvaluateSanshokuDoukouYaku(context, candidate, yakus);
             EvaluateIttsuuYaku(context, candidate, yakus);
@@ -361,6 +375,19 @@ namespace MahjongPrototype.Services
                     return false;
             }
 
+            for (int i = 0; context.Melds != null && i < context.Melds.Count; i++)
+            {
+                PlayerMeld meld = context.Melds[i];
+                if (meld == null)
+                    return false;
+
+                for (int j = 0; j < meld.PhysicalTiles.Count; j++)
+                {
+                    if (!IsSimpleNumberTile(meld.PhysicalTiles[j]))
+                        return false;
+                }
+            }
+
             return true;
         }
 
@@ -404,6 +431,28 @@ namespace MahjongPrototype.Services
                         ref allTilesAreTerminalOrHonors))
                 {
                     return false;
+                }
+            }
+
+            for (int i = 0; context.Melds != null && i < context.Melds.Count; i++)
+            {
+                PlayerMeld meld = context.Melds[i];
+                if (meld == null)
+                    return false;
+
+                for (int j = 0; j < meld.PhysicalTiles.Count; j++)
+                {
+                    if (!TryAnalyzeTileCompositionTile(
+                            meld.PhysicalTiles[j],
+                            ref numberSuitMask,
+                            ref hasHonor,
+                            ref allTilesAreGreen,
+                            ref allTilesAreHonors,
+                            ref allTilesAreTerminalNumbers,
+                            ref allTilesAreTerminalOrHonors))
+                    {
+                        return false;
+                    }
                 }
             }
 
@@ -906,7 +955,9 @@ namespace MahjongPrototype.Services
 
             StandardWinningInterpretation interpretation =
                 candidate.StandardInterpretation;
-            if (concealedTripletCount != 4 || interpretation == null)
+            if (!context.IsClosed ||
+                concealedTripletCount != 4 ||
+                interpretation == null)
                 return;
 
             if (interpretation.WaitType == WaitType.Tanki)
@@ -938,6 +989,60 @@ namespace MahjongPrototype.Services
             }
         }
 
+        private void EvaluateToitoiYaku(
+            HandEvaluationContext context,
+            HandEvaluationCandidate candidate,
+            List<EvaluatedYaku> yakus)
+        {
+            StandardHandDecomposition decomposition =
+                candidate?.StandardInterpretation?.Decomposition;
+            if (decomposition == null || decomposition.Melds == null ||
+                decomposition.Melds.Count != 4)
+            {
+                return;
+            }
+
+            for (int i = 0; i < decomposition.Melds.Count; i++)
+            {
+                HandMeld meld = decomposition.Melds[i];
+                if (meld == null || meld.Type != MeldType.Triplet)
+                    return;
+            }
+
+            TryAddYaku(yakus, YakuKind.Toitoi, true, context.IsClosed);
+        }
+
+        private void EvaluateKanYaku(
+            HandEvaluationContext context,
+            HandEvaluationCandidate candidate,
+            List<EvaluatedYaku> yakus)
+        {
+            if (candidate == null ||
+                candidate.Type != HandEvaluationCandidateType.Standard)
+            {
+                return;
+            }
+
+            int kanCount = 0;
+            for (int i = 0; context.Melds != null && i < context.Melds.Count; i++)
+            {
+                PlayerMeld meld = context.Melds[i];
+                if (meld != null && meld.IsKan)
+                    kanCount++;
+            }
+
+            TryAddYaku(
+                yakus,
+                YakuKind.Sankantsu,
+                kanCount == 3,
+                context.IsClosed);
+            TryAddYaku(
+                yakus,
+                YakuKind.Suukantsu,
+                kanCount == 4,
+                context.IsClosed);
+        }
+
         private static bool TryCountConcealedTriplets(
             HandEvaluationContext context,
             HandEvaluationCandidate candidate,
@@ -945,10 +1050,8 @@ namespace MahjongPrototype.Services
         {
             concealedTripletCount = 0;
 
-            // PROTOTYPE: open meld visibility is not modeled yet.
             if (context == null ||
                 candidate == null ||
-                !context.IsClosed ||
                 candidate.Type != HandEvaluationCandidateType.Standard)
             {
                 return false;
@@ -971,6 +1074,14 @@ namespace MahjongPrototype.Services
                 HandMeld meld = decomposition.Melds[i];
                 if (meld == null || meld.Type != MeldType.Triplet)
                     continue;
+
+                if (meld.IsFixed)
+                {
+                    if (!meld.IsOpen)
+                        concealedTripletCount++;
+
+                    continue;
+                }
 
                 if (IsRonCompletedShanponTriplet(
                         context,

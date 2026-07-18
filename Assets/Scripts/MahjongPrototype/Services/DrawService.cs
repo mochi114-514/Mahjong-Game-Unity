@@ -22,6 +22,9 @@ namespace MahjongPrototype.Services
                     "GameState is not available.");
             }
 
+            if (purpose == DrawPurpose.RinshanDraw)
+                return DrawRinshan(seat, gameState, purpose);
+
             ActiveSkillEffect effect = purpose == DrawPurpose.TurnDraw
                 ? gameState.FindNextDrawEffect(seat)
                 : null;
@@ -30,6 +33,39 @@ namespace MahjongPrototype.Services
                 return DrawWithSkillEffect(seat, gameState, purpose, effect);
 
             return DrawNormal(seat, gameState, purpose, null, false, false);
+        }
+
+        private DrawResult DrawRinshan(
+            SeatId seat,
+            MahjongGameState gameState,
+            DrawPurpose purpose)
+        {
+            if (!gameState.Wall.TryTakeRinshan(out Tile tile))
+            {
+                return new DrawResult(
+                    false,
+                    seat,
+                    default,
+                    purpose,
+                    DrawSource.None,
+                    gameState.Wall.Count,
+                    null,
+                    false,
+                    false,
+                    "Rinshan draw is not available.");
+            }
+
+            return new DrawResult(
+                true,
+                seat,
+                tile,
+                purpose,
+                DrawSource.Rinshan,
+                gameState.Wall.Count,
+                null,
+                false,
+                false,
+                "Rinshan draw.");
         }
 
         private DrawResult DrawWithSkillEffect(

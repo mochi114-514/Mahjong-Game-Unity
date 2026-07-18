@@ -11,9 +11,6 @@ namespace MahjongPrototype.Tests.TestSupport.Features.UiInput
     {
         private const string ControllerTypeName =
             "MahjongPrototype.UI.MahjongUiInputController, Assembly-CSharp";
-        private const string TmpInputFieldTypeName =
-            "TMPro.TMP_InputField, Unity.TextMeshPro";
-
         private readonly ReflectionTestAccess reflection;
         private readonly UnityObjectTestOwner owner;
         private readonly GameObject root;
@@ -48,6 +45,8 @@ namespace MahjongPrototype.Tests.TestSupport.Features.UiInput
         public int CancelReachCount { get; private set; }
         public int RoundResultConfirmCount { get; private set; }
         public int AutoSortEventCount { get; private set; }
+        public ReflectionTestAccess Reflection => reflection;
+        public Component Controller => controller;
 
         public bool DrawInteractable => controls.DrawButton.interactable;
         public bool ForceDrawSkillInteractable => controls.ForceDrawSkillButton.interactable;
@@ -75,8 +74,19 @@ namespace MahjongPrototype.Tests.TestSupport.Features.UiInput
 
         public string TargetTileText
         {
+            get => (string)reflection.GetProperty(controls.TargetTileInput, "text");
             set => reflection.SetProperty(controls.TargetTileInput, "text", value);
         }
+
+        public int TargetTileSelectionAnchorPosition =>
+            (int)reflection.GetProperty(
+                controls.TargetTileInput,
+                "selectionStringAnchorPosition");
+
+        public int TargetTileSelectionFocusPosition =>
+            (int)reflection.GetProperty(
+                controls.TargetTileInput,
+                "selectionStringFocusPosition");
 
         public static MahjongUiInputControllerTestDriver Create(string rootName)
         {
@@ -236,6 +246,18 @@ namespace MahjongPrototype.Tests.TestSupport.Features.UiInput
             reflection.Invoke(controller, "SetGameplayInputInteractable", interactable);
         }
 
+        public void SetTargetTileSelection(int anchorPosition, int focusPosition)
+        {
+            reflection.SetProperty(
+                controls.TargetTileInput,
+                "selectionStringAnchorPosition",
+                anchorPosition);
+            reflection.SetProperty(
+                controls.TargetTileInput,
+                "selectionStringFocusPosition",
+                focusPosition);
+        }
+
         public void SetAutoSortInteractable(bool interactable)
         {
             reflection.Invoke(controller, "SetAutoSortInteractable", interactable);
@@ -334,9 +356,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.UiInput
                 Transform parent,
                 string name)
             {
-                GameObject gameObject = new GameObject(name);
-                gameObject.transform.SetParent(parent);
-                return gameObject.AddComponent(reflection.RequireType(TmpInputFieldTypeName));
+                return TmpInputFieldTestFactory.Create(reflection, parent, name);
             }
         }
     }

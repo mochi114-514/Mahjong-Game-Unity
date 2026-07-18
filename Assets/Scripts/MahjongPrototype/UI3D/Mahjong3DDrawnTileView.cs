@@ -11,6 +11,7 @@ namespace MahjongPrototype.UI3D
     {
         [SerializeField] private Transform spawnRoot;
         [SerializeField] private Mahjong3DTileView tilePrefab;
+        [SerializeField] private float handGap = 1f;
 
         private Mahjong3DTileView activeTile;
         private bool faceUp = true;
@@ -18,8 +19,37 @@ namespace MahjongPrototype.UI3D
         private bool warnedMissingTilePrefab;
 
         public event Action DrawnTileClicked;
+        public float HandGap => handGap;
 
         public void Render(Tile? drawnTile, bool faceUp, bool interactable)
+        {
+            RenderInternal(drawnTile, faceUp, interactable, false, Vector3.zero);
+        }
+
+        public void RenderAtWorldPosition(
+            Tile? drawnTile,
+            bool faceUp,
+            bool interactable,
+            Vector3 worldPosition)
+        {
+            RenderInternal(drawnTile, faceUp, interactable, true, worldPosition);
+        }
+
+        public void SetWorldPosition(Vector3 worldPosition)
+        {
+            if (activeTile == null)
+                return;
+
+            Transform root = GetSpawnRoot();
+            activeTile.transform.localPosition = root.InverseTransformPoint(worldPosition);
+        }
+
+        private void RenderInternal(
+            Tile? drawnTile,
+            bool faceUp,
+            bool interactable,
+            bool useWorldPosition,
+            Vector3 worldPosition)
         {
             this.faceUp = faceUp;
             tileInteractable = faceUp && interactable;
@@ -34,9 +64,11 @@ namespace MahjongPrototype.UI3D
                 return;
             }
 
-            Transform root = spawnRoot != null ? spawnRoot : transform;
+            Transform root = GetSpawnRoot();
             activeTile = Instantiate(tilePrefab, root);
-            activeTile.transform.localPosition = Vector3.zero;
+            activeTile.transform.localPosition = useWorldPosition
+                ? root.InverseTransformPoint(worldPosition)
+                : Vector3.zero;
             activeTile.transform.localRotation = Quaternion.identity;
             activeTile.transform.localScale = Vector3.one;
             activeTile.Initialize(0, drawnTile.Value, faceUp, tileInteractable);
@@ -90,6 +122,11 @@ namespace MahjongPrototype.UI3D
         private void HandleTileClicked(int _)
         {
             DrawnTileClicked?.Invoke();
+        }
+
+        private Transform GetSpawnRoot()
+        {
+            return spawnRoot != null ? spawnRoot : transform;
         }
 
         private static void DestroyTile(Mahjong3DTileView tile)

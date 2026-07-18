@@ -15,6 +15,7 @@ namespace MahjongPrototype.Services
         public ReachDecisionResult TryBeginAfterDraw(MahjongGameState gameState, SeatId seat)
         {
             if (gameState == null || gameState.IsRoundEnded || gameState.IsWinDecisionPending ||
+                gameState.IsReactionWindowPending ||
                 gameState.IsReachDecisionPending || gameState.IsReachDiscardSelectionPending ||
                 !gameState.IsSelfTurn || !gameState.IsSelfSeat(seat))
             {
@@ -22,7 +23,7 @@ namespace MahjongPrototype.Services
             }
 
             PlayerSeat playerSeat = gameState.GetPlayerSeat(seat);
-            if (playerSeat.IsReachDeclared || !playerSeat.HasDrawnTile ||
+            if (!playerSeat.IsClosed || playerSeat.IsReachDeclared || !playerSeat.HasDrawnTile ||
                 !playerSeat.DrawnTile.HasValue || playerSeat.Hand.Count != 13)
             {
                 return ReachDecisionResult.None;
@@ -116,7 +117,9 @@ namespace MahjongPrototype.Services
 
             SeatId seat = record.ActorSeat;
             int turnIndex = gameState.TurnIndex;
-            bool isDoubleReach = IsFirstDiscardBySeat(gameState, seat);
+            bool isDoubleReach =
+                !gameState.HasCallOccurred &&
+                IsFirstDiscardBySeat(gameState, seat);
             gameState.GetPlayerSeat(seat).DeclareReach(turnIndex, isDoubleReach);
             gameState.ClearReachDecision();
             return new ReachDeclarationResult(true, seat, turnIndex, isDoubleReach);

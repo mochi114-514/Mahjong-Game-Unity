@@ -1,6 +1,8 @@
 using System;
+using MahjongPrototype.Domain;
 using TMPro;
 using UnityEngine;
+using UnityEngine.Events;
 using UnityEngine.UI;
 
 namespace MahjongPrototype.UI
@@ -21,6 +23,9 @@ namespace MahjongPrototype.UI
         [Header("Win Decision")]
         [SerializeField] private Button winButton;
         [SerializeField] private Button declineWinButton;
+        [Header("Pon Decision")]
+        [SerializeField] private Button ponButton;
+        [SerializeField] private Button declinePonButton;
         [Header("Reach Decision")]
         [SerializeField] private Button reachButton;
         [SerializeField] private Button declineReachButton;
@@ -38,10 +43,20 @@ namespace MahjongPrototype.UI
         private bool warnedMissingRetryButton;
         private bool warnedMissingWinButton;
         private bool warnedMissingDeclineWinButton;
+        private bool warnedMissingPonButton;
+        private bool warnedMissingDeclinePonButton;
         private bool warnedMissingReachButton;
         private bool warnedMissingDeclineReachButton;
         private bool warnedMissingCancelReachButton;
         private bool warnedMissingRoundResultConfirmButton;
+        private UnityAction reactionWinAction;
+        private UnityAction reactionDeclineWinAction;
+        private UnityAction reactionPonAction;
+        private UnityAction reactionDeclinePonAction;
+        private UnityAction winDecisionAction;
+        private UnityAction declineWinDecisionAction;
+        private UnityAction reachDecisionAction;
+        private UnityAction declineReachDecisionAction;
 
         public event Action DrawRequested;
         public event Action<string> ForceDrawSkillRequested;
@@ -49,6 +64,17 @@ namespace MahjongPrototype.UI
         public event Action RetryRequested;
         public event Action WinRequested;
         public event Action DeclineWinRequested;
+        public event Action PonRequested;
+        public event Action DeclinePonRequested;
+        public event Action<MeldCallKind, int> MeldCallRequested;
+        public event Action DeclineMeldCallsRequested;
+        public event Action<long, int, ReactionWindowSeatAnswerKind, int?>
+            ReactionResponseRequested;
+        public event Action<long, bool> WinDecisionResponseRequested;
+        public event Action<long, bool> ReachDecisionResponseRequested;
+        public event Action<long, bool, int> SelfKanDecisionResponseRequested;
+        public event Action<SelfKanKind, int, int> SelfKanRequested;
+        public event Action DeclineSelfKanRequested;
         public event Action ReachRequested;
         public event Action DeclineReachRequested;
         public event Action CancelReachRequested;
@@ -61,6 +87,9 @@ namespace MahjongPrototype.UI
 
         private void OnDisable()
         {
+            ClearReactionResponseBindings();
+            ClearWinDecisionResponseBindings();
+            ClearReachDecisionResponseBindings();
             UnregisterButtonListeners();
         }
 
@@ -121,6 +150,24 @@ namespace MahjongPrototype.UI
             else
             {
                 WarnMissingOnce(ref warnedMissingDeclineWinButton, "DeclineWinButton is not assigned.");
+            }
+
+            if (ponButton != null)
+            {
+                ponButton.onClick.AddListener(HandlePonClicked);
+            }
+            else
+            {
+                WarnMissingOnce(ref warnedMissingPonButton, "PonButton is not assigned.");
+            }
+
+            if (declinePonButton != null)
+            {
+                declinePonButton.onClick.AddListener(HandleDeclinePonClicked);
+            }
+            else
+            {
+                WarnMissingOnce(ref warnedMissingDeclinePonButton, "DeclinePonButton is not assigned.");
             }
 
             if (reachButton != null)
@@ -187,6 +234,12 @@ namespace MahjongPrototype.UI
             if (declineWinButton != null)
                 declineWinButton.onClick.RemoveListener(HandleDeclineWinClicked);
 
+            if (ponButton != null)
+                ponButton.onClick.RemoveListener(HandlePonClicked);
+
+            if (declinePonButton != null)
+                declinePonButton.onClick.RemoveListener(HandleDeclinePonClicked);
+
             if (reachButton != null)
                 reachButton.onClick.RemoveListener(HandleReachClicked);
 
@@ -230,27 +283,255 @@ namespace MahjongPrototype.UI
 
         private void HandleWinClicked()
         {
+            if (reactionWinAction != null || winDecisionAction != null)
+                return;
+
             WinRequested?.Invoke();
         }
 
         private void HandleDeclineWinClicked()
         {
+            if (reactionDeclineWinAction != null || declineWinDecisionAction != null)
+                return;
+
             DeclineWinRequested?.Invoke();
+        }
+
+        private void HandlePonClicked()
+        {
+            if (reactionPonAction != null)
+                return;
+
+            PonRequested?.Invoke();
+            RequestMeldCall(MeldCallKind.Pon, 0);
+        }
+
+        private void HandleDeclinePonClicked()
+        {
+            if (reactionDeclinePonAction != null)
+                return;
+
+            DeclinePonRequested?.Invoke();
+            RequestDeclineMeldCalls();
+        }
+
+        public void RequestMeldCall(MeldCallKind kind, int chiOptionId)
+        {
+            MeldCallRequested?.Invoke(kind, chiOptionId);
+        }
+
+        public void RequestDeclineMeldCalls()
+        {
+            DeclineMeldCallsRequested?.Invoke();
+        }
+
+        /// <summary>
+        /// Binds the static reaction buttons to one immutable request identity.
+        /// The lambdas deliberately capture the supplied ids so a delayed UI
+        /// callback from a closed window cannot be rewritten as a response to
+        /// a newer window.
+        /// </summary>
+        public void SetReactionResponseBindings(
+            long requestId,
+            int windowId,
+            bool showRon,
+            bool showPon,
+            bool showMeldPass)
+        {
+            ClearReactionResponseBindings();
+            if (requestId <= 0 || windowId <= 0)
+                return;
+
+            if (showRon && winButton != null)
+            {
+                reactionWinAction = () => RequestReactionResponse(
+                    requestId,
+                    windowId,
+                    ReactionWindowSeatAnswerKind.Ron,
+                    null);
+                winButton.onClick.AddListener(reactionWinAction);
+            }
+
+            if (showRon && declineWinButton != null)
+            {
+                reactionDeclineWinAction = () => RequestReactionResponse(
+                    requestId,
+                    windowId,
+                    ReactionWindowSeatAnswerKind.Pass,
+                    null);
+                declineWinButton.onClick.AddListener(reactionDeclineWinAction);
+            }
+            else if (showMeldPass && declinePonButton != null)
+            {
+                reactionDeclinePonAction = () => RequestReactionResponse(
+                    requestId,
+                    windowId,
+                    ReactionWindowSeatAnswerKind.Pass,
+                    null);
+                declinePonButton.onClick.AddListener(reactionDeclinePonAction);
+            }
+
+            if (showPon && ponButton != null)
+            {
+                reactionPonAction = () => RequestReactionResponse(
+                    requestId,
+                    windowId,
+                    ReactionWindowSeatAnswerKind.Pon,
+                    null);
+                ponButton.onClick.AddListener(reactionPonAction);
+            }
+        }
+
+        public void ClearReactionResponseBindings()
+        {
+            if (reactionWinAction != null && winButton != null)
+                winButton.onClick.RemoveListener(reactionWinAction);
+            if (reactionDeclineWinAction != null && declineWinButton != null)
+                declineWinButton.onClick.RemoveListener(reactionDeclineWinAction);
+            if (reactionPonAction != null && ponButton != null)
+                ponButton.onClick.RemoveListener(reactionPonAction);
+            if (reactionDeclinePonAction != null && declinePonButton != null)
+                declinePonButton.onClick.RemoveListener(reactionDeclinePonAction);
+
+            reactionWinAction = null;
+            reactionDeclineWinAction = null;
+            reactionPonAction = null;
+            reactionDeclinePonAction = null;
+        }
+
+        /// <summary>
+        /// Binds the self-draw win controls to an authority-issued decision.
+        /// Capturing the request id prevents a delayed click from being
+        /// interpreted as a choice for a later draw.
+        /// </summary>
+        public void SetWinDecisionResponseBindings(long requestId)
+        {
+            ClearWinDecisionResponseBindings();
+            if (requestId <= 0)
+                return;
+
+            if (winButton != null)
+            {
+                winDecisionAction = () => RequestWinDecisionResponse(requestId, true);
+                winButton.onClick.AddListener(winDecisionAction);
+            }
+
+            if (declineWinButton != null)
+            {
+                declineWinDecisionAction = () => RequestWinDecisionResponse(requestId, false);
+                declineWinButton.onClick.AddListener(declineWinDecisionAction);
+            }
+        }
+
+        public void ClearWinDecisionResponseBindings()
+        {
+            if (winDecisionAction != null && winButton != null)
+                winButton.onClick.RemoveListener(winDecisionAction);
+            if (declineWinDecisionAction != null && declineWinButton != null)
+                declineWinButton.onClick.RemoveListener(declineWinDecisionAction);
+
+            winDecisionAction = null;
+            declineWinDecisionAction = null;
+        }
+
+        public void RequestWinDecisionResponse(long requestId, bool accepted)
+        {
+            WinDecisionResponseRequested?.Invoke(requestId, accepted);
+        }
+
+        public void RequestReactionResponse(
+            long requestId,
+            int windowId,
+            ReactionWindowSeatAnswerKind kind,
+            int? chiOptionId = null)
+        {
+            ReactionResponseRequested?.Invoke(
+                requestId,
+                windowId,
+                kind,
+                chiOptionId);
+        }
+
+        public void RequestSelfKan(
+            SelfKanKind kind,
+            int tileTypeIndex,
+            int sourcePonMeldIndex)
+        {
+            SelfKanRequested?.Invoke(kind, tileTypeIndex, sourcePonMeldIndex);
+        }
+
+        public void RequestDeclineSelfKan()
+        {
+            DeclineSelfKanRequested?.Invoke();
+        }
+
+        public void RequestSelfKanDecisionResponse(
+            long requestId,
+            bool accepted,
+            int optionId = -1)
+        {
+            SelfKanDecisionResponseRequested?.Invoke(requestId, accepted, optionId);
         }
 
         private void HandleReachClicked()
         {
+            if (reachDecisionAction != null)
+                return;
+
             ReachRequested?.Invoke();
         }
 
         private void HandleDeclineReachClicked()
         {
+            if (declineReachDecisionAction != null)
+                return;
+
             DeclineReachRequested?.Invoke();
         }
 
         private void HandleCancelReachClicked()
         {
             CancelReachRequested?.Invoke();
+        }
+
+        /// <summary>
+        /// Binds reach acceptance and decline to the exact request created by
+        /// the authority. The actual discard stays on the existing command
+        /// path after an accepted response.
+        /// </summary>
+        public void SetReachDecisionResponseBindings(long requestId)
+        {
+            ClearReachDecisionResponseBindings();
+            if (requestId <= 0)
+                return;
+
+            if (reachButton != null)
+            {
+                reachDecisionAction = () => RequestReachDecisionResponse(requestId, true);
+                reachButton.onClick.AddListener(reachDecisionAction);
+            }
+
+            if (declineReachButton != null)
+            {
+                declineReachDecisionAction = () => RequestReachDecisionResponse(requestId, false);
+                declineReachButton.onClick.AddListener(declineReachDecisionAction);
+            }
+        }
+
+        public void ClearReachDecisionResponseBindings()
+        {
+            if (reachDecisionAction != null && reachButton != null)
+                reachButton.onClick.RemoveListener(reachDecisionAction);
+            if (declineReachDecisionAction != null && declineReachButton != null)
+                declineReachButton.onClick.RemoveListener(declineReachDecisionAction);
+
+            reachDecisionAction = null;
+            declineReachDecisionAction = null;
+        }
+
+        public void RequestReachDecisionResponse(long requestId, bool accepted)
+        {
+            ReachDecisionResponseRequested?.Invoke(requestId, accepted);
         }
 
         private void HandleRoundResultConfirmClicked()
@@ -271,14 +552,23 @@ namespace MahjongPrototype.UI
 
         public void SetGameplayInputInteractable(bool interactable)
         {
+            // PROTOTYPE: Kept for direct legacy callers. TargetTileInput is
+            // intentionally excluded so temporary game-state refreshes never
+            // interrupt its IME composition or selection.
+            SetDrawButtonInteractable(interactable);
+            SetForceDrawSkillButtonInteractable(interactable);
+        }
+
+        public void SetDrawButtonInteractable(bool interactable)
+        {
             if (drawButton != null)
                 drawButton.interactable = interactable;
+        }
 
+        public void SetForceDrawSkillButtonInteractable(bool interactable)
+        {
             if (forceDrawSkillButton != null)
                 forceDrawSkillButton.interactable = interactable;
-
-            if (targetTileInput != null)
-                targetTileInput.interactable = interactable;
         }
 
         public void SetAutoSortInteractable(bool interactable)

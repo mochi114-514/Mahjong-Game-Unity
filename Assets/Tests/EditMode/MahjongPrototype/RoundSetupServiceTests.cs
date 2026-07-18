@@ -76,7 +76,7 @@ namespace MahjongPrototype.Tests
             Assert.That(driver.HandCount("East"), Is.EqualTo(2));
             Assert.That(driver.HandCount("South"), Is.EqualTo(2));
             Assert.That(driver.HandCount("West"), Is.EqualTo(2));
-            Assert.That(driver.WallCount, Is.EqualTo(130));
+            Assert.That(driver.WallCount, Is.EqualTo(116));
         }
 
         [Test]

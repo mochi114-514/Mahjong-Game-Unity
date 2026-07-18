@@ -69,6 +69,22 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
+        public void ChildAfterCallTsumoWin_DoesNotAddChiihou()
+        {
+            using (Driver driver = Driver.Create())
+            {
+                driver.StartNewRound();
+                driver.MarkCallOccurred();
+                driver.ForceCurrentTurn("South", 2);
+                driver.DrawWinningTsumoForSeat("South");
+
+                Assert.That(driver.IsWinDecisionPending, Is.True);
+                Assert.That(driver.PendingCandidateContainsYaku("Chiihou"), Is.False);
+                Assert.That(driver.PendingCandidateContainsYaku("Tenhou"), Is.False);
+            }
+        }
+
+        [Test]
         public void ChildAfterOtherSeatDiscardStillFirstTsumo_AddsChiihou()
         {
             using (Driver driver = Driver.Create())
@@ -186,6 +202,11 @@ namespace MahjongPrototype.Tests
             public void StartNewRound()
             {
                 session.Commands.StartNewRound();
+            }
+
+            public void MarkCallOccurred()
+            {
+                session.Reflection.Invoke(session.CurrentState, "MarkCallOccurred");
             }
 
             public void ForceCurrentTurn(string seatName, int turnIndex)

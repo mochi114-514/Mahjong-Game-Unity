@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using MahjongPrototype.Tests.TestSupport.Core;
 using UnityEngine;
 
 namespace MahjongPrototype.Tests.TestSupport.Unity
@@ -39,6 +40,41 @@ namespace MahjongPrototype.Tests.TestSupport.Unity
             }
 
             ownedObjects.Clear();
+        }
+    }
+
+    internal static class TmpInputFieldTestFactory
+    {
+        private const string TmpInputFieldTypeName =
+            "TMPro.TMP_InputField, Unity.TextMeshPro";
+        private const string TmpTextTypeName =
+            "TMPro.TextMeshProUGUI, Unity.TextMeshPro";
+
+        public static Component Create(
+            ReflectionTestAccess reflection,
+            Transform parent,
+            string name)
+        {
+            GameObject inputObject = new GameObject(name, typeof(RectTransform));
+            inputObject.transform.SetParent(parent, false);
+            Component input = inputObject.AddComponent(
+                reflection.RequireType(TmpInputFieldTypeName));
+
+            GameObject viewportObject = new GameObject(
+                "TextViewport",
+                typeof(RectTransform));
+            viewportObject.transform.SetParent(inputObject.transform, false);
+
+            GameObject textObject = new GameObject("Text", typeof(RectTransform));
+            textObject.transform.SetParent(viewportObject.transform, false);
+            Component text = textObject.AddComponent(reflection.RequireType(TmpTextTypeName));
+
+            reflection.SetProperty(
+                input,
+                "textViewport",
+                viewportObject.GetComponent<RectTransform>());
+            reflection.SetProperty(input, "textComponent", text);
+            return input;
         }
     }
 }

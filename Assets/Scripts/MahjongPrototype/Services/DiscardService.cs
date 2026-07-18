@@ -25,7 +25,7 @@ namespace MahjongPrototype.Services
                 gameState.TurnIndex,
                 DiscardSource.Hand,
                 IsLastLiveWallDiscard(gameState, actorSeat));
-            gameState.AddDiscard(record);
+            record = gameState.AddDiscard(record);
             return DiscardResult.Discarded(record);
         }
 
@@ -49,7 +49,7 @@ namespace MahjongPrototype.Services
                 gameState.TurnIndex,
                 DiscardSource.DrawnTile,
                 IsLastLiveWallDiscard(gameState, actorSeat));
-            gameState.AddDiscard(record);
+            record = gameState.AddDiscard(record);
             return DiscardResult.Discarded(record);
         }
 

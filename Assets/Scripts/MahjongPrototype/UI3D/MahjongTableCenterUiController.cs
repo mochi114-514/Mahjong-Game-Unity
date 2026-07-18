@@ -12,6 +12,13 @@ namespace MahjongPrototype.UI3D
 
         private bool warnedMissingPresenterReferences;
 
+        public void SetViewContext(MahjongViewContext context)
+        {
+            CacheReferences();
+            if (textPresenter != null)
+                textPresenter.SetViewContext(context);
+        }
+
         private void Reset()
         {
             CacheReferences();

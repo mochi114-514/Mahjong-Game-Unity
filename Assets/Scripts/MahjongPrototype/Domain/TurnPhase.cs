@@ -10,6 +10,10 @@ namespace MahjongPrototype.Domain
         WinDecision = 5,
         RoundEnded = 6,
         RoundResult = 7,
-        GameEnded = 8
+        GameEnded = 8,
+        ReactionWindow = 9,
+        WaitingForDiscardAfterCall = 10,
+        WaitingForRinshanDraw = 11,
+        SelfKanDecision = 12
     }
 }

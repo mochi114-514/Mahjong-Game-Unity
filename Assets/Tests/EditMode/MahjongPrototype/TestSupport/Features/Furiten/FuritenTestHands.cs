@@ -45,8 +45,8 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Furiten
 
         private static readonly string[] SimpleFiveManWaitTiles =
         {
-            "2m", "3m", "4m",
             "2p", "3p", "4p",
+            "5p", "6p", "7p",
             "2s", "3s", "4s",
             "6s", "7s", "8s",
             "5m"
@@ -63,11 +63,11 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Furiten
 
         private static readonly string[] RonMultiWaitTiles =
         {
-            "2p", "3p", "4p",
-            "3p", "4p", "5p",
-            "2s", "3s", "4s",
-            "6s", "6s",
-            "4m", "5m"
+            "2m", "2m", "2m",
+            "3m", "3m", "3m",
+            "4m", "4m", "4m",
+            "5m", "5m", "5m",
+            "7m"
         };
 
         public static string[] EvaluatorSingleWait()

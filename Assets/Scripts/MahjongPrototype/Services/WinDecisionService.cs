@@ -33,7 +33,12 @@ namespace MahjongPrototype.Services
                 return NoYakuTenpaiEvaluationResult.NotTenpai;
 
             PlayerSeat selfPlayerSeat = gameState.GetPlayerSeat(gameState.SelfSeat);
-            if (selfPlayerSeat.Hand.Count != 13 || selfPlayerSeat.HasDrawnTile)
+            if (!PlayerMeldRules.TryGetExpectedConcealedTileCount(
+                    13,
+                    selfPlayerSeat.Melds,
+                    out int expectedConcealedTileCount) ||
+                selfPlayerSeat.Hand.Count != expectedConcealedTileCount ||
+                selfPlayerSeat.HasDrawnTile)
                 return NoYakuTenpaiEvaluationResult.NotTenpai;
 
             return noYakuTenpaiEvaluator.Evaluate(
@@ -42,10 +47,18 @@ namespace MahjongPrototype.Services
                 gameState.WindProgress.RoundWind,
                 gameState.SelfSeat,
                 selfPlayerSeat.IsReachDeclared,
-                true);
+                selfPlayerSeat.IsClosed,
+                selfPlayerSeat.Melds);
         }
 
         public WinDecisionEvaluation EvaluateTsumo(MahjongGameState gameState)
+        {
+            return EvaluateTsumo(gameState, false);
+        }
+
+        public WinDecisionEvaluation EvaluateTsumo(
+            MahjongGameState gameState,
+            bool isRinshanDraw)
         {
             if (gameState == null)
                 return WinDecisionEvaluation.None;
@@ -59,7 +72,9 @@ namespace MahjongPrototype.Services
                     playerSeat,
                     WinType.Tsumo,
                     winningTile.Value,
-                    null))
+                    null,
+                    null,
+                    isRinshanDraw))
                 : WinDeclarationEvaluationResult.NotWinningShape(WinCheckResult.NotWin);
             bool canDeclareWin = evaluationResult.CanDeclareWin;
 
@@ -85,18 +100,53 @@ namespace MahjongPrototype.Services
 
         public WinDecisionEvaluation EvaluateRon(MahjongGameState gameState, DiscardRecord discard)
         {
+            return EvaluateRon(
+                gameState,
+                discard.Tile,
+                discard.ActorSeat,
+                discard.TurnIndex,
+                false,
+                discard);
+        }
+
+        public WinDecisionEvaluation EvaluateRon(
+            MahjongGameState gameState,
+            Tile winningTile,
+            SeatId sourceSeat,
+            int turnIndex,
+            bool isChankan)
+        {
+            return EvaluateRon(
+                gameState,
+                winningTile,
+                sourceSeat,
+                turnIndex,
+                isChankan,
+                null);
+        }
+
+        private WinDecisionEvaluation EvaluateRon(
+            MahjongGameState gameState,
+            Tile winningTile,
+            SeatId sourceSeat,
+            int turnIndex,
+            bool isChankan,
+            DiscardRecord? sourceDiscard)
+        {
             if (gameState == null)
                 return WinDecisionEvaluation.None;
 
             FuritenEvaluationResultSet furitenResults = furitenEvaluator.EvaluateAll(gameState);
             List<WinCheckNotification> notifications = new List<WinCheckNotification>();
-            bool decisionStarted = false;
+            List<RonWinCandidate> candidates = new List<RonWinCandidate>();
 
-            // PROTOTYPE: only local participants currently receive the single ron decision.
+            // PROTOTYPE: CPU response collection remains outside the reaction
+            // decision path. Every eligible Local UI seat is still evaluated
+            // so the authority can collect simultaneous seat responses.
             for (int i = 0; i < gameState.SeatSlots.Count; i++)
             {
                 SeatSlot slot = gameState.SeatSlots[i];
-                if (!slot.HasPlayer || slot.Wind == discard.ActorSeat ||
+                if (!slot.HasPlayer || slot.Wind == sourceSeat ||
                     slot.ParticipantType != ParticipantType.LocalHuman)
                 {
                     continue;
@@ -108,9 +158,11 @@ namespace MahjongPrototype.Services
                         gameState,
                         playerSeat,
                         WinType.Ron,
-                        discard.Tile,
-                        discard.ActorSeat,
-                        discard));
+                        winningTile,
+                        sourceSeat,
+                        sourceDiscard,
+                        false,
+                        isChankan));
                 if (IsNoYakuWinningShape(evaluationResult, playerSeat))
                     playerSeat.MarkTemporaryFuriten();
 
@@ -122,31 +174,26 @@ namespace MahjongPrototype.Services
                 notifications.Add(new WinCheckNotification(
                     slot.Wind,
                     WinType.Ron,
-                    discard.Tile,
-                    discard.ActorSeat,
-                    discard.TurnIndex,
+                    winningTile,
+                    sourceSeat,
+                    turnIndex,
                     canDeclareWin));
 
                 if (!canDeclareWin)
                     continue;
 
-                gameState.BeginWinDecisionDetailed(
-                    slot.Wind,
-                    WinType.Ron,
-                    discard.Tile,
-                    discard.ActorSeat,
-                    discard.TurnIndex,
-                    evaluationResult);
-                decisionStarted = true;
-                break;
+                candidates.Add(new RonWinCandidate(slot.Wind, evaluationResult));
             }
 
-            return new WinDecisionEvaluation(notifications, decisionStarted);
+            return new WinDecisionEvaluation(
+                notifications,
+                candidates.Count > 0,
+                candidates);
         }
 
         public WinDecisionDeclineResult Decline(MahjongGameState gameState)
         {
-            if (gameState == null || !gameState.IsWinDecisionPending)
+            if (gameState == null || gameState.TurnPhase != TurnPhase.WinDecision)
                 return WinDecisionDeclineResult.None;
 
             SeatId seat = gameState.WinDecisionSeat;
@@ -162,6 +209,48 @@ namespace MahjongPrototype.Services
                 winType,
                 turnIndex,
                 shouldEndAfterLastRon);
+        }
+
+        public void MarkDeclinedRonFuriten(MahjongGameState gameState, SeatId seat)
+        {
+            if (gameState == null)
+                return;
+
+            PlayerSeat playerSeat = gameState.GetPlayerSeat(seat);
+            if (playerSeat.IsReachDeclared)
+                playerSeat.MarkReachPassFuriten();
+            else
+                playerSeat.MarkTemporaryFuriten();
+        }
+
+        /// <summary>
+        /// Applies pass furiten only to ron-capable seats whose final seat
+        /// answer was not Ron. A Ron answer remains exempt even when another
+        /// Ron seat wins the prototype priority tie.
+        /// </summary>
+        public void ApplyDeclinedReactionRonFuriten(
+            MahjongGameState gameState,
+            ReactionWindowSeatAnswerCollection answers)
+        {
+            if (gameState == null || answers == null)
+                return;
+
+            IReadOnlyList<ReactionWindowCandidate> candidates =
+                answers.ReactionWindow.Candidates;
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                ReactionWindowCandidate candidate = candidates[i];
+                if (candidate == null || candidate.Kind != ReactionKind.Ron ||
+                    !answers.TryGetRegisteredAnswer(
+                        candidate.Seat,
+                        out ReactionWindowSeatAnswer answer) ||
+                    answer.Kind == ReactionWindowSeatAnswerKind.Ron)
+                {
+                    continue;
+                }
+
+                MarkDeclinedRonFuriten(gameState, candidate.Seat);
+            }
         }
 
         public void SetPending(MahjongGameState gameState, bool isPending, SeatId seat, int turnIndex)
@@ -197,7 +286,9 @@ namespace MahjongPrototype.Services
             WinType winType,
             Tile winningTile,
             SeatId? sourceSeat,
-            DiscardRecord? sourceDiscard = null)
+            DiscardRecord? sourceDiscard = null,
+            bool isRinshanDraw = false,
+            bool isChankan = false)
         {
             SeatId winnerSeat = playerSeat.SeatId;
             return new WinDeclarationEvaluationContext(
@@ -209,13 +300,16 @@ namespace MahjongPrototype.Services
                 gameState.WindProgress.RoundWind,
                 winnerSeat,
                 playerSeat.IsReachDeclared,
-                true,
+                playerSeat.IsClosed,
                 playerSeat.IsIppatsuEligible,
                 playerSeat.IsDoubleReachDeclared,
                 IsFirstTurnTsumoEligible(gameState, winnerSeat, winType),
                 IsLastLiveWallDraw(gameState, winnerSeat, winningTile, winType),
                 winType == WinType.Ron && sourceDiscard.HasValue &&
-                    sourceDiscard.Value.IsLastLiveWallDiscard);
+                    sourceDiscard.Value.IsLastLiveWallDiscard,
+                playerSeat.Melds,
+                isRinshanDraw,
+                isChankan);
         }
 
         private static bool IsNoYakuWinningShape(
@@ -227,7 +321,7 @@ namespace MahjongPrototype.Services
                 !playerSeat.IsReachDeclared;
         }
 
-        private static void MarkDeclinedRonFuriten(
+        private void MarkDeclinedRonFuriten(
             MahjongGameState gameState,
             SeatId seat,
             WinType? winType)
@@ -235,11 +329,7 @@ namespace MahjongPrototype.Services
             if (winType != WinType.Ron)
                 return;
 
-            PlayerSeat playerSeat = gameState.GetPlayerSeat(seat);
-            if (playerSeat.IsReachDeclared)
-                playerSeat.MarkReachPassFuriten();
-            else
-                playerSeat.MarkTemporaryFuriten();
+            MarkDeclinedRonFuriten(gameState, seat);
         }
 
         private static bool IsLastDiscardLastLiveWallDiscard(MahjongGameState gameState)
@@ -253,7 +343,7 @@ namespace MahjongPrototype.Services
             SeatId seat,
             WinType winType)
         {
-            if (winType != WinType.Tsumo)
+            if (winType != WinType.Tsumo || gameState.HasCallOccurred)
                 return false;
 
             bool hasAnyDiscard = false;
@@ -300,11 +390,54 @@ namespace MahjongPrototype.Services
     public readonly struct WinDecisionEvaluation
     {
         public static WinDecisionEvaluation None => new WinDecisionEvaluation(
-            Array.Empty<WinCheckNotification>(), false);
-        public WinDecisionEvaluation(IReadOnlyList<WinCheckNotification> notifications, bool decisionStarted)
-        { Notifications = notifications ?? Array.Empty<WinCheckNotification>(); DecisionStarted = decisionStarted; }
+            Array.Empty<WinCheckNotification>(),
+            false,
+            Array.Empty<RonWinCandidate>());
+        public WinDecisionEvaluation(
+            IReadOnlyList<WinCheckNotification> notifications,
+            bool decisionStarted,
+            RonWinCandidate? ronCandidate = null)
+            : this(
+                notifications,
+                decisionStarted,
+                ronCandidate.HasValue
+                    ? new[] { ronCandidate.Value }
+                    : Array.Empty<RonWinCandidate>())
+        {
+        }
+
+        public WinDecisionEvaluation(
+            IReadOnlyList<WinCheckNotification> notifications,
+            bool decisionStarted,
+            IReadOnlyList<RonWinCandidate> ronCandidates)
+        {
+            Notifications = notifications ?? Array.Empty<WinCheckNotification>();
+            DecisionStarted = decisionStarted;
+            List<RonWinCandidate> copiedCandidates = ronCandidates != null
+                ? new List<RonWinCandidate>(ronCandidates)
+                : new List<RonWinCandidate>();
+            RonCandidates = copiedCandidates.AsReadOnly();
+            // Compatibility projection for existing serial reaction callers.
+            RonCandidate = RonCandidates.Count > 0
+                ? RonCandidates[0]
+                : (RonWinCandidate?)null;
+        }
         public IReadOnlyList<WinCheckNotification> Notifications { get; }
         public bool DecisionStarted { get; }
+        public RonWinCandidate? RonCandidate { get; }
+        public IReadOnlyList<RonWinCandidate> RonCandidates { get; }
+    }
+
+    public readonly struct RonWinCandidate
+    {
+        public RonWinCandidate(SeatId seat, WinDeclarationEvaluationResult evaluationResult)
+        {
+            Seat = seat;
+            EvaluationResult = evaluationResult;
+        }
+
+        public SeatId Seat { get; }
+        public WinDeclarationEvaluationResult EvaluationResult { get; }
     }
 
     public readonly struct WinDecisionDeclineResult
