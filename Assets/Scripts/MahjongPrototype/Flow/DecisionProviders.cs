@@ -60,9 +60,9 @@ namespace MahjongPrototype
     }
 
     /// <summary>
-    /// CPU decision endpoint. CPU call/ron decisions are intentionally not
-    /// registered in this phase; normal active turn commands use the authority
-    /// command port directly.
+    /// CPU decision endpoint. CPU call/reach/self-kan strategy is intentionally
+    /// absent, but the existing always-declare tsumo behavior is expressed as
+    /// a normal response to the authority-issued win request.
     /// </summary>
     public sealed class CpuAgentDecisionProvider : IDecisionProvider
     {
@@ -73,6 +73,36 @@ namespace MahjongPrototype
             DecisionRequest request,
             Func<DecisionResponse, DecisionResponseResult> respond)
         {
+            if (request == null || respond == null)
+            {
+                return;
+            }
+
+            if (request.Kind == DecisionKind.SelfKan)
+            {
+                // No CPU self-kan strategy is in scope. Explicitly declining
+                // still closes the authority-issued request, so a CPU turn
+                // cannot remain pending forever when a candidate exists.
+                respond(new DecisionResponse(
+                    request.RequestId,
+                    request.Kind,
+                    request.PlayerId,
+                    request.ActorSeat,
+                    request.TurnIndex,
+                    false));
+                return;
+            }
+
+            if (request.Kind != DecisionKind.WinDeclaration)
+                return;
+
+            respond(new DecisionResponse(
+                request.RequestId,
+                request.Kind,
+                request.PlayerId,
+                request.ActorSeat,
+                request.TurnIndex,
+                true));
         }
 
         public void CancelDecision(long requestId)

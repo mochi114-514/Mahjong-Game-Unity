@@ -97,13 +97,16 @@ namespace MahjongPrototype.UI
             inputController.RetryRequested += HandleRetryRequested;
             inputController.WinRequested += HandleWinRequested;
             inputController.DeclineWinRequested += HandleDeclineWinRequested;
+            inputController.WinDecisionResponseRequested += HandleWinDecisionResponseRequested;
             inputController.MeldCallRequested += HandleMeldCallRequested;
             inputController.DeclineMeldCallsRequested += HandleDeclineMeldCallsRequested;
             inputController.ReactionResponseRequested += HandleReactionResponseRequested;
             inputController.SelfKanRequested += HandleSelfKanRequested;
             inputController.DeclineSelfKanRequested += HandleDeclineSelfKanRequested;
+            inputController.SelfKanDecisionResponseRequested += HandleSelfKanDecisionResponseRequested;
             inputController.ReachRequested += HandleReachRequested;
             inputController.DeclineReachRequested += HandleDeclineReachRequested;
+            inputController.ReachDecisionResponseRequested += HandleReachDecisionResponseRequested;
             inputController.CancelReachRequested += HandleCancelReachRequested;
             inputController.RoundResultConfirmRequested += HandleRoundResultConfirmRequested;
             subscribedInputController = inputController;
@@ -120,13 +123,16 @@ namespace MahjongPrototype.UI
             subscribedInputController.RetryRequested -= HandleRetryRequested;
             subscribedInputController.WinRequested -= HandleWinRequested;
             subscribedInputController.DeclineWinRequested -= HandleDeclineWinRequested;
+            subscribedInputController.WinDecisionResponseRequested -= HandleWinDecisionResponseRequested;
             subscribedInputController.MeldCallRequested -= HandleMeldCallRequested;
             subscribedInputController.DeclineMeldCallsRequested -= HandleDeclineMeldCallsRequested;
             subscribedInputController.ReactionResponseRequested -= HandleReactionResponseRequested;
             subscribedInputController.SelfKanRequested -= HandleSelfKanRequested;
             subscribedInputController.DeclineSelfKanRequested -= HandleDeclineSelfKanRequested;
+            subscribedInputController.SelfKanDecisionResponseRequested -= HandleSelfKanDecisionResponseRequested;
             subscribedInputController.ReachRequested -= HandleReachRequested;
             subscribedInputController.DeclineReachRequested -= HandleDeclineReachRequested;
+            subscribedInputController.ReachDecisionResponseRequested -= HandleReachDecisionResponseRequested;
             subscribedInputController.CancelReachRequested -= HandleCancelReachRequested;
             subscribedInputController.RoundResultConfirmRequested -= HandleRoundResultConfirmRequested;
             subscribedInputController = null;
@@ -169,11 +175,9 @@ namespace MahjongPrototype.UI
             if (!TryGetGameFlow("Cannot activate skill because MahjongGameFlow is not assigned."))
                 return;
 
-            MahjongGameState state = gameFlow.CurrentState;
-            if (state == null || !TryGetLocalActor(state, out _, out SeatId actorSeat))
-                return;
-
-            gameFlow.RequestForceDrawSkillForSeat(actorSeat, targetTileText);
+            TryExecuteLocalTurnCommand(
+                MahjongAuthorityCommandKind.ForceDrawSkill,
+                textPayload: targetTileText);
         }
 
         private void HandleAutoSortChanged(bool enabled)
@@ -197,14 +201,7 @@ namespace MahjongPrototype.UI
             if (!TryGetGameFlow("Cannot declare win because MahjongGameFlow is not assigned."))
                 return;
 
-            MahjongGameState state = gameFlow.CurrentState;
-            // Bound ReactionResponseRequested callbacks carry the original
-            // request identity. Generic win input must never synthesize a
-            // response for whichever window happens to be current now.
-            if (state != null && state.IsReactionWindowPending)
-                return;
-
-            TryExecuteLocalTurnCommand(MahjongAuthorityCommandKind.DeclareWin);
+            TrySubmitCurrentDecisionResponse(DecisionKind.WinDeclaration, true);
         }
 
         private void HandleDeclineWinRequested()
@@ -212,11 +209,18 @@ namespace MahjongPrototype.UI
             if (!TryGetGameFlow("Cannot decline win because MahjongGameFlow is not assigned."))
                 return;
 
-            MahjongGameState state = gameFlow.CurrentState;
-            if (state != null && state.IsReactionWindowPending)
+            TrySubmitCurrentDecisionResponse(DecisionKind.WinDeclaration, false);
+        }
+
+        private void HandleWinDecisionResponseRequested(long requestId, bool accepted)
+        {
+            if (!TryGetGameFlow("Cannot submit win decision because MahjongGameFlow is not assigned."))
                 return;
 
-            gameFlow.RequestDeclineWin();
+            TrySubmitBoundDecisionResponse(
+                requestId,
+                DecisionKind.WinDeclaration,
+                accepted);
         }
 
         private void HandleMeldCallRequested(MeldCallKind kind, int optionId)
@@ -224,15 +228,11 @@ namespace MahjongPrototype.UI
             if (!TryGetGameFlow("Cannot respond to a meld call because MahjongGameFlow is not assigned."))
                 return;
 
-            MahjongGameState state = gameFlow.CurrentState;
-            if (state != null && state.IsReactionWindowPending)
-                return;
-
-            if (state == null || !TryGetLocalActor(state, out _, out SeatId actorSeat))
-                return;
-
             if (kind == MeldCallKind.Kan)
-                gameFlow.TryRequestDeclareAnkanForSeat(actorSeat, optionId);
+                TrySubmitLegacySelfKanResponse(
+                    SelfKanKind.Ankan,
+                    optionId,
+                    -1);
         }
 
         private void HandleDeclineMeldCallsRequested()
@@ -271,17 +271,7 @@ namespace MahjongPrototype.UI
             if (!TryGetGameFlow("Cannot declare a self kan because MahjongGameFlow is not assigned."))
                 return;
 
-            MahjongGameState state = gameFlow.CurrentState;
-            if (state == null || !TryGetLocalActor(state, out _, out SeatId actorSeat))
-                return;
-
-            if (kind == SelfKanKind.Ankan)
-                gameFlow.TryRequestDeclareAnkanForSeat(actorSeat, tileTypeIndex);
-            else if (kind == SelfKanKind.Kakan)
-                gameFlow.TryRequestDeclareKakanForSeat(
-                    actorSeat,
-                    tileTypeIndex,
-                    sourcePonMeldIndex);
+            TrySubmitLegacySelfKanResponse(kind, tileTypeIndex, sourcePonMeldIndex);
         }
 
         private void HandleDeclineSelfKanRequested()
@@ -289,9 +279,22 @@ namespace MahjongPrototype.UI
             if (!TryGetGameFlow("Cannot decline self kan because MahjongGameFlow is not assigned."))
                 return;
 
-            MahjongGameState state = gameFlow.CurrentState;
-            if (state != null && TryGetLocalActor(state, out _, out SeatId actorSeat))
-                gameFlow.TryRequestDeclineSelfKanForSeat(actorSeat);
+            TrySubmitCurrentDecisionResponse(DecisionKind.SelfKan, false);
+        }
+
+        private void HandleSelfKanDecisionResponseRequested(
+            long requestId,
+            bool accepted,
+            int optionId)
+        {
+            if (!TryGetGameFlow("Cannot submit self kan decision because MahjongGameFlow is not assigned."))
+                return;
+
+            TrySubmitBoundDecisionResponse(
+                requestId,
+                DecisionKind.SelfKan,
+                accepted,
+                accepted ? new SelfKanDecisionResponse(optionId) : null);
         }
 
         private void HandleReachRequested()
@@ -299,7 +302,7 @@ namespace MahjongPrototype.UI
             if (!TryGetGameFlow("Cannot declare reach because MahjongGameFlow is not assigned."))
                 return;
 
-            gameFlow.RequestDeclareReach();
+            TrySubmitCurrentDecisionResponse(DecisionKind.Reach, true);
         }
 
         private void HandleDeclineReachRequested()
@@ -307,7 +310,15 @@ namespace MahjongPrototype.UI
             if (!TryGetGameFlow("Cannot decline reach because MahjongGameFlow is not assigned."))
                 return;
 
-            gameFlow.RequestDeclineReach();
+            TrySubmitCurrentDecisionResponse(DecisionKind.Reach, false);
+        }
+
+        private void HandleReachDecisionResponseRequested(long requestId, bool accepted)
+        {
+            if (!TryGetGameFlow("Cannot submit reach decision because MahjongGameFlow is not assigned."))
+                return;
+
+            TrySubmitBoundDecisionResponse(requestId, DecisionKind.Reach, accepted);
         }
 
         private void HandleCancelReachRequested()
@@ -315,7 +326,8 @@ namespace MahjongPrototype.UI
             if (!TryGetGameFlow("Cannot cancel reach discard selection because MahjongGameFlow is not assigned."))
                 return;
 
-            gameFlow.RequestCancelReachDiscardSelection();
+            TryExecuteLocalTurnCommand(
+                MahjongAuthorityCommandKind.CancelReachDiscardSelection);
         }
 
         private void HandleRoundResultConfirmRequested()
@@ -349,7 +361,8 @@ namespace MahjongPrototype.UI
 
         private bool TryExecuteLocalTurnCommand(
             MahjongAuthorityCommandKind kind,
-            int handIndex = -1)
+            int handIndex = -1,
+            string textPayload = null)
         {
             MahjongGameState state = gameFlow != null ? gameFlow.CurrentState : null;
             if (state == null || !TryGetLocalActor(state, out PlayerId playerId, out SeatId seat))
@@ -360,7 +373,93 @@ namespace MahjongPrototype.UI
                 playerId,
                 seat,
                 state.TurnIndex,
-                handIndex)).Accepted;
+                handIndex,
+                textPayload)).Accepted;
+        }
+
+        private bool TrySubmitCurrentDecisionResponse(
+            DecisionKind kind,
+            bool accepted)
+        {
+            MahjongGameState state = gameFlow != null ? gameFlow.CurrentState : null;
+            if (state == null || !TryGetLocalActor(state, out PlayerId playerId, out _) ||
+                !gameFlow.TryGetPendingDecisionRequest(playerId, kind, out DecisionRequest request))
+            {
+                return false;
+            }
+
+            return TrySubmitBoundDecisionResponse(request.RequestId, kind, accepted);
+        }
+
+        private bool TrySubmitLegacySelfKanResponse(
+            SelfKanKind kind,
+            int tileTypeIndex,
+            int sourcePonMeldIndex)
+        {
+            MahjongGameState state = gameFlow != null ? gameFlow.CurrentState : null;
+            if (state == null || !TryGetLocalActor(state, out PlayerId playerId, out _) ||
+                !gameFlow.TryGetPendingDecisionRequest(
+                    playerId,
+                    DecisionKind.SelfKan,
+                    out DecisionRequest request) ||
+                request.SelfKan == null)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < request.SelfKan.Options.Count; i++)
+            {
+                SelfKanDecisionOption option = request.SelfKan.Options[i];
+                if (option.Kind == kind && option.Tile.TypeIndex == tileTypeIndex &&
+                    option.SourcePonMeldIndex == sourcePonMeldIndex)
+                {
+                    return TrySubmitBoundDecisionResponse(
+                        request.RequestId,
+                        DecisionKind.SelfKan,
+                        true,
+                        new SelfKanDecisionResponse(option.OptionId));
+                }
+            }
+
+            return false;
+        }
+
+        private bool TrySubmitBoundDecisionResponse(
+            long requestId,
+            DecisionKind kind,
+            bool accepted,
+            SelfKanDecisionResponse selfKan = null)
+        {
+            MahjongGameState state = gameFlow != null ? gameFlow.CurrentState : null;
+            if (state == null || !TryGetLocalActor(state, out PlayerId playerId, out SeatId seat) ||
+                !gameFlow.TryGetPendingDecisionRequest(playerId, kind, out DecisionRequest request) ||
+                request.Kind != kind || request.RequestId != requestId ||
+                request.PlayerId != playerId || request.ActorSeat != seat ||
+                request.TurnIndex != state.TurnIndex ||
+                !gameFlow.TryGetLocalUiDecisionProvider(
+                    playerId,
+                    out LocalUiDecisionProvider provider))
+            {
+                return false;
+            }
+
+            DecisionResponse response = selfKan == null
+                ? new DecisionResponse(
+                    request.RequestId,
+                    kind,
+                    playerId,
+                    seat,
+                    request.TurnIndex,
+                    accepted)
+                : new DecisionResponse(
+                    request.RequestId,
+                    kind,
+                    playerId,
+                    seat,
+                    request.TurnIndex,
+                    accepted,
+                    selfKan);
+            return provider.TrySubmitResponse(response);
         }
 
         private bool TrySubmitBoundReactionResponse(

@@ -91,12 +91,15 @@ namespace MahjongPrototype
         private readonly Dictionary<long, PendingReactionDecision>
             pendingReactionDecisionsByRequestId =
                 new Dictionary<long, PendingReactionDecision>();
+        private readonly Dictionary<long, DecisionRequest>
+            pendingDecisionRequestsById =
+                new Dictionary<long, DecisionRequest>();
         private readonly HashSet<SeatId> notifiedReactionAnswerSeats =
             new HashSet<SeatId>();
         private ReactionWindowSeatAnswerCollection reactionWindowSeatAnswers;
         private ReactionWindow reactionWindowAwaitingRequestRetry;
         private int notifiedReactionAnswerWindowId;
-        private long nextReactionDecisionRequestId = 1;
+        private long nextDecisionRequestId = 1;
         private MahjongViewContext viewContext = new MahjongViewContext(PlayerId.Player1);
 
         public MahjongGameState CurrentState => gameState;
@@ -134,6 +137,32 @@ namespace MahjongPrototype
                 if (pending.Request.PlayerId == playerId)
                 {
                     request = pending.Request;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Returns the immutable request currently owned by one player. UI and
+        /// providers use this projection instead of reading mutable decision
+        /// state directly from the game flow.
+        /// </summary>
+        public bool TryGetPendingDecisionRequest(
+            PlayerId playerId,
+            DecisionKind kind,
+            out DecisionRequest request)
+        {
+            request = null;
+            if (kind == DecisionKind.Reaction)
+                return TryGetPendingReactionDecisionRequest(playerId, out request);
+
+            foreach (DecisionRequest pending in pendingDecisionRequestsById.Values)
+            {
+                if (pending.PlayerId == playerId && pending.Kind == kind)
+                {
+                    request = pending;
                     return true;
                 }
             }
@@ -183,15 +212,6 @@ namespace MahjongPrototype
                 turnIndex)).Accepted;
         }
 
-        bool ICpuTurnGateway.RequestDeclareWinForCpu(PlayerId playerId, SeatId seat, int turnIndex)
-        {
-            return TryExecuteCommand(new MahjongAuthorityCommand(
-                MahjongAuthorityCommandKind.DeclareWin,
-                playerId,
-                seat,
-                turnIndex)).Accepted;
-        }
-
         bool ICpuTurnGateway.IsSameGameStateAndTurn(
             MahjongGameState expectedGameState,
             PlayerId playerId,
@@ -209,14 +229,17 @@ namespace MahjongPrototype
         {
             if (gameState == null)
                 return MahjongAuthorityCommandResult.Rejected("GameStateMissing");
+            if (!System.Enum.IsDefined(typeof(SeatId), command.ActorSeat))
+                return MahjongAuthorityCommandResult.Rejected("PlayerSeatMismatch");
 
             SeatSlot actorSlot = gameState.GetSeatSlot(command.ActorSeat);
             if (!actorSlot.HasPlayer || actorSlot.PlayerId != command.PlayerId)
                 return MahjongAuthorityCommandResult.Rejected("PlayerSeatMismatch");
-            if (gameState.CurrentTurn != command.ActorSeat)
-                return MahjongAuthorityCommandResult.Rejected("NotCurrentTurn");
             if (gameState.TurnIndex != command.TurnIndex)
                 return MahjongAuthorityCommandResult.Rejected("StaleTurnIndex");
+            if (command.Kind != MahjongAuthorityCommandKind.ForceDrawSkill &&
+                gameState.CurrentTurn != command.ActorSeat)
+                return MahjongAuthorityCommandResult.Rejected("NotCurrentTurn");
 
             bool accepted;
             switch (command.Kind)
@@ -231,7 +254,15 @@ namespace MahjongPrototype
                     accepted = TryRequestDiscardDrawnTileForSeat(command.ActorSeat);
                     break;
                 case MahjongAuthorityCommandKind.DeclareWin:
-                    accepted = TryRequestDeclareWinForSeat(command.ActorSeat);
+                    return MahjongAuthorityCommandResult.Rejected(
+                        "WinDeclarationRequiresDecisionResponse");
+                case MahjongAuthorityCommandKind.CancelReachDiscardSelection:
+                    accepted = TryCancelReachDiscardSelectionForSeat(command.ActorSeat);
+                    break;
+                case MahjongAuthorityCommandKind.ForceDrawSkill:
+                    accepted = TryRequestForceDrawSkillCommand(
+                        command.ActorSeat,
+                        command.TextPayload);
                     break;
                 default:
                     return MahjongAuthorityCommandResult.Rejected("UnsupportedCommand");
@@ -266,9 +297,28 @@ namespace MahjongPrototype
             if (gameState.TurnIndex != response.TurnIndex)
                 return DecisionResponseResult.Rejected("StaleTurnIndex");
 
-            // PROTOTYPE: Non-reaction decisions keep their existing direct,
-            // atomic paths until their own coordinator migration.
-            return DecisionResponseResult.Rejected("DecisionKindNotIntegrated");
+            if (!pendingDecisionRequestsById.TryGetValue(
+                    response.RequestId,
+                    out DecisionRequest request))
+            {
+                return DecisionResponseResult.Rejected("DecisionRequestMissingOrCancelled");
+            }
+            if (!MatchesDecisionIdentity(request, response))
+                return DecisionResponseResult.Rejected("DecisionResponseIdentityMismatch");
+            if (!request.TryValidateResponsePayload(response, out string validationReason))
+                return DecisionResponseResult.Rejected(validationReason);
+
+            switch (response.Kind)
+            {
+                case DecisionKind.WinDeclaration:
+                    return TryExecuteWinDeclarationDecisionResponse(request, response);
+                case DecisionKind.Reach:
+                    return TryExecuteReachDecisionResponse(request, response);
+                case DecisionKind.SelfKan:
+                    return TryExecuteSelfKanDecisionResponse(request, response);
+                default:
+                    return DecisionResponseResult.Rejected("DecisionKindNotIntegrated");
+            }
         }
 
         private DecisionResponseResult TryExecuteReactionDecisionResponse(
@@ -382,6 +432,124 @@ namespace MahjongPrototype
                 return DecisionResponseResult.Rejected("ReactionWindowResolutionFailed");
 
             return DecisionResponseResult.Succeeded();
+        }
+
+        private DecisionResponseResult TryExecuteWinDeclarationDecisionResponse(
+            DecisionRequest request,
+            DecisionResponse response)
+        {
+            if (request.WinDeclaration == null ||
+                !gameState.IsWinDecisionPending ||
+                gameState.WinDecisionSeat != response.ActorSeat ||
+                gameState.WinDecisionTurnIndex != response.TurnIndex ||
+                gameState.WinDecisionType != request.WinDeclaration.WinType ||
+                gameState.WinningTile != request.WinDeclaration.WinningTile ||
+                gameState.WinSourceSeat != request.WinDeclaration.SourceSeat ||
+                request.WinDeclaration.WinType != WinType.Tsumo)
+            {
+                return DecisionResponseResult.Rejected("WinDecisionStale");
+            }
+
+            pendingDecisionRequestsById.Remove(request.RequestId);
+            if (response.Accepted)
+            {
+                return TryRequestDeclareWinForSeat(response.ActorSeat)
+                    ? DecisionResponseResult.Succeeded()
+                    : DecisionResponseResult.Rejected("WinDeclarationRejected");
+            }
+
+            return TryDeclineWinDecisionForSeat(response.ActorSeat)
+                ? DecisionResponseResult.Succeeded()
+                : DecisionResponseResult.Rejected("WinDecisionStale");
+        }
+
+        private DecisionResponseResult TryExecuteReachDecisionResponse(
+            DecisionRequest request,
+            DecisionResponse response)
+        {
+            if (request.Reach == null || !gameState.IsReachDecisionPending ||
+                gameState.ReachDecisionSeat != response.ActorSeat ||
+                gameState.ReachDecisionTurnIndex != response.TurnIndex)
+            {
+                return DecisionResponseResult.Rejected("ReachDecisionStale");
+            }
+
+            pendingDecisionRequestsById.Remove(request.RequestId);
+            EnsureDecisionServices();
+            if (response.Accepted)
+            {
+                ReachDecisionResult result = reachDecisionService.BeginDiscardSelection(
+                    gameState,
+                    response.ActorSeat);
+                if (!result.Success)
+                    return DecisionResponseResult.Rejected(result.FailureReason);
+
+                EventPublisher.NotifyTurnDebug(
+                    "ReachDiscardSelection",
+                    $"phase={gameState.TurnPhase}; candidates={gameState.ReachDiscardCandidates.Count}",
+                    seat: result.Seat,
+                    turnIndex: result.TurnIndex);
+                EventPublisher.NotifyReachDiscardSelectionStarted(result.Seat, result.TurnIndex);
+                return DecisionResponseResult.Succeeded();
+            }
+
+            ReachDecisionResult declined = reachDecisionService.Decline(gameState);
+            if (!declined.Success)
+                return DecisionResponseResult.Rejected(declined.FailureReason);
+
+            ApplyDeferredAutoSortAfterReachDecisionIfNeeded("ReachDeclined");
+            EventPublisher.NotifyTurnDebug(
+                "ReachDeclined",
+                $"phase={gameState.TurnPhase}",
+                seat: declined.Seat,
+                turnIndex: declined.TurnIndex);
+            EventPublisher.NotifyReachDeclined(declined.Seat, declined.TurnIndex);
+            return DecisionResponseResult.Succeeded();
+        }
+
+        private DecisionResponseResult TryExecuteSelfKanDecisionResponse(
+            DecisionRequest request,
+            DecisionResponse response)
+        {
+            if (request.SelfKan == null || !gameState.IsSelfKanDecisionPending ||
+                gameState.CurrentSelfKanDecision == null ||
+                gameState.CurrentSelfKanDecision.Seat != response.ActorSeat ||
+                gameState.CurrentSelfKanDecision.TurnIndex != response.TurnIndex)
+            {
+                return DecisionResponseResult.Rejected("SelfKanDecisionStale");
+            }
+
+            pendingDecisionRequestsById.Remove(request.RequestId);
+            if (!response.Accepted)
+            {
+                return TryDeclineSelfKanDecisionForSeat(response.ActorSeat)
+                    ? DecisionResponseResult.Succeeded()
+                    : DecisionResponseResult.Rejected("SelfKanDecisionStale");
+            }
+
+            if (response.SelfKan == null ||
+                !request.SelfKan.TryGetOption(response.SelfKan.OptionId, out SelfKanDecisionOption option) ||
+                option.OptionId < 0 ||
+                option.OptionId >= gameState.CurrentSelfKanDecision.Candidates.Count)
+            {
+                return DecisionResponseResult.Rejected("SelfKanOptionMissing");
+            }
+
+            SelfKanCandidate candidate =
+                gameState.CurrentSelfKanDecision.Candidates[option.OptionId];
+            if (candidate == null || candidate.Kind != option.Kind ||
+                candidate.Tile != option.Tile ||
+                candidate.AddedTileLocation != option.AddedTileLocation ||
+                candidate.SourcePonMeldIndex != option.SourcePonMeldIndex ||
+                candidate.Seat != response.ActorSeat ||
+                candidate.TurnIndex != response.TurnIndex)
+            {
+                return DecisionResponseResult.Rejected("SelfKanDecisionStale");
+            }
+
+            return TryRequestDeclareSelfKanForSeat(response.ActorSeat, candidate)
+                ? DecisionResponseResult.Succeeded()
+                : DecisionResponseResult.Rejected("SelfKanDeclarationRejected");
         }
 
         public void HandleRejectedReactionDecisionResponse(
@@ -974,11 +1142,17 @@ namespace MahjongPrototype
         {
             if (!CanUseGameState())
                 return;
-            EnsureSkillFlowService();
-            NotifySkillFlowResult(skillFlowService.RequestForceDraw(
-                gameState,
+
+            SeatSlot slot = gameState.GetSeatSlot(ownerSeat);
+            if (!slot.HasPlayer)
+                return;
+
+            TryExecuteCommand(new MahjongAuthorityCommand(
+                MahjongAuthorityCommandKind.ForceDrawSkill,
+                slot.PlayerId.Value,
                 ownerSeat,
-                targetTileCode));
+                gameState.TurnIndex,
+                textPayload: targetTileCode));
         }
 
         public bool CanRequestForceDrawSkillForSeat(SeatId ownerSeat)
@@ -1009,6 +1183,14 @@ namespace MahjongPrototype
         {
             if (!CanUseGameState())
                 return;
+
+            if (TrySubmitLegacyDecisionResponse(
+                    gameState.SelfSeat,
+                    DecisionKind.WinDeclaration,
+                    true))
+            {
+                return;
+            }
 
             TryRequestDeclareWinForSeat(gameState.SelfSeat);
         }
@@ -1243,6 +1425,15 @@ namespace MahjongPrototype
 
         public bool TryRequestDeclareAnkanForSeat(SeatId actorSeat, int tileTypeIndex)
         {
+            if (TrySubmitLegacySelfKanDecisionResponse(
+                    actorSeat,
+                    SelfKanKind.Ankan,
+                    tileTypeIndex,
+                    -1))
+            {
+                return true;
+            }
+
             IReadOnlyList<SelfKanCandidate> candidates = GetSelfKanCandidatesForSeat(actorSeat);
             for (int i = 0; i < candidates.Count; i++)
             {
@@ -1259,6 +1450,15 @@ namespace MahjongPrototype
 
         public bool TryRequestDeclareAnkanForSeat(SeatId actorSeat, Tile tile)
         {
+            if (TrySubmitLegacySelfKanDecisionResponse(
+                    actorSeat,
+                    SelfKanKind.Ankan,
+                    tile.TypeIndex,
+                    -1))
+            {
+                return true;
+            }
+
             IReadOnlyList<SelfKanCandidate> candidates = GetSelfKanCandidatesForSeat(actorSeat);
             for (int i = 0; i < candidates.Count; i++)
             {
@@ -1275,6 +1475,15 @@ namespace MahjongPrototype
             int tileTypeIndex,
             int sourcePonMeldIndex)
         {
+            if (TrySubmitLegacySelfKanDecisionResponse(
+                    actorSeat,
+                    SelfKanKind.Kakan,
+                    tileTypeIndex,
+                    sourcePonMeldIndex))
+            {
+                return true;
+            }
+
             IReadOnlyList<SelfKanCandidate> candidates = GetSelfKanCandidatesForSeat(actorSeat);
             for (int i = 0; i < candidates.Count; i++)
             {
@@ -1344,6 +1553,14 @@ namespace MahjongPrototype
 
         public bool TryRequestDeclineSelfKanForSeat(SeatId actorSeat)
         {
+            if (TrySubmitLegacyDecisionResponse(
+                    actorSeat,
+                    DecisionKind.SelfKan,
+                    false))
+            {
+                return true;
+            }
+
             if (!CanUseGameState() || !gameState.TryDeclineSelfKanDecision(actorSeat))
             {
                 NotifyKanBlocked(actorSeat, default, "SelfKanDecisionMissing");
@@ -1449,6 +1666,14 @@ namespace MahjongPrototype
                 return;
             }
 
+            if (TrySubmitLegacyDecisionResponse(
+                    gameState.WinDecisionSeat,
+                    DecisionKind.WinDeclaration,
+                    false))
+            {
+                return;
+            }
+
             EnsureDecisionServices();
             WinDecisionDeclineResult result = winDecisionService.Decline(gameState);
 
@@ -1480,6 +1705,14 @@ namespace MahjongPrototype
             {
                 Warn("Only the self player can declare reach from the current UI.");
                 NotifyTurnBlocked("ReachBlocked", "NotSelfReachDecision");
+                return;
+            }
+
+            if (TrySubmitLegacyDecisionResponse(
+                    gameState.ReachDecisionSeat,
+                    DecisionKind.Reach,
+                    true))
+            {
                 return;
             }
 
@@ -1521,6 +1754,17 @@ namespace MahjongPrototype
                 return;
             }
 
+            SeatSlot slot = gameState.GetSeatSlot(gameState.SelfSeat);
+            if (slot.HasPlayer)
+            {
+                TryExecuteCommand(new MahjongAuthorityCommand(
+                    MahjongAuthorityCommandKind.CancelReachDiscardSelection,
+                    slot.PlayerId.Value,
+                    gameState.SelfSeat,
+                    gameState.TurnIndex));
+                return;
+            }
+
             EnsureDecisionServices();
             ReachDecisionResult result = reachDecisionService.CancelDiscardSelection(
                 gameState,
@@ -1549,6 +1793,14 @@ namespace MahjongPrototype
             {
                 Warn("No reach decision is pending.");
                 NotifyTurnBlocked("ReachBlocked", "ReachDecisionMissing");
+                return;
+            }
+
+            if (TrySubmitLegacyDecisionResponse(
+                    gameState.ReachDecisionSeat,
+                    DecisionKind.Reach,
+                    false))
+            {
                 return;
             }
 
@@ -2065,6 +2317,16 @@ namespace MahjongPrototype
             WinDecisionEvaluation evaluation = winDecisionService.EvaluateTsumo(
                 gameState,
                 isRinshanDraw);
+            if (evaluation.DecisionStarted &&
+                !TryBeginWinDeclarationDecisionRequest(out string requestReason))
+            {
+                NotifyTurnBlocked("WinBlocked", requestReason);
+                // A provider route may be configured without a strategy (for
+                // example the intentionally unimplemented network path). Do
+                // not leave a newly-created self-draw decision pending
+                // forever when no provider can receive it.
+                TryDeclineWinDecisionForSeat(gameState.WinDecisionSeat);
+            }
             NotifyWinDecisionStartedIfNeeded(evaluation);
             NotifyWinCheckResults(evaluation);
         }
@@ -2074,27 +2336,9 @@ namespace MahjongPrototype
             CheckWinPrototype(isRinshanDraw);
 
             if (gameState.IsWinDecisionPending)
-            {
-                EnsureTurnFlowService();
-                if (IsCpuPlayer(gameState.WinDecisionSeat))
-                {
-                    PlayerId? playerId = gameState.GetSeatSlot(
-                        gameState.WinDecisionSeat).PlayerId;
-                    if (!playerId.HasValue)
-                        return;
-
-                    cpuTurnController?.TryRespondToWinDecision(
-                        this,
-                        gameState,
-                        playerId.Value,
-                        gameState.WinDecisionSeat,
-                        gameState.WinDecisionTurnIndex);
-                }
-
                 return;
-            }
 
-            if (TryBeginReachAnkanDecisionAfterDraw(seat))
+            if (TryBeginSelfKanDecisionAfterDraw(seat))
                 return;
 
             if (ShouldAutoDiscardDrawnTileAfterDraw(seat))
@@ -2108,7 +2352,7 @@ namespace MahjongPrototype
 
         private void ContinueAfterDeclinedTsumo(SeatId seat)
         {
-            if (TryBeginReachAnkanDecisionAfterDraw(seat))
+            if (TryBeginSelfKanDecisionAfterDraw(seat))
                 return;
 
             if (ShouldAutoDiscardDrawnTileAfterDraw(seat))
@@ -2120,11 +2364,10 @@ namespace MahjongPrototype
             TryBeginReachDecisionAfterDraw(seat);
         }
 
-        private bool TryBeginReachAnkanDecisionAfterDraw(SeatId seat)
+        private bool TryBeginSelfKanDecisionAfterDraw(SeatId seat)
         {
             if (gameState == null || gameState.CurrentTurn != seat ||
-                gameState.TurnPhase != TurnPhase.WaitingForDiscard ||
-                !gameState.GetPlayerSeat(seat).IsReachDeclared)
+                gameState.TurnPhase != TurnPhase.WaitingForDiscard)
             {
                 return false;
             }
@@ -2134,8 +2377,15 @@ namespace MahjongPrototype
             if (candidates.Count <= 0 || !gameState.BeginSelfKanDecision(seat, candidates))
                 return false;
 
+            if (!TryBeginSelfKanDecisionRequest(seat, out string requestReason))
+            {
+                gameState.TryDeclineSelfKanDecision(seat);
+                NotifyKanBlocked(seat, default, requestReason);
+                return false;
+            }
+
             EventPublisher.NotifyTurnDebug(
-                "ReachAnkanDecisionStarted",
+                "SelfKanDecisionStarted",
                 $"seat={seat}; candidates={candidates.Count}",
                 seat: seat,
                 turnIndex: gameState.TurnIndex);
@@ -2216,6 +2466,13 @@ namespace MahjongPrototype
             ReachDecisionResult result = reachDecisionService.TryBeginAfterDraw(gameState, seat);
             if (!result.Success)
                 return;
+
+            if (!TryBeginReachDecisionRequest(result.Seat, result.TurnIndex, out string requestReason))
+            {
+                reachDecisionService.Decline(gameState);
+                NotifyTurnBlocked("ReachBlocked", requestReason);
+                return;
+            }
 
             EventPublisher.NotifyTurnDebug(
                 "ReachDecision",
@@ -2990,7 +3247,7 @@ namespace MahjongPrototype
                 }
 
                 DecisionRequest request = new DecisionRequest(
-                    AllocateReactionDecisionRequestId(),
+                    AllocateDecisionRequestId(),
                     DecisionKind.Reaction,
                     slot.PlayerId.Value,
                     seat,
@@ -3150,13 +3407,13 @@ namespace MahjongPrototype
                 chiOptions));
         }
 
-        private long AllocateReactionDecisionRequestId()
+        private long AllocateDecisionRequestId()
         {
-            long requestId = nextReactionDecisionRequestId;
-            nextReactionDecisionRequestId =
-                nextReactionDecisionRequestId == long.MaxValue
+            long requestId = nextDecisionRequestId;
+            nextDecisionRequestId =
+                nextDecisionRequestId == long.MaxValue
                     ? 1
-                    : nextReactionDecisionRequestId + 1;
+                    : nextDecisionRequestId + 1;
             return requestId;
         }
 
@@ -3222,6 +3479,310 @@ namespace MahjongPrototype
                 request.TurnIndex == response.TurnIndex;
         }
 
+        private bool TryBeginWinDeclarationDecisionRequest(out string reason)
+        {
+            reason = string.Empty;
+            if (gameState == null || !gameState.IsWinDecisionPending ||
+                gameState.WinDecisionType != WinType.Tsumo)
+            {
+                reason = "WinDecisionMissing";
+                return false;
+            }
+
+            SeatId seat = gameState.WinDecisionSeat;
+            SeatSlot slot = gameState.GetSeatSlot(seat);
+            if (!slot.HasPlayer)
+            {
+                reason = "WinDecisionPlayerMissing";
+                return false;
+            }
+
+            if (TryGetPendingDecisionRequest(
+                    slot.PlayerId.Value,
+                    DecisionKind.WinDeclaration,
+                    out _))
+            {
+                return true;
+            }
+
+            DecisionRequest request = new DecisionRequest(
+                AllocateDecisionRequestId(),
+                DecisionKind.WinDeclaration,
+                slot.PlayerId.Value,
+                seat,
+                gameState.WinDecisionTurnIndex,
+                new WinDeclarationDecisionRequest(
+                    gameState.WinDecisionType.Value,
+                    gameState.WinningTile,
+                    gameState.WinSourceSeat));
+            return TryQueueDecisionRequest(request, out reason);
+        }
+
+        private bool TryBeginReachDecisionRequest(
+            SeatId seat,
+            int turnIndex,
+            out string reason)
+        {
+            reason = string.Empty;
+            if (gameState == null || !gameState.IsReachDecisionPending ||
+                gameState.ReachDecisionSeat != seat ||
+                gameState.ReachDecisionTurnIndex != turnIndex)
+            {
+                reason = "ReachDecisionMissing";
+                return false;
+            }
+
+            SeatSlot slot = gameState.GetSeatSlot(seat);
+            if (!slot.HasPlayer)
+            {
+                reason = "ReachDecisionPlayerMissing";
+                return false;
+            }
+
+            DecisionRequest request = new DecisionRequest(
+                AllocateDecisionRequestId(),
+                DecisionKind.Reach,
+                slot.PlayerId.Value,
+                seat,
+                turnIndex,
+                new ReachDecisionRequest());
+            return TryQueueDecisionRequest(request, out reason);
+        }
+
+        private bool TryBeginSelfKanDecisionRequest(SeatId seat, out string reason)
+        {
+            reason = string.Empty;
+            if (gameState == null || !gameState.IsSelfKanDecisionPending ||
+                gameState.CurrentSelfKanDecision == null ||
+                gameState.CurrentSelfKanDecision.Seat != seat)
+            {
+                reason = "SelfKanDecisionMissing";
+                return false;
+            }
+
+            SeatSlot slot = gameState.GetSeatSlot(seat);
+            if (!slot.HasPlayer)
+            {
+                reason = "SelfKanDecisionPlayerMissing";
+                return false;
+            }
+
+            DecisionRequest request = new DecisionRequest(
+                AllocateDecisionRequestId(),
+                DecisionKind.SelfKan,
+                slot.PlayerId.Value,
+                seat,
+                gameState.CurrentSelfKanDecision.TurnIndex,
+                new SelfKanDecisionRequest(gameState.CurrentSelfKanDecision.Candidates));
+            return TryQueueDecisionRequest(request, out reason);
+        }
+
+        private bool TryQueueDecisionRequest(DecisionRequest request, out string reason)
+        {
+            reason = string.Empty;
+            if (request == null)
+            {
+                reason = "DecisionRequestMissing";
+                return false;
+            }
+
+            EnsureDecisionCoordinator();
+            if (decisionCoordinator == null)
+            {
+                reason = "DecisionCoordinatorMissing";
+                return false;
+            }
+
+            if (pendingDecisionRequestsById.ContainsKey(request.RequestId))
+            {
+                reason = "DuplicateDecisionRequestId";
+                return false;
+            }
+
+            pendingDecisionRequestsById.Add(request.RequestId, request);
+            DecisionResponseResult result = decisionCoordinator.Request(request);
+            if (result.Accepted)
+                return true;
+
+            pendingDecisionRequestsById.Remove(request.RequestId);
+            reason = result.Reason;
+            return false;
+        }
+
+        // PROTOTYPE: Existing scene events and reflection-based tests still
+        // call the pre-decision public methods. When an authority request is
+        // present, keep that surface as a thin adapter into the coordinator
+        // rather than mutating game state directly. The no-request fallback in
+        // each caller preserves older test setup that creates a state-only
+        // decision without configuring a provider.
+        private bool TrySubmitLegacyDecisionResponse(
+            SeatId actorSeat,
+            DecisionKind kind,
+            bool accepted,
+            SelfKanDecisionResponse selfKan = null)
+        {
+            if (gameState == null)
+                return false;
+
+            SeatSlot slot = gameState.GetSeatSlot(actorSeat);
+            if (!slot.HasPlayer ||
+                !TryGetPendingDecisionRequest(slot.PlayerId.Value, kind, out DecisionRequest request) ||
+                request.ActorSeat != actorSeat ||
+                request.TurnIndex != gameState.TurnIndex)
+            {
+                return false;
+            }
+
+            DecisionResponse response = selfKan == null
+                ? new DecisionResponse(
+                    request.RequestId,
+                    kind,
+                    slot.PlayerId.Value,
+                    actorSeat,
+                    request.TurnIndex,
+                    accepted)
+                : new DecisionResponse(
+                    request.RequestId,
+                    kind,
+                    slot.PlayerId.Value,
+                    actorSeat,
+                    request.TurnIndex,
+                    accepted,
+                    selfKan);
+            EnsureDecisionCoordinator();
+            if (decisionCoordinator == null ||
+                !decisionCoordinator.ReceiveResponse(response).Accepted)
+            {
+                return false;
+            }
+
+            decisionCoordinator.Pump();
+            return true;
+        }
+
+        private bool TrySubmitLegacySelfKanDecisionResponse(
+            SeatId actorSeat,
+            SelfKanKind kind,
+            int tileTypeIndex,
+            int sourcePonMeldIndex)
+        {
+            if (gameState == null)
+                return false;
+
+            SeatSlot slot = gameState.GetSeatSlot(actorSeat);
+            if (!slot.HasPlayer ||
+                !TryGetPendingDecisionRequest(
+                    slot.PlayerId.Value,
+                    DecisionKind.SelfKan,
+                    out DecisionRequest request) ||
+                request.SelfKan == null)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < request.SelfKan.Options.Count; i++)
+            {
+                SelfKanDecisionOption option = request.SelfKan.Options[i];
+                if (option.Kind == kind && option.Tile.TypeIndex == tileTypeIndex &&
+                    option.SourcePonMeldIndex == sourcePonMeldIndex)
+                {
+                    return TrySubmitLegacyDecisionResponse(
+                        actorSeat,
+                        DecisionKind.SelfKan,
+                        true,
+                        new SelfKanDecisionResponse(option.OptionId));
+                }
+            }
+
+            return false;
+        }
+
+        private bool TryDeclineWinDecisionForSeat(SeatId actorSeat)
+        {
+            if (!CanUseGameState() || !gameState.IsWinDecisionPending ||
+                gameState.WinDecisionSeat != actorSeat ||
+                gameState.WinDecisionType != WinType.Tsumo)
+            {
+                return false;
+            }
+
+            EnsureDecisionServices();
+            WinDecisionDeclineResult result = winDecisionService.Decline(gameState);
+            if (!result.WasPending)
+                return false;
+
+            EventPublisher.NotifyWinDeclined(result.Seat, result.TurnIndex);
+            EventPublisher.NotifyWinDeclinedDetailed(
+                result.Seat,
+                result.WinType,
+                result.TurnIndex);
+            ContinueAfterDeclinedTsumo(result.Seat);
+            return true;
+        }
+
+        private bool TryDeclineSelfKanDecisionForSeat(SeatId actorSeat)
+        {
+            if (!CanUseGameState() || !gameState.TryDeclineSelfKanDecision(actorSeat))
+            {
+                NotifyKanBlocked(actorSeat, default, "SelfKanDecisionMissing");
+                return false;
+            }
+
+            if (!gameState.GetPlayerSeat(actorSeat).IsReachDeclared)
+                return true;
+
+            return TryRequestDiscardDrawnTileForSeatInternal(actorSeat, false);
+        }
+
+        private bool TryCancelReachDiscardSelectionForSeat(SeatId actorSeat)
+        {
+            if (!CanUseGameState() || !gameState.IsReachDiscardSelectionPending ||
+                gameState.ReachDecisionSeat != actorSeat ||
+                gameState.ReachDecisionTurnIndex != gameState.TurnIndex)
+            {
+                NotifyTurnBlocked("ReachBlocked", "ReachDiscardSelectionMissing");
+                return false;
+            }
+
+            EnsureDecisionServices();
+            ReachDecisionResult result = reachDecisionService.CancelDiscardSelection(
+                gameState,
+                actorSeat);
+            if (!result.Success)
+            {
+                NotifyTurnBlocked("ReachBlocked", result.FailureReason);
+                return false;
+            }
+
+            if (!TryBeginReachDecisionRequest(result.Seat, result.TurnIndex, out string requestReason))
+            {
+                NotifyTurnBlocked("ReachBlocked", requestReason);
+                return false;
+            }
+
+            EventPublisher.NotifyTurnDebug(
+                "ReachDiscardSelectionCanceled",
+                $"phase={gameState.TurnPhase}; candidates={gameState.ReachDiscardCandidates.Count}",
+                seat: result.Seat,
+                turnIndex: result.TurnIndex);
+            EventPublisher.NotifyReachDiscardSelectionCanceled(result.Seat, result.TurnIndex);
+            return true;
+        }
+
+        private bool TryRequestForceDrawSkillCommand(SeatId ownerSeat, string targetTileCode)
+        {
+            if (!CanUseGameState())
+                return false;
+
+            EnsureSkillFlowService();
+            SkillFlowResult result = skillFlowService.RequestForceDraw(
+                gameState,
+                ownerSeat,
+                targetTileCode);
+            NotifySkillFlowResult(result);
+            return result.Success;
+        }
+
         private void EnsureDecisionCoordinator()
         {
             EnsureMatchConfiguration();
@@ -3233,6 +3794,7 @@ namespace MahjongPrototype
         private void CancelPendingDecisions()
         {
             decisionCoordinator?.CancelAll();
+            pendingDecisionRequestsById.Clear();
             ClearReactionSeatAnswerState();
             notifiedReactionAnswerWindowId = 0;
             notifiedReactionAnswerSeats.Clear();

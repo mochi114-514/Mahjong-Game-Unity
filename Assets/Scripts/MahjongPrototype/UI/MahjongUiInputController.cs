@@ -53,6 +53,10 @@ namespace MahjongPrototype.UI
         private UnityAction reactionDeclineWinAction;
         private UnityAction reactionPonAction;
         private UnityAction reactionDeclinePonAction;
+        private UnityAction winDecisionAction;
+        private UnityAction declineWinDecisionAction;
+        private UnityAction reachDecisionAction;
+        private UnityAction declineReachDecisionAction;
 
         public event Action DrawRequested;
         public event Action<string> ForceDrawSkillRequested;
@@ -66,6 +70,9 @@ namespace MahjongPrototype.UI
         public event Action DeclineMeldCallsRequested;
         public event Action<long, int, ReactionWindowSeatAnswerKind, int?>
             ReactionResponseRequested;
+        public event Action<long, bool> WinDecisionResponseRequested;
+        public event Action<long, bool> ReachDecisionResponseRequested;
+        public event Action<long, bool, int> SelfKanDecisionResponseRequested;
         public event Action<SelfKanKind, int, int> SelfKanRequested;
         public event Action DeclineSelfKanRequested;
         public event Action ReachRequested;
@@ -81,6 +88,8 @@ namespace MahjongPrototype.UI
         private void OnDisable()
         {
             ClearReactionResponseBindings();
+            ClearWinDecisionResponseBindings();
+            ClearReachDecisionResponseBindings();
             UnregisterButtonListeners();
         }
 
@@ -274,7 +283,7 @@ namespace MahjongPrototype.UI
 
         private void HandleWinClicked()
         {
-            if (reactionWinAction != null)
+            if (reactionWinAction != null || winDecisionAction != null)
                 return;
 
             WinRequested?.Invoke();
@@ -282,7 +291,7 @@ namespace MahjongPrototype.UI
 
         private void HandleDeclineWinClicked()
         {
-            if (reactionDeclineWinAction != null)
+            if (reactionDeclineWinAction != null || declineWinDecisionAction != null)
                 return;
 
             DeclineWinRequested?.Invoke();
@@ -390,6 +399,46 @@ namespace MahjongPrototype.UI
             reactionDeclinePonAction = null;
         }
 
+        /// <summary>
+        /// Binds the self-draw win controls to an authority-issued decision.
+        /// Capturing the request id prevents a delayed click from being
+        /// interpreted as a choice for a later draw.
+        /// </summary>
+        public void SetWinDecisionResponseBindings(long requestId)
+        {
+            ClearWinDecisionResponseBindings();
+            if (requestId <= 0)
+                return;
+
+            if (winButton != null)
+            {
+                winDecisionAction = () => RequestWinDecisionResponse(requestId, true);
+                winButton.onClick.AddListener(winDecisionAction);
+            }
+
+            if (declineWinButton != null)
+            {
+                declineWinDecisionAction = () => RequestWinDecisionResponse(requestId, false);
+                declineWinButton.onClick.AddListener(declineWinDecisionAction);
+            }
+        }
+
+        public void ClearWinDecisionResponseBindings()
+        {
+            if (winDecisionAction != null && winButton != null)
+                winButton.onClick.RemoveListener(winDecisionAction);
+            if (declineWinDecisionAction != null && declineWinButton != null)
+                declineWinButton.onClick.RemoveListener(declineWinDecisionAction);
+
+            winDecisionAction = null;
+            declineWinDecisionAction = null;
+        }
+
+        public void RequestWinDecisionResponse(long requestId, bool accepted)
+        {
+            WinDecisionResponseRequested?.Invoke(requestId, accepted);
+        }
+
         public void RequestReactionResponse(
             long requestId,
             int windowId,
@@ -416,19 +465,73 @@ namespace MahjongPrototype.UI
             DeclineSelfKanRequested?.Invoke();
         }
 
+        public void RequestSelfKanDecisionResponse(
+            long requestId,
+            bool accepted,
+            int optionId = -1)
+        {
+            SelfKanDecisionResponseRequested?.Invoke(requestId, accepted, optionId);
+        }
+
         private void HandleReachClicked()
         {
+            if (reachDecisionAction != null)
+                return;
+
             ReachRequested?.Invoke();
         }
 
         private void HandleDeclineReachClicked()
         {
+            if (declineReachDecisionAction != null)
+                return;
+
             DeclineReachRequested?.Invoke();
         }
 
         private void HandleCancelReachClicked()
         {
             CancelReachRequested?.Invoke();
+        }
+
+        /// <summary>
+        /// Binds reach acceptance and decline to the exact request created by
+        /// the authority. The actual discard stays on the existing command
+        /// path after an accepted response.
+        /// </summary>
+        public void SetReachDecisionResponseBindings(long requestId)
+        {
+            ClearReachDecisionResponseBindings();
+            if (requestId <= 0)
+                return;
+
+            if (reachButton != null)
+            {
+                reachDecisionAction = () => RequestReachDecisionResponse(requestId, true);
+                reachButton.onClick.AddListener(reachDecisionAction);
+            }
+
+            if (declineReachButton != null)
+            {
+                declineReachDecisionAction = () => RequestReachDecisionResponse(requestId, false);
+                declineReachButton.onClick.AddListener(declineReachDecisionAction);
+            }
+        }
+
+        public void ClearReachDecisionResponseBindings()
+        {
+            if (reachDecisionAction != null && reachButton != null)
+                reachButton.onClick.RemoveListener(reachDecisionAction);
+            if (declineReachDecisionAction != null && declineReachButton != null)
+                declineReachButton.onClick.RemoveListener(declineReachDecisionAction);
+
+            reachDecisionAction = null;
+            declineReachDecisionAction = null;
+        }
+
+        public void RequestReachDecisionResponse(long requestId, bool accepted)
+        {
+            ReachDecisionResponseRequested?.Invoke(requestId, accepted);
         }
 
         private void HandleRoundResultConfirmClicked()

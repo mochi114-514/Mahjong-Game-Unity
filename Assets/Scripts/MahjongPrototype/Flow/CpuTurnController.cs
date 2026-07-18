@@ -48,29 +48,6 @@ namespace MahjongPrototype
             StopAllCoroutines();
         }
 
-        public bool TryRespondToWinDecision(
-            ICpuTurnGateway gateway,
-            MahjongGameState gameState,
-            PlayerId playerId,
-            SeatId seat,
-            int turnIndex)
-        {
-            if (gateway == null ||
-                gameState == null ||
-                !gateway.IsSameGameStateAndTurn(gameState, playerId, seat, turnIndex) ||
-                gameState.IsRoundEnded ||
-                gameState.TurnPhase != TurnPhase.WinDecision ||
-                !gameState.IsWinDecisionPending ||
-                gameState.WinDecisionSeat != seat ||
-                gameState.WinDecisionTurnIndex != turnIndex)
-            {
-                return false;
-            }
-
-            // PROTOTYPE: CPU declares every legal self-draw win decision.
-            return gateway.RequestDeclareWinForCpu(playerId, seat, turnIndex);
-        }
-
         private IEnumerator RunCpuTurn(
             ICpuTurnGateway gateway,
             MahjongGameState gameState,

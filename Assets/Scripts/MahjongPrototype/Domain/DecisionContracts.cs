@@ -31,7 +31,7 @@ namespace MahjongPrototype.Domain
                 playerId,
                 actorSeat,
                 turnIndex,
-                null)
+                (ReactionDecisionRequest)null)
         {
         }
 
@@ -42,6 +42,89 @@ namespace MahjongPrototype.Domain
             SeatId actorSeat,
             int turnIndex,
             ReactionDecisionRequest reaction)
+            : this(
+                requestId,
+                kind,
+                playerId,
+                actorSeat,
+                turnIndex,
+                reaction,
+                null,
+                null,
+                null)
+        {
+        }
+
+        public DecisionRequest(
+            long requestId,
+            DecisionKind kind,
+            PlayerId playerId,
+            SeatId actorSeat,
+            int turnIndex,
+            WinDeclarationDecisionRequest winDeclaration)
+            : this(
+                requestId,
+                kind,
+                playerId,
+                actorSeat,
+                turnIndex,
+                null,
+                winDeclaration,
+                null,
+                null)
+        {
+        }
+
+        public DecisionRequest(
+            long requestId,
+            DecisionKind kind,
+            PlayerId playerId,
+            SeatId actorSeat,
+            int turnIndex,
+            ReachDecisionRequest reach)
+            : this(
+                requestId,
+                kind,
+                playerId,
+                actorSeat,
+                turnIndex,
+                null,
+                null,
+                reach,
+                null)
+        {
+        }
+
+        public DecisionRequest(
+            long requestId,
+            DecisionKind kind,
+            PlayerId playerId,
+            SeatId actorSeat,
+            int turnIndex,
+            SelfKanDecisionRequest selfKan)
+            : this(
+                requestId,
+                kind,
+                playerId,
+                actorSeat,
+                turnIndex,
+                null,
+                null,
+                null,
+                selfKan)
+        {
+        }
+
+        private DecisionRequest(
+            long requestId,
+            DecisionKind kind,
+            PlayerId playerId,
+            SeatId actorSeat,
+            int turnIndex,
+            ReactionDecisionRequest reaction,
+            WinDeclarationDecisionRequest winDeclaration,
+            ReachDecisionRequest reach,
+            SelfKanDecisionRequest selfKan)
         {
             RequestId = requestId;
             Kind = kind;
@@ -49,6 +132,9 @@ namespace MahjongPrototype.Domain
             ActorSeat = actorSeat;
             TurnIndex = turnIndex;
             Reaction = reaction;
+            WinDeclaration = winDeclaration;
+            Reach = reach;
+            SelfKan = selfKan;
         }
 
         public long RequestId { get; }
@@ -61,28 +147,48 @@ namespace MahjongPrototype.Domain
         /// projection rather than a mutable ReactionWindow or candidate.
         /// </summary>
         public ReactionDecisionRequest Reaction { get; }
+        public WinDeclarationDecisionRequest WinDeclaration { get; }
+        public ReachDecisionRequest Reach { get; }
+        public SelfKanDecisionRequest SelfKan { get; }
 
         public bool TryValidateResponsePayload(
             DecisionResponse response,
             out string reason)
         {
             reason = string.Empty;
-            if (Kind != DecisionKind.Reaction)
-                return true;
-
-            if (Reaction == null)
+            switch (Kind)
             {
-                reason = "ReactionDecisionRequestMissing";
-                return false;
+                case DecisionKind.Reaction:
+                    if (Reaction == null)
+                    {
+                        reason = "ReactionDecisionRequestMissing";
+                        return false;
+                    }
+                    if (response == null || response.Reaction == null)
+                    {
+                        reason = "ReactionDecisionResponseMissing";
+                        return false;
+                    }
+                    return Reaction.TryValidateResponse(response.Reaction, out reason);
+                case DecisionKind.WinDeclaration:
+                    // A payload is required by MahjongGameFlow before any
+                    // state transition. Permit the historical payload-less
+                    // construction here so generic coordinator contract tests
+                    // and compatibility callers retain their queue semantics.
+                    return true;
+                case DecisionKind.Reach:
+                    return true;
+                case DecisionKind.SelfKan:
+                    if (SelfKan == null)
+                    {
+                        reason = "SelfKanDecisionRequestMissing";
+                        return false;
+                    }
+                    return SelfKan.TryValidateResponse(response, out reason);
+                default:
+                    reason = "DecisionKindUnsupported";
+                    return false;
             }
-
-            if (response == null || response.Reaction == null)
-            {
-                reason = "ReactionDecisionResponseMissing";
-                return false;
-            }
-
-            return Reaction.TryValidateResponse(response.Reaction, out reason);
         }
     }
 
@@ -102,7 +208,7 @@ namespace MahjongPrototype.Domain
                 actorSeat,
                 turnIndex,
                 accepted,
-                null)
+                (ReactionDecisionResponse)null)
         {
         }
 
@@ -114,6 +220,47 @@ namespace MahjongPrototype.Domain
             int turnIndex,
             bool accepted,
             ReactionDecisionResponse reaction)
+            : this(
+                requestId,
+                kind,
+                playerId,
+                actorSeat,
+                turnIndex,
+                accepted,
+                reaction,
+                null)
+        {
+        }
+
+        public DecisionResponse(
+            long requestId,
+            DecisionKind kind,
+            PlayerId playerId,
+            SeatId actorSeat,
+            int turnIndex,
+            bool accepted,
+            SelfKanDecisionResponse selfKan)
+            : this(
+                requestId,
+                kind,
+                playerId,
+                actorSeat,
+                turnIndex,
+                accepted,
+                null,
+                selfKan)
+        {
+        }
+
+        private DecisionResponse(
+            long requestId,
+            DecisionKind kind,
+            PlayerId playerId,
+            SeatId actorSeat,
+            int turnIndex,
+            bool accepted,
+            ReactionDecisionResponse reaction,
+            SelfKanDecisionResponse selfKan)
         {
             RequestId = requestId;
             Kind = kind;
@@ -122,6 +269,7 @@ namespace MahjongPrototype.Domain
             TurnIndex = turnIndex;
             Accepted = accepted;
             Reaction = reaction;
+            SelfKan = selfKan;
         }
 
         public long RequestId { get; }
@@ -131,6 +279,138 @@ namespace MahjongPrototype.Domain
         public int TurnIndex { get; }
         public bool Accepted { get; }
         public ReactionDecisionResponse Reaction { get; }
+        public SelfKanDecisionResponse SelfKan { get; }
+    }
+
+    /// <summary>
+    /// Immutable projection of a self-draw win choice. Rule evaluation remains
+    /// authority-owned; this is only the provider-facing presentation data.
+    /// </summary>
+    public sealed class WinDeclarationDecisionRequest
+    {
+        public WinDeclarationDecisionRequest(
+            WinType winType,
+            Tile? winningTile,
+            SeatId? sourceSeat)
+        {
+            WinType = winType;
+            WinningTile = winningTile;
+            SourceSeat = sourceSeat;
+        }
+
+        public WinType WinType { get; }
+        public Tile? WinningTile { get; }
+        public SeatId? SourceSeat { get; }
+    }
+
+    /// <summary>
+    /// Immutable marker for the authority-created reach choice. The subsequent
+    /// discard remains a confirmed authority command and its candidates remain
+    /// validated at that command boundary.
+    /// </summary>
+    public sealed class ReachDecisionRequest
+    {
+    }
+
+    /// <summary>
+    /// Immutable option projection for a self-kan decision. It contains no
+    /// mutable PlayerMeld reference and is identified only within its request.
+    /// </summary>
+    public sealed class SelfKanDecisionOption
+    {
+        public SelfKanDecisionOption(int optionId, SelfKanCandidate candidate)
+        {
+            if (optionId < 0)
+                throw new ArgumentOutOfRangeException(nameof(optionId));
+            if (candidate == null)
+                throw new ArgumentNullException(nameof(candidate));
+
+            OptionId = optionId;
+            Kind = candidate.Kind;
+            Tile = candidate.Tile;
+            AddedTileLocation = candidate.AddedTileLocation;
+            SourcePonMeldIndex = candidate.SourcePonMeldIndex;
+        }
+
+        public int OptionId { get; }
+        public SelfKanKind Kind { get; }
+        public Tile Tile { get; }
+        public SelfKanTileLocation AddedTileLocation { get; }
+        public int SourcePonMeldIndex { get; }
+    }
+
+    public sealed class SelfKanDecisionRequest
+    {
+        private readonly IReadOnlyList<SelfKanDecisionOption> options;
+
+        public SelfKanDecisionRequest(IReadOnlyList<SelfKanCandidate> candidates)
+        {
+            if (candidates == null || candidates.Count <= 0)
+                throw new ArgumentException("Self-kan decision candidates are required.", nameof(candidates));
+
+            List<SelfKanDecisionOption> copiedOptions =
+                new List<SelfKanDecisionOption>(candidates.Count);
+            for (int i = 0; i < candidates.Count; i++)
+                copiedOptions.Add(new SelfKanDecisionOption(i, candidates[i]));
+
+            options = copiedOptions.AsReadOnly();
+        }
+
+        public IReadOnlyList<SelfKanDecisionOption> Options => options;
+
+        public bool TryValidateResponse(DecisionResponse response, out string reason)
+        {
+            reason = string.Empty;
+            if (response == null)
+            {
+                reason = "SelfKanDecisionResponseMissing";
+                return false;
+            }
+
+            if (!response.Accepted)
+            {
+                if (response.SelfKan != null)
+                {
+                    reason = "SelfKanOptionNotAllowed";
+                    return false;
+                }
+
+                return true;
+            }
+
+            if (response.SelfKan == null || !TryGetOption(response.SelfKan.OptionId, out _))
+            {
+                reason = "SelfKanOptionMissing";
+                return false;
+            }
+
+            return true;
+        }
+
+        public bool TryGetOption(int optionId, out SelfKanDecisionOption option)
+        {
+            option = null;
+            for (int i = 0; i < options.Count; i++)
+            {
+                if (options[i].OptionId == optionId)
+                {
+                    option = options[i];
+                    return true;
+                }
+            }
+
+            return false;
+        }
+    }
+
+    public sealed class SelfKanDecisionResponse
+    {
+        public SelfKanDecisionResponse(int optionId)
+        {
+            OptionId = optionId;
+        }
+
+        public int OptionId { get; }
     }
 
     /// <summary>

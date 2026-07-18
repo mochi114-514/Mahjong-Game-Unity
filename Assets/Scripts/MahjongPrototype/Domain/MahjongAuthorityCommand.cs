@@ -7,7 +7,9 @@ namespace MahjongPrototype.Domain
         Draw = 0,
         DiscardHand = 1,
         DiscardDrawnTile = 2,
-        DeclareWin = 3
+        DeclareWin = 3,
+        CancelReachDiscardSelection = 4,
+        ForceDrawSkill = 5
     }
 
     /// <summary>
@@ -22,13 +24,15 @@ namespace MahjongPrototype.Domain
             PlayerId playerId,
             SeatId actorSeat,
             int turnIndex,
-            int handIndex = -1)
+            int handIndex = -1,
+            string textPayload = null)
         {
             Kind = kind;
             PlayerId = playerId;
             ActorSeat = actorSeat;
             TurnIndex = turnIndex;
             HandIndex = handIndex;
+            TextPayload = textPayload;
         }
 
         public MahjongAuthorityCommandKind Kind { get; }
@@ -36,6 +40,7 @@ namespace MahjongPrototype.Domain
         public SeatId ActorSeat { get; }
         public int TurnIndex { get; }
         public int HandIndex { get; }
+        public string TextPayload { get; }
     }
 
     public readonly struct MahjongAuthorityCommandResult

@@ -80,6 +80,57 @@ namespace MahjongPrototype.UI
         }
 
         /// <summary>
+        /// Displays one immutable self-kan request. Unlike the compatibility
+        /// path above, every button captures the request id and its option id;
+        /// it never asks the game state for the currently available candidates.
+        /// </summary>
+        public void SetSelfKanDecision(
+            long requestId,
+            SelfKanDecisionRequest request)
+        {
+            ClearReactionRequest();
+            ClearDynamicMeldButtons();
+            ConfigureSelfKanDecline(false);
+
+            if (ponDecisionRoot == null)
+            {
+                WarnMissingOnce(ref warnedMissingRoot, "PonDecisionRoot is not assigned.");
+                return;
+            }
+
+            if (requestId <= 0 || request == null || request.Options.Count <= 0)
+            {
+                ponDecisionRoot.SetActive(false);
+                return;
+            }
+
+            ponDecisionRoot.SetActive(true);
+            SetStaticButtonVisibility(false, true, false);
+            if (decisionLabel != null)
+                decisionLabel.text = "暗槓・加槓";
+
+            if (ponButton == null)
+            {
+                WarnMissingOnce(ref warnedMissingPonButton, "PonButton is not assigned.");
+                return;
+            }
+
+            if (inputController == null)
+                inputController = GetComponent<MahjongUiInputController>();
+            if (inputController == null)
+            {
+                WarnMissingOnce(
+                    ref warnedMissingInputController,
+                    "MahjongUiInputController is not assigned.");
+                return;
+            }
+
+            ConfigureSelfKanDecisionDecline(requestId);
+            for (int i = 0; i < request.Options.Count; i++)
+                CreateSelfKanDecisionButton(requestId, request.Options[i]);
+        }
+
+        /// <summary>
         /// Displays the meld portion of one immutable reaction request.
         /// The caller can keep the single pass action on the ron panel when
         /// ron and meld choices are offered together.
@@ -290,6 +341,30 @@ namespace MahjongPrototype.UI
             dynamicMeldButtons.Add(button);
         }
 
+        private void CreateSelfKanDecisionButton(
+            long requestId,
+            SelfKanDecisionOption option)
+        {
+            if (option == null)
+                return;
+
+            Button button = Instantiate(ponButton, ponButton.transform.parent);
+            button.name = $"{option.Kind}_{option.OptionId}";
+            if (declineButton != null)
+                button.transform.SetSiblingIndex(declineButton.transform.GetSiblingIndex());
+            button.onClick.RemoveAllListeners();
+            int optionId = option.OptionId;
+            button.onClick.AddListener(
+                () => inputController.RequestSelfKanDecisionResponse(
+                    requestId,
+                    true,
+                    optionId));
+            button.gameObject.SetActive(true);
+            string action = option.Kind == SelfKanKind.Ankan ? "暗槓" : "加槓";
+            SetButtonLabel(button, $"{action} {option.Tile}");
+            dynamicMeldButtons.Add(button);
+        }
+
         private void CreateMeldButton(
             string buttonName,
             string label,
@@ -358,6 +433,23 @@ namespace MahjongPrototype.UI
                 return;
 
             selfKanDeclineAction = () => inputController.RequestDeclineSelfKan();
+            declineButton.onClick.AddListener(selfKanDeclineAction);
+        }
+
+        private void ConfigureSelfKanDecisionDecline(long requestId)
+        {
+            if (declineButton == null || inputController == null || requestId <= 0)
+                return;
+
+            if (selfKanDeclineAction != null)
+            {
+                declineButton.onClick.RemoveListener(selfKanDeclineAction);
+                selfKanDeclineAction = null;
+            }
+
+            selfKanDeclineAction = () => inputController.RequestSelfKanDecisionResponse(
+                requestId,
+                false);
             declineButton.onClick.AddListener(selfKanDeclineAction);
         }
 

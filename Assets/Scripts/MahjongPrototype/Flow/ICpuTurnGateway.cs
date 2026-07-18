@@ -6,7 +6,6 @@ namespace MahjongPrototype
     {
         bool RequestDrawForCpu(PlayerId playerId, SeatId seat, int turnIndex);
         bool RequestDiscardDrawnTileForCpu(PlayerId playerId, SeatId seat, int turnIndex);
-        bool RequestDeclareWinForCpu(PlayerId playerId, SeatId seat, int turnIndex);
         bool IsSameGameStateAndTurn(
             MahjongGameState gameState,
             PlayerId playerId,

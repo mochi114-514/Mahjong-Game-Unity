@@ -762,11 +762,13 @@ namespace MahjongPrototype.UI
             if (winDecisionController == null)
             {
                 inputController?.ClearReactionResponseBindings();
+                inputController?.ClearWinDecisionResponseBindings();
                 return;
             }
 
             if (TryGetSelfReactionDecisionRequest(state, out DecisionRequest request))
             {
+                inputController?.ClearWinDecisionResponseBindings();
                 ReactionDecisionRequest reaction = request.Reaction;
                 bool showRon = reaction.Allows(ReactionWindowSeatAnswerKind.Ron);
                 inputController?.SetReactionResponseBindings(
@@ -785,15 +787,21 @@ namespace MahjongPrototype.UI
             }
 
             inputController?.ClearReactionResponseBindings();
+            if (TryGetSelfDecisionRequest(
+                    state,
+                    DecisionKind.WinDeclaration,
+                    out DecisionRequest winRequest) &&
+                winRequest.WinDeclaration != null)
+            {
+                inputController?.SetWinDecisionResponseBindings(winRequest.RequestId);
+                winDecisionController.SetWinDecision(
+                    true,
+                    winRequest.WinDeclaration.WinType);
+                return;
+            }
 
-            bool showSelfWinDecision =
-                state != null &&
-                state.IsWinDecisionPending &&
-                IsSelfSeat(state.WinDecisionSeat);
-            WinType? winType = showSelfWinDecision
-                ? state.WinDecisionType
-                : null;
-            winDecisionController.SetWinDecision(showSelfWinDecision, winType);
+            inputController?.ClearWinDecisionResponseBindings();
+            winDecisionController.SetWinDecision(false, null);
         }
 
         private void RefreshWinDecisionUi()
@@ -802,7 +810,10 @@ namespace MahjongPrototype.UI
             if (state != null)
                 RefreshWinDecision(state);
             else
+            {
                 inputController?.ClearReactionResponseBindings();
+                inputController?.ClearWinDecisionResponseBindings();
+            }
         }
 
         private void RefreshPonDecision(MahjongGameState state)
@@ -858,6 +869,18 @@ namespace MahjongPrototype.UI
                 return;
             }
 
+            if (TryGetSelfDecisionRequest(
+                    state,
+                    DecisionKind.SelfKan,
+                    out DecisionRequest selfKanRequest) &&
+                selfKanRequest.SelfKan != null)
+            {
+                ponDecisionController.SetSelfKanDecision(
+                    selfKanRequest.RequestId,
+                    selfKanRequest.SelfKan);
+                return;
+            }
+
             // The normal local UI must not derive reaction choices from a
             // mutable window. If a request is no longer pending, hide the
             // reaction controls until the existing lifecycle closes it.
@@ -874,18 +897,13 @@ namespace MahjongPrototype.UI
                 return;
             }
 
-            IReadOnlyList<SelfKanCandidate> selfKanCandidates = gameFlow != null
-                ? gameFlow.GetSelfKanCandidatesForSeat(selfSeat)
-                : null;
             ponDecisionController.SetMeldCallDecision(
                 false,
                 false,
                 null,
                 null,
-                selfKanCandidates,
-                state.IsSelfKanDecisionPending &&
-                state.CurrentSelfKanDecision != null &&
-                state.CurrentSelfKanDecision.Seat == selfSeat,
+                null,
+                false,
                 null);
         }
 
@@ -930,10 +948,15 @@ namespace MahjongPrototype.UI
 
             if (reachDecisionController != null)
             {
-                bool showSelfReachDecision =
-                    state != null &&
-                    state.IsReachDecisionPending &&
-                    IsSelfSeat(state.ReachDecisionSeat);
+                bool showSelfReachDecision = TryGetSelfDecisionRequest(
+                    state,
+                    DecisionKind.Reach,
+                    out DecisionRequest reachRequest);
+                if (showSelfReachDecision)
+                    inputController?.SetReachDecisionResponseBindings(reachRequest.RequestId);
+                else
+                    inputController?.ClearReachDecisionResponseBindings();
+
                 bool showSelfReachCancel =
                     state != null &&
                     state.IsReachDiscardSelectionPending &&
@@ -1082,6 +1105,30 @@ namespace MahjongPrototype.UI
                 pending.Kind != DecisionKind.Reaction || pending.Reaction == null ||
                 pending.PlayerId != gameFlow.ViewContext.LocalPlayerId ||
                 pending.ActorSeat != selfSeat)
+            {
+                return false;
+            }
+
+            request = pending;
+            return true;
+        }
+
+        private bool TryGetSelfDecisionRequest(
+            MahjongGameState state,
+            DecisionKind kind,
+            out DecisionRequest request)
+        {
+            request = null;
+            if (state == null || gameFlow == null || gameFlow.ViewContext == null ||
+                !TryGetSelfSeat(state, out SeatId selfSeat) ||
+                !gameFlow.TryGetPendingDecisionRequest(
+                    gameFlow.ViewContext.LocalPlayerId,
+                    kind,
+                    out DecisionRequest pending) ||
+                pending.Kind != kind ||
+                pending.PlayerId != gameFlow.ViewContext.LocalPlayerId ||
+                pending.ActorSeat != selfSeat ||
+                pending.TurnIndex != state.TurnIndex)
             {
                 return false;
             }
