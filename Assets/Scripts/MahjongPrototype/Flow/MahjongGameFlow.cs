@@ -3722,12 +3722,20 @@ namespace MahjongPrototype
 
         private bool TryDeclineSelfKanDecisionForSeat(SeatId actorSeat)
         {
-            if (!CanUseGameState() || !gameState.TryDeclineSelfKanDecision(actorSeat))
+            if (!CanUseGameState() || gameState.CurrentSelfKanDecision == null)
             {
                 NotifyKanBlocked(actorSeat, default, "SelfKanDecisionMissing");
                 return false;
             }
 
+            int turnIndex = gameState.CurrentSelfKanDecision.TurnIndex;
+            if (!gameState.TryDeclineSelfKanDecision(actorSeat))
+            {
+                NotifyKanBlocked(actorSeat, default, "SelfKanDecisionMissing");
+                return false;
+            }
+
+            EventPublisher.NotifySelfKanDecisionDeclined(actorSeat, turnIndex);
             if (!gameState.GetPlayerSeat(actorSeat).IsReachDeclared)
                 return true;
 

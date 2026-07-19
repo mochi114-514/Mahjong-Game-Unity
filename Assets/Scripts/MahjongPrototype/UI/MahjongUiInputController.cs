@@ -55,6 +55,8 @@ namespace MahjongPrototype.UI
         private UnityAction reactionDeclinePonAction;
         private UnityAction winDecisionAction;
         private UnityAction declineWinDecisionAction;
+        private Button selfKanDecisionDeclineButton;
+        private UnityAction selfKanDecisionDeclineAction;
         private UnityAction reachDecisionAction;
         private UnityAction declineReachDecisionAction;
 
@@ -89,6 +91,7 @@ namespace MahjongPrototype.UI
         {
             ClearReactionResponseBindings();
             ClearWinDecisionResponseBindings();
+            ClearSelfKanDecisionResponseBinding();
             ClearReachDecisionResponseBindings();
             UnregisterButtonListeners();
         }
@@ -308,7 +311,7 @@ namespace MahjongPrototype.UI
 
         private void HandleDeclinePonClicked()
         {
-            if (reactionDeclinePonAction != null)
+            if (reactionDeclinePonAction != null || selfKanDecisionDeclineAction != null)
                 return;
 
             DeclinePonRequested?.Invoke();
@@ -471,6 +474,36 @@ namespace MahjongPrototype.UI
             int optionId = -1)
         {
             SelfKanDecisionResponseRequested?.Invoke(requestId, accepted, optionId);
+        }
+
+        /// <summary>
+        /// Binds the self-kan skip control to the exact authority request that
+        /// created it. The normal meld-decline handler is suppressed while this
+        /// binding exists, so one click cannot enter both input paths.
+        /// </summary>
+        public void SetSelfKanDecisionResponseBinding(Button button, long requestId)
+        {
+            ClearSelfKanDecisionResponseBinding();
+            if (button == null || requestId <= 0)
+                return;
+
+            selfKanDecisionDeclineButton = button;
+            selfKanDecisionDeclineAction = () => RequestSelfKanDecisionResponse(
+                requestId,
+                false);
+            selfKanDecisionDeclineButton.onClick.AddListener(selfKanDecisionDeclineAction);
+        }
+
+        public void ClearSelfKanDecisionResponseBinding()
+        {
+            if (selfKanDecisionDeclineAction != null && selfKanDecisionDeclineButton != null)
+            {
+                selfKanDecisionDeclineButton.onClick.RemoveListener(
+                    selfKanDecisionDeclineAction);
+            }
+
+            selfKanDecisionDeclineButton = null;
+            selfKanDecisionDeclineAction = null;
         }
 
         private void HandleReachClicked()

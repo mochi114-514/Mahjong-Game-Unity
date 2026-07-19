@@ -30,6 +30,7 @@ namespace MahjongPrototype.Notifications
         public event Action<SeatId, int> WinDeclined;
         public event Action<SeatId, int> ReachDecisionStarted;
         public event Action<SeatId, int> SelfKanDecisionStarted;
+        public event Action<SeatId, int> SelfKanDecisionDeclined;
         public event Action<SeatId, int> ReachDiscardSelectionStarted;
         public event Action<SeatId, int> ReachDiscardSelectionCanceled;
         public event Action<SeatId, int> ReachDeclared;
@@ -132,6 +133,16 @@ namespace MahjongPrototype.Notifications
                 seat,
                 turnIndex,
                 nameof(SelfKanDecisionStarted));
+            NotifyAny();
+        }
+
+        public void NotifySelfKanDecisionDeclined(SeatId seat, int turnIndex)
+        {
+            NotifySubscribers(
+                SelfKanDecisionDeclined,
+                seat,
+                turnIndex,
+                nameof(SelfKanDecisionDeclined));
             NotifyAny();
         }
 

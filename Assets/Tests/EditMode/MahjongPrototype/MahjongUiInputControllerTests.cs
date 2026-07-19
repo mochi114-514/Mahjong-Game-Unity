@@ -312,12 +312,24 @@ namespace MahjongPrototype.Tests
     {
         private const string ControllerTypeName =
             "MahjongPrototype.UI.MahjongPonDecisionController, Assembly-CSharp";
+        private const string UiManagerTypeName =
+            "MahjongPrototype.UI.MahjongPrototypeUi, Assembly-CSharp";
         private const string InputControllerTypeName =
             "MahjongPrototype.UI.MahjongUiInputController, Assembly-CSharp";
+        private const string EventNotifierTypeName =
+            "MahjongPrototype.Notifications.MahjongEventNotifier, Assembly-CSharp";
         private const string ChiOptionTypeName =
             "MahjongPrototype.Domain.ChiOption, Assembly-CSharp";
         private const string ChiOptionViewTypeName =
             "MahjongPrototype.UI.MahjongChiOptionView, Assembly-CSharp";
+        private const string SelfKanCandidateTypeName =
+            "MahjongPrototype.Domain.SelfKanCandidate, Assembly-CSharp";
+        private const string SelfKanKindTypeName =
+            "MahjongPrototype.Domain.SelfKanKind, Assembly-CSharp";
+        private const string SelfKanTileLocationTypeName =
+            "MahjongPrototype.Domain.SelfKanTileLocation, Assembly-CSharp";
+        private const string SelfKanDecisionRequestTypeName =
+            "MahjongPrototype.Domain.SelfKanDecisionRequest, Assembly-CSharp";
         private const string TileSpriteCatalogTypeName =
             "MahjongPrototype.UI.MahjongTileSpriteCatalog, Assembly-CSharp";
         private const string TileSpriteViewTypeName =
@@ -631,6 +643,217 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
+        public void SelfKanDecisionButtons_UseOnlyRequestBoundEvents_AndClearStaleChoices()
+        {
+            ReflectionTestAccess reflection = new ReflectionTestAccess();
+            MahjongTestTypes types = new MahjongTestTypes(reflection);
+            MahjongTestDataFactory dataFactory = new MahjongTestDataFactory(reflection, types);
+            GameObject root = new GameObject("SelfKanDecisionInputTestRoot");
+            root.SetActive(false);
+            try
+            {
+                Component inputController = root.AddComponent(
+                    reflection.RequireType(InputControllerTypeName));
+                Component controller = root.AddComponent(
+                    reflection.RequireType(ControllerTypeName));
+                Type tmpTextType = reflection.RequireType(TmpTextTypeName);
+                GameObject decisionRoot = new GameObject(
+                    "SelfKanDecisionRoot",
+                    typeof(RectTransform));
+                decisionRoot.transform.SetParent(root.transform);
+                Button ponButton = CreateButton(
+                    reflection,
+                    tmpTextType,
+                    decisionRoot.transform,
+                    "PonButton",
+                    "ポン");
+                Button declineButton = CreateButton(
+                    reflection,
+                    tmpTextType,
+                    decisionRoot.transform,
+                    "DeclineButton",
+                    "拒否");
+
+                reflection.SetPrivateField(controller, "ponDecisionRoot", decisionRoot);
+                reflection.SetPrivateField(
+                    controller,
+                    "decisionLabel",
+                    declineButton.GetComponentInChildren(tmpTextType, true));
+                reflection.SetPrivateField(controller, "ponButton", ponButton);
+                reflection.SetPrivateField(controller, "declineButton", declineButton);
+                reflection.SetPrivateField(controller, "inputController", inputController);
+
+                // Reproduce the static legacy listener that the production input
+                // controller registers on this shared decline button.
+                declineButton.onClick.AddListener(
+                    () => reflection.Invoke(inputController, "HandleDeclinePonClicked"));
+
+                int legacyEventCount = 0;
+                foreach (string eventName in new[]
+                {
+                    "MeldCallRequested",
+                    "DeclineMeldCallsRequested",
+                    "SelfKanRequested",
+                    "DeclineSelfKanRequested"
+                })
+                {
+                    EventInfo legacyEvent = inputController.GetType().GetEvent(eventName);
+                    Assert.That(legacyEvent, Is.Not.Null);
+                    legacyEvent.AddEventHandler(
+                        inputController,
+                        CreateIgnoringHandler(
+                            legacyEvent.EventHandlerType,
+                            () => legacyEventCount++));
+                }
+
+                List<long> requestIds = new List<long>();
+                List<bool> acceptedValues = new List<bool>();
+                List<int> optionIds = new List<int>();
+                inputController.GetType()
+                    .GetEvent("SelfKanDecisionResponseRequested")
+                    .AddEventHandler(
+                        inputController,
+                        new Action<long, bool, int>((requestId, accepted, optionId) =>
+                        {
+                            requestIds.Add(requestId);
+                            acceptedValues.Add(accepted);
+                            optionIds.Add(optionId);
+                        }));
+
+                reflection.Invoke(
+                    controller,
+                    "SetSelfKanDecision",
+                    501L,
+                    CreateSelfKanDecisionRequest(
+                        reflection,
+                        dataFactory,
+                        includeKakan: true));
+
+                Button ankanButton = FindButton(decisionRoot.transform, "Ankan_0");
+                Button kakanButton = FindButton(decisionRoot.transform, "Kakan_1");
+                Assert.That(ankanButton, Is.Not.Null);
+                Assert.That(kakanButton, Is.Not.Null);
+                Assert.That(
+                    ButtonLabel(reflection, tmpTextType, ankanButton),
+                    Is.EqualTo("カン P"));
+                Assert.That(
+                    ButtonLabel(reflection, tmpTextType, kakanButton),
+                    Is.EqualTo("カン C"));
+                Assert.That(
+                    ButtonLabel(reflection, tmpTextType, declineButton),
+                    Is.EqualTo("スキップ"));
+
+                ankanButton.onClick.Invoke();
+                kakanButton.onClick.Invoke();
+                declineButton.onClick.Invoke();
+
+                Assert.That(requestIds, Is.EqualTo(new[] { 501L, 501L, 501L }));
+                Assert.That(acceptedValues, Is.EqualTo(new[] { true, true, false }));
+                Assert.That(optionIds, Is.EqualTo(new[] { 0, 1, -1 }));
+                Assert.That(legacyEventCount, Is.Zero);
+
+                reflection.Invoke(
+                    controller,
+                    "SetSelfKanDecision",
+                    502L,
+                    CreateSelfKanDecisionRequest(
+                        reflection,
+                        dataFactory,
+                        includeKakan: false));
+
+                Assert.That(ankanButton == null, Is.True);
+                Assert.That(kakanButton == null, Is.True);
+                Button currentButton = FindButton(decisionRoot.transform, "Ankan_0");
+                Assert.That(currentButton, Is.Not.Null);
+                Assert.That(
+                    ButtonLabel(reflection, tmpTextType, currentButton),
+                    Is.EqualTo("カン"));
+                currentButton.onClick.Invoke();
+                Assert.That(requestIds.Last(), Is.EqualTo(502L));
+                Assert.That(optionIds.Last(), Is.Zero);
+
+                reflection.Invoke(controller, "ClearReactionMeldCallDecision");
+                Assert.That(currentButton == null, Is.True);
+                Assert.That(decisionRoot.activeSelf, Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void SelfKanDecisionDeclinedNotification_ClosesTheDecisionUi()
+        {
+            ReflectionTestAccess reflection = new ReflectionTestAccess();
+            MahjongTestTypes types = new MahjongTestTypes(reflection);
+            MahjongTestDataFactory dataFactory = new MahjongTestDataFactory(reflection, types);
+            GameObject root = new GameObject("SelfKanDeclinedUiRefreshTestRoot");
+            root.SetActive(false);
+            try
+            {
+                Component notifier = root.AddComponent(
+                    reflection.RequireType(EventNotifierTypeName));
+                Component inputController = root.AddComponent(
+                    reflection.RequireType(InputControllerTypeName));
+                Component controller = root.AddComponent(
+                    reflection.RequireType(ControllerTypeName));
+                Component uiManager = root.AddComponent(
+                    reflection.RequireType(UiManagerTypeName));
+                Type tmpTextType = reflection.RequireType(TmpTextTypeName);
+                GameObject decisionRoot = new GameObject(
+                    "SelfKanDecisionRoot",
+                    typeof(RectTransform));
+                decisionRoot.transform.SetParent(root.transform);
+                Button ponButton = CreateButton(
+                    reflection,
+                    tmpTextType,
+                    decisionRoot.transform,
+                    "PonButton",
+                    "ポン");
+                Button declineButton = CreateButton(
+                    reflection,
+                    tmpTextType,
+                    decisionRoot.transform,
+                    "DeclineButton",
+                    "スキップ");
+                reflection.SetPrivateField(controller, "ponDecisionRoot", decisionRoot);
+                reflection.SetPrivateField(controller, "ponButton", ponButton);
+                reflection.SetPrivateField(controller, "declineButton", declineButton);
+                reflection.SetPrivateField(controller, "inputController", inputController);
+                reflection.SetPrivateField(uiManager, "eventNotifier", notifier);
+                reflection.SetPrivateField(uiManager, "ponDecisionController", controller);
+                reflection.Invoke(uiManager, "SubscribeNotifications");
+
+                reflection.Invoke(
+                    controller,
+                    "SetSelfKanDecision",
+                    601L,
+                    CreateSelfKanDecisionRequest(
+                        reflection,
+                        dataFactory,
+                        includeKakan: false));
+                Button staleButton = FindButton(decisionRoot.transform, "Ankan_0");
+                Assert.That(decisionRoot.activeSelf, Is.True);
+                Assert.That(staleButton, Is.Not.Null);
+
+                reflection.Invoke(
+                    notifier,
+                    "NotifySelfKanDecisionDeclined",
+                    dataFactory.ParseSeat("East"),
+                    7);
+
+                Assert.That(decisionRoot.activeSelf, Is.False);
+                Assert.That(staleButton == null, Is.True);
+                reflection.Invoke(uiManager, "UnsubscribeNotifications");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
         public void ProductionScene_ChiOptionPanel_GrowsWithoutOverlap_AndUsesExistingInputPath()
         {
             const string scenePath = "Assets/Scenes/Mahjong Prototype.unity";
@@ -653,9 +876,17 @@ namespace MahjongPrototype.Tests
                 Component inputController = (Component)reflection.GetPrivateField(
                     controller,
                     "inputController");
-                Behaviour inputBehaviour = (Behaviour)inputController;
-                inputBehaviour.enabled = false;
-                inputBehaviour.enabled = true;
+                Component decisionLabel = (Component)reflection.GetPrivateField(
+                    controller,
+                    "decisionLabel");
+                Button ponButton = (Button)reflection.GetPrivateField(
+                    controller,
+                    "ponButton");
+                Button declineButton = (Button)reflection.GetPrivateField(
+                    controller,
+                    "declineButton");
+                reflection.Invoke(inputController, "OnDisable");
+                reflection.Invoke(inputController, "OnEnable");
                 GameObject decisionRoot = (GameObject)reflection.GetPrivateField(
                     controller,
                     "ponDecisionRoot");
@@ -679,6 +910,18 @@ namespace MahjongPrototype.Tests
                     "chiTileViewPrefab");
 
                 Assert.That(decisionRoot, Is.Not.Null);
+                Assert.That(
+                    decisionLabel,
+                    Is.Null,
+                    "The optional heading must not reuse either button's text component.");
+                Assert.That(
+                    reflection.GetPrivateField(inputController, "ponButton"),
+                    Is.SameAs(ponButton));
+                Assert.That(
+                    reflection.GetPrivateField(inputController, "declinePonButton"),
+                    Is.SameAs(declineButton));
+                Assert.That(ponButton.onClick.GetPersistentEventCount(), Is.Zero);
+                Assert.That(declineButton.onClick.GetPersistentEventCount(), Is.Zero);
                 Assert.That(chiDecisionRoot, Is.Not.Null);
                 Assert.That(optionsContainer, Is.Not.Null);
                 Assert.That(heading, Is.Not.Null);
@@ -835,9 +1078,6 @@ namespace MahjongPrototype.Tests
                     "6m",
                     "7m");
 
-                Button declineButton = (Button)reflection.GetPrivateField(
-                    controller,
-                    "declineButton");
                 declineButton.onClick.Invoke();
                 Assert.That(skipCount, Is.EqualTo(1));
 
@@ -1313,6 +1553,45 @@ namespace MahjongPrototype.Tests
             return CreateChiOptions(reflection, dataFactory, calledTile, 2);
         }
 
+        private static object CreateSelfKanDecisionRequest(
+            ReflectionTestAccess reflection,
+            MahjongTestDataFactory dataFactory,
+            bool includeKakan)
+        {
+            Type candidateType = reflection.RequireType(SelfKanCandidateTypeName);
+            IList candidates = (IList)Activator.CreateInstance(
+                typeof(List<>).MakeGenericType(candidateType));
+            candidates.Add(reflection.CreateInstance(
+                candidateType,
+                Enum.Parse(reflection.RequireType(SelfKanKindTypeName), "Ankan"),
+                dataFactory.ParseSeat("East"),
+                dataFactory.CreateTile("P"),
+                Enum.Parse(
+                    reflection.RequireType(SelfKanTileLocationTypeName),
+                    "DrawnTile"),
+                7,
+                -1,
+                null));
+            if (includeKakan)
+            {
+                candidates.Add(reflection.CreateInstance(
+                    candidateType,
+                    Enum.Parse(reflection.RequireType(SelfKanKindTypeName), "Kakan"),
+                    dataFactory.ParseSeat("East"),
+                    dataFactory.CreateTile("C"),
+                    Enum.Parse(
+                        reflection.RequireType(SelfKanTileLocationTypeName),
+                        "Hand"),
+                    7,
+                    0,
+                    null));
+            }
+
+            return reflection.CreateInstance(
+                reflection.RequireType(SelfKanDecisionRequestTypeName),
+                candidates);
+        }
+
         private static IList CreateChiOptions(
             ReflectionTestAccess reflection,
             MahjongTestDataFactory dataFactory,
@@ -1557,6 +1836,25 @@ namespace MahjongPrototype.Tests
             return Expression.Lambda(handlerType, body, kind, optionId).Compile();
         }
 
+        private static Delegate CreateIgnoringHandler(
+            Type handlerType,
+            Action recorder)
+        {
+            ParameterInfo[] parameters = handlerType.GetMethod("Invoke").GetParameters();
+            ParameterExpression[] ignoredParameters = new ParameterExpression[parameters.Length];
+            for (int i = 0; i < parameters.Length; i++)
+            {
+                ignoredParameters[i] = Expression.Parameter(
+                    parameters[i].ParameterType,
+                    parameters[i].Name);
+            }
+
+            MethodCallExpression body = Expression.Call(
+                Expression.Constant(recorder),
+                typeof(Action).GetMethod("Invoke"));
+            return Expression.Lambda(handlerType, body, ignoredParameters).Compile();
+        }
+
         private static void RecordMeldCall(Action<string, int> recorder, object kind, int optionId)
         {
             recorder(kind.ToString(), optionId);
@@ -1634,6 +1932,15 @@ namespace MahjongPrototype.Tests
         {
             Transform child = parent.Find(name);
             return child != null ? child.GetComponent<Button>() : null;
+        }
+
+        private static string ButtonLabel(
+            ReflectionTestAccess reflection,
+            Type tmpTextType,
+            Button button)
+        {
+            Component label = button.GetComponentInChildren(tmpTextType, true);
+            return label != null ? (string)reflection.GetProperty(label, "text") : null;
         }
 
         private static Button FindChiOptionButton(Transform decisionRoot, string name)

@@ -6,11 +6,22 @@ using System.Reflection;
 using MahjongPrototype.Tests.TestSupport.Core;
 using MahjongPrototype.Tests.TestSupport.Mahjong;
 using NUnit.Framework;
+using UnityEngine;
+using UnityEngine.UI;
 
 namespace MahjongPrototype.Tests
 {
     public sealed class KanGameFlowTests
     {
+        private const string DecisionKindTypeName =
+            "MahjongPrototype.Domain.DecisionKind, Assembly-CSharp";
+        private const string UiInputControllerTypeName =
+            "MahjongPrototype.UI.MahjongUiInputController, Assembly-CSharp";
+        private const string MeldCallDecisionControllerTypeName =
+            "MahjongPrototype.UI.MahjongPonDecisionController, Assembly-CSharp";
+        private const string UiCommandRouterTypeName =
+            "MahjongPrototype.UI.MahjongUiCommandRouter, Assembly-CSharp";
+
         [Test]
         public void DaiminkanCandidate_AppearsBesidePonAndAutoDrawsRinshanAfterReactionWindowCloses()
         {
@@ -319,6 +330,203 @@ namespace MahjongPrototype.Tests
                 Assert.That(session.Commands.TryRequestDeclareAnkanForSeat("East", "C"), Is.True);
                 Assert.That(CountHandTile(session, "East", "P"), Is.EqualTo(4));
                 Assert.That(CountHandTile(session, "East", "C"), Is.EqualTo(0));
+            }
+        }
+
+        [TestCase(false, "DrawnTile")]
+        [TestCase(true, "Hand")]
+        public void SelfKanDecisionUiRoute_AnkanUsesBoundRequestAndOption(
+            bool fourTilesInHand,
+            string expectedAddedTileLocation)
+        {
+            using (MahjongGameFlowTestSession session = CreateSession(1))
+            {
+                session.Commands.StartNewRound();
+                object east = session.Query.GetPlayerSeat("East");
+                if (fourTilesInHand)
+                {
+                    session.DataFactory.AddHandTiles(
+                        east,
+                        "P", "P", "P", "P",
+                        "1m", "4m", "7m",
+                        "1p", "4p", "7p",
+                        "1s", "4s", "7s");
+                    session.DataFactory.SetDrawnTile(session.CurrentState, "East", "9m");
+                }
+                else
+                {
+                    session.DataFactory.AddHandTiles(
+                        east,
+                        "P", "P", "P",
+                        "1m", "4m", "7m", "9m",
+                        "1p", "4p", "7p",
+                        "1s", "4s", "7s");
+                    session.DataFactory.SetDrawnTile(session.CurrentState, "East", "P");
+                }
+
+                session.Commands.ResolveAfterDraw("East");
+
+                object request = GetPendingSelfKanRequest(session);
+                object option = FindSelfKanOption(session, request, "P");
+                long requestId = (long)session.Reflection.GetProperty(request, "RequestId");
+                int optionId = (int)session.Reflection.GetProperty(option, "OptionId");
+                Assert.That(PropertyText(session, option, "Kind"), Is.EqualTo("Ankan"));
+                Assert.That(
+                    PropertyText(session, option, "AddedTileLocation"),
+                    Is.EqualTo(expectedAddedTileLocation));
+
+                SubmitSelfKanResponseThroughUi(
+                    session,
+                    requestId + 1000,
+                    true,
+                    optionId);
+                Assert.That(DecisionQueuedResponseCount(session), Is.Zero);
+                Assert.That(session.Query.MeldCount("East"), Is.Zero);
+
+                SubmitSelfKanResponseThroughUi(session, requestId, true, optionId);
+                Assert.That(DecisionQueuedResponseCount(session), Is.EqualTo(1));
+                PumpDecisionCoordinator(session);
+
+                Assert.That(session.Query.MeldCount("East"), Is.EqualTo(1));
+                Assert.That(
+                    PropertyText(session, session.Query.MeldAt("East", 0), "Type"),
+                    Is.EqualTo("Ankan"));
+                Assert.That(CountHandTile(session, "East", "P"), Is.Zero);
+            }
+        }
+
+        [Test]
+        public void SelfKanDecisionUiRoute_MultipleAnkanOptionsCommitTheSelectedOptionId()
+        {
+            using (MahjongGameFlowTestSession session = CreateSession(1))
+            {
+                session.Commands.StartNewRound();
+                session.DataFactory.AddHandTiles(
+                    session.Query.GetPlayerSeat("East"),
+                    "P", "P", "P", "P",
+                    "C", "C", "C", "C",
+                    "1m", "4m", "1p", "4p", "1s");
+                session.DataFactory.SetDrawnTile(session.CurrentState, "East", "9s");
+                session.Commands.ResolveAfterDraw("East");
+
+                object request = GetPendingSelfKanRequest(session);
+                object selectedOption = FindSelfKanOption(session, request, "C");
+                int selectedOptionId = (int)session.Reflection.GetProperty(
+                    selectedOption,
+                    "OptionId");
+                Assert.That(selectedOptionId, Is.GreaterThanOrEqualTo(0));
+                Assert.That(PropertyText(session, selectedOption, "Kind"), Is.EqualTo("Ankan"));
+
+                SubmitSelfKanResponseThroughUi(
+                    session,
+                    (long)session.Reflection.GetProperty(request, "RequestId"),
+                    true,
+                    selectedOptionId);
+                PumpDecisionCoordinator(session);
+
+                Assert.That(CountHandTile(session, "East", "C"), Is.Zero);
+                Assert.That(CountHandTile(session, "East", "P"), Is.EqualTo(4));
+                Assert.That(
+                    PropertyText(session, session.Query.MeldAt("East", 0), "Type"),
+                    Is.EqualTo("Ankan"));
+            }
+        }
+
+        [Test]
+        public void SelfKanDecisionUiRoute_AnkanSkipPreservesTurnState()
+        {
+            using (MahjongGameFlowTestSession session = CreateAnkanDecisionSession())
+            {
+                object request = GetPendingSelfKanRequest(session);
+                int handCountBefore = session.Query.HandCount("East");
+                string drawnTileBefore = session.Query.DrawnTileCodeOrNull("East");
+                int wallCountBefore = session.Query.WallCount;
+                int turnIndexBefore = session.Query.TurnIndex;
+
+                using (EventSequenceRecorder events = new EventSequenceRecorder(
+                    session.EventNotifier,
+                    "SelfKanDecisionDeclined"))
+                {
+                    SubmitSelfKanResponseThroughUi(
+                        session,
+                        (long)session.Reflection.GetProperty(request, "RequestId"),
+                        false,
+                        -1);
+                    PumpDecisionCoordinator(session);
+                    Assert.That(events.Names, Is.EqualTo(new[] { "SelfKanDecisionDeclined" }));
+                }
+
+                Assert.That(session.Query.HandCount("East"), Is.EqualTo(handCountBefore));
+                Assert.That(session.Query.DrawnTileCodeOrNull("East"), Is.EqualTo(drawnTileBefore));
+                Assert.That(session.Query.MeldCount("East"), Is.Zero);
+                Assert.That(session.Query.WallCount, Is.EqualTo(wallCountBefore));
+                Assert.That(session.Query.TurnIndex, Is.EqualTo(turnIndexBefore));
+                Assert.That(session.Query.TurnPhaseName, Is.EqualTo("WaitingForDiscard"));
+            }
+        }
+
+        [Test]
+        public void SelfKanDecisionUiRoute_KakanUsesSourcePonAndOptionId()
+        {
+            using (MahjongGameFlowTestSession session = CreateKakanDecisionSession())
+            {
+                object request = GetPendingSelfKanRequest(session);
+                object option = FindSelfKanOption(session, request, "P");
+                Assert.That(PropertyText(session, option, "Kind"), Is.EqualTo("Kakan"));
+                Assert.That(
+                    PropertyText(session, option, "AddedTileLocation"),
+                    Is.EqualTo("DrawnTile"));
+                Assert.That(
+                    (int)session.Reflection.GetProperty(option, "SourcePonMeldIndex"),
+                    Is.Zero);
+
+                SubmitSelfKanResponseThroughUi(
+                    session,
+                    (long)session.Reflection.GetProperty(request, "RequestId"),
+                    true,
+                    (int)session.Reflection.GetProperty(option, "OptionId"));
+                PumpDecisionCoordinator(session);
+
+                Assert.That(session.Query.MeldCount("East"), Is.EqualTo(1));
+                Assert.That(
+                    PropertyText(session, session.Query.MeldAt("East", 0), "Type"),
+                    Is.EqualTo("Kakan"));
+            }
+        }
+
+        [Test]
+        public void SelfKanDecisionUiRoute_KakanSkipPreservesPonAndDrawnTile()
+        {
+            using (MahjongGameFlowTestSession session = CreateKakanDecisionSession())
+            {
+                object request = GetPendingSelfKanRequest(session);
+                int handCountBefore = session.Query.HandCount("East");
+                string drawnTileBefore = session.Query.DrawnTileCodeOrNull("East");
+                int wallCountBefore = session.Query.WallCount;
+                int turnIndexBefore = session.Query.TurnIndex;
+
+                using (EventSequenceRecorder events = new EventSequenceRecorder(
+                    session.EventNotifier,
+                    "SelfKanDecisionDeclined"))
+                {
+                    SubmitSelfKanResponseThroughUi(
+                        session,
+                        (long)session.Reflection.GetProperty(request, "RequestId"),
+                        false,
+                        -1);
+                    PumpDecisionCoordinator(session);
+                    Assert.That(events.Names, Is.EqualTo(new[] { "SelfKanDecisionDeclined" }));
+                }
+
+                Assert.That(session.Query.HandCount("East"), Is.EqualTo(handCountBefore));
+                Assert.That(session.Query.DrawnTileCodeOrNull("East"), Is.EqualTo(drawnTileBefore));
+                Assert.That(session.Query.WallCount, Is.EqualTo(wallCountBefore));
+                Assert.That(session.Query.TurnIndex, Is.EqualTo(turnIndexBefore));
+                Assert.That(session.Query.MeldCount("East"), Is.EqualTo(1));
+                Assert.That(
+                    PropertyText(session, session.Query.MeldAt("East", 0), "Type"),
+                    Is.EqualTo("Pon"));
+                Assert.That(session.Query.TurnPhaseName, Is.EqualTo("WaitingForDiscard"));
             }
         }
 
@@ -695,6 +903,203 @@ namespace MahjongPrototype.Tests
                     RoundResultContainsYaku(session, "RinshanKaihou"),
                     Is.True);
             }
+        }
+
+        private static MahjongGameFlowTestSession CreateAnkanDecisionSession()
+        {
+            MahjongGameFlowTestSession session = CreateSession(1);
+            try
+            {
+                session.Commands.StartNewRound();
+                session.DataFactory.AddHandTiles(
+                    session.Query.GetPlayerSeat("East"),
+                    "P", "P", "P",
+                    "1m", "4m", "7m", "9m",
+                    "1p", "4p", "7p",
+                    "1s", "4s", "7s");
+                session.DataFactory.SetDrawnTile(session.CurrentState, "East", "P");
+                session.Commands.ResolveAfterDraw("East");
+                Assert.That(session.Query.TurnPhaseName, Is.EqualTo("SelfKanDecision"));
+                return session;
+            }
+            catch
+            {
+                session.Dispose();
+                throw;
+            }
+        }
+
+        private static MahjongGameFlowTestSession CreateKakanDecisionSession()
+        {
+            MahjongGameFlowTestSession session = CreateSession(2);
+            try
+            {
+                session.Commands.StartNewRound();
+                session.DataFactory.AddHandTiles(
+                    session.Query.GetPlayerSeat("East"),
+                    "P", "P",
+                    "1m", "4m", "7m", "9m",
+                    "1p", "4p", "7p",
+                    "1s", "4s", "7s", "9s");
+                DiscardFromWest(session, "P");
+                Assert.That(
+                    session.Commands.TryRequestDeclarePonForSeat(
+                        "East",
+                        session.Query.ReactionWindowId),
+                    Is.True);
+                session.DataFactory.SetDrawnTile(session.CurrentState, "East", "P");
+                session.Reflection.Invoke(session.CurrentState, "EnterWaitingForDiscard");
+                session.Commands.ResolveAfterDraw("East");
+                Assert.That(session.Query.TurnPhaseName, Is.EqualTo("SelfKanDecision"));
+                return session;
+            }
+            catch
+            {
+                session.Dispose();
+                throw;
+            }
+        }
+
+        private static object GetPendingSelfKanRequest(MahjongGameFlowTestSession session)
+        {
+            object[] arguments =
+            {
+                session.DataFactory.ParsePlayerId("Player1"),
+                Enum.Parse(session.Reflection.RequireType(DecisionKindTypeName), "SelfKan"),
+                null
+            };
+            Assert.That(
+                (bool)session.Reflection.Invoke(
+                    session.GameFlow,
+                    "TryGetPendingDecisionRequest",
+                    arguments),
+                Is.True);
+            Assert.That(arguments[2], Is.Not.Null);
+            return arguments[2];
+        }
+
+        private static object FindSelfKanOption(
+            MahjongGameFlowTestSession session,
+            object request,
+            string tileCode)
+        {
+            object selfKan = session.Reflection.GetProperty(request, "SelfKan");
+            object options = session.Reflection.GetProperty(selfKan, "Options");
+            for (int i = 0; i < session.Collections.Count(options); i++)
+            {
+                object option = session.Collections.Item(options, i);
+                if (session.Reflection.GetProperty(option, "Tile").ToString() == tileCode)
+                    return option;
+            }
+
+            Assert.Fail($"Self-kan option not found: {tileCode}");
+            return null;
+        }
+
+        private static void SubmitSelfKanResponseThroughUi(
+            MahjongGameFlowTestSession session,
+            long requestId,
+            bool accepted,
+            int optionId)
+        {
+            GameObject uiRoot = new GameObject("SelfKanDecisionUiRoute");
+            uiRoot.SetActive(false);
+            try
+            {
+                Component inputController = uiRoot.AddComponent(
+                    session.Reflection.RequireType(UiInputControllerTypeName));
+                Component decisionController = uiRoot.AddComponent(
+                    session.Reflection.RequireType(MeldCallDecisionControllerTypeName));
+                Component commandRouter = uiRoot.AddComponent(
+                    session.Reflection.RequireType(UiCommandRouterTypeName));
+                GameObject decisionRoot = new GameObject("SelfKanDecisionRoot");
+                decisionRoot.transform.SetParent(uiRoot.transform);
+                Button ponButton = CreateUiButton(decisionRoot.transform, "PonButton");
+                Button declineButton = CreateUiButton(decisionRoot.transform, "DeclineButton");
+                session.Reflection.SetPrivateField(
+                    decisionController,
+                    "ponDecisionRoot",
+                    decisionRoot);
+                session.Reflection.SetPrivateField(
+                    decisionController,
+                    "ponButton",
+                    ponButton);
+                session.Reflection.SetPrivateField(
+                    decisionController,
+                    "declineButton",
+                    declineButton);
+                session.Reflection.SetPrivateField(
+                    decisionController,
+                    "inputController",
+                    inputController);
+                session.Reflection.SetPrivateField(
+                    commandRouter,
+                    "gameFlow",
+                    session.GameFlow);
+                session.Reflection.SetPrivateField(
+                    commandRouter,
+                    "inputController",
+                    inputController);
+                session.Reflection.Invoke(commandRouter, "OnEnable");
+
+                object request = GetPendingSelfKanRequest(session);
+                session.Reflection.Invoke(
+                    decisionController,
+                    "SetSelfKanDecision",
+                    requestId,
+                    session.Reflection.GetProperty(request, "SelfKan"));
+                if (accepted)
+                {
+                    Button selectedButton = null;
+                    for (int i = 0; i < decisionRoot.transform.childCount; i++)
+                    {
+                        Transform child = decisionRoot.transform.GetChild(i);
+                        if (child.name.EndsWith($"_{optionId}", StringComparison.Ordinal))
+                        {
+                            selectedButton = child.GetComponent<Button>();
+                            break;
+                        }
+                    }
+
+                    Assert.That(selectedButton, Is.Not.Null);
+                    selectedButton.onClick.Invoke();
+                }
+                else
+                {
+                    declineButton.onClick.Invoke();
+                }
+
+                session.Reflection.Invoke(
+                    decisionController,
+                    "ClearReactionMeldCallDecision");
+                session.Reflection.Invoke(commandRouter, "OnDisable");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(uiRoot);
+            }
+        }
+
+        private static Button CreateUiButton(Transform parent, string name)
+        {
+            GameObject gameObject = new GameObject(name);
+            gameObject.transform.SetParent(parent);
+            return gameObject.AddComponent<Button>();
+        }
+
+        private static int DecisionQueuedResponseCount(MahjongGameFlowTestSession session)
+        {
+            object coordinator = session.Reflection.GetProperty(
+                session.GameFlow,
+                "DecisionCoordinator");
+            return (int)session.Reflection.GetProperty(coordinator, "QueuedResponseCount");
+        }
+
+        private static void PumpDecisionCoordinator(MahjongGameFlowTestSession session)
+        {
+            session.Reflection.Invoke(
+                session.Reflection.GetProperty(session.GameFlow, "DecisionCoordinator"),
+                "Pump");
         }
 
         private static MahjongGameFlowTestSession CreateDaiminkanSession()

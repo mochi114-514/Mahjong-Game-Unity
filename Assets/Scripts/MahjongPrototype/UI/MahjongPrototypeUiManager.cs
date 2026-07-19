@@ -247,6 +247,7 @@ namespace MahjongPrototype.UI
             eventNotifier.WinDeclined += HandleWinDeclined;
             eventNotifier.ReachDecisionStarted += HandleReachDecisionStarted;
             eventNotifier.SelfKanDecisionStarted += HandleSelfKanDecisionStarted;
+            eventNotifier.SelfKanDecisionDeclined += HandleSelfKanDecisionDeclined;
             eventNotifier.ReachDiscardSelectionStarted += HandleReachDiscardSelectionStarted;
             eventNotifier.ReachDiscardSelectionCanceled += HandleReachDiscardSelectionCanceled;
             eventNotifier.ReachDeclared += HandleReachDeclared;
@@ -283,6 +284,7 @@ namespace MahjongPrototype.UI
             eventNotifier.WinDeclined -= HandleWinDeclined;
             eventNotifier.ReachDecisionStarted -= HandleReachDecisionStarted;
             eventNotifier.SelfKanDecisionStarted -= HandleSelfKanDecisionStarted;
+            eventNotifier.SelfKanDecisionDeclined -= HandleSelfKanDecisionDeclined;
             eventNotifier.ReachDiscardSelectionStarted -= HandleReachDiscardSelectionStarted;
             eventNotifier.ReachDiscardSelectionCanceled -= HandleReachDiscardSelectionCanceled;
             eventNotifier.ReachDeclared -= HandleReachDeclared;
@@ -581,6 +583,13 @@ namespace MahjongPrototype.UI
         }
 
         private void HandleSelfKanDecisionStarted(SeatId _, int __)
+        {
+            RefreshGlobalStatus();
+            RefreshPonDecisionUi();
+            RefreshInteractionUi();
+        }
+
+        private void HandleSelfKanDecisionDeclined(SeatId _, int __)
         {
             RefreshGlobalStatus();
             RefreshPonDecisionUi();

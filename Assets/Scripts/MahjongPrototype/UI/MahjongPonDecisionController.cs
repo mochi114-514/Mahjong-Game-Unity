@@ -60,6 +60,7 @@ namespace MahjongPrototype.UI
         public void ClearReactionMeldCallDecision()
         {
             ClearReactionRequest();
+            ClearSelfKanDecisionResponseBinding();
             ClearDynamicMeldButtons();
             ClearDynamicChiOptions();
             ConfigureSelfKanDecline(false);
@@ -111,6 +112,7 @@ namespace MahjongPrototype.UI
             SelfKanDecisionRequest request)
         {
             ClearReactionRequest();
+            ClearSelfKanDecisionResponseBinding();
             ClearDynamicMeldButtons();
             ClearDynamicChiOptions();
             ConfigureSelfKanDecline(false);
@@ -130,7 +132,8 @@ namespace MahjongPrototype.UI
             ponDecisionRoot.SetActive(true);
             SetStaticButtonVisibility(false, true, false);
             if (decisionLabel != null)
-                decisionLabel.text = "暗槓・加槓";
+                decisionLabel.text = "カン";
+            SetButtonLabel(declineButton, "スキップ");
 
             if (ponButton == null)
             {
@@ -148,9 +151,15 @@ namespace MahjongPrototype.UI
                 return;
             }
 
-            ConfigureSelfKanDecisionDecline(requestId);
+            inputController.SetSelfKanDecisionResponseBinding(declineButton, requestId);
+            bool showTargetTile = request.Options.Count > 1;
             for (int i = 0; i < request.Options.Count; i++)
-                CreateSelfKanDecisionButton(requestId, request.Options[i]);
+            {
+                CreateSelfKanDecisionButton(
+                    requestId,
+                    request.Options[i],
+                    showTargetTile);
+            }
         }
 
         /// <summary>
@@ -238,6 +247,7 @@ namespace MahjongPrototype.UI
             bool showSelfKanDecline,
             Tile? calledTile)
         {
+            ClearSelfKanDecisionResponseBinding();
             ClearDynamicMeldButtons();
             ClearDynamicChiOptions();
 
@@ -422,7 +432,8 @@ namespace MahjongPrototype.UI
 
         private void CreateSelfKanDecisionButton(
             long requestId,
-            SelfKanDecisionOption option)
+            SelfKanDecisionOption option,
+            bool showTargetTile)
         {
             if (option == null)
                 return;
@@ -431,7 +442,9 @@ namespace MahjongPrototype.UI
             button.name = $"{option.Kind}_{option.OptionId}";
             if (declineButton != null)
                 button.transform.SetSiblingIndex(declineButton.transform.GetSiblingIndex());
-            button.onClick.RemoveAllListeners();
+            // Remove persistent and runtime callbacks inherited from the
+            // template before binding this immutable request/option pair.
+            button.onClick = new Button.ButtonClickedEvent();
             int optionId = option.OptionId;
             button.onClick.AddListener(
                 () => inputController.RequestSelfKanDecisionResponse(
@@ -439,8 +452,7 @@ namespace MahjongPrototype.UI
                     true,
                     optionId));
             button.gameObject.SetActive(true);
-            string action = option.Kind == SelfKanKind.Ankan ? "暗槓" : "加槓";
-            SetButtonLabel(button, $"{action} {option.Tile}");
+            SetButtonLabel(button, showTargetTile ? $"カン {option.Tile}" : "カン");
             dynamicMeldButtons.Add(button);
         }
 
@@ -454,7 +466,9 @@ namespace MahjongPrototype.UI
             button.name = buttonName;
             if (declineButton != null)
                 button.transform.SetSiblingIndex(declineButton.transform.GetSiblingIndex());
-            button.onClick.RemoveAllListeners();
+            // Remove persistent and runtime callbacks inherited from the
+            // template before binding the route selected for this button.
+            button.onClick = new Button.ButtonClickedEvent();
             button.onClick.AddListener(CreateMeldCallAction(kind, optionId));
             button.gameObject.SetActive(true);
             SetButtonLabel(button, label);
@@ -549,6 +563,7 @@ namespace MahjongPrototype.UI
                 if (button == null)
                     continue;
 
+                button.onClick = new Button.ButtonClickedEvent();
                 button.gameObject.SetActive(false);
                 if (Application.isPlaying)
                     Destroy(button.gameObject);
@@ -599,21 +614,10 @@ namespace MahjongPrototype.UI
             declineButton.onClick.AddListener(selfKanDeclineAction);
         }
 
-        private void ConfigureSelfKanDecisionDecline(long requestId)
+        private void ClearSelfKanDecisionResponseBinding()
         {
-            if (declineButton == null || inputController == null || requestId <= 0)
-                return;
-
-            if (selfKanDeclineAction != null)
-            {
-                declineButton.onClick.RemoveListener(selfKanDeclineAction);
-                selfKanDeclineAction = null;
-            }
-
-            selfKanDeclineAction = () => inputController.RequestSelfKanDecisionResponse(
-                requestId,
-                false);
-            declineButton.onClick.AddListener(selfKanDeclineAction);
+            if (inputController != null)
+                inputController.ClearSelfKanDecisionResponseBinding();
         }
 
         private static void SetButtonLabel(Button button, string label)
