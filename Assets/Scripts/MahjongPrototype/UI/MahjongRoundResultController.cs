@@ -345,7 +345,24 @@ namespace MahjongPrototype.UI
 
         private static string FormatWindProgress(WindProgress progress)
         {
-            return $"{FormatRoundWind(progress.RoundWind)}{progress.HandNumber}局";
+            return $"{FormatRoundWind(progress.RoundWind)}{FormatHandNumber(progress.HandNumber)}局";
+        }
+
+        private static string FormatHandNumber(int handNumber)
+        {
+            switch (handNumber)
+            {
+                case 1:
+                    return "一";
+                case 2:
+                    return "二";
+                case 3:
+                    return "三";
+                case 4:
+                    return "四";
+                default:
+                    return handNumber.ToString();
+            }
         }
 
         private static string FormatRoundWind(RoundWind roundWind)

@@ -77,7 +77,7 @@ namespace MahjongPrototype.UI
         private bool warnedMissingLogPreviewController;
         private bool warnedMissingZeroHanTenpaiController;
         private bool warnedMissingFuritenController;
-        private WindProgress? pendingRoundProgress;
+        private MahjongRoundProgressController subscribedRoundProgressController;
         private void Reset()
         {
             CacheReferences();
@@ -100,6 +100,7 @@ namespace MahjongPrototype.UI
             EnsureReachDecisionController();
             EnsureRoundResultController();
             EnsureRoundProgressController();
+            SubscribeRoundProgressPresentation();
             EnsureLogPreviewController();
             EnsureZeroHanTenpaiController();
             EnsureFuritenController();
@@ -119,6 +120,7 @@ namespace MahjongPrototype.UI
             EnsureReachDecisionController();
             EnsureRoundResultController();
             EnsureRoundProgressController();
+            SubscribeRoundProgressPresentation();
             EnsureLogPreviewController();
             EnsureZeroHanTenpaiController();
             EnsureFuritenController();
@@ -128,6 +130,8 @@ namespace MahjongPrototype.UI
 
         private void OnDisable()
         {
+            NotifyRoundProgressFallback();
+            UnsubscribeRoundProgressPresentation();
             UnsubscribeNotifications();
             inputController?.ClearReactionResponseBindings();
             ponDecisionController?.ClearReactionMeldCallDecision();
@@ -433,9 +437,32 @@ namespace MahjongPrototype.UI
             }
         }
 
+        private void SubscribeRoundProgressPresentation()
+        {
+            if (subscribedRoundProgressController == roundProgressController)
+                return;
+
+            UnsubscribeRoundProgressPresentation();
+            if (roundProgressController == null)
+                return;
+
+            subscribedRoundProgressController = roundProgressController;
+            subscribedRoundProgressController.PresentationCompleted +=
+                HandleRoundProgressPresentationCompleted;
+        }
+
+        private void UnsubscribeRoundProgressPresentation()
+        {
+            if (subscribedRoundProgressController == null)
+                return;
+
+            subscribedRoundProgressController.PresentationCompleted -=
+                HandleRoundProgressPresentationCompleted;
+            subscribedRoundProgressController = null;
+        }
+
         private void HandleRunStarted(string _)
         {
-            pendingRoundProgress = null;
             if (roundProgressController == null)
                 EnsureRoundProgressController();
 
@@ -444,7 +471,7 @@ namespace MahjongPrototype.UI
 
         private void HandleRoundStarted(int _, int __)
         {
-            QueueRoundProgress();
+            PlayRoundProgressForCurrentState();
             RefreshFromFlow(false);
             ClearZeroHanTenpaiUi();
             ClearFuritenUi();
@@ -453,29 +480,43 @@ namespace MahjongPrototype.UI
         private void HandleRoundSetupCompleted()
         {
             RefreshFromFlow();
-            PlayQueuedRoundProgress();
         }
 
-        private void QueueRoundProgress()
+        private void PlayRoundProgressForCurrentState()
         {
             MahjongGameState state = gameFlow != null ? gameFlow.CurrentState : null;
-            if (state != null)
-                pendingRoundProgress = state.WindProgress;
-        }
-
-        private void PlayQueuedRoundProgress()
-        {
-            if (!pendingRoundProgress.HasValue)
+            if (state == null)
                 return;
 
             if (roundProgressController == null)
                 EnsureRoundProgressController();
 
-            MahjongGameState state = gameFlow != null ? gameFlow.CurrentState : null;
-            if (roundProgressController != null && state != null)
-                roundProgressController.TryPlay(pendingRoundProgress.Value, state.SelfSeat);
+            if (roundProgressController == null)
+            {
+                gameFlow?.NotifyRoundProgressCompleted(state.WindProgress);
+                return;
+            }
 
-            pendingRoundProgress = null;
+            SubscribeRoundProgressPresentation();
+            if (roundProgressController.TryPlay(state.WindProgress, state.SelfSeat))
+            {
+                gameFlow?.NotifyRoundProgressPlaybackStarted(state.WindProgress);
+                return;
+            }
+
+            gameFlow?.NotifyRoundProgressCompleted(state.WindProgress);
+        }
+
+        private void HandleRoundProgressPresentationCompleted(WindProgress progress)
+        {
+            gameFlow?.NotifyRoundProgressCompleted(progress);
+        }
+
+        private void NotifyRoundProgressFallback()
+        {
+            MahjongGameState state = gameFlow != null ? gameFlow.CurrentState : null;
+            if (state != null)
+                gameFlow.NotifyRoundProgressCompleted(state.WindProgress);
         }
 
         private void HandleTurnStarted(SeatId _, int __)
@@ -1113,7 +1154,7 @@ namespace MahjongPrototype.UI
                 state != null &&
                 TryGetSelfSeat(state, out SeatId selfSeat) &&
                 state.CurrentTurn == selfSeat &&
-                !state.IsInteractionLocked;
+                !gameFlow.IsInteractionLocked;
         }
 
         private bool CanUseDrawInput(MahjongGameState state)
@@ -1122,6 +1163,7 @@ namespace MahjongPrototype.UI
                 state != null &&
                 TryGetSelfSeat(state, out SeatId selfSeat) &&
                 state.CurrentTurn == selfSeat &&
+                !gameFlow.IsInteractionLocked &&
                 !state.IsRoundEnded &&
                 !state.IsWinDecisionPending &&
                 !state.IsReachDecisionPending &&

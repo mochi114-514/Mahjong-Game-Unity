@@ -76,6 +76,31 @@ namespace MahjongPrototype.Tests
             }
         }
 
+        [Test]
+        public void TryPlay_InactiveController_ReturnsFalseSoTheFlowCanUseItsFallback()
+        {
+            GameObject host = new GameObject("InactiveRoundProgressControllerTestHost");
+            host.SetActive(false);
+
+            try
+            {
+                Type controllerType = RequireType(ControllerTypeName);
+                Component controller = host.AddComponent(controllerType);
+                object progress = CreateWindProgress("East", 1);
+                object selfSeat = Enum.Parse(RequireType(SeatIdTypeName), "East");
+
+                bool played = (bool)controllerType
+                    .GetMethod("TryPlay")
+                    .Invoke(controller, new[] { progress, selfSeat });
+
+                Assert.That(played, Is.False);
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+            }
+        }
+
         private static object CreateWindProgress(string roundWindName, int handNumber)
         {
             object roundWind = Enum.Parse(RequireType(RoundWindTypeName), roundWindName);

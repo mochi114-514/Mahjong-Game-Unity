@@ -31,6 +31,7 @@ namespace MahjongPrototype
 
         [Header("Round Setup")]
         [SerializeField, Min(1)] private int initialHandTileCount = 13;
+        [SerializeField, Min(0f)] private float roundProgressCompletionDelaySeconds = 0.5f;
         [SerializeField] private bool autoStart = true;
         [SerializeField] private bool enableAutoDraw;
         [SerializeField] private bool useFixedRandomSeed = false;
@@ -79,6 +80,13 @@ namespace MahjongPrototype
         private MahjongFlowEventPublisher eventPublisher;
         private MahjongGameState gameState;
         private AutoDiscardDrawnTileController autoDiscardDrawnTileController;
+        private Coroutine pendingRoundSetupCoroutine;
+        private MahjongGameState pendingRoundSetupState;
+        private WindProgress pendingRoundSetupProgress;
+        private bool isRoundSetupPending;
+        private bool roundProgressPlaybackStarted;
+        private bool roundProgressPlaybackCompleted;
+        private int roundSetupSequence;
         private readonly MatchStartValidator matchStartValidator = new MatchStartValidator();
         private MatchRoster matchRoster;
         private DecisionProviderRegistry decisionProviderRegistry;
@@ -111,7 +119,10 @@ namespace MahjongPrototype
         public MatchStartValidationResult LastMatchStartValidationResult { get; private set; }
         public bool IsWinDecisionPending => gameState != null && gameState.IsWinDecisionPending;
         public bool IsAutoSortEnabled => autoSortEnabled;
-        public bool IsInteractionLocked => gameState != null && gameState.IsInteractionLocked;
+        public bool IsInteractionLocked =>
+            isRoundSetupPending ||
+            (gameState != null && gameState.IsInteractionLocked);
+        public bool IsRoundSetupPending => isRoundSetupPending;
 
         /// <summary>
         /// Returns the immutable reaction request currently waiting for the
@@ -628,6 +639,7 @@ namespace MahjongPrototype
 
         private void OnDisable()
         {
+            CancelPendingRoundSetup();
             CancelPendingDecisions();
             CancelPendingAutoDiscardDrawnTile();
         }
@@ -637,6 +649,7 @@ namespace MahjongPrototype
         {
             NormalizeParticipantCount();
             initialHandTileCount = Mathf.Max(1, initialHandTileCount);
+            roundProgressCompletionDelaySeconds = Mathf.Max(0f, roundProgressCompletionDelaySeconds);
             autoDiscardDrawnTileDelaySeconds = Mathf.Max(0f, autoDiscardDrawnTileDelaySeconds);
         }
 #endif
@@ -689,6 +702,7 @@ namespace MahjongPrototype
             bool notifyRunStarted,
             SeatId selfSeat)
         {
+            CancelPendingRoundSetup();
             EnsureMatchConfiguration();
             MatchStartValidationResult validationResult = matchStartValidator.Validate(
                 matchRoster,
@@ -728,13 +742,129 @@ namespace MahjongPrototype
                 decisionProviderRegistry);
             gameState = setupResult.GameState;
 
+            BeginWaitingForRoundProgress(gameState);
             EventPublisher.NotifySeatSlotsAssigned();
             EventPublisher.NotifyRoundStarted(gameState.TurnIndex, gameState.Wall.Count);
 
+            if (!Application.isPlaying)
+            {
+                CompletePendingRoundSetupImmediately(gameState, roundSetupSequence);
+            }
+            else
+            {
+                pendingRoundSetupCoroutine = StartCoroutine(
+                    CompleteRoundSetupAfterRoundProgress(gameState, roundSetupSequence));
+            }
+
+            return validationResult;
+        }
+
+        /// <summary>
+        /// Called by the presentation layer after it accepted the current round-start animation.
+        /// </summary>
+        public void NotifyRoundProgressPlaybackStarted(WindProgress progress)
+        {
+            if (!IsAwaitingRoundProgress(progress))
+                return;
+
+            roundProgressPlaybackStarted = true;
+        }
+
+        /// <summary>
+        /// Called by the presentation layer when the current round-start animation has finished.
+        /// </summary>
+        public void NotifyRoundProgressCompleted(WindProgress progress)
+        {
+            if (!IsAwaitingRoundProgress(progress))
+                return;
+
+            roundProgressPlaybackCompleted = true;
+        }
+
+        private void BeginWaitingForRoundProgress(MahjongGameState state)
+        {
+            pendingRoundSetupState = state;
+            pendingRoundSetupProgress = state.WindProgress;
+            isRoundSetupPending = true;
+            roundProgressPlaybackStarted = false;
+            roundProgressPlaybackCompleted = false;
+            roundSetupSequence++;
+        }
+
+        private IEnumerator CompleteRoundSetupAfterRoundProgress(
+            MahjongGameState state,
+            int sequence)
+        {
+            // Let RoundStarted subscribers synchronously report whether a presentation began.
+            yield return null;
+
+            if (!IsPendingRoundSetup(state, sequence))
+                yield break;
+
+            // A missing UI host/controller cannot block game progression.
+            if (!roundProgressPlaybackStarted)
+                roundProgressPlaybackCompleted = true;
+
+            while (IsPendingRoundSetup(state, sequence) && !roundProgressPlaybackCompleted)
+                yield return null;
+
+            if (!IsPendingRoundSetup(state, sequence))
+                yield break;
+
+            if (roundProgressCompletionDelaySeconds > 0f)
+                yield return new WaitForSecondsRealtime(roundProgressCompletionDelaySeconds);
+
+            CompletePendingRoundSetupImmediately(state, sequence);
+        }
+
+        private void CompletePendingRoundSetupImmediately(MahjongGameState state, int sequence)
+        {
+            if (!IsPendingRoundSetup(state, sequence))
+                return;
+
+            ClearPendingRoundSetupState();
             DealInitialHands();
+            if (gameState == null || gameState.IsRoundEnded)
+                return;
+
             EventPublisher.NotifyRoundSetupCompleted();
             StartTurn(gameState.CurrentTurn, gameState.TurnIndex);
-            return validationResult;
+        }
+
+        private bool IsAwaitingRoundProgress(WindProgress progress)
+        {
+            return isRoundSetupPending &&
+                pendingRoundSetupState == gameState &&
+                pendingRoundSetupProgress.Equals(progress);
+        }
+
+        private bool IsPendingRoundSetup(MahjongGameState state, int sequence)
+        {
+            return isRoundSetupPending &&
+                pendingRoundSetupState == state &&
+                gameState == state &&
+                roundSetupSequence == sequence;
+        }
+
+        private void CancelPendingRoundSetup()
+        {
+            if (pendingRoundSetupCoroutine != null)
+            {
+                StopCoroutine(pendingRoundSetupCoroutine);
+                pendingRoundSetupCoroutine = null;
+            }
+
+            ClearPendingRoundSetupState();
+            roundSetupSequence++;
+        }
+
+        private void ClearPendingRoundSetupState()
+        {
+            pendingRoundSetupCoroutine = null;
+            pendingRoundSetupState = null;
+            isRoundSetupPending = false;
+            roundProgressPlaybackStarted = false;
+            roundProgressPlaybackCompleted = false;
         }
 
         public void RetryPrototype()
@@ -1157,7 +1287,7 @@ namespace MahjongPrototype
 
         public bool CanRequestForceDrawSkillForSeat(SeatId ownerSeat)
         {
-            if (gameState == null)
+            if (gameState == null || isRoundSetupPending)
                 return false;
 
             EnsureSkillFlowService();
@@ -3893,10 +4023,16 @@ namespace MahjongPrototype
 
         private bool CanUseGameState()
         {
-            if (gameState != null)
+            if (gameState == null)
+            {
+                Warn("GameState is not initialized. StartNewRound first.");
+                return false;
+            }
+
+            if (!isRoundSetupPending)
                 return true;
 
-            Warn("GameState is not initialized. StartNewRound first.");
+            Warn("Round setup is waiting for the round progress presentation.");
             return false;
         }
 

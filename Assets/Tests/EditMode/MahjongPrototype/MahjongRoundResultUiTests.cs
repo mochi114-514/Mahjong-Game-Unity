@@ -104,7 +104,7 @@ namespace MahjongPrototype.Tests
                 Assert.That(harness.WinDetailsVisible, Is.True);
                 Assert.That(harness.SourceSeatVisible, Is.False);
                 Assert.That(harness.TitleText, Is.EqualTo("和了"));
-                Assert.That(harness.RoundText, Is.EqualTo("東1局"));
+                Assert.That(harness.RoundText, Is.EqualTo("東一局"));
                 Assert.That(harness.WinnerText, Is.EqualTo("東"));
                 Assert.That(harness.WinTypeText, Is.EqualTo("ツモ"));
                 Assert.That(harness.WinningTileText, Is.EqualTo("C"));
@@ -185,7 +185,7 @@ namespace MahjongPrototype.Tests
                 Assert.That(harness.WinDetailsVisible, Is.False);
                 Assert.That(harness.SourceSeatVisible, Is.False);
                 Assert.That(harness.TitleText, Is.EqualTo("流局"));
-                Assert.That(harness.RoundText, Is.EqualTo("東2局"));
+                Assert.That(harness.RoundText, Is.EqualTo("東二局"));
                 Assert.That(harness.YakuRowCount, Is.EqualTo(0));
                 Assert.That(harness.TotalText, Is.EqualTo(string.Empty));
                 Assert.That(harness.ConfirmButtonLabel, Is.EqualTo("次局へ進む"));
@@ -202,7 +202,7 @@ namespace MahjongPrototype.Tests
 
                 harness.SetResult(result);
 
-                Assert.That(harness.RoundText, Is.EqualTo("南4局"));
+                Assert.That(harness.RoundText, Is.EqualTo("南四局"));
                 Assert.That(harness.ConfirmButtonLabel, Is.EqualTo("ゲーム終了"));
             }
         }
@@ -365,7 +365,7 @@ namespace MahjongPrototype.Tests
 
                 Assert.That(driver.RoundResultRootVisible, Is.True);
                 Assert.That(driver.ResultTitleText, Is.EqualTo("流局"));
-                Assert.That(driver.ResultRoundText, Is.EqualTo("東2局"));
+                Assert.That(driver.ResultRoundText, Is.EqualTo("東二局"));
             }
         }
 
@@ -400,6 +400,8 @@ namespace MahjongPrototype.Tests
             "MahjongPrototype.UI.MahjongRoundProgressController, Assembly-CSharp";
         private const string InputControllerTypeName =
             "MahjongPrototype.UI.MahjongUiInputController, Assembly-CSharp";
+        private const string GameFlowTypeName =
+            "MahjongPrototype.MahjongGameFlow, Assembly-CSharp";
 
         [Test]
         public void ResultPanelPrefab_HasControllerAndInspectorReferences()
@@ -469,6 +471,13 @@ namespace MahjongPrototype.Tests
                     "roundProgressController",
                     roundProgressController);
                 Assert.That(FindSceneGameObjects(scene, "Round Progress"), Has.Length.EqualTo(1));
+
+                Component gameFlow = FindSceneComponent(scene, GameFlowTypeName);
+                SerializedObject gameFlowSerialized = new SerializedObject(gameFlow);
+                SerializedProperty delay = gameFlowSerialized.FindProperty(
+                    "roundProgressCompletionDelaySeconds");
+                Assert.That(delay, Is.Not.Null);
+                Assert.That(delay.floatValue, Is.EqualTo(0.5f));
 
                 Component inputController = FindSceneComponent(scene, InputControllerTypeName);
                 SerializedObject inputSerialized = new SerializedObject(inputController);

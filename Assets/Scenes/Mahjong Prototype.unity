@@ -1533,6 +1533,7 @@ MonoBehaviour:
   randomizeSelfSeat: 1
   fixedSelfSeat: 0
   initialHandTileCount: 13
+  roundProgressCompletionDelaySeconds: 0.5
   autoStart: 1
   enableAutoDraw: 1
   useFixedRandomSeed: 0

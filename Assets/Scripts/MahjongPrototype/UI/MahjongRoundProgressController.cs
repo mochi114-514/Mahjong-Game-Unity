@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using MahjongPrototype.Domain;
 using TMPro;
@@ -23,11 +24,16 @@ namespace MahjongPrototype.UI
 
         private Coroutine playRoutine;
         private WindProgress lastPlayedProgress;
+        private WindProgress activeProgress;
         private bool hasPlayedProgress;
+        private bool isPresentationActive;
         private bool warnedMissingRoundProgressRoot;
         private bool warnedMissingRoundText;
         private bool warnedMissingMyWindText;
         private bool warnedMissingWindText;
+        private bool warnedInactiveController;
+
+        public event Action<WindProgress> PresentationCompleted;
 
         private void Awake()
         {
@@ -37,7 +43,14 @@ namespace MahjongPrototype.UI
 
         private void OnDisable()
         {
+            bool wasPresentationActive = isPresentationActive;
+            WindProgress interruptedProgress = activeProgress;
             Clear();
+
+            // The game flow waits for the presentation callback. Disabling only this
+            // component must not leave the current round setup waiting indefinitely.
+            if (wasPresentationActive)
+                PresentationCompleted?.Invoke(interruptedProgress);
         }
 
         /// <summary>
@@ -45,6 +58,14 @@ namespace MahjongPrototype.UI
         /// </summary>
         public bool TryPlay(WindProgress progress, SeatId selfSeat)
         {
+            if (!isActiveAndEnabled)
+            {
+                WarnMissingOnce(
+                    ref warnedInactiveController,
+                    "Round progress controller is inactive. Skipping the presentation.");
+                return false;
+            }
+
             ResolveReferences();
             if (!HasRequiredReferences())
                 return false;
@@ -55,6 +76,8 @@ namespace MahjongPrototype.UI
             hasPlayedProgress = true;
             lastPlayedProgress = progress;
             StopPlayRoutine();
+            activeProgress = progress;
+            isPresentationActive = true;
 
             if (!Application.isPlaying)
             {
@@ -73,6 +96,7 @@ namespace MahjongPrototype.UI
             SetActive(myWindText, false);
             SetActive(windText, false);
             SetActive(roundProgressRoot, false);
+            isPresentationActive = false;
         }
 
         public void ResetPlaybackHistory()
@@ -104,7 +128,7 @@ namespace MahjongPrototype.UI
             SetActive(windText, true);
             yield return new WaitForSecondsRealtime(finalDisplayDuration);
 
-            ClearVisibleStateAfterPlayback();
+            CompletePlayback(progress);
         }
 
         private IEnumerator RevealText(TMP_Text text, float duration)
@@ -136,16 +160,18 @@ namespace MahjongPrototype.UI
             SetActive(roundText, true);
             SetActive(myWindText, true);
             SetActive(windText, true);
-            ClearVisibleStateAfterPlayback();
+            CompletePlayback(progress);
         }
 
-        private void ClearVisibleStateAfterPlayback()
+        private void CompletePlayback(WindProgress progress)
         {
             SetActive(roundText, false);
             SetActive(myWindText, false);
             SetActive(windText, false);
             SetActive(roundProgressRoot, false);
             playRoutine = null;
+            isPresentationActive = false;
+            PresentationCompleted?.Invoke(progress);
         }
 
         private void StopPlayRoutine()
@@ -220,7 +246,24 @@ namespace MahjongPrototype.UI
 
         private static string FormatWindProgress(WindProgress progress)
         {
-            return $"{FormatRoundWind(progress.RoundWind)}{progress.HandNumber}局";
+            return $"{FormatRoundWind(progress.RoundWind)}{FormatHandNumber(progress.HandNumber)}局";
+        }
+
+        private static string FormatHandNumber(int handNumber)
+        {
+            switch (handNumber)
+            {
+                case 1:
+                    return "一";
+                case 2:
+                    return "二";
+                case 3:
+                    return "三";
+                case 4:
+                    return "四";
+                default:
+                    return handNumber.ToString();
+            }
         }
 
         private static string FormatRoundWind(RoundWind roundWind)
