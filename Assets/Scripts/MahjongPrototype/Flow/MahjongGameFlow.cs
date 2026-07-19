@@ -824,7 +824,7 @@ namespace MahjongPrototype
 
             ClearPendingRoundSetupState();
             DealInitialHands();
-            if (gameState == null || gameState.IsRoundEnded)
+            if (gameState == null)
                 return;
 
             EventPublisher.NotifyRoundSetupCompleted();
