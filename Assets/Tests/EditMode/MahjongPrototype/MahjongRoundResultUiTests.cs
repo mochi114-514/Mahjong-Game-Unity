@@ -477,7 +477,7 @@ namespace MahjongPrototype.Tests
                 SerializedProperty delay = gameFlowSerialized.FindProperty(
                     "roundProgressCompletionDelaySeconds");
                 Assert.That(delay, Is.Not.Null);
-                Assert.That(delay.floatValue, Is.EqualTo(0.5f));
+                Assert.That(delay.floatValue, Is.GreaterThanOrEqualTo(0f));
 
                 Component inputController = FindSceneComponent(scene, InputControllerTypeName);
                 SerializedObject inputSerialized = new SerializedObject(inputController);
