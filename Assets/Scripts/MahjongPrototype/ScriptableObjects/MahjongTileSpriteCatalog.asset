@@ -12,4 +12,72 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a7b3e1d45f8247f7a82e559465b01942, type: 3}
   m_Name: MahjongTileSpriteCatalog
   m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI.MahjongTileSpriteCatalog
-  entries: []
+  entries:
+  - typeIndex: 0
+    sprite: {fileID: -855298285791758126, guid: 13d64b7f8e3b46d47b639a8a126cd8e1, type: 3}
+  - typeIndex: 1
+    sprite: {fileID: 6937817954938267909, guid: 3525383a3b54a2149aa7c277f69a1997, type: 3}
+  - typeIndex: 2
+    sprite: {fileID: -6470460504253458178, guid: c6cae88edf473234a93af7e5034da97a, type: 3}
+  - typeIndex: 3
+    sprite: {fileID: -4178046375966092550, guid: 56791a539f895e740bc9cde6377b6f0d, type: 3}
+  - typeIndex: 4
+    sprite: {fileID: 4130640169021434097, guid: 3c9886b65ced2f549ab089c498ceafdc, type: 3}
+  - typeIndex: 5
+    sprite: {fileID: 3465286685962602723, guid: 20d6ae9830ae4bc4d950e8af31469b1a, type: 3}
+  - typeIndex: 6
+    sprite: {fileID: 7028616704906629411, guid: aa08a87dcfc21c04da8c0e45e9f3cf25, type: 3}
+  - typeIndex: 7
+    sprite: {fileID: 8288426215254106694, guid: 0bb337db52d7b6446bc5cb8f13330882, type: 3}
+  - typeIndex: 8
+    sprite: {fileID: 4113829005332862926, guid: 069a9aff0fa6667419e995432fcb039e, type: 3}
+  - typeIndex: 9
+    sprite: {fileID: -855298285791758126, guid: bae9017e6274aef48b804e880c8dcbb7, type: 3}
+  - typeIndex: 10
+    sprite: {fileID: 6937817954938267909, guid: a4d5f3e383722534eab4e2184265573f, type: 3}
+  - typeIndex: 11
+    sprite: {fileID: -6470460504253458178, guid: d08cd7629172bef45b0ef9180ff18b7c, type: 3}
+  - typeIndex: 12
+    sprite: {fileID: -4178046375966092550, guid: f0600ab575eeaff48a2817b3adc72407, type: 3}
+  - typeIndex: 13
+    sprite: {fileID: 4130640169021434097, guid: 53bee80c50028f24cb1cd0227639c4d9, type: 3}
+  - typeIndex: 14
+    sprite: {fileID: 3465286685962602723, guid: 920c683c2ad49e54585b2701b0700a65, type: 3}
+  - typeIndex: 15
+    sprite: {fileID: 7028616704906629411, guid: e73a28198413b634e862027d822e1103, type: 3}
+  - typeIndex: 16
+    sprite: {fileID: 8288426215254106694, guid: 96225d1885e15a141bdbf794d5ada61c, type: 3}
+  - typeIndex: 17
+    sprite: {fileID: 4113829005332862926, guid: 52d13f726491b114ebacc9f03e032874, type: 3}
+  - typeIndex: 18
+    sprite: {fileID: -855298285791758126, guid: 4fb2f8aa68a04cf4788dd1ef33f84d1c, type: 3}
+  - typeIndex: 19
+    sprite: {fileID: 6937817954938267909, guid: 9f74ef838a0f2bb4794562c3ec8e4554, type: 3}
+  - typeIndex: 20
+    sprite: {fileID: -6470460504253458178, guid: 0554f8519207abf40afa351a23c6fc27, type: 3}
+  - typeIndex: 21
+    sprite: {fileID: -4178046375966092550, guid: d576a70dc6587b74a9f3d377a8ac20eb, type: 3}
+  - typeIndex: 22
+    sprite: {fileID: 4130640169021434097, guid: af7af5850cdccca4a9572dce68b919b2, type: 3}
+  - typeIndex: 23
+    sprite: {fileID: 3465286685962602723, guid: d51ed2f386c48374ea1c8c9dc2e4ba88, type: 3}
+  - typeIndex: 24
+    sprite: {fileID: 7028616704906629411, guid: c8abd731683c8604f8c62b0ab6011a68, type: 3}
+  - typeIndex: 25
+    sprite: {fileID: 8288426215254106694, guid: e2a22a2ec3cf5b24db733d73b7fb5bb9, type: 3}
+  - typeIndex: 26
+    sprite: {fileID: 4113829005332862926, guid: ad269a2225b2070468f4e1e3df7ad5ab, type: 3}
+  - typeIndex: 27
+    sprite: {fileID: 5682625409711836018, guid: 8c4b0b319603d8c4f93c75896de479d2, type: 3}
+  - typeIndex: 28
+    sprite: {fileID: 6710729551986720335, guid: 3f4078ee9df4db747ae66f17c12df9ab, type: 3}
+  - typeIndex: 29
+    sprite: {fileID: -145340046631728430, guid: 96a85a358536c294c8953f68a0423c6b, type: 3}
+  - typeIndex: 30
+    sprite: {fileID: -5215268651100149225, guid: 9b540721ea3756a41992110e39125934, type: 3}
+  - typeIndex: 31
+    sprite: {fileID: 3514998746854928232, guid: 60b39ee33d6bea544af888ac204344b6, type: 3}
+  - typeIndex: 32
+    sprite: {fileID: 7675831346599914159, guid: ceccf45560e48654ba06b5b243350252, type: 3}
+  - typeIndex: 33
+    sprite: {fileID: -6602110005487555812, guid: 28ee7615f86083d4a89cbfdb9c585512, type: 3}
