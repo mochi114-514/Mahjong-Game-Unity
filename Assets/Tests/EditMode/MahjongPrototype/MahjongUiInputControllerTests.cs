@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using MahjongPrototype.Tests.TestSupport.Features.UiInput;
@@ -8,7 +9,11 @@ using MahjongPrototype.Tests.TestSupport.Core;
 using MahjongPrototype.Tests.TestSupport.Mahjong;
 using MahjongPrototype.Tests.TestSupport.Unity;
 using NUnit.Framework;
+using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
 using UnityEngine.UI;
 
@@ -626,6 +631,231 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
+        public void ProductionScene_ChiOptionPanel_GrowsWithoutOverlap_AndUsesExistingInputPath()
+        {
+            const string scenePath = "Assets/Scenes/Mahjong Prototype.unity";
+            const string optionPrefabPath = "Assets/Prefab/Mahjong Chi Option.prefab";
+            const string tilePrefabPath = "Assets/Prefab/Chi Prefab.prefab";
+            const string catalogPath =
+                "Assets/Scripts/MahjongPrototype/ScriptableObjects/MahjongTileSpriteCatalog.asset";
+
+            ReflectionTestAccess reflection = new ReflectionTestAccess();
+            MahjongTestTypes types = new MahjongTestTypes(reflection);
+            MahjongTestDataFactory dataFactory = new MahjongTestDataFactory(reflection, types);
+            Scene scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Additive);
+            Component controller = null;
+            try
+            {
+                Type controllerType = reflection.RequireType(ControllerTypeName);
+                controller = Resources.FindObjectsOfTypeAll(controllerType)
+                    .Cast<Component>()
+                    .Single(candidate => candidate.gameObject.scene == scene);
+                Component inputController = (Component)reflection.GetPrivateField(
+                    controller,
+                    "inputController");
+                Behaviour inputBehaviour = (Behaviour)inputController;
+                inputBehaviour.enabled = false;
+                inputBehaviour.enabled = true;
+                GameObject decisionRoot = (GameObject)reflection.GetPrivateField(
+                    controller,
+                    "ponDecisionRoot");
+                GameObject chiDecisionRoot = (GameObject)reflection.GetPrivateField(
+                    controller,
+                    "chiDecisionRoot");
+                Transform optionsContainer = (Transform)reflection.GetPrivateField(
+                    controller,
+                    "chiOptionsContainer");
+                Component heading = (Component)reflection.GetPrivateField(
+                    controller,
+                    "chiHeadingLabel");
+                Component optionViewPrefab = (Component)reflection.GetPrivateField(
+                    controller,
+                    "chiOptionViewPrefab");
+                ScriptableObject catalog = (ScriptableObject)reflection.GetPrivateField(
+                    controller,
+                    "chiTileSpriteCatalog");
+                Component tileViewPrefab = (Component)reflection.GetPrivateField(
+                    controller,
+                    "chiTileViewPrefab");
+
+                Assert.That(decisionRoot, Is.Not.Null);
+                Assert.That(chiDecisionRoot, Is.Not.Null);
+                Assert.That(optionsContainer, Is.Not.Null);
+                Assert.That(heading, Is.Not.Null);
+                Assert.That(optionViewPrefab, Is.Not.Null);
+                Assert.That(catalog, Is.Not.Null);
+                Assert.That(tileViewPrefab, Is.Not.Null);
+                Assert.That(
+                    AssetDatabase.GetAssetPath(optionViewPrefab),
+                    Is.EqualTo(optionPrefabPath));
+                Assert.That(
+                    AssetDatabase.GetAssetPath(tileViewPrefab),
+                    Is.EqualTo(tilePrefabPath));
+                Assert.That(
+                    AssetDatabase.GetAssetPath(catalog),
+                    Is.EqualTo(catalogPath));
+                Assert.That(
+                    optionViewPrefab.GetComponent<Button>(),
+                    Is.Not.Null);
+                Assert.That(
+                    optionViewPrefab.transform.Find("Tiles"),
+                    Is.Not.Null);
+                Assert.That(
+                    optionViewPrefab.GetComponentsInChildren(
+                        reflection.RequireType(TmpTextTypeName),
+                        true).Length,
+                    Is.Zero);
+                Assert.That(
+                    chiDecisionRoot.GetComponent<VerticalLayoutGroup>(),
+                    Is.Not.Null);
+                Assert.That(
+                    chiDecisionRoot.GetComponent<ContentSizeFitter>(),
+                    Is.Not.Null);
+                Assert.That(
+                    optionsContainer.GetComponent<HorizontalLayoutGroup>(),
+                    Is.Not.Null);
+                Assert.That(
+                    decisionRoot.GetComponent<ContentSizeFitter>(),
+                    Is.Not.Null);
+                Color panelColor = chiDecisionRoot.GetComponent<Image>().color;
+                Assert.That(panelColor.b, Is.GreaterThan(panelColor.r));
+                Assert.That(panelColor.a, Is.GreaterThan(0.8f));
+
+                string requestedKind = null;
+                int requestedOptionId = -1;
+                EventInfo meldCallEvent = inputController.GetType().GetEvent(
+                    "MeldCallRequested");
+                meldCallEvent.AddEventHandler(
+                    inputController,
+                    CreateMeldCallHandler(
+                        meldCallEvent.EventHandlerType,
+                        (kind, optionId) =>
+                        {
+                            requestedKind = kind;
+                            requestedOptionId = optionId;
+                        }));
+                int skipCount = 0;
+                inputController.GetType()
+                    .GetEvent("DeclineMeldCallsRequested")
+                    .AddEventHandler(inputController, new Action(() => skipCount++));
+
+                object calledTile = dataFactory.CreateTile("5m");
+                reflection.Invoke(
+                    controller,
+                    "SetMeldCallDecision",
+                    false,
+                    CreateChiOptions(reflection, dataFactory, calledTile, 1),
+                    calledTile);
+                ForceDecisionLayout(decisionRoot);
+
+                RectTransform chiRect = (RectTransform)chiDecisionRoot.transform;
+                float oneOptionWidth = chiRect.rect.width;
+                Assert.That(chiDecisionRoot.activeSelf, Is.True);
+                Assert.That(optionsContainer.childCount, Is.EqualTo(1));
+                Assert.That(
+                    reflection.GetProperty(heading, "text"),
+                    Is.EqualTo("チー"));
+                Assert.That(oneOptionWidth, Is.InRange(120f, 180f));
+                AssertProductionChiTileSprites(
+                    reflection,
+                    dataFactory,
+                    catalog,
+                    optionsContainer.GetChild(0),
+                    "3m",
+                    "4m",
+                    "5m");
+
+                reflection.Invoke(
+                    controller,
+                    "SetMeldCallDecision",
+                    false,
+                    CreateChiOptions(reflection, dataFactory, calledTile, 3),
+                    calledTile);
+                ForceDecisionLayout(decisionRoot);
+
+                float threeOptionWidth = chiRect.rect.width;
+                Assert.That(optionsContainer.childCount, Is.EqualTo(3));
+                Assert.That(threeOptionWidth, Is.GreaterThan(oneOptionWidth + 190f));
+                Assert.That(threeOptionWidth, Is.LessThanOrEqualTo(380f));
+                Assert.That(
+                    CountText(
+                        reflection,
+                        chiDecisionRoot.transform,
+                        reflection.RequireType(TmpTextTypeName),
+                        "チー"),
+                    Is.EqualTo(1));
+
+                EventSystem eventSystem = Resources.FindObjectsOfTypeAll<EventSystem>()
+                    .Single(candidate => candidate.gameObject.scene == scene);
+
+                Bounds previousBounds = default;
+                for (int i = 0; i < optionsContainer.childCount; i++)
+                {
+                    Transform option = optionsContainer.GetChild(i);
+                    Bounds bounds = RectTransformUtility.CalculateRelativeRectTransformBounds(
+                        optionsContainer,
+                        option);
+                    if (i > 0)
+                        Assert.That(bounds.min.x, Is.GreaterThan(previousBounds.max.x));
+                    previousBounds = bounds;
+
+                    Assert.That(
+                        option.GetComponentsInChildren(
+                            reflection.RequireType(TileSpriteViewTypeName),
+                            true).Length,
+                        Is.EqualTo(3));
+                    Component firstTile = option.GetComponentsInChildren(
+                        reflection.RequireType(TileSpriteViewTypeName),
+                        true)[0];
+                    PointerEventData pointer = new PointerEventData(eventSystem)
+                    {
+                        button = PointerEventData.InputButton.Left
+                    };
+                    Assert.That(
+                        ExecuteEvents.ExecuteHierarchy(
+                            firstTile.gameObject,
+                            pointer,
+                            ExecuteEvents.pointerClickHandler),
+                        Is.Not.Null);
+                    Assert.That(requestedKind, Is.EqualTo("Chi"));
+                    Assert.That(requestedOptionId, Is.EqualTo(i + 3));
+                }
+
+                Bounds optionsBounds = RectTransformUtility.CalculateRelativeRectTransformBounds(
+                    chiRect,
+                    optionsContainer);
+                Assert.That(optionsBounds.min.x, Is.GreaterThanOrEqualTo(chiRect.rect.xMin));
+                Assert.That(optionsBounds.max.x, Is.LessThanOrEqualTo(chiRect.rect.xMax));
+                AssertProductionChiTileSprites(
+                    reflection,
+                    dataFactory,
+                    catalog,
+                    optionsContainer.GetChild(2),
+                    "5m",
+                    "6m",
+                    "7m");
+
+                Button declineButton = (Button)reflection.GetPrivateField(
+                    controller,
+                    "declineButton");
+                declineButton.onClick.Invoke();
+                Assert.That(skipCount, Is.EqualTo(1));
+
+                reflection.Invoke(controller, "ClearReactionMeldCallDecision");
+                Assert.That(chiDecisionRoot.activeSelf, Is.False);
+                Assert.That(optionsContainer.childCount, Is.Zero);
+                Assert.That(decisionRoot.activeSelf, Is.False);
+            }
+            finally
+            {
+                if (controller != null)
+                    reflection.Invoke(controller, "ClearReactionMeldCallDecision");
+                if (scene.IsValid() && scene.isLoaded)
+                    EditorSceneManager.CloseScene(scene, true);
+            }
+        }
+
+        [Test]
         public void ReactionMeldButtons_EmitTheRequestIdentityThatCreatedThem()
         {
             ReflectionTestAccess reflection = new ReflectionTestAccess();
@@ -1118,6 +1348,45 @@ namespace MahjongPrototype.Tests
                 dataFactory.CreateTileArrayFromText("6m 7m"),
                 dataFactory.CreateTileArrayFromText("5m 6m 7m")));
             return options;
+        }
+
+        private static void ForceDecisionLayout(GameObject decisionRoot)
+        {
+            RectTransform rect = (RectTransform)decisionRoot.transform;
+            for (int i = 0; i < 3; i++)
+            {
+                Canvas.ForceUpdateCanvases();
+                LayoutRebuilder.ForceRebuildLayoutImmediate(rect);
+            }
+        }
+
+        private static void AssertProductionChiTileSprites(
+            ReflectionTestAccess reflection,
+            MahjongTestDataFactory dataFactory,
+            ScriptableObject catalog,
+            Transform option,
+            params string[] tileCodes)
+        {
+            Type tileViewType = reflection.RequireType(TileSpriteViewTypeName);
+            Component[] tileViews = option.GetComponentsInChildren(tileViewType, true)
+                .Cast<Component>()
+                .ToArray();
+            Assert.That(tileViews.Length, Is.EqualTo(tileCodes.Length));
+
+            MethodInfo tryGetSprite = catalog.GetType().GetMethod("TryGetSprite");
+            Assert.That(tryGetSprite, Is.Not.Null);
+            for (int i = 0; i < tileCodes.Length; i++)
+            {
+                object[] arguments =
+                {
+                    dataFactory.CreateTile(tileCodes[i]),
+                    null
+                };
+                Assert.That((bool)tryGetSprite.Invoke(catalog, arguments), Is.True);
+                Image image = tileViews[i].GetComponent<Image>();
+                Assert.That(image, Is.Not.Null);
+                Assert.That(image.sprite, Is.SameAs(arguments[1]));
+            }
         }
 
         private static void ConfigureChiTileImages(
