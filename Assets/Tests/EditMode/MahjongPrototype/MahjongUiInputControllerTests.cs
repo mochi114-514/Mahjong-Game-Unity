@@ -368,7 +368,7 @@ namespace MahjongPrototype.Tests
                     tmpTextType,
                     decisionRoot.transform,
                     "DeclineButton",
-                    "拒否");
+                    "スキップ");
                 reflection.SetPrivateField(controller, "ponDecisionRoot", decisionRoot);
                 reflection.SetPrivateField(controller, "ponButton", ponButton);
                 reflection.SetPrivateField(controller, "declineButton", declineButton);
@@ -409,6 +409,9 @@ namespace MahjongPrototype.Tests
                 Assert.That(decisionRoot.activeSelf, Is.True);
                 Assert.That(ponButton.gameObject.activeSelf, Is.False);
                 Assert.That(declineButton.gameObject.activeSelf, Is.True);
+                Assert.That(
+                    ButtonLabel(reflection, tmpTextType, declineButton),
+                    Is.EqualTo("スキップ"));
 
                 reflection.Invoke(
                     controller,
@@ -472,6 +475,9 @@ namespace MahjongPrototype.Tests
                 Button daiminkanButton = FindButton(decisionRoot.transform, "Daiminkan");
                 Assert.That(daiminkanButton, Is.Not.Null);
                 Assert.That(
+                    ButtonLabel(reflection, tmpTextType, daiminkanButton),
+                    Is.EqualTo("カン"));
+                Assert.That(
                     decisionRoot.transform.Find("ChiDecisionRoot").gameObject.activeSelf,
                     Is.False);
                 daiminkanButton.onClick.Invoke();
@@ -517,6 +523,9 @@ namespace MahjongPrototype.Tests
                     calledTile,
                     true);
                 Assert.That(declineButton.gameObject.activeSelf, Is.True);
+                Assert.That(
+                    ButtonLabel(reflection, tmpTextType, declineButton),
+                    Is.EqualTo("スキップ"));
 
                 reflection.Invoke(controller, "SetMeldCallDecision", false, null, null);
                 Assert.That(decisionRoot.activeSelf, Is.False);
@@ -561,7 +570,7 @@ namespace MahjongPrototype.Tests
                     tmpTextType,
                     decisionRoot.transform,
                     "DeclineButton",
-                    "拒否");
+                    "スキップ");
                 reflection.SetPrivateField(controller, "ponDecisionRoot", decisionRoot);
                 reflection.SetPrivateField(controller, "ponButton", ponButton);
                 reflection.SetPrivateField(controller, "declineButton", declineButton);
@@ -672,13 +681,9 @@ namespace MahjongPrototype.Tests
                     tmpTextType,
                     decisionRoot.transform,
                     "DeclineButton",
-                    "拒否");
+                    "スキップ");
 
                 reflection.SetPrivateField(controller, "ponDecisionRoot", decisionRoot);
-                reflection.SetPrivateField(
-                    controller,
-                    "decisionLabel",
-                    declineButton.GetComponentInChildren(tmpTextType, true));
                 reflection.SetPrivateField(controller, "ponButton", ponButton);
                 reflection.SetPrivateField(controller, "declineButton", declineButton);
                 reflection.SetPrivateField(controller, "inputController", inputController);
@@ -985,9 +990,18 @@ namespace MahjongPrototype.Tests
                 object calledTile = dataFactory.CreateTile("5m");
                 RectTransform chiRect = (RectTransform)chiDecisionRoot.transform;
                 RectTransform decisionRect = (RectTransform)decisionRoot.transform;
+                RectTransform canvasRect = (RectTransform)decisionRect.parent;
+                Assert.That(canvasRect, Is.SameAs(controller.transform));
+                Assert.That(decisionRect.anchorMin, Is.EqualTo(new Vector2(1f, 0f)));
+                Assert.That(decisionRect.anchorMax, Is.EqualTo(new Vector2(1f, 0f)));
+                Assert.That(decisionRect.pivot, Is.EqualTo(new Vector2(1f, 0f)));
+                Assert.That(decisionRect.anchoredPosition.x, Is.LessThanOrEqualTo(0f));
+                Assert.That(decisionRect.anchoredPosition.y, Is.GreaterThanOrEqualTo(0f));
                 EventSystem eventSystem = Resources.FindObjectsOfTypeAll<EventSystem>()
                     .Single(candidate => candidate.gameObject.scene == scene);
                 float previousChiWidth = 0f;
+                float previousLeftEdge = float.PositiveInfinity;
+                float fixedSkipRightEdge = 0f;
                 for (int optionCount = 1; optionCount <= 3; optionCount++)
                 {
                     reflection.Invoke(
@@ -1017,9 +1031,21 @@ namespace MahjongPrototype.Tests
                         Is.EqualTo(1));
                     Assert.That(
                         ButtonLabel(reflection, reflection.RequireType(TmpTextTypeName), declineButton),
-                        Is.EqualTo("パス"));
+                        Is.EqualTo("スキップ"));
                     Assert.That(chiRect.rect.width, Is.GreaterThan(previousChiWidth));
                     previousChiWidth = chiRect.rect.width;
+
+                    Bounds decisionBounds = CalculateRectBounds(canvasRect, decisionRect);
+                    float skipRightEdge = AssertRightAnchoredDecisionLayout(
+                        canvasRect,
+                        decisionRect,
+                        declineButton);
+                    if (optionCount == 1)
+                        fixedSkipRightEdge = skipRightEdge;
+                    else
+                        Assert.That(skipRightEdge, Is.EqualTo(fixedSkipRightEdge).Within(0.05f));
+                    Assert.That(decisionBounds.min.x, Is.LessThan(previousLeftEdge));
+                    previousLeftEdge = decisionBounds.min.x;
 
                     AssertProductionChiLayout(
                         reflection,
@@ -1081,12 +1107,102 @@ namespace MahjongPrototype.Tests
                     true);
                 Assert.That(chiDecisionRoot.activeSelf, Is.False);
                 Assert.That(optionsContainer.childCount, Is.Zero);
-                Assert.That(decisionRect.rect.width, Is.InRange(160f, 180f));
+                Assert.That(decisionRect.rect.width, Is.InRange(180f, 200f));
+                Assert.That(
+                    AssertRightAnchoredDecisionLayout(
+                        canvasRect,
+                        decisionRect,
+                        declineButton),
+                    Is.EqualTo(fixedSkipRightEdge).Within(0.05f));
                 Assert.That(
                     CalculateRectBounds(decisionRect, (RectTransform)ponButton.transform).max.x,
                     Is.LessThan(CalculateRectBounds(
                         decisionRect,
                         (RectTransform)declineButton.transform).min.x));
+
+                reflection.Invoke(
+                    controller,
+                    "SetReactionMeldCallDecision",
+                    true,
+                    false,
+                    CreateChiOptions(reflection, dataFactory, calledTile, 3),
+                    calledTile,
+                    true);
+                Assert.That(
+                    AssertRightAnchoredDecisionLayout(
+                        canvasRect,
+                        decisionRect,
+                        declineButton),
+                    Is.EqualTo(fixedSkipRightEdge).Within(0.05f));
+                Assert.That(
+                    CalculateRectBounds(decisionRect, (RectTransform)ponButton.transform).max.x,
+                    Is.LessThanOrEqualTo(CalculateRectBounds(
+                        decisionRect,
+                        chiRect).min.x + 0.05f));
+                AssertProductionChiLayout(
+                    reflection,
+                    decisionRect,
+                    chiRect,
+                    optionsContainer,
+                    declineButton,
+                    3);
+
+                reflection.Invoke(
+                    controller,
+                    "SetReactionMeldCallDecision",
+                    false,
+                    true,
+                    null,
+                    calledTile,
+                    true);
+                Button daiminkanButton = FindButton(decisionRoot.transform, "Daiminkan");
+                Assert.That(daiminkanButton, Is.Not.Null);
+                Assert.That(
+                    ButtonLabel(
+                        reflection,
+                        reflection.RequireType(TmpTextTypeName),
+                        daiminkanButton),
+                    Is.EqualTo("カン"));
+                Assert.That(
+                    ButtonLabel(
+                        reflection,
+                        reflection.RequireType(TmpTextTypeName),
+                        declineButton),
+                    Is.EqualTo("スキップ"));
+                Assert.That(
+                    AssertRightAnchoredDecisionLayout(
+                        canvasRect,
+                        decisionRect,
+                        declineButton),
+                    Is.EqualTo(fixedSkipRightEdge).Within(0.05f));
+                Assert.That(
+                    CalculateRectBounds(
+                        decisionRect,
+                        (RectTransform)daiminkanButton.transform).max.x,
+                    Is.LessThan(CalculateRectBounds(
+                        decisionRect,
+                        (RectTransform)declineButton.transform).min.x));
+
+                reflection.Invoke(
+                    controller,
+                    "SetSelfKanDecision",
+                    801L,
+                    CreateSelfKanDecisionRequest(
+                        reflection,
+                        dataFactory,
+                        includeKakan: true));
+                Assert.That(
+                    ButtonLabel(
+                        reflection,
+                        reflection.RequireType(TmpTextTypeName),
+                        declineButton),
+                    Is.EqualTo("スキップ"));
+                Assert.That(
+                    AssertRightAnchoredDecisionLayout(
+                        canvasRect,
+                        decisionRect,
+                        declineButton),
+                    Is.EqualTo(fixedSkipRightEdge).Within(0.05f));
                 reflection.Invoke(controller, "ClearReactionMeldCallDecision");
                 Assert.That(decisionRoot.activeSelf, Is.False);
             }
@@ -1130,7 +1246,7 @@ namespace MahjongPrototype.Tests
                     tmpTextType,
                     decisionRoot.transform,
                     "DeclineButton",
-                    "パス");
+                    "スキップ");
                 reflection.SetPrivateField(controller, "ponDecisionRoot", decisionRoot);
                 reflection.SetPrivateField(controller, "ponButton", ponButton);
                 reflection.SetPrivateField(controller, "declineButton", declineButton);
@@ -1178,6 +1294,15 @@ namespace MahjongPrototype.Tests
                     calledTile,
                     true);
 
+                Button daiminkanButton = FindButton(decisionRoot.transform, "Daiminkan");
+                Assert.That(daiminkanButton, Is.Not.Null);
+                Assert.That(
+                    ButtonLabel(reflection, tmpTextType, daiminkanButton),
+                    Is.EqualTo("カン"));
+                Assert.That(
+                    ButtonLabel(reflection, tmpTextType, declineButton),
+                    Is.EqualTo("スキップ"));
+
                 FindChiOptionButton(
                     decisionRoot.transform,
                     "ChiOption_4").onClick.Invoke();
@@ -1186,7 +1311,7 @@ namespace MahjongPrototype.Tests
                 Assert.That(actualKind, Is.EqualTo("Chi"));
                 Assert.That(actualChiOptionId, Is.EqualTo(4));
 
-                FindButton(decisionRoot.transform, "Daiminkan").onClick.Invoke();
+                daiminkanButton.onClick.Invoke();
                 Assert.That(actualRequestId, Is.EqualTo(901));
                 Assert.That(actualWindowId, Is.EqualTo(71));
                 Assert.That(actualKind, Is.EqualTo("Daiminkan"));
@@ -1321,7 +1446,7 @@ namespace MahjongPrototype.Tests
                     tmpTextType,
                     decisionRoot.transform,
                     "DeclineButton",
-                    "拒否");
+                    "スキップ");
                 reflection.SetPrivateField(controller, "ponDecisionRoot", decisionRoot);
                 reflection.SetPrivateField(controller, "ponButton", ponButton);
                 reflection.SetPrivateField(controller, "declineButton", declineButton);
@@ -1455,7 +1580,7 @@ namespace MahjongPrototype.Tests
                     tmpTextType,
                     decisionRoot.transform,
                     "DeclineButton",
-                    "拒否");
+                    "スキップ");
                 reflection.SetPrivateField(controller, "ponDecisionRoot", decisionRoot);
                 reflection.SetPrivateField(controller, "ponButton", ponButton);
                 reflection.SetPrivateField(controller, "declineButton", declineButton);
@@ -1690,6 +1815,25 @@ namespace MahjongPrototype.Tests
 
                 previousOptionBounds = optionBounds;
             }
+        }
+
+        private static float AssertRightAnchoredDecisionLayout(
+            RectTransform canvasRect,
+            RectTransform decisionRect,
+            Button declineButton)
+        {
+            const float tolerance = 0.05f;
+            Bounds decisionBounds = CalculateRectBounds(canvasRect, decisionRect);
+            Bounds declineBounds = CalculateRectBounds(
+                canvasRect,
+                (RectTransform)declineButton.transform);
+            AssertBoundsInside(canvasRect.rect, decisionBounds, tolerance);
+            AssertBoundsInside(canvasRect.rect, declineBounds, tolerance);
+            Assert.That(
+                declineBounds.max.x,
+                Is.EqualTo(decisionBounds.max.x).Within(tolerance),
+                "The Inspector-configured skip button must remain at the decision UI's fixed right edge.");
+            return declineBounds.max.x;
         }
 
         private static Bounds CalculateRectBounds(

@@ -134,7 +134,6 @@ namespace MahjongPrototype.UI
             SetStaticButtonVisibility(false, true, false);
             if (decisionLabel != null)
                 decisionLabel.text = "カン";
-            SetButtonLabel(declineButton, "スキップ");
 
             if (ponButton == null)
             {
@@ -217,8 +216,6 @@ namespace MahjongPrototype.UI
                 return;
 
             declineButton.gameObject.SetActive(showPass);
-            if (showPass)
-                SetButtonLabel(declineButton, "パス");
             RefreshDecisionLayout();
         }
 
@@ -304,7 +301,7 @@ namespace MahjongPrototype.UI
             ConfigureSelfKanDecline(showSelfKanDecline);
 
             if (showDaiminkan && needsDynamicMeldButton)
-                CreateMeldButton("Daiminkan", "大明槓", MeldCallKind.Kan, 0);
+                CreateMeldButton("Daiminkan", "カン", MeldCallKind.Kan, 0);
             if (showChi)
                 ShowChiOptions(chiOptions);
             if (showAnkan && needsDynamicMeldButton)
@@ -335,8 +332,6 @@ namespace MahjongPrototype.UI
             {
                 declineButton.gameObject.SetActive(showDecline);
                 ConfigureSelfKanDecline(showSelfKanDecline);
-                if (showDecline)
-                    SetButtonLabel(declineButton, showSelfKanDecline ? "カンしない" : "拒否");
             }
         }
 

@@ -24,11 +24,16 @@ namespace MahjongPrototype.Tests
             root.transform.SetParent(controllerObject.transform);
             GameObject labelObject = new GameObject("RenamedWinLabel");
             labelObject.transform.SetParent(root.transform);
+            GameObject declineLabelObject = new GameObject("InspectorConfiguredDeclineLabel");
+            declineLabelObject.transform.SetParent(root.transform);
 
             try
             {
                 Component label = labelObject.AddComponent(
                     Type.GetType(TextMeshProUguiTypeName, true));
+                Component declineLabel = declineLabelObject.AddComponent(
+                    Type.GetType(TextMeshProUguiTypeName, true));
+                SetProperty(declineLabel, "text", "スキップ");
                 Component controller = controllerObject.AddComponent(
                     Type.GetType(ControllerTypeName, true));
                 SetPrivateField(controller, "winDecisionRoot", root);
@@ -41,6 +46,7 @@ namespace MahjongPrototype.Tests
                     true,
                     Enum.Parse(Type.GetType(WinTypeName, true), "Tsumo"));
                 Assert.That(GetProperty(label, "text"), Is.EqualTo("ツモ"));
+                Assert.That(GetProperty(declineLabel, "text"), Is.EqualTo("スキップ"));
                 Assert.That(root.activeSelf, Is.True);
 
                 Invoke(
@@ -49,10 +55,12 @@ namespace MahjongPrototype.Tests
                     true,
                     Enum.Parse(Type.GetType(WinTypeName, true), "Ron"));
                 Assert.That(GetProperty(label, "text"), Is.EqualTo("ロン"));
+                Assert.That(GetProperty(declineLabel, "text"), Is.EqualTo("スキップ"));
                 Assert.That(root.activeSelf, Is.True);
 
                 Invoke(controller, "SetWinDecision", false, null);
                 Assert.That(GetProperty(label, "text"), Is.EqualTo("和了"));
+                Assert.That(GetProperty(declineLabel, "text"), Is.EqualTo("スキップ"));
                 Assert.That(root.activeSelf, Is.False);
             }
             finally
@@ -147,6 +155,15 @@ namespace MahjongPrototype.Tests
                 BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
             Assert.That(property, Is.Not.Null);
             return property.GetValue(target);
+        }
+
+        private static void SetProperty(object target, string propertyName, object value)
+        {
+            PropertyInfo property = target.GetType().GetProperty(
+                propertyName,
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.That(property, Is.Not.Null);
+            property.SetValue(target, value);
         }
 
         private static void SetPrivateField(object target, string fieldName, object value)
