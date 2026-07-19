@@ -17,17 +17,27 @@ namespace MahjongPrototype.UI
         [SerializeField] private Button declineButton;
         [SerializeField] private MahjongUiInputController inputController;
 
-        [Header("Chi Tile Images")]
+        [Header("Chi Options")]
+        [SerializeField] private GameObject chiDecisionRoot;
+        [SerializeField] private TMP_Text chiHeadingLabel;
+        [SerializeField] private Transform chiOptionsContainer;
+        [SerializeField] private MahjongChiOptionView chiOptionViewPrefab;
         [SerializeField] private MahjongTileSpriteCatalog chiTileSpriteCatalog;
         [SerializeField] private MahjongTileSpriteView chiTileViewPrefab;
 
         private readonly List<Button> dynamicMeldButtons = new List<Button>();
+        private readonly List<MahjongChiOptionView> dynamicChiOptionViews =
+            new List<MahjongChiOptionView>();
         private readonly HashSet<int> warnedMissingChiTileSpriteTypeIndexes =
             new HashSet<int>();
         private bool warnedMissingRoot;
         private bool warnedMissingPonButton;
         private bool warnedMissingInputController;
-        private bool warnedMissingChiOptionView;
+        private bool warnedMissingChiDecisionRoot;
+        private bool warnedMissingChiHeadingLabel;
+        private bool warnedMissingChiOptionsContainer;
+        private bool warnedMissingChiOptionViewPrefab;
+        private bool warnedInvalidChiOptionViewPrefab;
         private bool warnedMissingChiTileContainer;
         private bool warnedMissingChiTileSpriteCatalog;
         private bool warnedMissingChiTileViewPrefab;
@@ -51,6 +61,7 @@ namespace MahjongPrototype.UI
         {
             ClearReactionRequest();
             ClearDynamicMeldButtons();
+            ClearDynamicChiOptions();
             ConfigureSelfKanDecline(false);
             if (ponDecisionRoot != null)
                 ponDecisionRoot.SetActive(false);
@@ -101,6 +112,7 @@ namespace MahjongPrototype.UI
         {
             ClearReactionRequest();
             ClearDynamicMeldButtons();
+            ClearDynamicChiOptions();
             ConfigureSelfKanDecline(false);
 
             if (ponDecisionRoot == null)
@@ -226,13 +238,15 @@ namespace MahjongPrototype.UI
             bool showSelfKanDecline,
             Tile? calledTile)
         {
+            ClearDynamicMeldButtons();
+            ClearDynamicChiOptions();
+
             if (ponDecisionRoot == null)
             {
                 WarnMissingOnce(ref warnedMissingRoot, "PonDecisionRoot is not assigned.");
                 return;
             }
 
-            ClearDynamicMeldButtons();
             bool showChi = chiOptions != null && chiOptions.Count > 0;
             bool showAnkan = ankanCandidates != null && ankanCandidates.Count > 0;
             bool showSelfKan = selfKanCandidates != null && selfKanCandidates.Count > 0;
@@ -252,10 +266,12 @@ namespace MahjongPrototype.UI
             if (!showDaiminkan && !showChi && !showAnkan && !showSelfKan)
                 return;
 
-            if (ponButton == null)
+            bool needsDynamicMeldButton =
+                showDaiminkan || showAnkan || showSelfKan;
+            if (needsDynamicMeldButton && ponButton == null)
             {
                 WarnMissingOnce(ref warnedMissingPonButton, "PonButton is not assigned.");
-                return;
+                needsDynamicMeldButton = false;
             }
 
             if (inputController == null)
@@ -270,19 +286,16 @@ namespace MahjongPrototype.UI
 
             ConfigureSelfKanDecline(showSelfKanDecline);
 
-            if (showDaiminkan)
+            if (showDaiminkan && needsDynamicMeldButton)
                 CreateMeldButton("Daiminkan", "大明槓", MeldCallKind.Kan, 0);
             if (showChi)
-            {
-                for (int i = 0; i < chiOptions.Count; i++)
-                    CreateChiOptionButton(chiOptions[i]);
-            }
-            if (showAnkan)
+                ShowChiOptions(chiOptions);
+            if (showAnkan && needsDynamicMeldButton)
             {
                 for (int i = 0; i < ankanCandidates.Count; i++)
                     CreateAnkanButton(ankanCandidates[i]);
             }
-            if (showSelfKan)
+            if (showSelfKan && needsDynamicMeldButton)
             {
                 for (int i = 0; i < selfKanCandidates.Count; i++)
                     CreateSelfKanButton(selfKanCandidates[i]);
@@ -308,18 +321,71 @@ namespace MahjongPrototype.UI
             }
         }
 
-        private void CreateChiOptionButton(ChiOption option)
+        private void ShowChiOptions(IReadOnlyList<ChiOption> chiOptions)
+        {
+            if (chiDecisionRoot == null)
+            {
+                WarnMissingOnce(
+                    ref warnedMissingChiDecisionRoot,
+                    "ChiDecisionRoot is not assigned.");
+                return;
+            }
+
+            chiDecisionRoot.SetActive(true);
+            if (chiHeadingLabel != null &&
+                IsSameOrChild(chiHeadingLabel.transform, chiDecisionRoot.transform))
+                chiHeadingLabel.text = "チー";
+            else
+                WarnMissingOnce(
+                    ref warnedMissingChiHeadingLabel,
+                    "ChiHeadingLabel must be assigned under ChiDecisionRoot.");
+
+            if (chiOptionsContainer == null ||
+                !IsSameOrChild(chiOptionsContainer, chiDecisionRoot.transform))
+            {
+                WarnMissingOnce(
+                    ref warnedMissingChiOptionsContainer,
+                    "ChiOptionsContainer must be assigned under ChiDecisionRoot.");
+                return;
+            }
+
+            if (chiOptionViewPrefab == null)
+            {
+                WarnMissingOnce(
+                    ref warnedMissingChiOptionViewPrefab,
+                    "ChiOptionViewPrefab is not assigned.");
+                return;
+            }
+
+            for (int i = 0; i < chiOptions.Count; i++)
+                CreateChiOptionView(chiOptions[i]);
+        }
+
+        private void CreateChiOptionView(ChiOption option)
         {
             if (option == null)
                 return;
 
-            Button button = CreateMeldButton(
-                $"ChiOption_{option.OptionId}",
-                "チー",
-                MeldCallKind.Chi,
-                option.OptionId);
-            if (button != null)
-                PopulateChiTileImages(button, option.MeldTiles);
+            MahjongChiOptionView optionView = Instantiate(
+                chiOptionViewPrefab,
+                chiOptionsContainer);
+            optionView.name = $"ChiOption_{option.OptionId}";
+            optionView.gameObject.SetActive(false);
+
+            if (!optionView.HasClickableTileContainer ||
+                !optionView.TrySetSelectionAction(
+                    CreateMeldCallAction(MeldCallKind.Chi, option.OptionId)))
+            {
+                WarnMissingOnce(
+                    ref warnedInvalidChiOptionViewPrefab,
+                    "ChiOptionViewPrefab select Button must contain its tile container.");
+                DestroyChiOptionView(optionView);
+                return;
+            }
+
+            PopulateChiTileImages(optionView, option.MeldTiles);
+            optionView.gameObject.SetActive(true);
+            dynamicChiOptionViews.Add(optionView);
         }
 
         private void CreateAnkanButton(Tile tile)
@@ -389,25 +455,7 @@ namespace MahjongPrototype.UI
             if (declineButton != null)
                 button.transform.SetSiblingIndex(declineButton.transform.GetSiblingIndex());
             button.onClick.RemoveAllListeners();
-            if (hasReactionRequest &&
-                TryMapReactionAnswerKind(kind, out ReactionWindowSeatAnswerKind answerKind))
-            {
-                long requestId = reactionRequestId;
-                int windowId = reactionWindowId;
-                button.onClick.AddListener(
-                    () => inputController.RequestReactionResponse(
-                        requestId,
-                        windowId,
-                        answerKind,
-                        answerKind == ReactionWindowSeatAnswerKind.Chi
-                            ? optionId
-                            : (int?)null));
-            }
-            else
-            {
-                button.onClick.AddListener(
-                    () => inputController.RequestMeldCall(kind, optionId));
-            }
+            button.onClick.AddListener(CreateMeldCallAction(kind, optionId));
             button.gameObject.SetActive(true);
             SetButtonLabel(button, label);
             dynamicMeldButtons.Add(button);
@@ -415,20 +463,11 @@ namespace MahjongPrototype.UI
         }
 
         private void PopulateChiTileImages(
-            Button button,
+            MahjongChiOptionView optionView,
             IReadOnlyList<Tile> meldTiles)
         {
-            if (button == null || meldTiles == null)
+            if (optionView == null || meldTiles == null)
                 return;
-
-            MahjongChiOptionView optionView = button.GetComponent<MahjongChiOptionView>();
-            if (optionView == null)
-            {
-                WarnMissingOnce(
-                    ref warnedMissingChiOptionView,
-                    "PonButton needs a MahjongChiOptionView with its tile container assigned.");
-                return;
-            }
 
             if (!optionView.HasTileContainer)
             {
@@ -481,6 +520,27 @@ namespace MahjongPrototype.UI
             }
         }
 
+        private UnityAction CreateMeldCallAction(
+            MeldCallKind kind,
+            int optionId)
+        {
+            if (hasReactionRequest &&
+                TryMapReactionAnswerKind(kind, out ReactionWindowSeatAnswerKind answerKind))
+            {
+                long requestId = reactionRequestId;
+                int windowId = reactionWindowId;
+                return () => inputController.RequestReactionResponse(
+                    requestId,
+                    windowId,
+                    answerKind,
+                    answerKind == ReactionWindowSeatAnswerKind.Chi
+                        ? optionId
+                        : (int?)null);
+            }
+
+            return () => inputController.RequestMeldCall(kind, optionId);
+        }
+
         private void ClearDynamicMeldButtons()
         {
             for (int i = dynamicMeldButtons.Count - 1; i >= 0; i--)
@@ -497,6 +557,28 @@ namespace MahjongPrototype.UI
             }
 
             dynamicMeldButtons.Clear();
+        }
+
+        private void ClearDynamicChiOptions()
+        {
+            for (int i = dynamicChiOptionViews.Count - 1; i >= 0; i--)
+                DestroyChiOptionView(dynamicChiOptionViews[i]);
+
+            dynamicChiOptionViews.Clear();
+            if (chiDecisionRoot != null)
+                chiDecisionRoot.SetActive(false);
+        }
+
+        private static void DestroyChiOptionView(MahjongChiOptionView optionView)
+        {
+            if (optionView == null)
+                return;
+
+            optionView.gameObject.SetActive(false);
+            if (Application.isPlaying)
+                Destroy(optionView.gameObject);
+            else
+                DestroyImmediate(optionView.gameObject);
         }
 
         private void ConfigureSelfKanDecline(bool enabled)
@@ -567,6 +649,13 @@ namespace MahjongPrototype.UI
                     answerKind = default;
                     return false;
             }
+        }
+
+        private static bool IsSameOrChild(Transform candidate, Transform parent)
+        {
+            return candidate != null &&
+                   parent != null &&
+                   (candidate == parent || candidate.IsChildOf(parent));
         }
 
         private void WarnMissingOnce(ref bool warned, string message)

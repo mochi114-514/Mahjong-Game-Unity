@@ -400,14 +400,37 @@ namespace MahjongPrototype.Tests
                     options,
                     calledTile);
                 Assert.That(ponButton.gameObject.activeSelf, Is.True);
-                Button firstChiButton = FindButton(decisionRoot.transform, "ChiOption_3");
-                Button secondChiButton = FindButton(decisionRoot.transform, "ChiOption_4");
+                Button firstChiButton = FindChiOptionButton(
+                    decisionRoot.transform,
+                    "ChiOption_3");
+                Button secondChiButton = FindChiOptionButton(
+                    decisionRoot.transform,
+                    "ChiOption_4");
                 Assert.That(firstChiButton, Is.Not.Null);
                 Assert.That(secondChiButton, Is.Not.Null);
-                Component label = secondChiButton.transform.Find("Text").GetComponent(tmpTextType);
+                Transform chiDecisionRoot = decisionRoot.transform.Find("ChiDecisionRoot");
+                Assert.That(chiDecisionRoot, Is.Not.Null);
+                Assert.That(chiDecisionRoot.gameObject.activeSelf, Is.True);
+                Component headingLabel = chiDecisionRoot.Find("ChiHeading")
+                    .GetComponent(tmpTextType);
                 Assert.That(
-                    reflection.GetProperty(label, "text"),
+                    reflection.GetProperty(headingLabel, "text"),
                     Is.EqualTo("チー"));
+                Assert.That(
+                    CountText(
+                        reflection,
+                        decisionRoot.transform,
+                        tmpTextType,
+                        "チー"),
+                    Is.EqualTo(1));
+                Assert.That(
+                    firstChiButton.GetComponentsInChildren(tmpTextType, true).Length,
+                    Is.Zero);
+                Assert.That(
+                    secondChiButton.GetComponentsInChildren(tmpTextType, true).Length,
+                    Is.Zero);
+                Assert.That(firstChiButton.transform.parent.name, Is.EqualTo("ChiOptions"));
+                Assert.That(secondChiButton.transform.parent.name, Is.EqualTo("ChiOptions"));
                 AssertChiTileSprites(firstChiButton, "3m", "4m", "5m");
                 AssertChiTileSprites(secondChiButton, "4m", "5m", "6m");
 
@@ -431,6 +454,9 @@ namespace MahjongPrototype.Tests
 
                 Button daiminkanButton = FindButton(decisionRoot.transform, "Daiminkan");
                 Assert.That(daiminkanButton, Is.Not.Null);
+                Assert.That(
+                    decisionRoot.transform.Find("ChiDecisionRoot").gameObject.activeSelf,
+                    Is.False);
                 daiminkanButton.onClick.Invoke();
                 Assert.That(requestedKind, Is.EqualTo("Kan"));
                 Assert.That(requestedOptionId, Is.EqualTo(0));
@@ -477,6 +503,120 @@ namespace MahjongPrototype.Tests
 
                 reflection.Invoke(controller, "SetMeldCallDecision", false, null, null);
                 Assert.That(decisionRoot.activeSelf, Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+                owner.Dispose();
+            }
+        }
+
+        [TestCase(1)]
+        [TestCase(3)]
+        public void DedicatedChiOptionList_CreatesOneClickableViewPerOption_AndClearsOnRefresh(
+            int optionCount)
+        {
+            ReflectionTestAccess reflection = new ReflectionTestAccess();
+            MahjongTestTypes types = new MahjongTestTypes(reflection);
+            MahjongTestDataFactory dataFactory = new MahjongTestDataFactory(reflection, types);
+            GameObject root = new GameObject("DedicatedChiOptionListTestRoot");
+            UnityObjectTestOwner owner = new UnityObjectTestOwner();
+            root.SetActive(false);
+            try
+            {
+                Component inputController = root.AddComponent(
+                    reflection.RequireType(InputControllerTypeName));
+                Component controller = root.AddComponent(
+                    reflection.RequireType(ControllerTypeName));
+                Type tmpTextType = reflection.RequireType(TmpTextTypeName);
+                GameObject decisionRoot = new GameObject(
+                    "MeldCallDecisionRoot",
+                    typeof(RectTransform));
+                decisionRoot.transform.SetParent(root.transform);
+                Button ponButton = CreateButton(
+                    reflection,
+                    tmpTextType,
+                    decisionRoot.transform,
+                    "PonButton",
+                    "ポン");
+                Button declineButton = CreateButton(
+                    reflection,
+                    tmpTextType,
+                    decisionRoot.transform,
+                    "DeclineButton",
+                    "拒否");
+                reflection.SetPrivateField(controller, "ponDecisionRoot", decisionRoot);
+                reflection.SetPrivateField(controller, "ponButton", ponButton);
+                reflection.SetPrivateField(controller, "declineButton", declineButton);
+                reflection.SetPrivateField(controller, "inputController", inputController);
+                string requestedKind = null;
+                int requestedOptionId = -1;
+                EventInfo eventInfo = inputController.GetType().GetEvent("MeldCallRequested");
+                Assert.That(eventInfo, Is.Not.Null);
+                eventInfo.AddEventHandler(
+                    inputController,
+                    CreateMeldCallHandler(
+                        eventInfo.EventHandlerType,
+                        (kind, optionId) =>
+                        {
+                            requestedKind = kind;
+                            requestedOptionId = optionId;
+                        }));
+                ConfigureChiTileImages(
+                    reflection,
+                    dataFactory,
+                    controller,
+                    ponButton,
+                    owner,
+                    "3m",
+                    "4m",
+                    "5m",
+                    "6m",
+                    "7m");
+
+                object calledTile = dataFactory.CreateTile("5m");
+                reflection.Invoke(
+                    controller,
+                    "SetMeldCallDecision",
+                    false,
+                    CreateChiOptions(
+                        reflection,
+                        dataFactory,
+                        calledTile,
+                        optionCount),
+                    calledTile);
+
+                Transform chiDecisionRoot = decisionRoot.transform.Find("ChiDecisionRoot");
+                Transform optionsContainer = chiDecisionRoot.Find("ChiOptions");
+                Assert.That(chiDecisionRoot.gameObject.activeSelf, Is.True);
+                Assert.That(optionsContainer.childCount, Is.EqualTo(optionCount));
+                for (int i = 0; i < optionCount; i++)
+                {
+                    Transform option = optionsContainer.Find($"ChiOption_{i + 3}");
+                    Assert.That(option, Is.Not.Null);
+                    Assert.That(option.GetComponent<Button>(), Is.Not.Null);
+                    Assert.That(
+                        option.GetComponentsInChildren(
+                            reflection.RequireType(TileSpriteViewTypeName),
+                            true).Length,
+                        Is.EqualTo(3));
+                    Assert.That(
+                        option.GetComponentsInChildren(tmpTextType, true).Length,
+                        Is.Zero);
+                    option.GetComponent<Button>().onClick.Invoke();
+                    Assert.That(requestedKind, Is.EqualTo("Chi"));
+                    Assert.That(requestedOptionId, Is.EqualTo(i + 3));
+                }
+
+                reflection.Invoke(
+                    controller,
+                    "SetMeldCallDecision",
+                    false,
+                    null,
+                    null);
+
+                Assert.That(chiDecisionRoot.gameObject.activeSelf, Is.False);
+                Assert.That(optionsContainer.childCount, Is.Zero);
             }
             finally
             {
@@ -564,7 +704,9 @@ namespace MahjongPrototype.Tests
                     calledTile,
                     true);
 
-                FindButton(decisionRoot.transform, "ChiOption_4").onClick.Invoke();
+                FindChiOptionButton(
+                    decisionRoot.transform,
+                    "ChiOption_4").onClick.Invoke();
                 Assert.That(actualRequestId, Is.EqualTo(901));
                 Assert.That(actualWindowId, Is.EqualTo(71));
                 Assert.That(actualKind, Is.EqualTo("Chi"));
@@ -641,7 +783,9 @@ namespace MahjongPrototype.Tests
                     CreateChiOptions(reflection, dataFactory, calledTile),
                     calledTile,
                     true);
-                Assert.That(FindButton(decisionRoot.transform, "ChiOption_4"), Is.Not.Null);
+                Assert.That(
+                    FindChiOptionButton(decisionRoot.transform, "ChiOption_4"),
+                    Is.Not.Null);
                 Assert.That(FindButton(decisionRoot.transform, "Daiminkan"), Is.Not.Null);
                 Assert.That(
                     decisionRoot.GetComponentsInChildren(
@@ -652,7 +796,9 @@ namespace MahjongPrototype.Tests
                 reflection.Invoke(controller, "ClearReactionMeldCallDecision");
 
                 Assert.That(decisionRoot.activeSelf, Is.False);
-                Assert.That(FindButton(decisionRoot.transform, "ChiOption_4"), Is.Null);
+                Assert.That(
+                    FindChiOptionButton(decisionRoot.transform, "ChiOption_4"),
+                    Is.Null);
                 Assert.That(FindButton(decisionRoot.transform, "Daiminkan"), Is.Null);
                 Assert.That(
                     decisionRoot.GetComponentsInChildren(
@@ -671,7 +817,7 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void MissingChiImageConfiguration_WarnsOnceAndKeepsChiButtonUsable()
+        public void MissingChiUiConfiguration_WarnsOnceAndKeepsConfiguredCandidateUsable()
         {
             ReflectionTestAccess reflection = new ReflectionTestAccess();
             MahjongTestTypes types = new MahjongTestTypes(reflection);
@@ -702,7 +848,6 @@ namespace MahjongPrototype.Tests
                     decisionRoot.transform,
                     "DeclineButton",
                     "拒否");
-                ConfigureChiOptionContainer(reflection, ponButton);
                 reflection.SetPrivateField(controller, "ponDecisionRoot", decisionRoot);
                 reflection.SetPrivateField(controller, "ponButton", ponButton);
                 reflection.SetPrivateField(controller, "declineButton", declineButton);
@@ -724,6 +869,39 @@ namespace MahjongPrototype.Tests
 
                 object calledTile = dataFactory.CreateTile("5m");
                 IList options = CreateChiOptions(reflection, dataFactory, calledTile);
+                LogAssert.Expect(
+                    LogType.Warning,
+                    "MahjongPonDecisionController: ChiDecisionRoot is not assigned.");
+                reflection.Invoke(
+                    controller,
+                    "SetMeldCallDecision",
+                    false,
+                    options,
+                    calledTile);
+
+                ConfigureChiUiStructure(
+                    reflection,
+                    controller,
+                    decisionRoot.transform,
+                    owner);
+                object optionViewPrefab = reflection.GetPrivateField(
+                    controller,
+                    "chiOptionViewPrefab");
+                reflection.SetPrivateField(controller, "chiOptionViewPrefab", null);
+                LogAssert.Expect(
+                    LogType.Warning,
+                    "MahjongPonDecisionController: ChiOptionViewPrefab is not assigned.");
+                reflection.Invoke(
+                    controller,
+                    "SetMeldCallDecision",
+                    false,
+                    options,
+                    calledTile);
+                reflection.SetPrivateField(
+                    controller,
+                    "chiOptionViewPrefab",
+                    optionViewPrefab);
+
                 LogAssert.Expect(
                     LogType.Warning,
                     "MahjongPonDecisionController: Chi tile sprite catalog is not assigned.");
@@ -756,7 +934,9 @@ namespace MahjongPrototype.Tests
                     options,
                     calledTile);
 
-                Button secondChiButton = FindButton(decisionRoot.transform, "ChiOption_4");
+                Button secondChiButton = FindChiOptionButton(
+                    decisionRoot.transform,
+                    "ChiOption_4");
                 Assert.That(secondChiButton, Is.Not.Null);
                 secondChiButton.onClick.Invoke();
                 Assert.That(requestedKind, Is.EqualTo("Chi"));
@@ -829,7 +1009,9 @@ namespace MahjongPrototype.Tests
                     options,
                     calledTile);
 
-                Button secondChiButton = FindButton(decisionRoot.transform, "ChiOption_4");
+                Button secondChiButton = FindChiOptionButton(
+                    decisionRoot.transform,
+                    "ChiOption_4");
                 Assert.That(secondChiButton, Is.Not.Null);
                 AssertChiTileSprites(secondChiButton, "4m", "5m");
 
@@ -898,6 +1080,16 @@ namespace MahjongPrototype.Tests
             MahjongTestDataFactory dataFactory,
             object calledTile)
         {
+            return CreateChiOptions(reflection, dataFactory, calledTile, 2);
+        }
+
+        private static IList CreateChiOptions(
+            ReflectionTestAccess reflection,
+            MahjongTestDataFactory dataFactory,
+            object calledTile,
+            int optionCount)
+        {
+            Assert.That(optionCount, Is.InRange(1, 3));
             Type chiOptionType = reflection.RequireType(ChiOptionTypeName);
             IList options = (IList)Activator.CreateInstance(
                 typeof(List<>).MakeGenericType(chiOptionType));
@@ -907,12 +1099,24 @@ namespace MahjongPrototype.Tests
                 calledTile,
                 dataFactory.CreateTileArrayFromText("3m 4m"),
                 dataFactory.CreateTileArrayFromText("3m 4m 5m")));
+            if (optionCount == 1)
+                return options;
+
             options.Add(reflection.CreateInstance(
                 chiOptionType,
                 4,
                 calledTile,
                 dataFactory.CreateTileArrayFromText("4m 6m"),
                 dataFactory.CreateTileArrayFromText("4m 5m 6m")));
+            if (optionCount == 2)
+                return options;
+
+            options.Add(reflection.CreateInstance(
+                chiOptionType,
+                5,
+                calledTile,
+                dataFactory.CreateTileArrayFromText("6m 7m"),
+                dataFactory.CreateTileArrayFromText("5m 6m 7m")));
             return options;
         }
 
@@ -924,7 +1128,11 @@ namespace MahjongPrototype.Tests
             UnityObjectTestOwner owner,
             params string[] tileCodes)
         {
-            ConfigureChiOptionContainer(reflection, ponButton);
+            ConfigureChiUiStructure(
+                reflection,
+                controller,
+                ponButton.transform.parent,
+                owner);
 
             Type tileSpriteViewType = reflection.RequireType(TileSpriteViewTypeName);
             GameObject tilePrefabObject = owner.Own(new GameObject(
@@ -955,17 +1163,54 @@ namespace MahjongPrototype.Tests
             reflection.SetPrivateField(controller, "chiTileViewPrefab", tileViewPrefab);
         }
 
-        private static void ConfigureChiOptionContainer(
+        private static void ConfigureChiUiStructure(
             ReflectionTestAccess reflection,
-            Button ponButton)
+            Component controller,
+            Transform decisionRoot,
+            UnityObjectTestOwner owner)
         {
-            Component optionView = ponButton.gameObject.AddComponent(
+            Type tmpTextType = reflection.RequireType(TmpTextTypeName);
+            GameObject chiDecisionRoot = new GameObject(
+                "ChiDecisionRoot",
+                typeof(RectTransform));
+            chiDecisionRoot.transform.SetParent(decisionRoot, false);
+            GameObject headingObject = new GameObject(
+                "ChiHeading",
+                typeof(RectTransform),
+                tmpTextType);
+            headingObject.transform.SetParent(chiDecisionRoot.transform, false);
+            Component headingLabel = headingObject.GetComponent(tmpTextType);
+            GameObject optionsContainer = new GameObject(
+                "ChiOptions",
+                typeof(RectTransform));
+            optionsContainer.transform.SetParent(chiDecisionRoot.transform, false);
+
+            GameObject optionPrefabObject = owner.Own(new GameObject(
+                "ChiOptionViewPrefab",
+                typeof(RectTransform),
+                typeof(Image),
+                typeof(Button)));
+            optionPrefabObject.SetActive(false);
+            Component optionView = optionPrefabObject.AddComponent(
                 reflection.RequireType(ChiOptionViewTypeName));
             GameObject tileContainer = new GameObject(
                 "ChiTileImages",
                 typeof(RectTransform));
-            tileContainer.transform.SetParent(ponButton.transform, false);
+            tileContainer.transform.SetParent(optionPrefabObject.transform, false);
+            reflection.SetPrivateField(
+                optionView,
+                "selectButton",
+                optionPrefabObject.GetComponent<Button>());
             reflection.SetPrivateField(optionView, "tileContainer", tileContainer.transform);
+
+            reflection.SetPrivateField(controller, "chiDecisionRoot", chiDecisionRoot);
+            reflection.SetPrivateField(controller, "chiHeadingLabel", headingLabel);
+            reflection.SetPrivateField(
+                controller,
+                "chiOptionsContainer",
+                optionsContainer.transform);
+            reflection.SetPrivateField(controller, "chiOptionViewPrefab", optionView);
+            chiDecisionRoot.SetActive(false);
         }
 
         private static void SetCatalogEntries(
@@ -1120,6 +1365,29 @@ namespace MahjongPrototype.Tests
         {
             Transform child = parent.Find(name);
             return child != null ? child.GetComponent<Button>() : null;
+        }
+
+        private static Button FindChiOptionButton(Transform decisionRoot, string name)
+        {
+            Transform child = decisionRoot.Find($"ChiDecisionRoot/ChiOptions/{name}");
+            return child != null ? child.GetComponent<Button>() : null;
+        }
+
+        private static int CountText(
+            ReflectionTestAccess reflection,
+            Transform root,
+            Type tmpTextType,
+            string expected)
+        {
+            Component[] texts = root.GetComponentsInChildren(tmpTextType, true);
+            int count = 0;
+            for (int i = 0; i < texts.Length; i++)
+            {
+                if ((string)reflection.GetProperty(texts[i], "text") == expected)
+                    count++;
+            }
+
+            return count;
         }
     }
 
