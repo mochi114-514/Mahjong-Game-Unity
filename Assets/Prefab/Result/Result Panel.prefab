@@ -1294,6 +1294,7 @@ MonoBehaviour:
   winningTileText: {fileID: 6100001023}
   totalText: {fileID: 6100001053}
   confirmButtonLabel: {fileID: 5803466926103113611}
+  confirmButton: {fileID: 991031076261630718}
   yakuListRoot: {fileID: 6100001061}
   yakuRowPrefab: {fileID: 6100002000, guid: 661a78d3668e42249993519a98eabad7, type: 3}
 --- !u!1 &4410670715559761699

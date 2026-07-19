@@ -1,3 +1,4 @@
+using System.Collections;
 using MahjongPrototype.Domain;
 using TMPro;
 using UnityEngine;
@@ -13,6 +14,10 @@ namespace MahjongPrototype.UI
 
         private bool warnedMissingYakuNameText;
         private bool warnedMissingValueText;
+        private Color yakuNameColor;
+        private Color valueColor;
+        private Vector3 normalScale;
+        private bool presentationCached;
 
         public void Bind(EvaluatedYaku yaku)
         {
@@ -26,6 +31,57 @@ namespace MahjongPrototype.UI
                 yaku.IsYakuman ? "役満" : $"{(int)yaku.Han}翻",
                 ref warnedMissingValueText,
                 "ValueText is not assigned.");
+        }
+
+        public void SetRevealVisible(bool visible)
+        {
+            CachePresentation();
+            SetTextAlpha(yakuNameText, yakuNameColor, visible ? 1f : 0f);
+            SetTextAlpha(valueText, valueColor, visible ? 1f : 0f);
+            transform.localScale = normalScale;
+        }
+
+        public IEnumerator PlayReveal(float duration)
+        {
+            CachePresentation();
+            if (duration <= 0f)
+            {
+                SetRevealVisible(true);
+                yield break;
+            }
+
+            for (float elapsed = 0f; elapsed < duration; elapsed += Time.unscaledDeltaTime)
+            {
+                float t = Mathf.Clamp01(elapsed / duration);
+                SetTextAlpha(yakuNameText, yakuNameColor, t);
+                SetTextAlpha(valueText, valueColor, t);
+                transform.localScale = Vector3.Lerp(normalScale * 1.1f, normalScale, t);
+                yield return null;
+            }
+
+            SetRevealVisible(true);
+        }
+
+        private void CachePresentation()
+        {
+            if (presentationCached)
+                return;
+
+            presentationCached = true;
+            normalScale = transform.localScale;
+            if (yakuNameText != null)
+                yakuNameColor = yakuNameText.color;
+            if (valueText != null)
+                valueColor = valueText.color;
+        }
+
+        private static void SetTextAlpha(TMP_Text text, Color baseColor, float alpha)
+        {
+            if (text == null)
+                return;
+
+            baseColor.a *= alpha;
+            text.color = baseColor;
         }
 
         private void SetTextOrWarn(

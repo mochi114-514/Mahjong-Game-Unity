@@ -51,6 +51,9 @@ namespace MahjongPrototype.UI
         [Header("Round Result")]
         [SerializeField] private MahjongRoundResultController roundResultController;
 
+        [Header("Round Progress")]
+        [SerializeField] private MahjongRoundProgressController roundProgressController;
+
         [Header("Log Preview")]
         [Tooltip("Controller for the on-screen recent log preview.")]
         [SerializeField] private MahjongLogPreviewController logPreviewController;
@@ -70,9 +73,11 @@ namespace MahjongPrototype.UI
         private bool warnedMissingPonDecisionController;
         private bool warnedMissingReachDecisionController;
         private bool warnedMissingRoundResultController;
+        private bool warnedMissingRoundProgressController;
         private bool warnedMissingLogPreviewController;
         private bool warnedMissingZeroHanTenpaiController;
         private bool warnedMissingFuritenController;
+        private WindProgress? pendingRoundProgress;
         private void Reset()
         {
             CacheReferences();
@@ -94,6 +99,7 @@ namespace MahjongPrototype.UI
             EnsurePonDecisionController();
             EnsureReachDecisionController();
             EnsureRoundResultController();
+            EnsureRoundProgressController();
             EnsureLogPreviewController();
             EnsureZeroHanTenpaiController();
             EnsureFuritenController();
@@ -112,6 +118,7 @@ namespace MahjongPrototype.UI
             EnsurePonDecisionController();
             EnsureReachDecisionController();
             EnsureRoundResultController();
+            EnsureRoundProgressController();
             EnsureLogPreviewController();
             EnsureZeroHanTenpaiController();
             EnsureFuritenController();
@@ -215,6 +222,9 @@ namespace MahjongPrototype.UI
 
             if (roundResultController == null)
                 roundResultController = GetComponentInChildren<MahjongRoundResultController>(true);
+
+            if (roundProgressController == null)
+                roundProgressController = GetComponentInChildren<MahjongRoundProgressController>(true);
         }
 
         private void SubscribeNotifications()
@@ -227,6 +237,7 @@ namespace MahjongPrototype.UI
                 return;
             }
 
+            eventNotifier.RunStarted += HandleRunStarted;
             eventNotifier.RoundStarted += HandleRoundStarted;
             eventNotifier.RoundSetupCompleted += HandleRoundSetupCompleted;
             eventNotifier.TurnStarted += HandleTurnStarted;
@@ -264,6 +275,7 @@ namespace MahjongPrototype.UI
             if (eventNotifier == null)
                 return;
 
+            eventNotifier.RunStarted -= HandleRunStarted;
             eventNotifier.RoundStarted -= HandleRoundStarted;
             eventNotifier.RoundSetupCompleted -= HandleRoundSetupCompleted;
             eventNotifier.TurnStarted -= HandleTurnStarted;
@@ -406,8 +418,33 @@ namespace MahjongPrototype.UI
             }
         }
 
+        private void EnsureRoundProgressController()
+        {
+            if (roundProgressController == null)
+            {
+                roundProgressController = GetComponentInChildren<MahjongRoundProgressController>(true);
+            }
+
+            if (roundProgressController == null)
+            {
+                WarnMissingOnce(
+                    ref warnedMissingRoundProgressController,
+                    "MahjongRoundProgressController is not assigned. Round-start presentation will not be shown.");
+            }
+        }
+
+        private void HandleRunStarted(string _)
+        {
+            pendingRoundProgress = null;
+            if (roundProgressController == null)
+                EnsureRoundProgressController();
+
+            roundProgressController?.ResetPlaybackHistory();
+        }
+
         private void HandleRoundStarted(int _, int __)
         {
+            QueueRoundProgress();
             RefreshFromFlow(false);
             ClearZeroHanTenpaiUi();
             ClearFuritenUi();
@@ -416,6 +453,29 @@ namespace MahjongPrototype.UI
         private void HandleRoundSetupCompleted()
         {
             RefreshFromFlow();
+            PlayQueuedRoundProgress();
+        }
+
+        private void QueueRoundProgress()
+        {
+            MahjongGameState state = gameFlow != null ? gameFlow.CurrentState : null;
+            if (state != null)
+                pendingRoundProgress = state.WindProgress;
+        }
+
+        private void PlayQueuedRoundProgress()
+        {
+            if (!pendingRoundProgress.HasValue)
+                return;
+
+            if (roundProgressController == null)
+                EnsureRoundProgressController();
+
+            MahjongGameState state = gameFlow != null ? gameFlow.CurrentState : null;
+            if (roundProgressController != null && state != null)
+                roundProgressController.TryPlay(pendingRoundProgress.Value, state.SelfSeat);
+
+            pendingRoundProgress = null;
         }
 
         private void HandleTurnStarted(SeatId _, int __)

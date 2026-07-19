@@ -396,6 +396,8 @@ namespace MahjongPrototype.Tests
             "MahjongPrototype.UI.MahjongRoundResultYakuRowController, Assembly-CSharp";
         private const string UiManagerTypeName =
             "MahjongPrototype.UI.MahjongPrototypeUiManager, Assembly-CSharp";
+        private const string RoundProgressControllerTypeName =
+            "MahjongPrototype.UI.MahjongRoundProgressController, Assembly-CSharp";
         private const string InputControllerTypeName =
             "MahjongPrototype.UI.MahjongUiInputController, Assembly-CSharp";
 
@@ -417,6 +419,7 @@ namespace MahjongPrototype.Tests
             AssertObjectReferenceName(serialized, "winningTileText", "WinningTileText");
             AssertObjectReferenceName(serialized, "totalText", "TotalText");
             AssertObjectReferenceName(serialized, "confirmButtonLabel", "Text (TMP)");
+            AssertObjectReferenceName(serialized, "confirmButton", "Button");
 
             Object yakuListRoot = ObjectReference(serialized, "yakuListRoot");
             Assert.That(yakuListRoot, Is.TypeOf<RectTransform>());
@@ -458,6 +461,14 @@ namespace MahjongPrototype.Tests
                 Component uiManager = FindSceneComponent(scene, UiManagerTypeName);
                 SerializedObject uiSerialized = new SerializedObject(uiManager);
                 AssertObjectReference(uiSerialized, "roundResultController", resultController);
+
+                Component roundProgressController =
+                    FindSceneComponent(scene, RoundProgressControllerTypeName);
+                AssertObjectReference(
+                    uiSerialized,
+                    "roundProgressController",
+                    roundProgressController);
+                Assert.That(FindSceneGameObjects(scene, "Round Progress"), Has.Length.EqualTo(1));
 
                 Component inputController = FindSceneComponent(scene, InputControllerTypeName);
                 SerializedObject inputSerialized = new SerializedObject(inputController);

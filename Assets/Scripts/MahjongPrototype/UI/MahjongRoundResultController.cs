@@ -1,7 +1,9 @@
+using System.Collections;
 using System.Collections.Generic;
 using MahjongPrototype.Domain;
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace MahjongPrototype.UI
 {
@@ -24,9 +26,16 @@ namespace MahjongPrototype.UI
         [SerializeField] private TMP_Text totalText;
         [SerializeField] private TMP_Text confirmButtonLabel;
 
+        [Header("Input")]
+        [SerializeField] private Button confirmButton;
+
         [Header("Yaku List")]
         [SerializeField] private Transform yakuListRoot;
         [SerializeField] private MahjongRoundResultYakuRowController yakuRowPrefab;
+
+        [Header("Yaku Reveal")]
+        [SerializeField, Min(0f)] private float yakuRevealDuration = 0.18f;
+        [SerializeField, Min(0f)] private float totalRevealDuration = 0.16f;
 
         private readonly List<MahjongRoundResultYakuRowController> generatedYakuRows =
             new List<MahjongRoundResultYakuRowController>();
@@ -37,6 +46,11 @@ namespace MahjongPrototype.UI
         private bool warnedMissingTexts;
         private bool warnedMissingYakuListRoot;
         private bool warnedMissingYakuRowPrefab;
+        private Coroutine yakuRevealRoutine;
+        private RoundResult displayedResult;
+        private Color totalTextColor;
+        private Vector3 totalTextScale;
+        private bool totalPresentationCached;
 
         public void SetResult(RoundResult result)
         {
@@ -46,6 +60,11 @@ namespace MahjongPrototype.UI
                 return;
             }
 
+            if (ReferenceEquals(displayedResult, result))
+                return;
+
+            StopYakuReveal();
+            displayedResult = result;
             ClearGeneratedYakuRows();
             SetActiveOrWarn(
                 roundResultRoot,
@@ -73,6 +92,8 @@ namespace MahjongPrototype.UI
 
         public void Clear()
         {
+            StopYakuReveal();
+            displayedResult = null;
             ClearGeneratedYakuRows();
             SetActive(roundResultRoot, false);
             SetActive(winDetailsRoot, false);
@@ -85,6 +106,14 @@ namespace MahjongPrototype.UI
             SetText(winningTileText, string.Empty);
             SetText(totalText, string.Empty);
             SetText(confirmButtonLabel, string.Empty);
+            SetTotalRevealVisible(true);
+            SetConfirmInteractable(true);
+        }
+
+        private void OnDisable()
+        {
+            StopYakuReveal();
+            SetConfirmInteractable(true);
         }
 
         private void SetWinResult(RoundResult result)
@@ -115,6 +144,7 @@ namespace MahjongPrototype.UI
 
             PopulateYakuRows(result.Yakus);
             SetText(totalText, FormatTotal(result));
+            BeginYakuReveal();
         }
 
         private void SetExhaustiveDrawResult()
@@ -131,6 +161,8 @@ namespace MahjongPrototype.UI
             SetText(sourceSeatText, string.Empty);
             SetText(winningTileText, string.Empty);
             SetText(totalText, string.Empty);
+            SetTotalRevealVisible(true);
+            SetConfirmInteractable(true);
         }
 
         private void PopulateYakuRows(IReadOnlyList<EvaluatedYaku> yakus)
@@ -157,6 +189,119 @@ namespace MahjongPrototype.UI
                 generatedYakuRows.Add(row);
                 row.Bind(yakus[i]);
             }
+        }
+
+        private void BeginYakuReveal()
+        {
+            if (!Application.isPlaying || generatedYakuRows.Count == 0)
+            {
+                SetGeneratedRowsRevealVisible(true);
+                SetTotalRevealVisible(true);
+                SetConfirmInteractable(true);
+                return;
+            }
+
+            SetGeneratedRowsRevealVisible(false);
+            SetTotalRevealVisible(false);
+            SetConfirmInteractable(false);
+            yakuRevealRoutine = StartCoroutine(RevealYakuRows());
+        }
+
+        private IEnumerator RevealYakuRows()
+        {
+            for (int i = 0; i < generatedYakuRows.Count; i++)
+            {
+                MahjongRoundResultYakuRowController row = generatedYakuRows[i];
+                if (row != null)
+                    yield return row.PlayReveal(yakuRevealDuration);
+            }
+
+            yield return RevealTotal();
+            yakuRevealRoutine = null;
+            SetConfirmInteractable(true);
+        }
+
+        private IEnumerator RevealTotal()
+        {
+            CacheTotalPresentation();
+            if (totalText == null || totalRevealDuration <= 0f)
+            {
+                SetTotalRevealVisible(true);
+                yield break;
+            }
+
+            for (float elapsed = 0f; elapsed < totalRevealDuration; elapsed += Time.unscaledDeltaTime)
+            {
+                float t = Mathf.Clamp01(elapsed / totalRevealDuration);
+                SetTotalRevealAlpha(t);
+                totalText.transform.localScale = Vector3.Lerp(totalTextScale * 1.12f, totalTextScale, t);
+                yield return null;
+            }
+
+            SetTotalRevealVisible(true);
+        }
+
+        private void StopYakuReveal()
+        {
+            if (yakuRevealRoutine == null)
+                return;
+
+            StopCoroutine(yakuRevealRoutine);
+            yakuRevealRoutine = null;
+        }
+
+        private void SetGeneratedRowsRevealVisible(bool visible)
+        {
+            for (int i = 0; i < generatedYakuRows.Count; i++)
+            {
+                MahjongRoundResultYakuRowController row = generatedYakuRows[i];
+                if (row != null)
+                    row.SetRevealVisible(visible);
+            }
+        }
+
+        private void SetTotalRevealVisible(bool visible)
+        {
+            CacheTotalPresentation();
+            SetTotalRevealAlpha(visible ? 1f : 0f);
+            if (totalText != null)
+                totalText.transform.localScale = totalTextScale;
+        }
+
+        private void CacheTotalPresentation()
+        {
+            if (totalPresentationCached || totalText == null)
+                return;
+
+            totalPresentationCached = true;
+            totalTextColor = totalText.color;
+            totalTextScale = totalText.transform.localScale;
+        }
+
+        private void SetTotalRevealAlpha(float alpha)
+        {
+            if (totalText == null)
+                return;
+
+            CacheTotalPresentation();
+            Color color = totalTextColor;
+            color.a *= alpha;
+            totalText.color = color;
+        }
+
+        private void SetConfirmInteractable(bool interactable)
+        {
+            if (confirmButton == null)
+                confirmButton = FindConfirmButton();
+
+            if (confirmButton != null)
+                confirmButton.interactable = interactable;
+        }
+
+        private Button FindConfirmButton()
+        {
+            Transform root = roundResultRoot != null ? roundResultRoot.transform : transform;
+            return root.GetComponentInChildren<Button>(true);
         }
 
         private void ClearGeneratedYakuRows()
