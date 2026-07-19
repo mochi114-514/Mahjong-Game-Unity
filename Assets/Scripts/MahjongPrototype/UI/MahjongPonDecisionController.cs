@@ -64,6 +64,7 @@ namespace MahjongPrototype.UI
             ClearDynamicMeldButtons();
             ClearDynamicChiOptions();
             ConfigureSelfKanDecline(false);
+            RefreshDecisionLayout();
             if (ponDecisionRoot != null)
                 ponDecisionRoot.SetActive(false);
         }
@@ -160,6 +161,8 @@ namespace MahjongPrototype.UI
                     request.Options[i],
                     showTargetTile);
             }
+
+            RefreshDecisionLayout();
         }
 
         /// <summary>
@@ -216,6 +219,7 @@ namespace MahjongPrototype.UI
             declineButton.gameObject.SetActive(showPass);
             if (showPass)
                 SetButtonLabel(declineButton, "パス");
+            RefreshDecisionLayout();
         }
 
         public void SetMeldCallDecision(
@@ -274,7 +278,10 @@ namespace MahjongPrototype.UI
             }
 
             if (!showDaiminkan && !showChi && !showAnkan && !showSelfKan)
+            {
+                RefreshDecisionLayout();
                 return;
+            }
 
             bool needsDynamicMeldButton =
                 showDaiminkan || showAnkan || showSelfKan;
@@ -310,6 +317,8 @@ namespace MahjongPrototype.UI
                 for (int i = 0; i < selfKanCandidates.Count; i++)
                     CreateSelfKanButton(selfKanCandidates[i]);
             }
+
+            RefreshDecisionLayout();
         }
 
         private void SetStaticButtonVisibility(
@@ -582,6 +591,22 @@ namespace MahjongPrototype.UI
             dynamicChiOptionViews.Clear();
             if (chiDecisionRoot != null)
                 chiDecisionRoot.SetActive(false);
+        }
+
+        private void RefreshDecisionLayout()
+        {
+            // Each level sizes itself from its direct child. Rebuild from the
+            // innermost dynamic row so the chi panel and pass button receive
+            // the final candidate width during the same UI update.
+            RebuildLayout(chiOptionsContainer);
+            RebuildLayout(chiDecisionRoot != null ? chiDecisionRoot.transform : null);
+            RebuildLayout(ponDecisionRoot != null ? ponDecisionRoot.transform : null);
+        }
+
+        private static void RebuildLayout(Transform target)
+        {
+            if (target is RectTransform rectTransform)
+                LayoutRebuilder.ForceRebuildLayoutImmediate(rectTransform);
         }
 
         private static void DestroyChiOptionView(MahjongChiOptionView optionView)

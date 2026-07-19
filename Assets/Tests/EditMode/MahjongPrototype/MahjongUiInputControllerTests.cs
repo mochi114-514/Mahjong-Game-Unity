@@ -313,7 +313,7 @@ namespace MahjongPrototype.Tests
         private const string ControllerTypeName =
             "MahjongPrototype.UI.MahjongPonDecisionController, Assembly-CSharp";
         private const string UiManagerTypeName =
-            "MahjongPrototype.UI.MahjongPrototypeUi, Assembly-CSharp";
+            "MahjongPrototype.UI.MahjongPrototypeUiManager, Assembly-CSharp";
         private const string InputControllerTypeName =
             "MahjongPrototype.UI.MahjongUiInputController, Assembly-CSharp";
         private const string EventNotifierTypeName =
@@ -983,107 +983,111 @@ namespace MahjongPrototype.Tests
                     .AddEventHandler(inputController, new Action(() => skipCount++));
 
                 object calledTile = dataFactory.CreateTile("5m");
-                reflection.Invoke(
-                    controller,
-                    "SetMeldCallDecision",
-                    false,
-                    CreateChiOptions(reflection, dataFactory, calledTile, 1),
-                    calledTile);
-                ForceDecisionLayout(decisionRoot);
-
                 RectTransform chiRect = (RectTransform)chiDecisionRoot.transform;
-                float oneOptionWidth = chiRect.rect.width;
-                Assert.That(chiDecisionRoot.activeSelf, Is.True);
-                Assert.That(optionsContainer.childCount, Is.EqualTo(1));
-                Assert.That(
-                    reflection.GetProperty(heading, "text"),
-                    Is.EqualTo("チー"));
-                Assert.That(oneOptionWidth, Is.InRange(120f, 180f));
-                AssertProductionChiTileSprites(
-                    reflection,
-                    dataFactory,
-                    catalog,
-                    optionsContainer.GetChild(0),
-                    "3m",
-                    "4m",
-                    "5m");
-
-                reflection.Invoke(
-                    controller,
-                    "SetMeldCallDecision",
-                    false,
-                    CreateChiOptions(reflection, dataFactory, calledTile, 3),
-                    calledTile);
-                ForceDecisionLayout(decisionRoot);
-
-                float threeOptionWidth = chiRect.rect.width;
-                Assert.That(optionsContainer.childCount, Is.EqualTo(3));
-                Assert.That(threeOptionWidth, Is.GreaterThan(oneOptionWidth + 190f));
-                Assert.That(threeOptionWidth, Is.LessThanOrEqualTo(380f));
-                Assert.That(
-                    CountText(
-                        reflection,
-                        chiDecisionRoot.transform,
-                        reflection.RequireType(TmpTextTypeName),
-                        "チー"),
-                    Is.EqualTo(1));
-
+                RectTransform decisionRect = (RectTransform)decisionRoot.transform;
                 EventSystem eventSystem = Resources.FindObjectsOfTypeAll<EventSystem>()
                     .Single(candidate => candidate.gameObject.scene == scene);
-
-                Bounds previousBounds = default;
-                for (int i = 0; i < optionsContainer.childCount; i++)
+                float previousChiWidth = 0f;
+                for (int optionCount = 1; optionCount <= 3; optionCount++)
                 {
-                    Transform option = optionsContainer.GetChild(i);
-                    Bounds bounds = RectTransformUtility.CalculateRelativeRectTransformBounds(
-                        optionsContainer,
-                        option);
-                    if (i > 0)
-                        Assert.That(bounds.min.x, Is.GreaterThan(previousBounds.max.x));
-                    previousBounds = bounds;
+                    reflection.Invoke(
+                        controller,
+                        "SetReactionMeldCallDecision",
+                        false,
+                        false,
+                        CreateChiOptions(
+                            reflection,
+                            dataFactory,
+                            calledTile,
+                            optionCount),
+                        calledTile,
+                        true);
 
+                    Assert.That(chiDecisionRoot.activeSelf, Is.True);
+                    Assert.That(optionsContainer.childCount, Is.EqualTo(optionCount));
                     Assert.That(
-                        option.GetComponentsInChildren(
-                            reflection.RequireType(TileSpriteViewTypeName),
-                            true).Length,
-                        Is.EqualTo(3));
-                    Component firstTile = option.GetComponentsInChildren(
-                        reflection.RequireType(TileSpriteViewTypeName),
-                        true)[0];
-                    PointerEventData pointer = new PointerEventData(eventSystem)
+                        reflection.GetProperty(heading, "text"),
+                        Is.EqualTo("チー"));
+                    Assert.That(
+                        CountText(
+                            reflection,
+                            chiDecisionRoot.transform,
+                            reflection.RequireType(TmpTextTypeName),
+                            "チー"),
+                        Is.EqualTo(1));
+                    Assert.That(
+                        ButtonLabel(reflection, reflection.RequireType(TmpTextTypeName), declineButton),
+                        Is.EqualTo("パス"));
+                    Assert.That(chiRect.rect.width, Is.GreaterThan(previousChiWidth));
+                    previousChiWidth = chiRect.rect.width;
+
+                    AssertProductionChiLayout(
+                        reflection,
+                        decisionRect,
+                        chiRect,
+                        optionsContainer,
+                        declineButton,
+                        optionCount);
+
+                    for (int i = 0; i < optionsContainer.childCount; i++)
                     {
-                        button = PointerEventData.InputButton.Left
-                    };
-                    Assert.That(
-                        ExecuteEvents.ExecuteHierarchy(
-                            firstTile.gameObject,
-                            pointer,
-                            ExecuteEvents.pointerClickHandler),
-                        Is.Not.Null);
-                    Assert.That(requestedKind, Is.EqualTo("Chi"));
-                    Assert.That(requestedOptionId, Is.EqualTo(i + 3));
+                        Transform option = optionsContainer.GetChild(i);
+                        Assert.That(
+                            option.GetComponentsInChildren(
+                                reflection.RequireType(TileSpriteViewTypeName),
+                                true).Length,
+                            Is.EqualTo(3));
+                        Component firstTile = option.GetComponentsInChildren(
+                            reflection.RequireType(TileSpriteViewTypeName),
+                            true)[0];
+                        PointerEventData pointer = new PointerEventData(eventSystem)
+                        {
+                            button = PointerEventData.InputButton.Left
+                        };
+                        Assert.That(
+                            ExecuteEvents.ExecuteHierarchy(
+                                firstTile.gameObject,
+                                pointer,
+                                ExecuteEvents.pointerClickHandler),
+                            Is.Not.Null);
+                        Assert.That(requestedKind, Is.EqualTo("Chi"));
+                        Assert.That(requestedOptionId, Is.EqualTo(i + 3));
+                    }
+
+                    AssertProductionChiTileSprites(
+                        reflection,
+                        dataFactory,
+                        catalog,
+                        optionsContainer.GetChild(0),
+                        "3m",
+                        "4m",
+                        "5m");
+                    declineButton.onClick.Invoke();
+                    Assert.That(skipCount, Is.EqualTo(optionCount));
+
+                    reflection.Invoke(controller, "ClearReactionMeldCallDecision");
+                    Assert.That(chiDecisionRoot.activeSelf, Is.False);
+                    Assert.That(optionsContainer.childCount, Is.Zero);
+                    Assert.That(decisionRoot.activeSelf, Is.False);
                 }
 
-                Bounds optionsBounds = RectTransformUtility.CalculateRelativeRectTransformBounds(
-                    chiRect,
-                    optionsContainer);
-                Assert.That(optionsBounds.min.x, Is.GreaterThanOrEqualTo(chiRect.rect.xMin));
-                Assert.That(optionsBounds.max.x, Is.LessThanOrEqualTo(chiRect.rect.xMax));
-                AssertProductionChiTileSprites(
-                    reflection,
-                    dataFactory,
-                    catalog,
-                    optionsContainer.GetChild(2),
-                    "5m",
-                    "6m",
-                    "7m");
-
-                declineButton.onClick.Invoke();
-                Assert.That(skipCount, Is.EqualTo(1));
-
-                reflection.Invoke(controller, "ClearReactionMeldCallDecision");
+                reflection.Invoke(
+                    controller,
+                    "SetReactionMeldCallDecision",
+                    true,
+                    false,
+                    null,
+                    calledTile,
+                    true);
                 Assert.That(chiDecisionRoot.activeSelf, Is.False);
                 Assert.That(optionsContainer.childCount, Is.Zero);
+                Assert.That(decisionRect.rect.width, Is.InRange(160f, 180f));
+                Assert.That(
+                    CalculateRectBounds(decisionRect, (RectTransform)ponButton.transform).max.x,
+                    Is.LessThan(CalculateRectBounds(
+                        decisionRect,
+                        (RectTransform)declineButton.transform).min.x));
+                reflection.Invoke(controller, "ClearReactionMeldCallDecision");
                 Assert.That(decisionRoot.activeSelf, Is.False);
             }
             finally
@@ -1629,14 +1633,88 @@ namespace MahjongPrototype.Tests
             return options;
         }
 
-        private static void ForceDecisionLayout(GameObject decisionRoot)
+        private static void AssertProductionChiLayout(
+            ReflectionTestAccess reflection,
+            RectTransform decisionRect,
+            RectTransform chiRect,
+            Transform optionsContainer,
+            Button declineButton,
+            int expectedOptionCount)
         {
-            RectTransform rect = (RectTransform)decisionRoot.transform;
-            for (int i = 0; i < 3; i++)
+            const float tolerance = 0.05f;
+            Bounds chiBounds = CalculateRectBounds(decisionRect, chiRect);
+            Bounds declineBounds = CalculateRectBounds(
+                decisionRect,
+                (RectTransform)declineButton.transform);
+            AssertBoundsInside(decisionRect.rect, chiBounds, tolerance);
+            AssertBoundsInside(decisionRect.rect, declineBounds, tolerance);
+            Assert.That(
+                declineBounds.min.x,
+                Is.GreaterThanOrEqualTo(chiBounds.max.x - tolerance),
+                "Pass must follow the final chi panel width without overlap.");
+
+            Bounds optionsBounds = CalculateRectBounds(
+                chiRect,
+                (RectTransform)optionsContainer);
+            AssertBoundsInside(chiRect.rect, optionsBounds, tolerance);
+
+            Bounds previousOptionBounds = default;
+            for (int i = 0; i < expectedOptionCount; i++)
             {
-                Canvas.ForceUpdateCanvases();
-                LayoutRebuilder.ForceRebuildLayoutImmediate(rect);
+                RectTransform optionRect = (RectTransform)optionsContainer.GetChild(i);
+                Bounds optionBounds = CalculateRectBounds(
+                    (RectTransform)optionsContainer,
+                    optionRect);
+                AssertBoundsInside(
+                    ((RectTransform)optionsContainer).rect,
+                    optionBounds,
+                    tolerance);
+                if (i > 0)
+                {
+                    Assert.That(
+                        optionBounds.min.x,
+                        Is.GreaterThanOrEqualTo(previousOptionBounds.max.x - tolerance),
+                        "Chi candidates must not overlap.");
+                }
+
+                Component[] tileViews = optionRect.GetComponentsInChildren(
+                    reflection.RequireType(TileSpriteViewTypeName),
+                    true).Cast<Component>().ToArray();
+                for (int tileIndex = 0; tileIndex < tileViews.Length; tileIndex++)
+                {
+                    Bounds tileBounds = CalculateRectBounds(
+                        optionRect,
+                        (RectTransform)tileViews[tileIndex].transform);
+                    AssertBoundsInside(optionRect.rect, tileBounds, tolerance);
+                }
+
+                previousOptionBounds = optionBounds;
             }
+        }
+
+        private static Bounds CalculateRectBounds(
+            RectTransform relativeTo,
+            RectTransform target)
+        {
+            Vector3[] corners = new Vector3[4];
+            target.GetWorldCorners(corners);
+            Vector3 first = relativeTo.InverseTransformPoint(corners[0]);
+            Bounds bounds = new Bounds(first, Vector3.zero);
+            for (int i = 1; i < corners.Length; i++)
+                bounds.Encapsulate(relativeTo.InverseTransformPoint(corners[i]));
+
+            return bounds;
+        }
+
+        private static void AssertBoundsInside(
+            Rect container,
+            Bounds content,
+            float tolerance)
+        {
+            Assert.That(content.min.x, Is.GreaterThanOrEqualTo(container.xMin - tolerance));
+            Assert.That(content.max.x, Is.LessThanOrEqualTo(container.xMax + tolerance));
+            Assert.That(content.min.y, Is.GreaterThanOrEqualTo(container.yMin - tolerance));
+            Assert.That(content.max.y, Is.LessThanOrEqualTo(container.yMax + tolerance));
         }
 
         private static void AssertProductionChiTileSprites(
