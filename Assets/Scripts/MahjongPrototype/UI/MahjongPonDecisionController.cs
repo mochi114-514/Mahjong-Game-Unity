@@ -17,10 +17,21 @@ namespace MahjongPrototype.UI
         [SerializeField] private Button declineButton;
         [SerializeField] private MahjongUiInputController inputController;
 
+        [Header("Chi Tile Images")]
+        [SerializeField] private MahjongTileSpriteCatalog chiTileSpriteCatalog;
+        [SerializeField] private MahjongTileSpriteView chiTileViewPrefab;
+
         private readonly List<Button> dynamicMeldButtons = new List<Button>();
+        private readonly HashSet<int> warnedMissingChiTileSpriteTypeIndexes =
+            new HashSet<int>();
         private bool warnedMissingRoot;
         private bool warnedMissingPonButton;
         private bool warnedMissingInputController;
+        private bool warnedMissingChiOptionView;
+        private bool warnedMissingChiTileContainer;
+        private bool warnedMissingChiTileSpriteCatalog;
+        private bool warnedMissingChiTileViewPrefab;
+        private bool warnedInvalidChiTileViewPrefab;
         private UnityAction selfKanDeclineAction;
         private bool hasReactionRequest;
         private long reactionRequestId;
@@ -302,11 +313,13 @@ namespace MahjongPrototype.UI
             if (option == null)
                 return;
 
-            CreateMeldButton(
+            Button button = CreateMeldButton(
                 $"ChiOption_{option.OptionId}",
-                $"チー {FormatTiles(option.MeldTiles)}",
+                "チー",
                 MeldCallKind.Chi,
                 option.OptionId);
+            if (button != null)
+                PopulateChiTileImages(button, option.MeldTiles);
         }
 
         private void CreateAnkanButton(Tile tile)
@@ -365,7 +378,7 @@ namespace MahjongPrototype.UI
             dynamicMeldButtons.Add(button);
         }
 
-        private void CreateMeldButton(
+        private Button CreateMeldButton(
             string buttonName,
             string label,
             MeldCallKind kind,
@@ -398,6 +411,74 @@ namespace MahjongPrototype.UI
             button.gameObject.SetActive(true);
             SetButtonLabel(button, label);
             dynamicMeldButtons.Add(button);
+            return button;
+        }
+
+        private void PopulateChiTileImages(
+            Button button,
+            IReadOnlyList<Tile> meldTiles)
+        {
+            if (button == null || meldTiles == null)
+                return;
+
+            MahjongChiOptionView optionView = button.GetComponent<MahjongChiOptionView>();
+            if (optionView == null)
+            {
+                WarnMissingOnce(
+                    ref warnedMissingChiOptionView,
+                    "PonButton needs a MahjongChiOptionView with its tile container assigned.");
+                return;
+            }
+
+            if (!optionView.HasTileContainer)
+            {
+                WarnMissingOnce(
+                    ref warnedMissingChiTileContainer,
+                    "MahjongChiOptionView tile container must be assigned to a child Transform.");
+                return;
+            }
+
+            if (chiTileSpriteCatalog == null)
+            {
+                WarnMissingOnce(
+                    ref warnedMissingChiTileSpriteCatalog,
+                    "Chi tile sprite catalog is not assigned.");
+                return;
+            }
+
+            if (chiTileViewPrefab == null)
+            {
+                WarnMissingOnce(
+                    ref warnedMissingChiTileViewPrefab,
+                    "Chi tile view prefab is not assigned.");
+                return;
+            }
+
+            if (!chiTileViewPrefab.HasTargetImage)
+            {
+                WarnMissingOnce(
+                    ref warnedInvalidChiTileViewPrefab,
+                    "Chi tile view prefab target Image is not assigned.");
+                return;
+            }
+
+            optionView.ClearTiles();
+            for (int i = 0; i < meldTiles.Count; i++)
+            {
+                Tile tile = meldTiles[i];
+                if (!chiTileSpriteCatalog.TryGetSprite(tile, out Sprite sprite))
+                {
+                    WarnMissingChiTileSpriteOnce(tile);
+                    continue;
+                }
+
+                if (!optionView.TryAddTile(chiTileViewPrefab, sprite))
+                {
+                    WarnMissingOnce(
+                        ref warnedInvalidChiTileViewPrefab,
+                        "Chi tile view prefab could not display its Sprite.");
+                }
+            }
         }
 
         private void ClearDynamicMeldButtons()
@@ -460,18 +541,6 @@ namespace MahjongPrototype.UI
                 text.text = label;
         }
 
-        private static string FormatTiles(IReadOnlyList<Tile> tiles)
-        {
-            if (tiles == null || tiles.Count <= 0)
-                return string.Empty;
-
-            string[] labels = new string[tiles.Count];
-            for (int i = 0; i < tiles.Count; i++)
-                labels[i] = tiles[i].ToString();
-
-            return string.Join(" ", labels);
-        }
-
         private void ClearReactionRequest()
         {
             hasReactionRequest = false;
@@ -507,6 +576,18 @@ namespace MahjongPrototype.UI
 
             warned = true;
             Debug.LogWarning($"{nameof(MahjongPonDecisionController)}: {message}", this);
+        }
+
+        private void WarnMissingChiTileSpriteOnce(Tile tile)
+        {
+            int typeIndex = tile.TypeIndex;
+            if (!warnedMissingChiTileSpriteTypeIndexes.Add(typeIndex))
+                return;
+
+            Debug.LogWarning(
+                $"{nameof(MahjongPonDecisionController)}: " +
+                $"Chi tile sprite is not registered for {tile} (TypeIndex={typeIndex}).",
+                this);
         }
     }
 }

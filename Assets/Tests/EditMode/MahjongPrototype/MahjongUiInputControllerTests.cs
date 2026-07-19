@@ -311,6 +311,12 @@ namespace MahjongPrototype.Tests
             "MahjongPrototype.UI.MahjongUiInputController, Assembly-CSharp";
         private const string ChiOptionTypeName =
             "MahjongPrototype.Domain.ChiOption, Assembly-CSharp";
+        private const string ChiOptionViewTypeName =
+            "MahjongPrototype.UI.MahjongChiOptionView, Assembly-CSharp";
+        private const string TileSpriteCatalogTypeName =
+            "MahjongPrototype.UI.MahjongTileSpriteCatalog, Assembly-CSharp";
+        private const string TileSpriteViewTypeName =
+            "MahjongPrototype.UI.MahjongTileSpriteView, Assembly-CSharp";
         private const string TmpTextTypeName =
             "TMPro.TextMeshProUGUI, Unity.TextMeshPro";
 
@@ -321,6 +327,7 @@ namespace MahjongPrototype.Tests
             MahjongTestTypes types = new MahjongTestTypes(reflection);
             MahjongTestDataFactory dataFactory = new MahjongTestDataFactory(reflection, types);
             GameObject root = new GameObject("MeldCallDecisionTestRoot");
+            UnityObjectTestOwner owner = new UnityObjectTestOwner();
             root.SetActive(false);
             try
             {
@@ -349,6 +356,16 @@ namespace MahjongPrototype.Tests
                 reflection.SetPrivateField(controller, "ponButton", ponButton);
                 reflection.SetPrivateField(controller, "declineButton", declineButton);
                 reflection.SetPrivateField(controller, "inputController", inputController);
+                ConfigureChiTileImages(
+                    reflection,
+                    dataFactory,
+                    controller,
+                    ponButton,
+                    owner,
+                    "3m",
+                    "4m",
+                    "5m",
+                    "6m");
 
                 string requestedKind = null;
                 int requestedOptionId = 0;
@@ -383,12 +400,16 @@ namespace MahjongPrototype.Tests
                     options,
                     calledTile);
                 Assert.That(ponButton.gameObject.activeSelf, Is.True);
+                Button firstChiButton = FindButton(decisionRoot.transform, "ChiOption_3");
                 Button secondChiButton = FindButton(decisionRoot.transform, "ChiOption_4");
+                Assert.That(firstChiButton, Is.Not.Null);
                 Assert.That(secondChiButton, Is.Not.Null);
                 Component label = secondChiButton.transform.Find("Text").GetComponent(tmpTextType);
                 Assert.That(
                     reflection.GetProperty(label, "text"),
-                    Is.EqualTo("チー 4m 5m 6m"));
+                    Is.EqualTo("チー"));
+                AssertChiTileSprites(firstChiButton, "3m", "4m", "5m");
+                AssertChiTileSprites(secondChiButton, "4m", "5m", "6m");
 
                 secondChiButton.onClick.Invoke();
 
@@ -460,6 +481,7 @@ namespace MahjongPrototype.Tests
             finally
             {
                 UnityEngine.Object.DestroyImmediate(root);
+                owner.Dispose();
             }
         }
 
@@ -470,6 +492,7 @@ namespace MahjongPrototype.Tests
             MahjongTestTypes types = new MahjongTestTypes(reflection);
             MahjongTestDataFactory dataFactory = new MahjongTestDataFactory(reflection, types);
             GameObject root = new GameObject("ReactionMeldCallDecisionIdentityTestRoot");
+            UnityObjectTestOwner owner = new UnityObjectTestOwner();
             root.SetActive(false);
             try
             {
@@ -498,6 +521,16 @@ namespace MahjongPrototype.Tests
                 reflection.SetPrivateField(controller, "ponButton", ponButton);
                 reflection.SetPrivateField(controller, "declineButton", declineButton);
                 reflection.SetPrivateField(controller, "inputController", inputController);
+                ConfigureChiTileImages(
+                    reflection,
+                    dataFactory,
+                    controller,
+                    ponButton,
+                    owner,
+                    "3m",
+                    "4m",
+                    "5m",
+                    "6m");
 
                 long actualRequestId = 0;
                 int actualWindowId = 0;
@@ -546,6 +579,7 @@ namespace MahjongPrototype.Tests
             finally
             {
                 UnityEngine.Object.DestroyImmediate(root);
+                owner.Dispose();
             }
         }
 
@@ -556,6 +590,7 @@ namespace MahjongPrototype.Tests
             MahjongTestTypes types = new MahjongTestTypes(reflection);
             MahjongTestDataFactory dataFactory = new MahjongTestDataFactory(reflection, types);
             GameObject root = new GameObject("ReactionMeldCallDecisionCleanupTestRoot");
+            UnityObjectTestOwner owner = new UnityObjectTestOwner();
             root.SetActive(false);
             try
             {
@@ -584,6 +619,16 @@ namespace MahjongPrototype.Tests
                 reflection.SetPrivateField(controller, "ponButton", ponButton);
                 reflection.SetPrivateField(controller, "declineButton", declineButton);
                 reflection.SetPrivateField(controller, "inputController", inputController);
+                ConfigureChiTileImages(
+                    reflection,
+                    dataFactory,
+                    controller,
+                    ponButton,
+                    owner,
+                    "3m",
+                    "4m",
+                    "5m",
+                    "6m");
 
                 object calledTile = dataFactory.CreateTile("5m");
                 reflection.Invoke(
@@ -598,6 +643,11 @@ namespace MahjongPrototype.Tests
                     true);
                 Assert.That(FindButton(decisionRoot.transform, "ChiOption_4"), Is.Not.Null);
                 Assert.That(FindButton(decisionRoot.transform, "Daiminkan"), Is.Not.Null);
+                Assert.That(
+                    decisionRoot.GetComponentsInChildren(
+                        reflection.RequireType(TileSpriteViewTypeName),
+                        true).Length,
+                    Is.EqualTo(6));
 
                 reflection.Invoke(controller, "ClearReactionMeldCallDecision");
 
@@ -605,12 +655,241 @@ namespace MahjongPrototype.Tests
                 Assert.That(FindButton(decisionRoot.transform, "ChiOption_4"), Is.Null);
                 Assert.That(FindButton(decisionRoot.transform, "Daiminkan"), Is.Null);
                 Assert.That(
+                    decisionRoot.GetComponentsInChildren(
+                        reflection.RequireType(TileSpriteViewTypeName),
+                        true).Length,
+                    Is.Zero);
+                Assert.That(
                     (bool)reflection.GetPrivateField(controller, "hasReactionRequest"),
                     Is.False);
             }
             finally
             {
                 UnityEngine.Object.DestroyImmediate(root);
+                owner.Dispose();
+            }
+        }
+
+        [Test]
+        public void MissingChiImageConfiguration_WarnsOnceAndKeepsChiButtonUsable()
+        {
+            ReflectionTestAccess reflection = new ReflectionTestAccess();
+            MahjongTestTypes types = new MahjongTestTypes(reflection);
+            MahjongTestDataFactory dataFactory = new MahjongTestDataFactory(reflection, types);
+            GameObject root = new GameObject("MissingChiImageConfigurationTestRoot");
+            UnityObjectTestOwner owner = new UnityObjectTestOwner();
+            root.SetActive(false);
+            try
+            {
+                Component inputController = root.AddComponent(
+                    reflection.RequireType(InputControllerTypeName));
+                Component controller = root.AddComponent(
+                    reflection.RequireType(ControllerTypeName));
+                Type tmpTextType = reflection.RequireType(TmpTextTypeName);
+                GameObject decisionRoot = new GameObject(
+                    "MeldCallDecisionRoot",
+                    typeof(RectTransform));
+                decisionRoot.transform.SetParent(root.transform);
+                Button ponButton = CreateButton(
+                    reflection,
+                    tmpTextType,
+                    decisionRoot.transform,
+                    "PonButton",
+                    "ポン");
+                Button declineButton = CreateButton(
+                    reflection,
+                    tmpTextType,
+                    decisionRoot.transform,
+                    "DeclineButton",
+                    "拒否");
+                ConfigureChiOptionContainer(reflection, ponButton);
+                reflection.SetPrivateField(controller, "ponDecisionRoot", decisionRoot);
+                reflection.SetPrivateField(controller, "ponButton", ponButton);
+                reflection.SetPrivateField(controller, "declineButton", declineButton);
+                reflection.SetPrivateField(controller, "inputController", inputController);
+
+                string requestedKind = null;
+                int requestedOptionId = 0;
+                EventInfo eventInfo = inputController.GetType().GetEvent("MeldCallRequested");
+                Assert.That(eventInfo, Is.Not.Null);
+                eventInfo.AddEventHandler(
+                    inputController,
+                    CreateMeldCallHandler(
+                        eventInfo.EventHandlerType,
+                        (kind, optionId) =>
+                        {
+                            requestedKind = kind;
+                            requestedOptionId = optionId;
+                        }));
+
+                object calledTile = dataFactory.CreateTile("5m");
+                IList options = CreateChiOptions(reflection, dataFactory, calledTile);
+                LogAssert.Expect(
+                    LogType.Warning,
+                    "MahjongPonDecisionController: Chi tile sprite catalog is not assigned.");
+                reflection.Invoke(
+                    controller,
+                    "SetMeldCallDecision",
+                    false,
+                    options,
+                    calledTile);
+
+                // A refreshed candidate list does not repeat the same warning.
+                reflection.Invoke(
+                    controller,
+                    "SetMeldCallDecision",
+                    false,
+                    options,
+                    calledTile);
+
+                ScriptableObject emptyCatalog = ScriptableObject.CreateInstance(
+                    reflection.RequireType(TileSpriteCatalogTypeName));
+                owner.Register(emptyCatalog);
+                reflection.SetPrivateField(controller, "chiTileSpriteCatalog", emptyCatalog);
+                LogAssert.Expect(
+                    LogType.Warning,
+                    "MahjongPonDecisionController: Chi tile view prefab is not assigned.");
+                reflection.Invoke(
+                    controller,
+                    "SetMeldCallDecision",
+                    false,
+                    options,
+                    calledTile);
+
+                Button secondChiButton = FindButton(decisionRoot.transform, "ChiOption_4");
+                Assert.That(secondChiButton, Is.Not.Null);
+                secondChiButton.onClick.Invoke();
+                Assert.That(requestedKind, Is.EqualTo("Chi"));
+                Assert.That(requestedOptionId, Is.EqualTo(4));
+                LogAssert.NoUnexpectedReceived();
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+                owner.Dispose();
+            }
+        }
+
+        [Test]
+        public void UnregisteredChiTileSprite_WarnsOnceAndSkipsOnlyThatImage()
+        {
+            ReflectionTestAccess reflection = new ReflectionTestAccess();
+            MahjongTestTypes types = new MahjongTestTypes(reflection);
+            MahjongTestDataFactory dataFactory = new MahjongTestDataFactory(reflection, types);
+            GameObject root = new GameObject("UnregisteredChiTileSpriteTestRoot");
+            UnityObjectTestOwner owner = new UnityObjectTestOwner();
+            root.SetActive(false);
+            try
+            {
+                Component inputController = root.AddComponent(
+                    reflection.RequireType(InputControllerTypeName));
+                Component controller = root.AddComponent(
+                    reflection.RequireType(ControllerTypeName));
+                Type tmpTextType = reflection.RequireType(TmpTextTypeName);
+                GameObject decisionRoot = new GameObject(
+                    "MeldCallDecisionRoot",
+                    typeof(RectTransform));
+                decisionRoot.transform.SetParent(root.transform);
+                Button ponButton = CreateButton(
+                    reflection,
+                    tmpTextType,
+                    decisionRoot.transform,
+                    "PonButton",
+                    "ポン");
+                Button declineButton = CreateButton(
+                    reflection,
+                    tmpTextType,
+                    decisionRoot.transform,
+                    "DeclineButton",
+                    "拒否");
+                reflection.SetPrivateField(controller, "ponDecisionRoot", decisionRoot);
+                reflection.SetPrivateField(controller, "ponButton", ponButton);
+                reflection.SetPrivateField(controller, "declineButton", declineButton);
+                reflection.SetPrivateField(controller, "inputController", inputController);
+                ConfigureChiTileImages(
+                    reflection,
+                    dataFactory,
+                    controller,
+                    ponButton,
+                    owner,
+                    "3m",
+                    "4m",
+                    "5m");
+
+                object calledTile = dataFactory.CreateTile("5m");
+                IList options = CreateChiOptions(reflection, dataFactory, calledTile);
+                LogAssert.Expect(
+                    LogType.Warning,
+                    "MahjongPonDecisionController: " +
+                    "Chi tile sprite is not registered for 6m (TypeIndex=5).");
+                reflection.Invoke(
+                    controller,
+                    "SetMeldCallDecision",
+                    false,
+                    options,
+                    calledTile);
+
+                Button secondChiButton = FindButton(decisionRoot.transform, "ChiOption_4");
+                Assert.That(secondChiButton, Is.Not.Null);
+                AssertChiTileSprites(secondChiButton, "4m", "5m");
+
+                // Refreshing the same options does not repeat the TypeIndex warning.
+                reflection.Invoke(
+                    controller,
+                    "SetMeldCallDecision",
+                    false,
+                    options,
+                    calledTile);
+                LogAssert.NoUnexpectedReceived();
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+                owner.Dispose();
+            }
+        }
+
+        [Test]
+        public void TileSpriteCatalog_MapsTilesByTypeIndex()
+        {
+            ReflectionTestAccess reflection = new ReflectionTestAccess();
+            MahjongTestTypes types = new MahjongTestTypes(reflection);
+            MahjongTestDataFactory dataFactory = new MahjongTestDataFactory(reflection, types);
+            UnityObjectTestOwner owner = new UnityObjectTestOwner();
+            try
+            {
+                Type catalogType = reflection.RequireType(TileSpriteCatalogTypeName);
+                ScriptableObject catalog = ScriptableObject.CreateInstance(catalogType);
+                owner.Register(catalog);
+                Sprite sprite = CreateTestSprite(owner, "5m");
+                SetCatalogEntries(
+                    reflection,
+                    dataFactory,
+                    catalog,
+                    new[] { "5m" },
+                    new[] { sprite });
+
+                MethodInfo tryGetSprite = catalogType.GetMethod("TryGetSprite");
+                Assert.That(tryGetSprite, Is.Not.Null);
+                object[] registeredArguments =
+                {
+                    dataFactory.CreateTile("5m"),
+                    null
+                };
+                object[] missingArguments =
+                {
+                    dataFactory.CreateTile("6m"),
+                    null
+                };
+
+                Assert.That((bool)tryGetSprite.Invoke(catalog, registeredArguments), Is.True);
+                Assert.That(registeredArguments[1], Is.SameAs(sprite));
+                Assert.That((bool)tryGetSprite.Invoke(catalog, missingArguments), Is.False);
+                Assert.That(missingArguments[1], Is.Null);
+            }
+            finally
+            {
+                owner.Dispose();
             }
         }
 
@@ -635,6 +914,115 @@ namespace MahjongPrototype.Tests
                 dataFactory.CreateTileArrayFromText("4m 6m"),
                 dataFactory.CreateTileArrayFromText("4m 5m 6m")));
             return options;
+        }
+
+        private static void ConfigureChiTileImages(
+            ReflectionTestAccess reflection,
+            MahjongTestDataFactory dataFactory,
+            Component controller,
+            Button ponButton,
+            UnityObjectTestOwner owner,
+            params string[] tileCodes)
+        {
+            ConfigureChiOptionContainer(reflection, ponButton);
+
+            Type tileSpriteViewType = reflection.RequireType(TileSpriteViewTypeName);
+            GameObject tilePrefabObject = owner.Own(new GameObject(
+                "ChiTileViewPrefab",
+                typeof(RectTransform),
+                typeof(Image)));
+            tilePrefabObject.SetActive(false);
+            Component tileViewPrefab = tilePrefabObject.AddComponent(tileSpriteViewType);
+            reflection.SetPrivateField(
+                tileViewPrefab,
+                "targetImage",
+                tilePrefabObject.GetComponent<Image>());
+
+            ScriptableObject catalog = ScriptableObject.CreateInstance(
+                reflection.RequireType(TileSpriteCatalogTypeName));
+            owner.Register(catalog);
+            Sprite[] sprites = new Sprite[tileCodes.Length];
+            for (int i = 0; i < tileCodes.Length; i++)
+                sprites[i] = CreateTestSprite(owner, tileCodes[i]);
+
+            SetCatalogEntries(
+                reflection,
+                dataFactory,
+                catalog,
+                tileCodes,
+                sprites);
+            reflection.SetPrivateField(controller, "chiTileSpriteCatalog", catalog);
+            reflection.SetPrivateField(controller, "chiTileViewPrefab", tileViewPrefab);
+        }
+
+        private static void ConfigureChiOptionContainer(
+            ReflectionTestAccess reflection,
+            Button ponButton)
+        {
+            Component optionView = ponButton.gameObject.AddComponent(
+                reflection.RequireType(ChiOptionViewTypeName));
+            GameObject tileContainer = new GameObject(
+                "ChiTileImages",
+                typeof(RectTransform));
+            tileContainer.transform.SetParent(ponButton.transform, false);
+            reflection.SetPrivateField(optionView, "tileContainer", tileContainer.transform);
+        }
+
+        private static void SetCatalogEntries(
+            ReflectionTestAccess reflection,
+            MahjongTestDataFactory dataFactory,
+            ScriptableObject catalog,
+            IReadOnlyList<string> tileCodes,
+            IReadOnlyList<Sprite> sprites)
+        {
+            Type entryType = catalog.GetType().GetNestedType(
+                "Entry",
+                BindingFlags.Public);
+            Assert.That(entryType, Is.Not.Null);
+            IList entries = (IList)Activator.CreateInstance(
+                typeof(List<>).MakeGenericType(entryType));
+            for (int i = 0; i < tileCodes.Count; i++)
+            {
+                object entry = Activator.CreateInstance(entryType);
+                object tile = dataFactory.CreateTile(tileCodes[i]);
+                reflection.SetPrivateField(
+                    entry,
+                    "typeIndex",
+                    (int)reflection.GetProperty(tile, "TypeIndex"));
+                reflection.SetPrivateField(entry, "sprite", sprites[i]);
+                entries.Add(entry);
+            }
+
+            reflection.SetPrivateField(catalog, "entries", entries);
+        }
+
+        private static Sprite CreateTestSprite(
+            UnityObjectTestOwner owner,
+            string name)
+        {
+            Texture2D texture = owner.Own(new Texture2D(1, 1));
+            Sprite sprite = owner.Own(Sprite.Create(
+                texture,
+                new Rect(0f, 0f, 1f, 1f),
+                new Vector2(0.5f, 0.5f)));
+            sprite.name = name;
+            return sprite;
+        }
+
+        private static void AssertChiTileSprites(
+            Button chiButton,
+            params string[] expectedSpriteNames)
+        {
+            Transform tileContainer = chiButton.transform.Find("ChiTileImages");
+            Assert.That(tileContainer, Is.Not.Null);
+            Assert.That(tileContainer.childCount, Is.EqualTo(expectedSpriteNames.Length));
+            for (int i = 0; i < expectedSpriteNames.Length; i++)
+            {
+                Image image = tileContainer.GetChild(i).GetComponent<Image>();
+                Assert.That(image, Is.Not.Null);
+                Assert.That(image.sprite, Is.Not.Null);
+                Assert.That(image.sprite.name, Is.EqualTo(expectedSpriteNames[i]));
+            }
         }
 
         private static Delegate CreateMeldCallHandler(
