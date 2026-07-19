@@ -9041,8 +9041,12 @@ MonoBehaviour:
   ponButton: {fileID: 6100000407}
   declineButton: {fileID: 6100000416}
   inputController: {fileID: 45752830}
+  chiDecisionRoot: {fileID: 0}
+  chiHeadingLabel: {fileID: 0}
+  chiOptionsContainer: {fileID: 0}
+  chiOptionViewPrefab: {fileID: 0}
   chiTileSpriteCatalog: {fileID: 11400000, guid: 08835f13542092c43a137d38ae22d5e0, type: 2}
-  chiTileViewPrefab: {fileID: 0}
+  chiTileViewPrefab: {fileID: 4145103425768935260, guid: c1e122c0f71156a4c9e608109efe666a, type: 3}
 --- !u!4 &2263956389251206368 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 5200779170243697936, guid: 6da48b3d801ed9c48a3efa7f41a6cb27, type: 3}
