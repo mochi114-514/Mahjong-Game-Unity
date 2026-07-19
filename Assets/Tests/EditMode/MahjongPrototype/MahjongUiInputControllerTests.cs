@@ -1216,6 +1216,83 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
+        public void ProductionScene_DecisionButtons_UseTheChiVisualSystem_AndDynamicKanButtonsInheritIt()
+        {
+            const string scenePath = "Assets/Scenes/Mahjong Prototype.unity";
+            const string optionPrefabPath = "Assets/Prefab/Mahjong Chi Option.prefab";
+
+            ReflectionTestAccess reflection = new ReflectionTestAccess();
+            MahjongTestTypes types = new MahjongTestTypes(reflection);
+            MahjongTestDataFactory dataFactory = new MahjongTestDataFactory(reflection, types);
+            Scene scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Additive);
+            Component meldController = null;
+            try
+            {
+                GameObject chiOptionPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(optionPrefabPath);
+                Assert.That(chiOptionPrefab, Is.Not.Null);
+                AssertDecisionButtonVisualStyle(
+                    chiOptionPrefab.GetComponent<Button>(),
+                    requiresReadableLabel: false);
+
+                string[] decisionButtonNames =
+                {
+                    "PonButton",
+                    "DeclinePonButton",
+                    "WinButton",
+                    "DeclineWinButton",
+                    "ReachButton",
+                    "DeclineReachButton",
+                    "CancelButton"
+                };
+                for (int i = 0; i < decisionButtonNames.Length; i++)
+                {
+                    AssertDecisionButtonVisualStyle(
+                        FindButtonInScene(scene, decisionButtonNames[i]));
+                }
+
+                Type controllerType = reflection.RequireType(ControllerTypeName);
+                meldController = Resources.FindObjectsOfTypeAll(controllerType)
+                    .Cast<Component>()
+                    .Single(candidate => candidate.gameObject.scene == scene);
+                GameObject decisionRoot = (GameObject)reflection.GetPrivateField(
+                    meldController,
+                    "ponDecisionRoot");
+                object calledTile = dataFactory.CreateTile("5m");
+
+                reflection.Invoke(
+                    meldController,
+                    "SetReactionMeldCallDecision",
+                    false,
+                    true,
+                    null,
+                    calledTile,
+                    true);
+                AssertDecisionButtonVisualStyle(
+                    FindButton(decisionRoot.transform, "Daiminkan"));
+
+                reflection.Invoke(
+                    meldController,
+                    "SetSelfKanDecision",
+                    911L,
+                    CreateSelfKanDecisionRequest(
+                        reflection,
+                        dataFactory,
+                        includeKakan: true));
+                AssertDecisionButtonVisualStyle(
+                    FindButton(decisionRoot.transform, "Ankan_0"));
+                AssertDecisionButtonVisualStyle(
+                    FindButton(decisionRoot.transform, "Kakan_1"));
+            }
+            finally
+            {
+                if (meldController != null)
+                    reflection.Invoke(meldController, "ClearReactionMeldCallDecision");
+                if (scene.IsValid() && scene.isLoaded)
+                    EditorSceneManager.CloseScene(scene, true);
+            }
+        }
+
+        [Test]
         public void ReactionMeldButtons_EmitTheRequestIdentityThatCreatedThem()
         {
             ReflectionTestAccess reflection = new ReflectionTestAccess();
@@ -1888,6 +1965,50 @@ namespace MahjongPrototype.Tests
                 Assert.That(image, Is.Not.Null);
                 Assert.That(image.sprite, Is.SameAs(arguments[1]));
             }
+        }
+
+        private static Button FindButtonInScene(Scene scene, string buttonName)
+        {
+            return Resources.FindObjectsOfTypeAll<Button>()
+                .SingleOrDefault(button =>
+                    button.gameObject.scene == scene &&
+                    button.name == buttonName);
+        }
+
+        private static void AssertDecisionButtonVisualStyle(
+            Button button,
+            bool requiresReadableLabel = true)
+        {
+            Assert.That(button, Is.Not.Null);
+            Image background = button.targetGraphic as Image;
+            Graphic label = button.GetComponentsInChildren<Graphic>(true)
+                .FirstOrDefault(graphic => graphic != background);
+            Outline outline = button.GetComponent<Outline>();
+            Assert.That(background, Is.Not.Null);
+            Assert.That(outline, Is.Not.Null);
+
+            Assert.That(
+                background.color.b,
+                Is.GreaterThan(background.color.r),
+                "Decision buttons need the chi-style cool, dark background.");
+            Assert.That(background.color.grayscale, Is.LessThan(0.5f));
+            Assert.That(background.color.a, Is.GreaterThan(0.8f));
+            Assert.That(outline.effectColor.grayscale, Is.GreaterThan(background.color.grayscale));
+            if (requiresReadableLabel)
+            {
+                Assert.That(label, Is.Not.Null);
+                Assert.That(label.color.r, Is.GreaterThan(0.9f));
+                Assert.That(label.color.g, Is.GreaterThan(0.9f));
+                Assert.That(label.color.b, Is.GreaterThan(0.9f));
+            }
+
+            ColorBlock colors = button.colors;
+            Assert.That(button.transition, Is.EqualTo(Selectable.Transition.ColorTint));
+            Assert.That(colors.highlightedColor, Is.Not.EqualTo(colors.normalColor));
+            Assert.That(colors.pressedColor, Is.Not.EqualTo(colors.highlightedColor));
+            Assert.That(colors.selectedColor, Is.Not.EqualTo(colors.normalColor));
+            Assert.That(colors.disabledColor.a, Is.LessThan(colors.normalColor.a));
+            Assert.That(colors.fadeDuration, Is.GreaterThan(0f));
         }
 
         private static void ConfigureChiTileImages(
