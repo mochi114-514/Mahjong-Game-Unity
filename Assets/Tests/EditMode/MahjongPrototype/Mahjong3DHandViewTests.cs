@@ -52,7 +52,7 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void SetReachCandidateInteractableByIndices_DimsOnlyNonCandidates()
+        public void SetReachCandidateInteractableByIndices_DimsNonCandidatesAndKeepsAllClickable()
         {
             GameObject root = new GameObject("Hand3DViewReachCandidateDimmedTest");
             GameObject prefab = new GameObject("Tile3DPrefab");
@@ -73,9 +73,9 @@ namespace MahjongPrototype.Tests
 
                 Component[] tileViews = root.GetComponentsInChildren(Type.GetType(Mahjong3DTileViewTypeName, true));
                 Assert.That(tileViews.Length, Is.EqualTo(3));
-                Assert.That(GetProperty(tileViews[0], "Interactable"), Is.False);
+                Assert.That(GetProperty(tileViews[0], "Interactable"), Is.True);
                 Assert.That(GetProperty(tileViews[1], "Interactable"), Is.True);
-                Assert.That(GetProperty(tileViews[2], "Interactable"), Is.False);
+                Assert.That(GetProperty(tileViews[2], "Interactable"), Is.True);
                 Assert.That(GetProperty(tileViews[0], "IsDimmed"), Is.True);
                 Assert.That(GetProperty(tileViews[1], "IsDimmed"), Is.False);
                 Assert.That(GetProperty(tileViews[2], "IsDimmed"), Is.True);

@@ -21,7 +21,7 @@ namespace MahjongPrototype.Tests
             "MahjongPrototype.UI3D.Mahjong3DTileView, Assembly-CSharp";
 
         [Test]
-        public void SetReachCandidateInteractable_DimsWhenDrawnTileIsNotSelectable()
+        public void SetReachCandidateInteractable_DimsButKeepsNonCandidateClickable()
         {
             GameObject root = new GameObject("Drawn3DViewReachCandidateDimmedTest");
             GameObject prefab = new GameObject("Tile3DPrefab");
@@ -35,7 +35,7 @@ namespace MahjongPrototype.Tests
                 Invoke(view, "SetReachCandidateInteractable", false);
 
                 Component tileView = GetSingleTileView(root);
-                Assert.That(GetProperty(tileView, "Interactable"), Is.False);
+                Assert.That(GetProperty(tileView, "Interactable"), Is.True);
                 Assert.That(GetProperty(tileView, "IsDimmed"), Is.True);
             }
             finally
