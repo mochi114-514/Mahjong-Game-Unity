@@ -1153,8 +1153,7 @@ namespace MahjongPrototype.UI
             return gameFlow != null &&
                 state != null &&
                 TryGetSelfSeat(state, out SeatId selfSeat) &&
-                state.CurrentTurn == selfSeat &&
-                !gameFlow.IsInteractionLocked;
+                gameFlow.CanAcceptTileDiscardIntentForSeat(selfSeat);
         }
 
         private bool CanUseDrawInput(MahjongGameState state)
@@ -1298,7 +1297,7 @@ namespace MahjongPrototype.UI
                 return;
 
             int[] noHandIndices = new int[0];
-            bool drawnTileInteractable = false;
+            bool drawnTileInteractable = canUseGameplayInput;
 
             if (playerArea3DPresenter != null)
             {

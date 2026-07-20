@@ -125,6 +125,39 @@ namespace MahjongPrototype
         public bool IsRoundSetupPending => isRoundSetupPending;
 
         /// <summary>
+        /// Reports whether the current seat may submit a tile-click discard
+        /// intent. This does not relax the broader interaction lock: only a
+        /// discard intent may pass a self-draw optional decision.
+        /// </summary>
+        public bool CanAcceptTileDiscardIntentForSeat(SeatId actorSeat)
+        {
+            if (gameState == null || isRoundSetupPending || gameState.IsRoundEnded ||
+                gameState.CurrentTurn != actorSeat || gameState.IsReactionWindowPending)
+            {
+                return false;
+            }
+
+            PlayerSeat playerSeat = gameState.GetPlayerSeat(actorSeat);
+            bool isPostCallDiscard =
+                gameState.TurnPhase == TurnPhase.WaitingForDiscardAfterCall;
+            if (!playerSeat.HasDrawnTile && !isPostCallDiscard)
+                return false;
+
+            switch (gameState.TurnPhase)
+            {
+                case TurnPhase.WaitingForDiscard:
+                case TurnPhase.WaitingForDiscardAfterCall:
+                case TurnPhase.WinDecision:
+                case TurnPhase.ReachDecision:
+                case TurnPhase.SelfKanDecision:
+                case TurnPhase.ReachDiscardSelection:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        /// <summary>
         /// Returns the immutable reaction request currently waiting for the
         /// given local player. This intentionally exposes no ReactionWindow or
         /// ReactionWindowCandidate to the UI/provider layer.
@@ -263,6 +296,14 @@ namespace MahjongPrototype
                     break;
                 case MahjongAuthorityCommandKind.DiscardDrawnTile:
                     accepted = TryRequestDiscardDrawnTileForSeat(command.ActorSeat);
+                    break;
+                case MahjongAuthorityCommandKind.DiscardHandFromTileClick:
+                    accepted = TryRequestDiscardHandFromTileClick(
+                        command.ActorSeat,
+                        command.HandIndex);
+                    break;
+                case MahjongAuthorityCommandKind.DiscardDrawnTileFromTileClick:
+                    accepted = TryRequestDiscardDrawnTileFromTileClick(command.ActorSeat);
                     break;
                 case MahjongAuthorityCommandKind.DeclareWin:
                     return MahjongAuthorityCommandResult.Rejected(
@@ -1253,6 +1294,370 @@ namespace MahjongPrototype
             gameState.EnterWaitingForDraw();
             ExpireIppatsuAfterDiscard(result.Record, declaredReachNow);
             CompleteDiscard(result.Record);
+            return true;
+        }
+
+        private bool TryRequestDiscardHandFromTileClick(SeatId actorSeat, int handIndex)
+        {
+            return TryRequestDiscardFromTileClick(
+                actorSeat,
+                DiscardSource.Hand,
+                handIndex);
+        }
+
+        private bool TryRequestDiscardDrawnTileFromTileClick(SeatId actorSeat)
+        {
+            return TryRequestDiscardFromTileClick(
+                actorSeat,
+                DiscardSource.DrawnTile,
+                -1);
+        }
+
+        /// <summary>
+        /// Resolves a tile click as one discard intent. The target is checked
+        /// before any optional self-draw decision is removed, so an invalid
+        /// click cannot leave the player without either the decision or a
+        /// discard.
+        /// </summary>
+        private bool TryRequestDiscardFromTileClick(
+            SeatId actorSeat,
+            DiscardSource source,
+            int handIndex)
+        {
+            if (!TryValidateTileClickDiscard(
+                    actorSeat,
+                    source,
+                    handIndex,
+                    out string reason))
+            {
+                NotifyTurnBlocked("DiscardBlocked", reason);
+                return false;
+            }
+
+            if (!TryDismissOptionalDecisionForTileClick(
+                    actorSeat,
+                    source,
+                    handIndex,
+                    out bool applyDeferredAutoSortAfterDiscard,
+                    out reason))
+            {
+                NotifyTurnBlocked("DiscardBlocked", reason);
+                return false;
+            }
+
+            bool discarded = source == DiscardSource.Hand
+                ? TryRequestDiscardForSeatInternal(actorSeat, handIndex, false)
+                : TryRequestDiscardDrawnTileForSeatInternal(actorSeat, false);
+            if (discarded && applyDeferredAutoSortAfterDiscard)
+                ApplyDeferredAutoSortAfterReachDecisionIfNeeded("ReachDeclined");
+
+            return discarded;
+        }
+
+        private bool TryValidateTileClickDiscard(
+            SeatId actorSeat,
+            DiscardSource source,
+            int handIndex,
+            out string reason)
+        {
+            reason = string.Empty;
+            if (gameState == null || isRoundSetupPending)
+            {
+                reason = "GameStateUnavailable";
+                return false;
+            }
+
+            if (gameState.CurrentTurn != actorSeat)
+            {
+                reason = "NotCurrentTurn";
+                return false;
+            }
+
+            if (gameState.IsRoundEnded)
+            {
+                reason = "RoundEnded";
+                return false;
+            }
+
+            if (gameState.IsReactionWindowPending)
+            {
+                reason = "ReactionWindowPending";
+                return false;
+            }
+
+            PlayerSeat playerSeat = gameState.GetPlayerSeat(actorSeat);
+            bool isPostCallDiscard =
+                gameState.TurnPhase == TurnPhase.WaitingForDiscardAfterCall;
+            if (!playerSeat.HasDrawnTile && !isPostCallDiscard)
+            {
+                reason = "DrawnTileMissing";
+                return false;
+            }
+
+            if (source == DiscardSource.Hand)
+            {
+                if (handIndex < 0 || handIndex >= playerSeat.Hand.Count)
+                {
+                    reason = "HandIndexOutOfRange";
+                    return false;
+                }
+
+                if (playerSeat.IsReachDeclared)
+                {
+                    reason = "ReachDeclaredHandLocked";
+                    return false;
+                }
+            }
+            else if (source == DiscardSource.DrawnTile)
+            {
+                if (!playerSeat.HasDrawnTile || !playerSeat.DrawnTile.HasValue)
+                {
+                    reason = "DrawnTileMissing";
+                    return false;
+                }
+            }
+            else
+            {
+                reason = "DiscardSourceUnsupported";
+                return false;
+            }
+
+            switch (gameState.TurnPhase)
+            {
+                case TurnPhase.WaitingForDiscard:
+                case TurnPhase.WaitingForDiscardAfterCall:
+                case TurnPhase.WinDecision:
+                case TurnPhase.ReachDecision:
+                case TurnPhase.SelfKanDecision:
+                case TurnPhase.ReachDiscardSelection:
+                    return true;
+                default:
+                    reason = "InvalidTurnPhase";
+                    return false;
+            }
+        }
+
+        private bool TryDismissOptionalDecisionForTileClick(
+            SeatId actorSeat,
+            DiscardSource source,
+            int handIndex,
+            out bool applyDeferredAutoSortAfterDiscard,
+            out string reason)
+        {
+            reason = string.Empty;
+            applyDeferredAutoSortAfterDiscard = false;
+            switch (gameState.TurnPhase)
+            {
+                case TurnPhase.WinDecision:
+                    return TryDismissWinDecisionForTileClick(actorSeat, out reason);
+                case TurnPhase.ReachDecision:
+                {
+                    bool dismissed = TryDismissReachDecisionForTileClick(
+                        actorSeat,
+                        out reason);
+                    applyDeferredAutoSortAfterDiscard = dismissed;
+                    return dismissed;
+                }
+                case TurnPhase.SelfKanDecision:
+                    return TryDismissSelfKanDecisionForTileClick(actorSeat, out reason);
+                case TurnPhase.ReachDiscardSelection:
+                {
+                    if (IsValidReachDiscardCandidate(actorSeat, source, handIndex))
+                        return true;
+
+                    bool dismissed = TryDismissReachDiscardSelectionForTileClick(
+                        actorSeat,
+                        out reason);
+                    applyDeferredAutoSortAfterDiscard = dismissed;
+                    return dismissed;
+                }
+                default:
+                    return true;
+            }
+        }
+
+        private bool TryDismissWinDecisionForTileClick(SeatId actorSeat, out string reason)
+        {
+            reason = string.Empty;
+            if (!gameState.IsWinDecisionPending || gameState.WinDecisionSeat != actorSeat ||
+                gameState.WinDecisionTurnIndex != gameState.TurnIndex ||
+                gameState.WinDecisionType != WinType.Tsumo)
+            {
+                reason = "WinDecisionMissing";
+                return false;
+            }
+
+            if (!TryCancelPendingDecisionForTileClick(
+                    actorSeat,
+                    DecisionKind.WinDeclaration,
+                    out reason))
+            {
+                return false;
+            }
+
+            WinType? winType = gameState.WinDecisionType;
+            int turnIndex = gameState.WinDecisionTurnIndex;
+            gameState.ClearWinDecision();
+            EventPublisher.NotifyWinDeclined(actorSeat, turnIndex);
+            EventPublisher.NotifyWinDeclinedDetailed(actorSeat, winType, turnIndex);
+            return true;
+        }
+
+        private bool TryDismissReachDecisionForTileClick(SeatId actorSeat, out string reason)
+        {
+            reason = string.Empty;
+            if (!gameState.IsReachDecisionPending ||
+                gameState.ReachDecisionSeat != actorSeat ||
+                gameState.ReachDecisionTurnIndex != gameState.TurnIndex)
+            {
+                reason = "ReachDecisionMissing";
+                return false;
+            }
+
+            if (!TryCancelPendingDecisionForTileClick(
+                    actorSeat,
+                    DecisionKind.Reach,
+                    out reason))
+            {
+                return false;
+            }
+
+            EnsureDecisionServices();
+            ReachDecisionResult result = reachDecisionService.Decline(gameState);
+            if (!result.Success)
+            {
+                reason = result.FailureReason;
+                return false;
+            }
+
+            EventPublisher.NotifyTurnDebug(
+                "ReachDeclined",
+                $"phase={gameState.TurnPhase}",
+                seat: result.Seat,
+                turnIndex: result.TurnIndex);
+            EventPublisher.NotifyReachDeclined(result.Seat, result.TurnIndex);
+            return true;
+        }
+
+        private bool TryDismissSelfKanDecisionForTileClick(SeatId actorSeat, out string reason)
+        {
+            reason = string.Empty;
+            if (!gameState.IsSelfKanDecisionPending ||
+                gameState.CurrentSelfKanDecision == null ||
+                gameState.CurrentSelfKanDecision.Seat != actorSeat ||
+                gameState.CurrentSelfKanDecision.TurnIndex != gameState.TurnIndex)
+            {
+                reason = "SelfKanDecisionMissing";
+                return false;
+            }
+
+            if (!TryCancelPendingDecisionForTileClick(
+                    actorSeat,
+                    DecisionKind.SelfKan,
+                    out reason))
+            {
+                return false;
+            }
+
+            int turnIndex = gameState.CurrentSelfKanDecision.TurnIndex;
+            if (!gameState.TryDeclineSelfKanDecision(actorSeat))
+            {
+                reason = "SelfKanDecisionMissing";
+                return false;
+            }
+
+            EventPublisher.NotifySelfKanDecisionDeclined(actorSeat, turnIndex);
+            return true;
+        }
+
+        private bool TryDismissReachDiscardSelectionForTileClick(
+            SeatId actorSeat,
+            out string reason)
+        {
+            reason = string.Empty;
+            if (!gameState.IsReachDiscardSelectionPending ||
+                gameState.ReachDecisionSeat != actorSeat ||
+                gameState.ReachDecisionTurnIndex != gameState.TurnIndex)
+            {
+                reason = "ReachDiscardSelectionMissing";
+                return false;
+            }
+
+            if (!TryCancelPendingDecisionForTileClick(
+                    actorSeat,
+                    DecisionKind.Reach,
+                    out reason))
+            {
+                return false;
+            }
+
+            EnsureDecisionServices();
+            ReachDecisionResult cancelled = reachDecisionService.CancelDiscardSelection(
+                gameState,
+                actorSeat);
+            if (!cancelled.Success)
+            {
+                reason = cancelled.FailureReason;
+                return false;
+            }
+
+            EventPublisher.NotifyTurnDebug(
+                "ReachDiscardSelectionCanceled",
+                $"phase={gameState.TurnPhase}; candidates={gameState.ReachDiscardCandidates.Count}",
+                seat: cancelled.Seat,
+                turnIndex: cancelled.TurnIndex);
+            EventPublisher.NotifyReachDiscardSelectionCanceled(
+                cancelled.Seat,
+                cancelled.TurnIndex);
+
+            ReachDecisionResult declined = reachDecisionService.Decline(gameState);
+            if (!declined.Success)
+            {
+                reason = declined.FailureReason;
+                return false;
+            }
+
+            EventPublisher.NotifyTurnDebug(
+                "ReachDeclined",
+                $"phase={gameState.TurnPhase}",
+                seat: declined.Seat,
+                turnIndex: declined.TurnIndex);
+            EventPublisher.NotifyReachDeclined(declined.Seat, declined.TurnIndex);
+            return true;
+        }
+
+        private bool TryCancelPendingDecisionForTileClick(
+            SeatId actorSeat,
+            DecisionKind kind,
+            out string reason)
+        {
+            reason = string.Empty;
+            SeatSlot slot = gameState.GetSeatSlot(actorSeat);
+            if (!slot.HasPlayer)
+            {
+                reason = "PlayerSeatMismatch";
+                return false;
+            }
+
+            if (!TryGetPendingDecisionRequest(slot.PlayerId.Value, kind, out DecisionRequest request))
+                return true;
+
+            if (request.ActorSeat != actorSeat || request.TurnIndex != gameState.TurnIndex ||
+                decisionCoordinator == null ||
+                decisionCoordinator.IsResponseQueued(request.RequestId) ||
+                !decisionCoordinator.IsPending(request.RequestId))
+            {
+                reason = "DecisionResponsePendingOrStale";
+                return false;
+            }
+
+            if (!decisionCoordinator.Cancel(request.RequestId))
+            {
+                reason = "DecisionRequestMissingOrCancelled";
+                return false;
+            }
+
+            pendingDecisionRequestsById.Remove(request.RequestId);
             return true;
         }
 

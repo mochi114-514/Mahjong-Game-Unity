@@ -108,6 +108,42 @@ namespace MahjongPrototype.Tests
             }
         }
 
+        [Test]
+        public void ThreeDHandTileClicked_DuringTsumoDecision_UsesTheSingleDiscardIntent()
+        {
+            GameObject root = new GameObject("CommandRouter3DImplicitDecisionDiscardTest");
+            root.SetActive(false);
+            try
+            {
+                object gameFlow = CreateConfiguredGameFlow(root);
+                object inputController = root.AddComponent(Type.GetType(MahjongUiInputControllerTypeName, true));
+                object presenter = root.AddComponent(Type.GetType(Mahjong3DPlayerAreaPresenterTypeName, true));
+                object router = root.AddComponent(Type.GetType(MahjongUiCommandRouterTypeName, true));
+                SetPrivateField(router, "gameFlow", gameFlow);
+                SetPrivateField(router, "inputController", inputController);
+                SetPrivateField(router, "playerArea3DPresenter", presenter);
+                Invoke(router, "RefreshSubscriptions");
+
+                Invoke(gameFlow, "StartNewRound");
+                Invoke(gameFlow, "RequestDraw");
+                object gameState = GetProperty(gameFlow, "CurrentState");
+                Invoke(
+                    gameState,
+                    "BeginWinDecision",
+                    ParseSeat("East"),
+                    (int)GetProperty(gameState, "TurnIndex"));
+
+                RaiseEvent(presenter, "HandTileClicked", ParseSeat("East"), 0);
+
+                Assert.That((bool)GetProperty(gameState, "IsWinDecisionPending"), Is.False);
+                Assert.That(GetListCount(GetProperty(gameState, "Discards")), Is.EqualTo(1));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
         private static object CreateConfiguredGameFlow(GameObject gameObject)
         {
             gameObject.AddComponent(Type.GetType(MahjongEventNotifierTypeName, true));

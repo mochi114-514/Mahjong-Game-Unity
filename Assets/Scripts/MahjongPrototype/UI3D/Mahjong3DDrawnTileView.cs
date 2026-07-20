@@ -104,7 +104,7 @@ namespace MahjongPrototype.UI3D
 
         public void SetReachCandidateInteractable(bool selectable)
         {
-            tileInteractable = faceUp && selectable;
+            tileInteractable = faceUp;
 
             if (activeTile == null)
                 return;

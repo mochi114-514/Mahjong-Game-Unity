@@ -70,6 +70,24 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
                 dataFactory.ParseSeat(seatName));
         }
 
+        public bool TryRequestDiscardHandFromTileClickForSeat(
+            string seatName,
+            int handIndex)
+        {
+            return TryExecuteTileClickDiscardCommand(
+                "DiscardHandFromTileClick",
+                seatName,
+                handIndex);
+        }
+
+        public bool TryRequestDiscardDrawnTileFromTileClickForSeat(string seatName)
+        {
+            return TryExecuteTileClickDiscardCommand(
+                "DiscardDrawnTileFromTileClick",
+                seatName,
+                -1);
+        }
+
         public void RequestDeclareWin()
         {
             reflection.Invoke(GameFlow, "RequestDeclareWin");
@@ -233,6 +251,32 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
         public void SetWinDecisionPending(string seatName, int turnIndex)
         {
             reflection.Invoke(GameFlow, "SetWinDecisionPending", true, dataFactory.ParseSeat(seatName), turnIndex);
+        }
+
+        private bool TryExecuteTileClickDiscardCommand(
+            string commandKind,
+            string seatName,
+            int handIndex)
+        {
+            object state = reflection.GetProperty(GameFlow, "CurrentState");
+            object seat = dataFactory.ParseSeat(seatName);
+            object slot = reflection.Invoke(state, "GetSeatSlot", seat);
+            object playerId = reflection.GetProperty(slot, "PlayerId");
+            int turnIndex = (int)reflection.GetProperty(state, "TurnIndex");
+            object command = reflection.CreateInstance(
+                reflection.RequireType(
+                    "MahjongPrototype.Domain.MahjongAuthorityCommand, Assembly-CSharp"),
+                System.Enum.Parse(
+                    reflection.RequireType(
+                        "MahjongPrototype.Domain.MahjongAuthorityCommandKind, Assembly-CSharp"),
+                    commandKind),
+                playerId,
+                seat,
+                turnIndex,
+                handIndex,
+                null);
+            object result = reflection.Invoke(GameFlow, "TryExecuteCommand", command);
+            return (bool)reflection.GetProperty(result, "Accepted");
         }
 
         private object GameFlow => harness.GameFlow;

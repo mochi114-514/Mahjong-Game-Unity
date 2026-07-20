@@ -9,7 +9,9 @@ namespace MahjongPrototype.Domain
         DiscardDrawnTile = 2,
         DeclareWin = 3,
         CancelReachDiscardSelection = 4,
-        ForceDrawSkill = 5
+        ForceDrawSkill = 5,
+        DiscardHandFromTileClick = 6,
+        DiscardDrawnTileFromTileClick = 7
     }
 
     /// <summary>

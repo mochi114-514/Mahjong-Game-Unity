@@ -2349,7 +2349,7 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void RefreshInteractionState_ReachDecision_KeepsControlAreaInteractableAndSelfTilesDisabled()
+        public void RefreshInteractionState_ReachDecision_KeepsControlAreaAndSelfTilesInteractable()
         {
             using (Driver driver = Driver.Create())
             {
@@ -2362,13 +2362,13 @@ namespace MahjongPrototype.Tests
                 Assert.That(driver.ForceDrawSkillInteractable, Is.True);
                 Assert.That(driver.TargetTileInputInteractable, Is.True);
                 Assert.That(driver.AutoSortInteractable, Is.False);
-                Assert.That(driver.FirstSelfHandTileInteractable, Is.False);
-                Assert.That(driver.SelfDrawnTileInteractable, Is.False);
+                Assert.That(driver.FirstSelfHandTileInteractable, Is.True);
+                Assert.That(driver.SelfDrawnTileInteractable, Is.True);
             }
         }
 
         [Test]
-        public void RefreshInteractionState_ReachDiscardSelection_KeepsForceDrawSkillAndCancelEnabledWithCandidates()
+        public void RefreshInteractionState_ReachDiscardSelection_KeepsAllTilesClickableAndCandidatesUndimmed()
         {
             using (Driver driver = Driver.Create())
             {
@@ -2383,8 +2383,28 @@ namespace MahjongPrototype.Tests
                 Assert.That(driver.AutoSortInteractable, Is.False);
                 Assert.That(driver.CancelReachInteractable, Is.True);
                 Assert.That(driver.FirstSelfHandTileInteractable, Is.True);
-                Assert.That(driver.SecondSelfHandTileInteractable, Is.False);
-                Assert.That(driver.SelfDrawnTileInteractable, Is.False);
+                Assert.That(driver.SecondSelfHandTileInteractable, Is.True);
+                Assert.That(driver.SelfDrawnTileInteractable, Is.True);
+                Assert.That(driver.FirstSelfHandTileDimmed, Is.False);
+                Assert.That(driver.SecondSelfHandTileDimmed, Is.True);
+                Assert.That(driver.SelfDrawnTileDimmed, Is.True);
+            }
+        }
+
+        [Test]
+        public void RefreshInteractionState_WinDecision_LeavesOnlyTileDiscardInputAvailable()
+        {
+            using (Driver driver = Driver.Create())
+            {
+                driver.PrepareNormalSelfTurn();
+                driver.BeginWinDecision();
+
+                driver.RefreshInteraction();
+
+                Assert.That(driver.DrawInteractable, Is.False);
+                Assert.That(driver.AutoSortInteractable, Is.True);
+                Assert.That(driver.FirstSelfHandTileInteractable, Is.True);
+                Assert.That(driver.SelfDrawnTileInteractable, Is.True);
             }
         }
 
@@ -2439,6 +2459,21 @@ namespace MahjongPrototype.Tests
                 Assert.That(driver.DrawInteractable, Is.True);
                 Assert.That(driver.ForceDrawSkillInteractable, Is.True);
                 Assert.That(driver.TargetTileInputInteractable, Is.True);
+            }
+        }
+
+        [Test]
+        public void RefreshInteractionState_DeclaredReachWithDrawnTile_LocksHandButAllowsTsumogiri()
+        {
+            using (Driver driver = Driver.Create())
+            {
+                driver.PrepareNormalSelfTurn();
+                driver.DeclareReachWithDrawnTile();
+
+                driver.RefreshInteraction();
+
+                Assert.That(driver.FirstSelfHandTileInteractable, Is.False);
+                Assert.That(driver.SelfDrawnTileInteractable, Is.True);
             }
         }
 
@@ -2666,6 +2701,9 @@ namespace MahjongPrototype.Tests
             public bool FirstSelfHandTileInteractable => TileInteractable(FirstSelfHandTile);
             public bool SecondSelfHandTileInteractable => TileInteractable(SelfHandTileAt(1));
             public bool SelfDrawnTileInteractable => TileInteractable(SelfDrawnTile);
+            public bool FirstSelfHandTileDimmed => TileDimmed(FirstSelfHandTile);
+            public bool SecondSelfHandTileDimmed => TileDimmed(SelfHandTileAt(1));
+            public bool SelfDrawnTileDimmed => TileDimmed(SelfDrawnTile);
 
             public static Driver Create()
             {
@@ -2769,6 +2807,15 @@ namespace MahjongPrototype.Tests
                 object selfSeat = session.Query.GetPlayerSeat("East");
                 reflection.Invoke(selfSeat, "ClearDrawnTile");
                 reflection.Invoke(selfSeat, "DeclareReach", session.Query.TurnIndex);
+                session.DataFactory.SetCurrentTurn(State, "East");
+            }
+
+            public void DeclareReachWithDrawnTile()
+            {
+                reflection.Invoke(
+                    session.Query.GetPlayerSeat("East"),
+                    "DeclareReach",
+                    session.Query.TurnIndex);
                 session.DataFactory.SetCurrentTurn(State, "East");
             }
 
@@ -3054,6 +3101,11 @@ namespace MahjongPrototype.Tests
             private bool TileInteractable(object tile)
             {
                 return (bool)reflection.GetProperty(tile, "Interactable");
+            }
+
+            private bool TileDimmed(object tile)
+            {
+                return (bool)reflection.GetProperty(tile, "IsDimmed");
             }
 
             private static Button CreateButton(Transform parent, string name)

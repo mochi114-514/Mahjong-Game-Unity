@@ -348,7 +348,9 @@ namespace MahjongPrototype.UI
                 dataSeat != actorSeat)
                 return;
 
-            TryExecuteLocalTurnCommand(MahjongAuthorityCommandKind.DiscardHand, handIndex);
+            TryExecuteLocalTurnCommand(
+                MahjongAuthorityCommandKind.DiscardHandFromTileClick,
+                handIndex);
         }
 
         private void HandleDrawnTileClicked()
@@ -356,7 +358,8 @@ namespace MahjongPrototype.UI
             if (!TryGetGameFlow("Cannot discard drawn tile because MahjongGameFlow is not assigned."))
                 return;
 
-            TryExecuteLocalTurnCommand(MahjongAuthorityCommandKind.DiscardDrawnTile);
+            TryExecuteLocalTurnCommand(
+                MahjongAuthorityCommandKind.DiscardDrawnTileFromTileClick);
         }
 
         private bool TryExecuteLocalTurnCommand(

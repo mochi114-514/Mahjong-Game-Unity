@@ -101,7 +101,7 @@ namespace MahjongPrototype.UI3D
                     continue;
 
                 bool selectable = ContainsIndex(handIndices, i);
-                tile.SetInteractable(selectable);
+                tile.SetInteractable(true);
                 tile.SetDimmed(!selectable);
             }
         }
