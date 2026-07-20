@@ -1646,7 +1646,14 @@ MonoBehaviour:
   yakuListRoot: {fileID: 6100001061}
   yakuRowPrefab: {fileID: 6100002000, guid: 661a78d3668e42249993519a98eabad7, type: 3}
   yakuRevealDuration: 0.3
+  winTypeSealRevealDuration: 0.16
+  totalRevealDelaySeconds: 0.16
   totalRevealDuration: 0.3
+  manganOrAboveTotalTextColor: {r: 1, g: 0.78, b: 0.28, a: 1}
+  yakumanTotalTextColor: {r: 1, g: 0.94, b: 0.72, a: 1}
+  manganOrAboveTotalScalePeak: 1.1
+  yakumanTotalScalePeak: 1.2
+  resultTierEmphasisDuration: 0.18
 --- !u!1 &4410670715559761699
 GameObject:
   m_ObjectHideFlags: 0

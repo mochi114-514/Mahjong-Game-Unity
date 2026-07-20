@@ -11,6 +11,13 @@ namespace MahjongPrototype.UI
     [AddComponentMenu("Mahjong Prototype/UI/Mahjong Round Result Controller")]
     public sealed class MahjongRoundResultController : MonoBehaviour
     {
+        private enum ResultPresentationTier
+        {
+            Normal,
+            ManganOrAbove,
+            Yakuman
+        }
+
         [Header("Roots")]
         [SerializeField] private GameObject roundResultRoot;
         [SerializeField] private GameObject winDetailsRoot;
@@ -35,7 +42,22 @@ namespace MahjongPrototype.UI
 
         [Header("Yaku Reveal")]
         [SerializeField, Min(0f)] private float yakuRevealDuration = 0.18f;
+
+        [Header("Win Type Seal Reveal")]
+        [SerializeField, Min(0f)] private float winTypeSealRevealDuration = 0.16f;
+
+        [Header("Total Reveal")]
+        [SerializeField, Min(0f)] private float totalRevealDelaySeconds = 0.16f;
         [SerializeField, Min(0f)] private float totalRevealDuration = 0.16f;
+
+        [Header("Result Tier Presentation")]
+        [SerializeField] private Color manganOrAboveTotalTextColor =
+            new Color(1f, 0.78f, 0.28f, 1f);
+        [SerializeField] private Color yakumanTotalTextColor =
+            new Color(1f, 0.94f, 0.72f, 1f);
+        [SerializeField, Min(1f)] private float manganOrAboveTotalScalePeak = 1.1f;
+        [SerializeField, Min(1f)] private float yakumanTotalScalePeak = 1.2f;
+        [SerializeField, Min(0f)] private float resultTierEmphasisDuration = 0.18f;
 
         private readonly List<MahjongRoundResultYakuRowController> generatedYakuRows =
             new List<MahjongRoundResultYakuRowController>();
@@ -46,11 +68,17 @@ namespace MahjongPrototype.UI
         private bool warnedMissingTexts;
         private bool warnedMissingYakuListRoot;
         private bool warnedMissingYakuRowPrefab;
-        private Coroutine yakuRevealRoutine;
+        private Coroutine resultRevealRoutine;
         private RoundResult displayedResult;
+        private bool shouldRevealWinTypeSeal;
+        private ResultPresentationTier currentResultPresentationTier;
         private Color totalTextColor;
+        private Color totalTextPresentationColor;
         private Vector3 totalTextScale;
         private bool totalPresentationCached;
+        private Transform winTypePresentationRoot;
+        private Vector3 winTypePresentationScale;
+        private bool winTypePresentationCached;
 
         public void SetResult(RoundResult result)
         {
@@ -63,7 +91,7 @@ namespace MahjongPrototype.UI
             if (ReferenceEquals(displayedResult, result))
                 return;
 
-            StopYakuReveal();
+            StopResultReveal();
             displayedResult = result;
             ClearGeneratedYakuRows();
             SetActiveOrWarn(
@@ -92,8 +120,10 @@ namespace MahjongPrototype.UI
 
         public void Clear()
         {
-            StopYakuReveal();
+            StopResultReveal();
             displayedResult = null;
+            shouldRevealWinTypeSeal = false;
+            ResetTotalPresentation();
             ClearGeneratedYakuRows();
             SetActive(roundResultRoot, false);
             SetActive(winDetailsRoot, false);
@@ -112,12 +142,15 @@ namespace MahjongPrototype.UI
 
         private void OnDisable()
         {
-            StopYakuReveal();
-            SetConfirmInteractable(true);
+            StopResultReveal();
+            displayedResult = null;
+            shouldRevealWinTypeSeal = false;
         }
 
         private void SetWinResult(RoundResult result)
         {
+            shouldRevealWinTypeSeal = result.WinType == WinType.Tsumo || result.WinType == WinType.Ron;
+            SetResultPresentationTier(GetResultPresentationTier(result));
             SetText(titleText, "和了");
             SetActiveOrWarn(
                 winDetailsRoot,
@@ -144,11 +177,13 @@ namespace MahjongPrototype.UI
 
             PopulateYakuRows(result.Yakus);
             SetText(totalText, FormatTotal(result));
-            BeginYakuReveal();
+            BeginWinResultReveal();
         }
 
         private void SetExhaustiveDrawResult()
         {
+            shouldRevealWinTypeSeal = false;
+            ResetTotalPresentation();
             SetText(titleText, "流局");
             SetActiveOrWarn(
                 winDetailsRoot,
@@ -161,6 +196,7 @@ namespace MahjongPrototype.UI
             SetText(sourceSeatText, string.Empty);
             SetText(winningTileText, string.Empty);
             SetText(totalText, string.Empty);
+            ResetWinTypePresentation();
             SetTotalRevealVisible(true);
             SetConfirmInteractable(true);
         }
@@ -191,10 +227,11 @@ namespace MahjongPrototype.UI
             }
         }
 
-        private void BeginYakuReveal()
+        private void BeginWinResultReveal()
         {
-            if (!Application.isPlaying || generatedYakuRows.Count == 0)
+            if (!Application.isPlaying)
             {
+                ResetWinTypePresentation();
                 SetGeneratedRowsRevealVisible(true);
                 SetTotalRevealVisible(true);
                 SetConfirmInteractable(true);
@@ -203,12 +240,15 @@ namespace MahjongPrototype.UI
 
             SetGeneratedRowsRevealVisible(false);
             SetTotalRevealVisible(false);
+            SetWinTypePresentationScale(1.3f);
             SetConfirmInteractable(false);
-            yakuRevealRoutine = StartCoroutine(RevealYakuRows());
+            resultRevealRoutine = StartCoroutine(RevealWinResult());
         }
 
-        private IEnumerator RevealYakuRows()
+        private IEnumerator RevealWinResult()
         {
+            yield return RevealWinTypeSeal();
+
             for (int i = 0; i < generatedYakuRows.Count; i++)
             {
                 MahjongRoundResultYakuRowController row = generatedYakuRows[i];
@@ -216,9 +256,56 @@ namespace MahjongPrototype.UI
                     yield return row.PlayReveal(yakuRevealDuration);
             }
 
+            yield return WaitForUnscaledSeconds(totalRevealDelaySeconds);
             yield return RevealTotal();
-            yakuRevealRoutine = null;
+            yield return RevealResultTierEmphasis();
+            resultRevealRoutine = null;
             SetConfirmInteractable(true);
+        }
+
+        private IEnumerator RevealWinTypeSeal()
+        {
+            if (!shouldRevealWinTypeSeal ||
+                GetWinTypePresentationRoot() == null ||
+                winTypeSealRevealDuration <= 0f)
+            {
+                ResetWinTypePresentation();
+                yield break;
+            }
+
+            const float pressedScale = 0.92f;
+            const float pressedProgress = 0.55f;
+            for (float elapsed = 0f;
+                elapsed < winTypeSealRevealDuration;
+                elapsed += Time.unscaledDeltaTime)
+            {
+                float progress = Mathf.Clamp01(elapsed / winTypeSealRevealDuration);
+                float multiplier;
+                if (progress < pressedProgress)
+                {
+                    float press = EaseOutCubic(progress / pressedProgress);
+                    multiplier = Mathf.Lerp(1.3f, pressedScale, press);
+                }
+                else
+                {
+                    float settle = Mathf.SmoothStep(
+                        0f,
+                        1f,
+                        (progress - pressedProgress) / (1f - pressedProgress));
+                    multiplier = Mathf.Lerp(pressedScale, 1f, settle);
+                }
+
+                SetWinTypePresentationScale(multiplier);
+                yield return null;
+            }
+
+            ResetWinTypePresentation();
+        }
+
+        private static IEnumerator WaitForUnscaledSeconds(float duration)
+        {
+            for (float elapsed = 0f; elapsed < duration; elapsed += Time.unscaledDeltaTime)
+                yield return null;
         }
 
         private IEnumerator RevealTotal()
@@ -233,21 +320,51 @@ namespace MahjongPrototype.UI
             for (float elapsed = 0f; elapsed < totalRevealDuration; elapsed += Time.unscaledDeltaTime)
             {
                 float t = Mathf.Clamp01(elapsed / totalRevealDuration);
-                SetTotalRevealAlpha(t);
-                totalText.transform.localScale = Vector3.Lerp(totalTextScale * 1.12f, totalTextScale, t);
+                float eased = EaseOutCubic(t);
+                SetTotalRevealAlpha(eased);
+                totalText.transform.localScale = Vector3.Lerp(totalTextScale * 1.12f, totalTextScale, eased);
                 yield return null;
             }
 
             SetTotalRevealVisible(true);
         }
 
-        private void StopYakuReveal()
+        private IEnumerator RevealResultTierEmphasis()
         {
-            if (yakuRevealRoutine == null)
-                return;
+            if (currentResultPresentationTier == ResultPresentationTier.Normal ||
+                totalText == null ||
+                resultTierEmphasisDuration <= 0f)
+            {
+                SetTotalRevealVisible(true);
+                yield break;
+            }
 
-            StopCoroutine(yakuRevealRoutine);
-            yakuRevealRoutine = null;
+            float peak = GetResultTierScalePeak(currentResultPresentationTier);
+            for (float elapsed = 0f;
+                elapsed < resultTierEmphasisDuration;
+                elapsed += Time.unscaledDeltaTime)
+            {
+                float progress = Mathf.Clamp01(elapsed / resultTierEmphasisDuration);
+                totalText.transform.localScale = totalTextScale *
+                    GetResultTierScaleMultiplier(currentResultPresentationTier, peak, progress);
+                yield return null;
+            }
+
+            SetTotalRevealVisible(true);
+        }
+
+        private void StopResultReveal()
+        {
+            if (resultRevealRoutine != null)
+            {
+                StopCoroutine(resultRevealRoutine);
+                resultRevealRoutine = null;
+            }
+
+            ResetWinTypePresentation();
+            SetGeneratedRowsRevealVisible(true);
+            ResetTotalPresentation();
+            SetConfirmInteractable(true);
         }
 
         private void SetGeneratedRowsRevealVisible(bool visible)
@@ -275,6 +392,7 @@ namespace MahjongPrototype.UI
 
             totalPresentationCached = true;
             totalTextColor = totalText.color;
+            totalTextPresentationColor = totalTextColor;
             totalTextScale = totalText.transform.localScale;
         }
 
@@ -284,9 +402,146 @@ namespace MahjongPrototype.UI
                 return;
 
             CacheTotalPresentation();
-            Color color = totalTextColor;
+            Color color = totalTextPresentationColor;
             color.a *= alpha;
             totalText.color = color;
+        }
+
+        private void SetResultPresentationTier(ResultPresentationTier tier)
+        {
+            currentResultPresentationTier = tier;
+            CacheTotalPresentation();
+            totalTextPresentationColor = GetTotalTextColor(tier);
+            SetTotalRevealVisible(true);
+        }
+
+        private void ResetTotalPresentation()
+        {
+            SetResultPresentationTier(ResultPresentationTier.Normal);
+        }
+
+        private Color GetTotalTextColor(ResultPresentationTier tier)
+        {
+            switch (tier)
+            {
+                case ResultPresentationTier.ManganOrAbove:
+                    return manganOrAboveTotalTextColor;
+                case ResultPresentationTier.Yakuman:
+                    return yakumanTotalTextColor;
+                default:
+                    return totalTextColor;
+            }
+        }
+
+        private static ResultPresentationTier GetResultPresentationTier(RoundResult result)
+        {
+            if (result != null && (result.HasYakuman || result.YakumanCount > 0))
+                return ResultPresentationTier.Yakuman;
+
+            if (result != null && result.TotalHan >= 5)
+                return ResultPresentationTier.ManganOrAbove;
+
+            return ResultPresentationTier.Normal;
+        }
+
+        private float GetResultTierScalePeak(ResultPresentationTier tier)
+        {
+            switch (tier)
+            {
+                case ResultPresentationTier.ManganOrAbove:
+                    return Mathf.Max(1f, manganOrAboveTotalScalePeak);
+                case ResultPresentationTier.Yakuman:
+                    return Mathf.Max(1f, yakumanTotalScalePeak);
+                default:
+                    return 1f;
+            }
+        }
+
+        private static float GetResultTierScaleMultiplier(
+            ResultPresentationTier tier,
+            float peak,
+            float progress)
+        {
+            if (tier == ResultPresentationTier.ManganOrAbove)
+            {
+                const float peakProgress = 0.58f;
+                if (progress < peakProgress)
+                    return Mathf.Lerp(1f, peak, EaseOutCubic(progress / peakProgress));
+
+                float settle = Mathf.SmoothStep(
+                    0f,
+                    1f,
+                    (progress - peakProgress) / (1f - peakProgress));
+                return Mathf.Lerp(peak, 1f, settle);
+            }
+
+            const float yakumanPeakProgress = 0.5f;
+            const float yakumanSettleProgress = 0.78f;
+            float yakumanSettleScale = Mathf.Lerp(1f, peak, 0.3f);
+            if (progress < yakumanPeakProgress)
+                return Mathf.Lerp(1f, peak, EaseOutCubic(progress / yakumanPeakProgress));
+
+            if (progress < yakumanSettleProgress)
+            {
+                float settle = Mathf.SmoothStep(
+                    0f,
+                    1f,
+                    (progress - yakumanPeakProgress) /
+                    (yakumanSettleProgress - yakumanPeakProgress));
+                return Mathf.Lerp(peak, yakumanSettleScale, settle);
+            }
+
+            float finish = Mathf.SmoothStep(
+                0f,
+                1f,
+                (progress - yakumanSettleProgress) / (1f - yakumanSettleProgress));
+            return Mathf.Lerp(yakumanSettleScale, 1f, finish);
+        }
+
+        private Transform GetWinTypePresentationRoot()
+        {
+            if (winTypePresentationRoot != null)
+                return winTypePresentationRoot;
+
+            if (winTypeText == null)
+                return null;
+
+            Transform candidate = winTypeText.transform.parent;
+            if (candidate == null || candidate.Find("WinTypeSeal") == null)
+                return null;
+
+            winTypePresentationRoot = candidate;
+            return winTypePresentationRoot;
+        }
+
+        private void ResetWinTypePresentation()
+        {
+            SetWinTypePresentationScale(1f);
+        }
+
+        private void SetWinTypePresentationScale(float multiplier)
+        {
+            Transform presentationRoot = GetWinTypePresentationRoot();
+            if (presentationRoot == null)
+                return;
+
+            CacheWinTypePresentation(presentationRoot);
+            presentationRoot.localScale = winTypePresentationScale * multiplier;
+        }
+
+        private void CacheWinTypePresentation(Transform presentationRoot)
+        {
+            if (winTypePresentationCached)
+                return;
+
+            winTypePresentationCached = true;
+            winTypePresentationScale = presentationRoot.localScale;
+        }
+
+        private static float EaseOutCubic(float progress)
+        {
+            float inverse = 1f - Mathf.Clamp01(progress);
+            return 1f - inverse * inverse * inverse;
         }
 
         private void SetConfirmInteractable(bool interactable)
@@ -312,6 +567,7 @@ namespace MahjongPrototype.UI
                 if (row == null)
                     continue;
 
+                row.gameObject.SetActive(false);
                 DestroyRow(row.gameObject);
             }
 

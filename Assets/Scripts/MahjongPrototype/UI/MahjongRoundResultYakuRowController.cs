@@ -53,13 +53,39 @@ namespace MahjongPrototype.UI
             for (float elapsed = 0f; elapsed < duration; elapsed += Time.unscaledDeltaTime)
             {
                 float t = Mathf.Clamp01(elapsed / duration);
-                SetTextAlpha(yakuNameText, yakuNameColor, t);
-                SetTextAlpha(valueText, valueColor, t);
-                transform.localScale = Vector3.Lerp(normalScale * 1.1f, normalScale, t);
+                float alpha = EaseOutCubic(t);
+                SetTextAlpha(yakuNameText, yakuNameColor, alpha);
+                SetTextAlpha(valueText, valueColor, alpha);
+                transform.localScale = normalScale * GetRevealScaleMultiplier(t);
                 yield return null;
             }
 
             SetRevealVisible(true);
+        }
+
+        private static float GetRevealScaleMultiplier(float progress)
+        {
+            const float startScale = 0.9f;
+            const float overshootScale = 1.055f;
+            const float overshootProgress = 0.72f;
+
+            if (progress < overshootProgress)
+            {
+                float approach = EaseOutCubic(progress / overshootProgress);
+                return Mathf.Lerp(startScale, overshootScale, approach);
+            }
+
+            float settle = Mathf.SmoothStep(
+                0f,
+                1f,
+                (progress - overshootProgress) / (1f - overshootProgress));
+            return Mathf.Lerp(overshootScale, 1f, settle);
+        }
+
+        private static float EaseOutCubic(float progress)
+        {
+            float inverse = 1f - Mathf.Clamp01(progress);
+            return 1f - inverse * inverse * inverse;
         }
 
         private void CachePresentation()

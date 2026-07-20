@@ -76,6 +76,26 @@ namespace MahjongPrototype.Tests
                 }
             }
         }
+
+        [Test]
+        public void PlayReveal_ZeroDuration_RestoresOriginalAlphaAndScaleImmediately()
+        {
+            using (RoundResultYakuRowHarness harness = RoundResultYakuRowHarness.Create())
+            {
+                Color nameColor = new Color(0.25f, 0.4f, 0.6f, 0.73f);
+                Color valueColor = new Color(0.7f, 0.5f, 0.2f, 0.81f);
+                Vector3 scale = new Vector3(1.1f, 0.9f, 1f);
+                harness.SetPresentation(nameColor, valueColor, scale);
+                harness.SetRevealVisible(false);
+
+                IEnumerator reveal = harness.PlayReveal(0f);
+
+                Assert.That(reveal.MoveNext(), Is.False);
+                Assert.That(harness.YakuNameColor, Is.EqualTo(nameColor));
+                Assert.That(harness.ValueColor, Is.EqualTo(valueColor));
+                Assert.That(harness.RootScale, Is.EqualTo(scale));
+            }
+        }
     }
 
     public sealed class MahjongRoundResultControllerTests
@@ -293,6 +313,337 @@ namespace MahjongPrototype.Tests
                 Assert.That(harness.WinningTileText, Is.EqualTo(string.Empty));
             }
         }
+
+        [TestCase("Tsumo")]
+        [TestCase("Ron")]
+        public void SetResult_Win_UsesExistingWinTypePresentationRoot(string winTypeName)
+        {
+            using (RoundResultControllerTestHarness harness =
+                RoundResultControllerTestHarness.Create())
+            {
+                object result = harness.Data.CreateWin(
+                    "East",
+                    1,
+                    "East",
+                    winTypeName,
+                    winTypeName == "Ron" ? "West" : null,
+                    "C",
+                    false,
+                    harness.Data.CreateCandidate(YakuSpec.Normal("Reach", "立直", "One")));
+
+                harness.SetResult(result);
+
+                Assert.That(harness.WinTypePresentationRoot, Is.Not.Null);
+                Assert.That(harness.WinTypePresentationRoot.name, Is.EqualTo("WinTypePresentation"));
+                Assert.That(harness.WinTypePresentationRoot.Find("WinTypeSeal"), Is.Not.Null);
+                Assert.That(harness.WinTypeText, Is.EqualTo(winTypeName == "Tsumo" ? "ツモ" : "ロン"));
+            }
+        }
+
+        [Test]
+        public void SetResult_ExhaustiveDraw_LeavesWinTypePresentationAtNormalScale()
+        {
+            using (RoundResultControllerTestHarness harness =
+                RoundResultControllerTestHarness.Create())
+            {
+                harness.SetResult(harness.Data.CreateExhaustiveDraw("East", 1, false));
+
+                Assert.That(harness.WinDetailsVisible, Is.False);
+                Assert.That(harness.ShouldRevealWinTypeSeal, Is.False);
+                Assert.That(harness.WinTypePresentationScale, Is.EqualTo(Vector3.one));
+            }
+        }
+
+        [Test]
+        public void RevealSequence_RevealsTotalAfterRowsAndUnlocksConfirmButton()
+        {
+            using (RoundResultControllerTestHarness harness =
+                RoundResultControllerTestHarness.Create())
+            {
+                harness.SetRevealDurations(0f, 0f, 0f);
+                harness.SetResult(harness.Data.CreateWin(
+                    "East",
+                    1,
+                    "East",
+                    "Tsumo",
+                    null,
+                    "C",
+                    false,
+                    harness.Data.CreateCandidate(YakuSpec.Normal("Reach", "立直", "One"))));
+                harness.SetGeneratedRowsRevealVisible(false);
+                harness.SetTotalRevealVisible(false);
+                harness.SetConfirmInteractable(false);
+
+                IEnumerator sequence = harness.CreateRevealSequence();
+                Assert.That(sequence.MoveNext(), Is.True);
+                Complete(sequence.Current as IEnumerator);
+
+                Assert.That(sequence.MoveNext(), Is.True);
+                Assert.That(harness.TotalTextAlpha, Is.EqualTo(0f));
+                Complete(sequence.Current as IEnumerator);
+                Assert.That(harness.YakuNameAlphaAt(0), Is.EqualTo(1f));
+
+                Assert.That(sequence.MoveNext(), Is.True);
+                Complete(sequence.Current as IEnumerator);
+
+                Assert.That(sequence.MoveNext(), Is.True);
+                Assert.That(harness.TotalTextAlpha, Is.EqualTo(0f));
+                Complete(sequence.Current as IEnumerator);
+
+                Assert.That(sequence.MoveNext(), Is.True);
+                Complete(sequence.Current as IEnumerator);
+
+                Assert.That(sequence.MoveNext(), Is.False);
+                Assert.That(harness.TotalTextAlpha, Is.EqualTo(1f));
+                Assert.That(harness.ConfirmButtonInteractable, Is.True);
+            }
+        }
+
+        [Test]
+        public void ClearNewResultAndOnDisable_ResetPresentationState()
+        {
+            using (RoundResultControllerTestHarness harness =
+                RoundResultControllerTestHarness.Create())
+            {
+                object first = harness.Data.CreateWin(
+                    "East",
+                    1,
+                    "East",
+                    "Tsumo",
+                    null,
+                    "C",
+                    false,
+                    harness.Data.CreateCandidate(YakuSpec.Normal("Reach", "立直", "One")));
+                object second = harness.Data.CreateWin(
+                    "East",
+                    2,
+                    "South",
+                    "Ron",
+                    "West",
+                    "5p",
+                    false,
+                    harness.Data.CreateCandidate(YakuSpec.Normal("Tanyao", "断么九", "One")));
+
+                harness.SetResult(first);
+                harness.SetWinTypePresentationScale(1.3f);
+                harness.SetTotalRevealVisible(false);
+                harness.SetConfirmInteractable(false);
+
+                harness.SetResult(second);
+
+                Assert.That(harness.WinTypePresentationScale, Is.EqualTo(Vector3.one));
+                Assert.That(harness.TotalTextAlpha, Is.EqualTo(1f));
+                Assert.That(harness.ConfirmButtonInteractable, Is.True);
+                Assert.That(harness.YakuRowCount, Is.EqualTo(1));
+
+                harness.SetWinTypePresentationScale(0.92f);
+                harness.SetTotalRevealVisible(false);
+                harness.SetConfirmInteractable(false);
+                harness.InvokeOnDisable();
+
+                Assert.That(harness.WinTypePresentationScale, Is.EqualTo(Vector3.one));
+                Assert.That(harness.TotalTextAlpha, Is.EqualTo(1f));
+                Assert.That(harness.ConfirmButtonInteractable, Is.True);
+
+                harness.Clear();
+
+                Assert.That(harness.RoundResultRootVisible, Is.False);
+                Assert.That(harness.YakuRowCount, Is.EqualTo(0));
+                Assert.That(harness.ConfirmButtonInteractable, Is.True);
+            }
+        }
+
+        [Test]
+        public void SetResult_ResultPresentationTiers_SelectConfiguredColorsAndRestoreBaseScale()
+        {
+            using (RoundResultControllerTestHarness harness =
+                RoundResultControllerTestHarness.Create())
+            {
+                Color normalColor = new Color(0.31f, 0.42f, 0.53f, 0.87f);
+                Color manganColor = new Color(0.73f, 0.64f, 0.24f, 0.91f);
+                Color yakumanColor = new Color(0.93f, 0.86f, 0.65f, 0.96f);
+                Vector3 normalScale = new Vector3(1.1f, 0.9f, 1f);
+                harness.SetTotalTextBasePresentation(normalColor, normalScale);
+                harness.ConfigureTierPresentation(manganColor, yakumanColor, 1.09f, 1.19f, 0.2f);
+
+                harness.SetResult(CreateWinResult(
+                    harness,
+                    harness.Data.CreateCandidate(YakuSpec.Normal("Reach", "立直", "Four"))));
+
+                Assert.That(harness.ResultPresentationTierName, Is.EqualTo("Normal"));
+                Assert.That(harness.TotalTextColor, Is.EqualTo(normalColor));
+                Assert.That(harness.TotalTextScale, Is.EqualTo(normalScale));
+
+                harness.SetResult(CreateWinResult(
+                    harness,
+                    harness.Data.CreateCandidate(YakuSpec.Normal("Reach", "立直", "Five"))));
+
+                Assert.That(harness.ResultPresentationTierName, Is.EqualTo("ManganOrAbove"));
+                Assert.That(harness.TotalTextColor, Is.EqualTo(manganColor));
+                Assert.That(harness.TotalTextScale, Is.EqualTo(normalScale));
+
+                harness.SetResult(CreateWinResult(
+                    harness,
+                    harness.Data.CreateCandidate(
+                        YakuSpec.Normal("Reach", "立直", "Six"),
+                        YakuSpec.Yakuman("Daisangen", "大三元"))));
+
+                Assert.That(harness.ResultPresentationTierName, Is.EqualTo("Yakuman"));
+                Assert.That(harness.TotalTextColor, Is.EqualTo(yakumanColor));
+                Assert.That(harness.TotalTextScale, Is.EqualTo(normalScale));
+
+                harness.SetResult(CreateWinResult(
+                    harness,
+                    harness.Data.CreateCandidate(YakuSpec.Normal("Reach", "立直", "One"))));
+
+                Assert.That(harness.ResultPresentationTierName, Is.EqualTo("Normal"));
+                Assert.That(harness.TotalTextColor, Is.EqualTo(normalColor));
+                Assert.That(harness.TotalTextScale, Is.EqualTo(normalScale));
+            }
+        }
+
+        [Test]
+        public void ResultPresentationTier_ExhaustiveDrawAndClear_RestoreNormalTotalPresentation()
+        {
+            using (RoundResultControllerTestHarness harness =
+                RoundResultControllerTestHarness.Create())
+            {
+                Color normalColor = new Color(0.28f, 0.39f, 0.5f, 0.82f);
+                Color manganColor = new Color(0.76f, 0.62f, 0.22f, 0.93f);
+                Color yakumanColor = new Color(0.94f, 0.89f, 0.71f, 0.97f);
+                Vector3 normalScale = new Vector3(0.95f, 1.05f, 1f);
+                harness.SetTotalTextBasePresentation(normalColor, normalScale);
+                harness.ConfigureTierPresentation(manganColor, yakumanColor, 1.1f, 1.2f, 0.18f);
+
+                harness.SetResult(CreateWinResult(
+                    harness,
+                    harness.Data.CreateCandidate(YakuSpec.Normal("Reach", "立直", "Five"))));
+                Assert.That(harness.TotalTextColor, Is.EqualTo(manganColor));
+
+                harness.SetResult(harness.Data.CreateExhaustiveDraw("East", 2, false));
+
+                Assert.That(harness.ResultPresentationTierName, Is.EqualTo("Normal"));
+                Assert.That(harness.TotalText, Is.EqualTo(string.Empty));
+                Assert.That(harness.TotalTextColor, Is.EqualTo(normalColor));
+                Assert.That(harness.TotalTextAlpha, Is.EqualTo(normalColor.a));
+                Assert.That(harness.TotalTextScale, Is.EqualTo(normalScale));
+                Assert.That(harness.ConfirmButtonInteractable, Is.True);
+
+                harness.Clear();
+
+                Assert.That(harness.TotalTextColor, Is.EqualTo(normalColor));
+                Assert.That(harness.TotalTextAlpha, Is.EqualTo(normalColor.a));
+                Assert.That(harness.TotalTextScale, Is.EqualTo(normalScale));
+                Assert.That(harness.ConfirmButtonInteractable, Is.True);
+            }
+        }
+
+        [Test]
+        public void ResultPresentationTier_SetResultNullAndOnDisable_RestoreNormalTotalPresentation()
+        {
+            using (RoundResultControllerTestHarness harness =
+                RoundResultControllerTestHarness.Create())
+            {
+                Color normalColor = new Color(0.27f, 0.38f, 0.49f, 0.86f);
+                Color manganColor = new Color(0.78f, 0.66f, 0.26f, 0.94f);
+                Color yakumanColor = new Color(0.96f, 0.9f, 0.72f, 0.98f);
+                Vector3 normalScale = new Vector3(1.04f, 0.96f, 1f);
+                harness.SetTotalTextBasePresentation(normalColor, normalScale);
+                harness.ConfigureTierPresentation(manganColor, yakumanColor, 1.09f, 1.19f, 0.17f);
+
+                harness.SetResult(CreateWinResult(
+                    harness,
+                    harness.Data.CreateCandidate(YakuSpec.Yakuman("Daisangen", "大三元"))));
+                Assert.That(harness.TotalTextColor, Is.EqualTo(yakumanColor));
+
+                harness.SetResultNull();
+
+                Assert.That(harness.ResultPresentationTierName, Is.EqualTo("Normal"));
+                Assert.That(harness.TotalTextColor, Is.EqualTo(normalColor));
+                Assert.That(harness.TotalTextAlpha, Is.EqualTo(normalColor.a));
+                Assert.That(harness.TotalTextScale, Is.EqualTo(normalScale));
+                Assert.That(harness.ConfirmButtonInteractable, Is.True);
+
+                harness.SetResult(CreateWinResult(
+                    harness,
+                    harness.Data.CreateCandidate(YakuSpec.Normal("Reach", "立直", "Five"))));
+                Assert.That(harness.TotalTextColor, Is.EqualTo(manganColor));
+
+                harness.SetConfirmInteractable(false);
+                harness.InvokeOnDisable();
+
+                Assert.That(harness.ResultPresentationTierName, Is.EqualTo("Normal"));
+                Assert.That(harness.TotalTextColor, Is.EqualTo(normalColor));
+                Assert.That(harness.TotalTextAlpha, Is.EqualTo(normalColor.a));
+                Assert.That(harness.TotalTextScale, Is.EqualTo(normalScale));
+                Assert.That(harness.ConfirmButtonInteractable, Is.True);
+            }
+        }
+
+        [Test]
+        public void RevealSequence_ManganTier_UnlocksConfirmOnlyAfterTierEmphasis()
+        {
+            using (RoundResultControllerTestHarness harness =
+                RoundResultControllerTestHarness.Create())
+            {
+                harness.SetRevealDurations(0f, 0f, 0f);
+                harness.ConfigureTierPresentation(
+                    new Color(0.8f, 0.7f, 0.3f, 1f),
+                    new Color(0.95f, 0.9f, 0.7f, 1f),
+                    1.1f,
+                    1.2f,
+                    0f);
+                harness.SetResult(CreateWinResult(
+                    harness,
+                    harness.Data.CreateCandidate(YakuSpec.Normal("Reach", "立直", "Five"))));
+                harness.SetGeneratedRowsRevealVisible(false);
+                harness.SetTotalRevealVisible(false);
+                harness.SetConfirmInteractable(false);
+
+                IEnumerator sequence = harness.CreateRevealSequence();
+                CompleteNext(sequence);
+                CompleteNext(sequence);
+                CompleteNext(sequence);
+                CompleteNext(sequence);
+
+                Assert.That(harness.ConfirmButtonInteractable, Is.False);
+                Assert.That(sequence.MoveNext(), Is.True);
+                Complete(sequence.Current as IEnumerator);
+                Assert.That(harness.ConfirmButtonInteractable, Is.False);
+
+                Assert.That(sequence.MoveNext(), Is.False);
+                Assert.That(harness.ConfirmButtonInteractable, Is.True);
+                Assert.That(harness.TotalTextScale, Is.EqualTo(Vector3.one));
+            }
+        }
+
+        private static object CreateWinResult(
+            RoundResultControllerTestHarness harness,
+            object selectedCandidate)
+        {
+            return harness.Data.CreateWin(
+                "East",
+                1,
+                "East",
+                "Tsumo",
+                null,
+                "C",
+                false,
+                selectedCandidate);
+        }
+
+        private static void CompleteNext(IEnumerator sequence)
+        {
+            Assert.That(sequence.MoveNext(), Is.True);
+            Complete(sequence.Current as IEnumerator);
+        }
+
+        private static void Complete(IEnumerator routine)
+        {
+            Assert.That(routine, Is.Not.Null);
+            while (routine.MoveNext())
+                Complete(routine.Current as IEnumerator);
+        }
     }
 
     public sealed class MahjongRoundResultUiConnectionTests
@@ -422,6 +773,18 @@ namespace MahjongPrototype.Tests
             AssertObjectReferenceName(serialized, "totalText", "TotalText");
             AssertObjectReferenceName(serialized, "confirmButtonLabel", "Text (TMP)");
             AssertObjectReferenceName(serialized, "confirmButton", "Button");
+            AssertNonNegativeFloat(serialized, "winTypeSealRevealDuration");
+            AssertNonNegativeFloat(serialized, "totalRevealDelaySeconds");
+            AssertColorSetting(serialized, "manganOrAboveTotalTextColor");
+            AssertColorSetting(serialized, "yakumanTotalTextColor");
+            AssertAtLeastFloat(serialized, "manganOrAboveTotalScalePeak", 1f);
+            AssertAtLeastFloat(serialized, "yakumanTotalScalePeak", 1f);
+            AssertNonNegativeFloat(serialized, "resultTierEmphasisDuration");
+
+            Component winTypeText = (Component)ObjectReference(serialized, "winTypeText");
+            Transform winTypePresentationRoot = winTypeText.transform.parent;
+            Assert.That(winTypePresentationRoot.name, Is.EqualTo("WinType"));
+            Assert.That(winTypePresentationRoot.Find("WinTypeSeal"), Is.Not.Null);
 
             Object yakuListRoot = ObjectReference(serialized, "yakuListRoot");
             Assert.That(yakuListRoot, Is.TypeOf<RectTransform>());
@@ -569,6 +932,30 @@ namespace MahjongPrototype.Tests
             Assert.That(property, Is.Not.Null, $"Serialized property not found: {propertyName}.");
             Assert.That(property.objectReferenceValue, Is.Not.Null, $"{propertyName} is not assigned.");
             return property.objectReferenceValue;
+        }
+
+        private static void AssertNonNegativeFloat(SerializedObject serialized, string propertyName)
+        {
+            SerializedProperty property = serialized.FindProperty(propertyName);
+            Assert.That(property, Is.Not.Null, $"Serialized property not found: {propertyName}.");
+            Assert.That(property.floatValue, Is.GreaterThanOrEqualTo(0f));
+        }
+
+        private static void AssertAtLeastFloat(
+            SerializedObject serialized,
+            string propertyName,
+            float minimum)
+        {
+            SerializedProperty property = serialized.FindProperty(propertyName);
+            Assert.That(property, Is.Not.Null, $"Serialized property not found: {propertyName}.");
+            Assert.That(property.floatValue, Is.GreaterThanOrEqualTo(minimum));
+        }
+
+        private static void AssertColorSetting(SerializedObject serialized, string propertyName)
+        {
+            SerializedProperty property = serialized.FindProperty(propertyName);
+            Assert.That(property, Is.Not.Null, $"Serialized property not found: {propertyName}.");
+            Assert.That(property.propertyType, Is.EqualTo(SerializedPropertyType.Color));
         }
     }
 
@@ -753,6 +1140,9 @@ namespace MahjongPrototype.Tests
 
         public string YakuNameText => Text(yakuNameText);
         public string ValueText => Text(valueText);
+        public Color YakuNameColor => Color(yakuNameText);
+        public Color ValueColor => Color(valueText);
+        public Vector3 RootScale => root.transform.localScale;
 
         public static RoundResultYakuRowHarness Create()
         {
@@ -776,6 +1166,23 @@ namespace MahjongPrototype.Tests
         public void Bind(object yaku)
         {
             reflection.Invoke(controller, "Bind", yaku);
+        }
+
+        public void SetPresentation(Color nameColor, Color valueColor, Vector3 scale)
+        {
+            root.transform.localScale = scale;
+            reflection.SetProperty(yakuNameText, "color", nameColor);
+            reflection.SetProperty(valueText, "color", valueColor);
+        }
+
+        public void SetRevealVisible(bool visible)
+        {
+            reflection.Invoke(controller, "SetRevealVisible", visible);
+        }
+
+        public IEnumerator PlayReveal(float duration)
+        {
+            return (IEnumerator)reflection.Invoke(controller, "PlayReveal", duration);
         }
 
         public void Dispose()
@@ -816,6 +1223,11 @@ namespace MahjongPrototype.Tests
             return (string)reflection.GetProperty(text, "text");
         }
 
+        private Color Color(Component text)
+        {
+            return (Color)reflection.GetProperty(text, "color");
+        }
+
         private static Component CreateText(
             ReflectionTestAccess reflection,
             Transform parent,
@@ -845,6 +1257,8 @@ namespace MahjongPrototype.Tests
         private readonly GameObject winDetailsRoot;
         private readonly GameObject sourceSeatRoot;
         private readonly Transform yakuListRoot;
+        private readonly Transform winTypePresentationRoot;
+        private readonly Button confirmButton;
         private readonly TextRefs texts;
         private bool disposed;
 
@@ -856,6 +1270,8 @@ namespace MahjongPrototype.Tests
             GameObject winDetailsRoot,
             GameObject sourceSeatRoot,
             Transform yakuListRoot,
+            Transform winTypePresentationRoot,
+            Button confirmButton,
             TextRefs texts,
             RoundResultUiTestData data)
         {
@@ -866,6 +1282,8 @@ namespace MahjongPrototype.Tests
             this.winDetailsRoot = winDetailsRoot;
             this.sourceSeatRoot = sourceSeatRoot;
             this.yakuListRoot = yakuListRoot;
+            this.winTypePresentationRoot = winTypePresentationRoot;
+            this.confirmButton = confirmButton;
             this.texts = texts;
             Data = data;
         }
@@ -883,6 +1301,17 @@ namespace MahjongPrototype.Tests
         public string WinningTileText => Text(texts.WinningTileText);
         public string TotalText => Text(texts.TotalText);
         public string ConfirmButtonLabel => Text(texts.ConfirmButtonLabel);
+        public Transform WinTypePresentationRoot => winTypePresentationRoot;
+        public Vector3 WinTypePresentationScale => winTypePresentationRoot.localScale;
+        public bool ConfirmButtonInteractable => confirmButton.interactable;
+        public bool ShouldRevealWinTypeSeal =>
+            (bool)reflection.GetPrivateField(controller, "shouldRevealWinTypeSeal");
+        public string ResultPresentationTierName => reflection
+            .GetPrivateField(controller, "currentResultPresentationTier")
+            .ToString();
+        public Color TotalTextColor => TextColor(texts.TotalText);
+        public Vector3 TotalTextScale => texts.TotalText.transform.localScale;
+        public float TotalTextAlpha => TextAlpha(texts.TotalText);
         public Component Controller => controller;
 
         public static RoundResultControllerTestHarness Create()
@@ -910,8 +1339,15 @@ namespace MahjongPrototype.Tests
             GameObject sourceSeatRoot = CreateChild(winDetailsRoot.transform, "RenamedSourceSeat");
             Transform yakuListRoot =
                 CreateChild(roundResultRoot.transform, "RenamedYakuList").transform;
-            TextRefs texts = TextRefs.Create(reflection, roundResultRoot.transform);
+            Transform winTypePresentationRoot =
+                CreateChild(roundResultRoot.transform, "WinTypePresentation").transform;
+            CreateChild(winTypePresentationRoot, "WinTypeSeal");
+            TextRefs texts = TextRefs.Create(
+                reflection,
+                roundResultRoot.transform,
+                winTypePresentationRoot);
             Component rowPrefab = CreateYakuRowPrefab(reflection, root.transform);
+            Button confirmButton = CreateButton(roundResultRoot.transform, "RenamedConfirmButton");
 
             reflection.SetPrivateField(controller, "roundResultRoot", roundResultRoot);
             reflection.SetPrivateField(controller, "winDetailsRoot", winDetailsRoot);
@@ -924,6 +1360,7 @@ namespace MahjongPrototype.Tests
             reflection.SetPrivateField(controller, "winningTileText", texts.WinningTileText);
             reflection.SetPrivateField(controller, "totalText", texts.TotalText);
             reflection.SetPrivateField(controller, "confirmButtonLabel", texts.ConfirmButtonLabel);
+            reflection.SetPrivateField(controller, "confirmButton", confirmButton);
             reflection.SetPrivateField(controller, "yakuListRoot", yakuListRoot);
             reflection.SetPrivateField(controller, "yakuRowPrefab", rowPrefab);
 
@@ -935,6 +1372,8 @@ namespace MahjongPrototype.Tests
                 winDetailsRoot,
                 sourceSeatRoot,
                 yakuListRoot,
+                winTypePresentationRoot,
+                confirmButton,
                 texts,
                 data);
         }
@@ -958,6 +1397,64 @@ namespace MahjongPrototype.Tests
             reflection.Invoke(controller, "Clear");
         }
 
+        public void SetRevealDurations(float sealDuration, float yakuDuration, float totalDuration)
+        {
+            reflection.SetPrivateField(controller, "winTypeSealRevealDuration", sealDuration);
+            reflection.SetPrivateField(controller, "yakuRevealDuration", yakuDuration);
+            reflection.SetPrivateField(controller, "totalRevealDelaySeconds", totalDuration);
+            reflection.SetPrivateField(controller, "totalRevealDuration", totalDuration);
+        }
+
+        public void SetTotalTextBasePresentation(Color color, Vector3 scale)
+        {
+            reflection.SetProperty(texts.TotalText, "color", color);
+            texts.TotalText.transform.localScale = scale;
+        }
+
+        public void ConfigureTierPresentation(
+            Color manganColor,
+            Color yakumanColor,
+            float manganScalePeak,
+            float yakumanScalePeak,
+            float duration)
+        {
+            reflection.SetPrivateField(controller, "manganOrAboveTotalTextColor", manganColor);
+            reflection.SetPrivateField(controller, "yakumanTotalTextColor", yakumanColor);
+            reflection.SetPrivateField(controller, "manganOrAboveTotalScalePeak", manganScalePeak);
+            reflection.SetPrivateField(controller, "yakumanTotalScalePeak", yakumanScalePeak);
+            reflection.SetPrivateField(controller, "resultTierEmphasisDuration", duration);
+        }
+
+        public void SetGeneratedRowsRevealVisible(bool visible)
+        {
+            reflection.Invoke(controller, "SetGeneratedRowsRevealVisible", visible);
+        }
+
+        public void SetTotalRevealVisible(bool visible)
+        {
+            reflection.Invoke(controller, "SetTotalRevealVisible", visible);
+        }
+
+        public void SetConfirmInteractable(bool interactable)
+        {
+            reflection.Invoke(controller, "SetConfirmInteractable", interactable);
+        }
+
+        public void SetWinTypePresentationScale(float multiplier)
+        {
+            reflection.Invoke(controller, "SetWinTypePresentationScale", multiplier);
+        }
+
+        public void InvokeOnDisable()
+        {
+            reflection.Invoke(controller, "OnDisable");
+        }
+
+        public IEnumerator CreateRevealSequence()
+        {
+            return (IEnumerator)reflection.Invoke(controller, "RevealWinResult");
+        }
+
         public string YakuNameAt(int index)
         {
             return RowText(index, "yakuNameText");
@@ -966,6 +1463,14 @@ namespace MahjongPrototype.Tests
         public string YakuValueAt(int index)
         {
             return RowText(index, "valueText");
+        }
+
+        public float YakuNameAlphaAt(int index)
+        {
+            Component row = yakuListRoot.GetChild(index)
+                .GetComponent(reflection.RequireType(RowControllerTypeName));
+            Component text = (Component)reflection.GetPrivateField(row, "yakuNameText");
+            return TextAlpha(text);
         }
 
         public void Dispose()
@@ -990,6 +1495,16 @@ namespace MahjongPrototype.Tests
             return (string)reflection.GetProperty(text, "text");
         }
 
+        private float TextAlpha(Component text)
+        {
+            return TextColor(text).a;
+        }
+
+        private Color TextColor(Component text)
+        {
+            return (Color)reflection.GetProperty(text, "color");
+        }
+
         private static Component CreateYakuRowPrefab(
             ReflectionTestAccess reflection,
             Transform parent)
@@ -1012,6 +1527,17 @@ namespace MahjongPrototype.Tests
                 .AddComponent(reflection.RequireType(TextMeshProUguiTypeName));
         }
 
+        private static Button CreateButton(Transform parent, string name)
+        {
+            GameObject gameObject = new GameObject(
+                name,
+                typeof(RectTransform),
+                typeof(Image),
+                typeof(Button));
+            gameObject.transform.SetParent(parent);
+            return gameObject.GetComponent<Button>();
+        }
+
         private static GameObject CreateChild(Transform parent, string name)
         {
             GameObject gameObject = new GameObject(name);
@@ -1032,14 +1558,15 @@ namespace MahjongPrototype.Tests
 
             public static TextRefs Create(
                 ReflectionTestAccess reflection,
-                Transform parent)
+                Transform parent,
+                Transform winTypePresentationRoot)
             {
                 return new TextRefs
                 {
                     TitleText = CreateText(reflection, parent, "RenamedTitle"),
                     RoundText = CreateText(reflection, parent, "RenamedRound"),
                     WinnerText = CreateText(reflection, parent, "RenamedWinner"),
-                    WinTypeText = CreateText(reflection, parent, "RenamedWinType"),
+                    WinTypeText = CreateText(reflection, winTypePresentationRoot, "RenamedWinType"),
                     SourceSeatText = CreateText(reflection, parent, "RenamedSourceSeatText"),
                     WinningTileText = CreateText(reflection, parent, "RenamedWinningTile"),
                     TotalText = CreateText(reflection, parent, "RenamedTotal"),
