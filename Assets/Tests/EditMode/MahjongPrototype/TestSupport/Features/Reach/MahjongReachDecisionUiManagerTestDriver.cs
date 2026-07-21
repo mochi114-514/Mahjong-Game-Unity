@@ -26,9 +26,9 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
         private const string DrawResultTypeName =
             "MahjongPrototype.Services.DrawResult, Assembly-CSharp";
         private const string DrawPurposeTypeName =
-            "MahjongPrototype.Domain.DrawPurpose, Assembly-CSharp";
+            "MahjongPrototype.Services.DrawPurpose, Assembly-CSharp";
         private const string DrawSourceTypeName =
-            "MahjongPrototype.Domain.DrawSource, Assembly-CSharp";
+            "MahjongPrototype.Services.DrawSource, Assembly-CSharp";
         private const string ActiveSkillEffectTypeName =
             "MahjongPrototype.Skills.ActiveSkillEffect, Assembly-CSharp";
         private const string GroupPrefabPath =
