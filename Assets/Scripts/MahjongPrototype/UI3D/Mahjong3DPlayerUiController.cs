@@ -177,7 +177,7 @@ namespace MahjongPrototype.UI3D
 
         public void RenderDiscardRiver(IReadOnlyList<DiscardRecord> discards, SeatId dataSeat)
         {
-            RenderDiscardRiver(discards, null, dataSeat, false, 0);
+            RenderDiscardRiver(discards, null, dataSeat, false, 0, null);
         }
 
         public void RenderDiscardRiver(
@@ -185,7 +185,7 @@ namespace MahjongPrototype.UI3D
             IReadOnlyDictionary<int, DiscardClaim> discardClaims,
             SeatId dataSeat)
         {
-            RenderDiscardRiver(discards, discardClaims, dataSeat, false, 0);
+            RenderDiscardRiver(discards, discardClaims, dataSeat, false, 0, null);
         }
 
         public void RenderDiscardRiver(
@@ -194,6 +194,23 @@ namespace MahjongPrototype.UI3D
             SeatId dataSeat,
             bool isReachDeclared,
             int reachDeclaredTurnIndex)
+        {
+            RenderDiscardRiver(
+                discards,
+                discardClaims,
+                dataSeat,
+                isReachDeclared,
+                reachDeclaredTurnIndex,
+                null);
+        }
+
+        public void RenderDiscardRiver(
+            IReadOnlyList<DiscardRecord> discards,
+            IReadOnlyDictionary<int, DiscardClaim> discardClaims,
+            SeatId dataSeat,
+            bool isReachDeclared,
+            int reachDeclaredTurnIndex,
+            int? reactionHighlightDiscardId)
         {
             if (discardRiverView == null)
             {
@@ -206,7 +223,8 @@ namespace MahjongPrototype.UI3D
                 discardClaims,
                 dataSeat,
                 isReachDeclared,
-                reachDeclaredTurnIndex);
+                reachDeclaredTurnIndex,
+                reactionHighlightDiscardId);
         }
 
         public void ClearDiscardRiver()
@@ -215,6 +233,12 @@ namespace MahjongPrototype.UI3D
                 return;
 
             discardRiverView.Clear();
+        }
+
+        public void ClearDiscardReactionHighlights()
+        {
+            if (discardRiverView != null)
+                discardRiverView.ClearReactionHighlights();
         }
 
         public void RenderOpenMelds(IReadOnlyList<PlayerMeld> melds)

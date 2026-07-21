@@ -1,5 +1,9 @@
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.Reflection;
+using MahjongPrototype.Tests.TestSupport.Core;
+using MahjongPrototype.Tests.TestSupport.Mahjong;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -12,8 +16,56 @@ namespace MahjongPrototype.Tests
     {
         private const string HighlightTypeName =
             "MahjongPrototype.UI3D.Mahjong3DTileReactionHighlight, Assembly-CSharp";
+        private const string UiManagerTypeName =
+            "MahjongPrototype.UI.MahjongPrototypeUiManager, Assembly-CSharp";
+        private const string PlayerAreaPresenterTypeName =
+            "MahjongPrototype.UI3D.Mahjong3DPlayerAreaPresenter, Assembly-CSharp";
+        private const string PlayerUiControllerTypeName =
+            "MahjongPrototype.UI3D.Mahjong3DPlayerUiController, Assembly-CSharp";
+        private const string DiscardRiverViewTypeName =
+            "MahjongPrototype.UI3D.Mahjong3DDiscardRiverView, Assembly-CSharp";
         private const string TileViewTypeName =
             "MahjongPrototype.UI3D.Mahjong3DTileView, Assembly-CSharp";
+        private const string TileTypeName = "MahjongPrototype.Domain.Tile, Assembly-CSharp";
+        private const string SeatIdTypeName = "MahjongPrototype.Domain.SeatId, Assembly-CSharp";
+        private const string DiscardRecordTypeName =
+            "MahjongPrototype.Domain.DiscardRecord, Assembly-CSharp";
+        private const string DiscardClaimTypeName =
+            "MahjongPrototype.Domain.DiscardClaim, Assembly-CSharp";
+        private const string DiscardSourceTypeName =
+            "MahjongPrototype.Domain.DiscardSource, Assembly-CSharp";
+        private const string ReactionDecisionRequestTypeName =
+            "MahjongPrototype.Domain.ReactionDecisionRequest, Assembly-CSharp";
+        private const string ReactionDecisionOptionTypeName =
+            "MahjongPrototype.Domain.ReactionDecisionOption, Assembly-CSharp";
+        private const string ReactionDecisionChiOptionTypeName =
+            "MahjongPrototype.Domain.ReactionDecisionChiOption, Assembly-CSharp";
+        private const string ReactionWindowSourceKindTypeName =
+            "MahjongPrototype.Domain.ReactionWindowSourceKind, Assembly-CSharp";
+        private const string ReactionWindowSeatAnswerKindTypeName =
+            "MahjongPrototype.Domain.ReactionWindowSeatAnswerKind, Assembly-CSharp";
+        private const string MatchRosterTypeName =
+            "MahjongPrototype.Domain.MatchRoster, Assembly-CSharp";
+        private const string MatchParticipantTypeName =
+            "MahjongPrototype.Domain.MatchParticipant, Assembly-CSharp";
+        private const string ParticipantKindTypeName =
+            "MahjongPrototype.Domain.ParticipantKind, Assembly-CSharp";
+        private const string DecisionProviderRegistryTypeName =
+            "MahjongPrototype.Domain.DecisionProviderRegistry, Assembly-CSharp";
+        private const string DecisionProviderRegistrationTypeName =
+            "MahjongPrototype.Domain.DecisionProviderRegistration, Assembly-CSharp";
+        private const string DecisionProviderRouteTypeName =
+            "MahjongPrototype.Domain.DecisionProviderRoute, Assembly-CSharp";
+        private const string LocalUiDecisionProviderTypeName =
+            "MahjongPrototype.LocalUiDecisionProvider, Assembly-CSharp";
+        private const string ReactionWindowCandidateTypeName =
+            "MahjongPrototype.Domain.ReactionWindowCandidate, Assembly-CSharp";
+        private const string DecisionKindTypeName =
+            "MahjongPrototype.Domain.DecisionKind, Assembly-CSharp";
+        private const string DecisionResponseTypeName =
+            "MahjongPrototype.Domain.DecisionResponse, Assembly-CSharp";
+        private const string ReactionDecisionResponseTypeName =
+            "MahjongPrototype.Domain.ReactionDecisionResponse, Assembly-CSharp";
         private const string RiverVariantPath = "Assets/Prefab/Tiles/3DTile_RiverHighlight.prefab";
         private const string ScenePath = "Assets/Scenes/Mahjong Prototype.unity";
         private const string HighlightShaderName = "Mahjong Prototype/Reaction Highlight Shell";
@@ -287,6 +339,204 @@ namespace MahjongPrototype.Tests
             }
         }
 
+        [Test]
+        public void ResolveReactionHighlightDiscardId_UsesCallOptionsAndExactDiscardIdentity()
+        {
+            IList discards = CreateList(RequireType(DiscardRecordTypeName));
+            discards.Add(CreateDiscard(101, "East", "5m", 3));
+            discards.Add(CreateDiscard(102, "East", "5m", 7));
+
+            Assert.That(
+                ResolveReactionHighlightDiscardId(
+                    discards,
+                    CreateReactionRequest("Discard", "East", "5m", 7, "Pon")),
+                Is.EqualTo(102));
+            Assert.That(
+                ResolveReactionHighlightDiscardId(
+                    discards,
+                    CreateReactionRequest("Discard", "East", "5m", 7, "Chi")),
+                Is.EqualTo(102));
+            Assert.That(
+                ResolveReactionHighlightDiscardId(
+                    discards,
+                    CreateReactionRequest("Discard", "East", "5m", 7, "Daiminkan")),
+                Is.EqualTo(102));
+            Assert.That(
+                ResolveReactionHighlightDiscardId(
+                    discards,
+                    CreateReactionRequest("Discard", "East", "5m", 7, "Ron", "Pon")),
+                Is.EqualTo(102));
+            Assert.That(
+                ResolveReactionHighlightDiscardId(
+                    discards,
+                    CreateReactionRequest("Discard", "East", "5m", 8, "Pon")),
+                Is.Null);
+        }
+
+        [Test]
+        public void ResolveReactionHighlightDiscardId_ExcludesNonCallAndKakanRequests()
+        {
+            IList discards = CreateList(RequireType(DiscardRecordTypeName));
+            discards.Add(CreateDiscard(101, "East", "5m", 7));
+
+            Assert.That(
+                ResolveReactionHighlightDiscardId(
+                    discards,
+                    CreateReactionRequest("Discard", "East", "5m", 7, "Ron")),
+                Is.Null);
+            Assert.That(
+                ResolveReactionHighlightDiscardId(
+                    discards,
+                    CreateReactionRequest("Discard", "East", "5m", 7)),
+                Is.Null);
+            Assert.That(
+                ResolveReactionHighlightDiscardId(
+                    discards,
+                    CreateReactionRequest("Kakan", "East", "5m", 7, "Pon")),
+                Is.Null);
+        }
+
+        [Test]
+        public void RenderDiscardRiver_HighlightsOnlyTheMatchingUnclaimedDiscardId()
+        {
+            GameObject root = new GameObject("ReactionHighlightDiscardRiverTest");
+            try
+            {
+                Component riverView = root.AddComponent(RequireType(DiscardRiverViewTypeName));
+                SetPrivateField(
+                    riverView,
+                    "tilePrefab",
+                    AssetDatabase.LoadAssetAtPath<GameObject>(RiverVariantPath)
+                        .GetComponent(RequireType(TileViewTypeName)));
+                IList discards = CreateList(RequireType(DiscardRecordTypeName));
+                discards.Add(CreateDiscard(21, "East", "5m", 2));
+                discards.Add(CreateDiscard(22, "East", "5m", 6));
+
+                Invoke(riverView, "RenderDiscardRiver", discards, null, Seat("East"), false, 0, 22);
+
+                Component[] tiles = GetTileViews(root);
+                Assert.That(tiles.Length, Is.EqualTo(2));
+                Assert.That(IsReactionHighlighted(tiles[0]), Is.False);
+                Assert.That(IsReactionHighlighted(tiles[1]), Is.True);
+
+                Invoke(riverView, "ClearReactionHighlights");
+                Assert.That(IsReactionHighlighted(tiles[0]), Is.False);
+                Assert.That(IsReactionHighlighted(tiles[1]), Is.False);
+
+                Invoke(
+                    riverView,
+                    "RenderDiscardRiver",
+                    discards,
+                    CreateClaims(22),
+                    Seat("East"),
+                    false,
+                    0,
+                    22);
+                tiles = GetTileViews(root);
+                Assert.That(tiles.Length, Is.EqualTo(1));
+                Assert.That(IsReactionHighlighted(tiles[0]), Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void RenderDiscardRiver_HighlightsAReachDeclarationTileWithoutChangingItsRotation()
+        {
+            GameObject root = new GameObject("ReactionHighlightReachDiscardRiverTest");
+            try
+            {
+                Component riverView = root.AddComponent(RequireType(DiscardRiverViewTypeName));
+                SetPrivateField(
+                    riverView,
+                    "tilePrefab",
+                    AssetDatabase.LoadAssetAtPath<GameObject>(RiverVariantPath)
+                        .GetComponent(RequireType(TileViewTypeName)));
+                IList discards = CreateList(RequireType(DiscardRecordTypeName));
+                discards.Add(CreateDiscard(31, "East", "5m", 4));
+
+                Invoke(riverView, "RenderDiscardRiver", discards, null, Seat("East"), true, 4, 31);
+
+                Component[] tiles = GetTileViews(root);
+                Assert.That(tiles.Length, Is.EqualTo(1));
+                Assert.That(IsReactionHighlighted(tiles[0]), Is.True);
+                Assert.That(
+                    Quaternion.Angle(tiles[0].transform.localRotation, Quaternion.Euler(0f, 0f, 90f)),
+                    Is.LessThan(0.001f));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void UiManagerOnDisable_ClearsGeneratedDiscardReactionHighlights()
+        {
+            GameObject root = new GameObject("ReactionHighlightUiManagerDisableTest");
+            try
+            {
+                Component uiManager = root.AddComponent(RequireType(UiManagerTypeName));
+                Component presenter = CreateDiscardRiverPresenter(root.transform, out Component riverView);
+                SetPrivateField(uiManager, "playerArea3DPresenter", presenter);
+                SetPrivateField(
+                    riverView,
+                    "tilePrefab",
+                    AssetDatabase.LoadAssetAtPath<GameObject>(RiverVariantPath)
+                        .GetComponent(RequireType(TileViewTypeName)));
+                IList discards = CreateList(RequireType(DiscardRecordTypeName));
+                discards.Add(CreateDiscard(41, "East", "5m", 4));
+                Invoke(riverView, "RenderDiscardRiver", discards, null, Seat("East"), false, 0, 41);
+
+                Component[] tiles = GetTileViews(root);
+                Assert.That(tiles.Length, Is.EqualTo(1));
+                Assert.That(IsReactionHighlighted(tiles[0]), Is.True);
+
+                Invoke(uiManager, "OnDisable");
+
+                Assert.That(IsReactionHighlighted(tiles[0]), Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void ReactionWindowAnswerEvents_KeepHighlightUntilTheLocalCallRequestIsAnswered()
+        {
+            using (ReactionHighlightLifecycleFixture fixture = ReactionHighlightLifecycleFixture.Create(true))
+            {
+                fixture.RefreshForReactionWindowStarted();
+                Assert.That(fixture.HighlightedTileCount, Is.EqualTo(1));
+
+                fixture.SubmitResponse("South", "Pass");
+                fixture.RefreshForReactionWindowAnswered();
+                Assert.That(fixture.HighlightedTileCount, Is.EqualTo(1));
+
+                fixture.SubmitResponse("East", "Pon");
+                fixture.RefreshForReactionWindowAnswered();
+                Assert.That(fixture.HighlightedTileCount, Is.Zero);
+
+                fixture.RefreshForReactionWindowResolved();
+                fixture.RefreshForReactionWindowClosed();
+                Assert.That(fixture.HighlightedTileCount, Is.Zero);
+            }
+        }
+
+        [Test]
+        public void ReactionWindowStarted_DoesNotHighlightWhenOnlyAnotherSeatHasTheCallRequest()
+        {
+            using (ReactionHighlightLifecycleFixture fixture = ReactionHighlightLifecycleFixture.Create(false))
+            {
+                fixture.RefreshForReactionWindowStarted();
+
+                Assert.That(fixture.HighlightedTileCount, Is.Zero);
+            }
+        }
+
         private static HighlightTestFixture CreateFixture()
         {
             GameObject root = new GameObject("ReactionHighlightTestRoot");
@@ -350,6 +600,420 @@ namespace MahjongPrototype.Tests
             MeshRenderer renderer = child.AddComponent<MeshRenderer>();
             renderer.sharedMaterial = material;
             return renderer;
+        }
+
+        private static object ResolveReactionHighlightDiscardId(
+            IList discards,
+            object reactionRequest)
+        {
+            Type uiManagerType = RequireType(UiManagerTypeName);
+            MethodInfo method = uiManagerType.GetMethod(
+                "ResolveReactionHighlightDiscardId",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                null,
+                new[] { typeof(IReadOnlyList<>).MakeGenericType(RequireType(DiscardRecordTypeName)), RequireType(ReactionDecisionRequestTypeName) },
+                null);
+            Assert.That(method, Is.Not.Null);
+            return method.Invoke(null, new[] { (object)discards, reactionRequest });
+        }
+
+        private static object CreateReactionRequest(
+            string sourceKind,
+            string sourceSeat,
+            string sourceTile,
+            int sourceTurnIndex,
+            params string[] optionKinds)
+        {
+            Type optionType = RequireType(ReactionDecisionOptionTypeName);
+            IList options = CreateList(optionType);
+            options.Add(CreateReactionOption("Pass"));
+            for (int i = 0; i < optionKinds.Length; i++)
+                options.Add(CreateReactionOption(optionKinds[i]));
+
+            return Activator.CreateInstance(
+                RequireType(ReactionDecisionRequestTypeName),
+                1,
+                Enum.Parse(RequireType(ReactionWindowSourceKindTypeName), sourceKind),
+                Seat(sourceSeat),
+                CreateTile(sourceTile),
+                sourceTurnIndex,
+                options);
+        }
+
+        private static object CreateReactionOption(string kind)
+        {
+            object answerKind = Enum.Parse(RequireType(ReactionWindowSeatAnswerKindTypeName), kind);
+            if (kind != "Chi")
+            {
+                return Activator.CreateInstance(
+                    RequireType(ReactionDecisionOptionTypeName),
+                    answerKind,
+                    null);
+            }
+
+            IList chiOptions = CreateList(RequireType(ReactionDecisionChiOptionTypeName));
+            chiOptions.Add(Activator.CreateInstance(
+                RequireType(ReactionDecisionChiOptionTypeName),
+                1,
+                CreateTiles("3m", "4m"),
+                CreateTiles("3m", "4m", "5m")));
+            return Activator.CreateInstance(
+                RequireType(ReactionDecisionOptionTypeName),
+                answerKind,
+                chiOptions);
+        }
+
+        private static Component CreateDiscardRiverPresenter(
+            Transform parent,
+            out Component riverView)
+        {
+            Component presenter = new GameObject("Presenter")
+                .AddComponent(RequireType(PlayerAreaPresenterTypeName));
+            presenter.transform.SetParent(parent, false);
+            Component controller = new GameObject("SelfController")
+                .AddComponent(RequireType(PlayerUiControllerTypeName));
+            controller.transform.SetParent(presenter.transform, false);
+            riverView = new GameObject("DiscardRiver")
+                .AddComponent(RequireType(DiscardRiverViewTypeName));
+            riverView.transform.SetParent(controller.transform, false);
+            SetPrivateField(controller, "discardRiverView", riverView);
+            SetPrivateField(presenter, "selfBottomPlayerUiController", controller);
+            return presenter;
+        }
+
+        private static Component CreateAllDiscardRiverPresenter(
+            Transform parent,
+            List<Component> riverViews)
+        {
+            Component presenter = new GameObject("Presenter")
+                .AddComponent(RequireType(PlayerAreaPresenterTypeName));
+            presenter.transform.SetParent(parent, false);
+            string[] fields =
+            {
+                "selfBottomPlayerUiController",
+                "nextLeftPlayerUiController",
+                "acrossTopPlayerUiController",
+                "previousRightPlayerUiController"
+            };
+            for (int i = 0; i < fields.Length; i++)
+            {
+                Component controller = new GameObject($"Controller{i}")
+                    .AddComponent(RequireType(PlayerUiControllerTypeName));
+                controller.transform.SetParent(presenter.transform, false);
+                Component riverView = new GameObject($"DiscardRiver{i}")
+                    .AddComponent(RequireType(DiscardRiverViewTypeName));
+                riverView.transform.SetParent(controller.transform, false);
+                SetPrivateField(controller, "discardRiverView", riverView);
+                SetPrivateField(presenter, fields[i], controller);
+                riverViews.Add(riverView);
+            }
+
+            return presenter;
+        }
+
+        private static bool IsReactionHighlighted(Component tileView)
+        {
+            Component reactionHighlight = tileView.GetComponent(RequireType(HighlightTypeName));
+            Assert.That(reactionHighlight, Is.Not.Null);
+            return (bool)GetProperty(reactionHighlight, "IsHighlighted");
+        }
+
+        private static Component[] GetTileViews(GameObject root)
+        {
+            return root.GetComponentsInChildren(RequireType(TileViewTypeName), true);
+        }
+
+        private static object CreateDiscard(int id, string seatName, string tileCode, int turnIndex)
+        {
+            return Activator.CreateInstance(
+                RequireType(DiscardRecordTypeName),
+                id,
+                Seat(seatName),
+                CreateTile(tileCode),
+                turnIndex,
+                Enum.Parse(RequireType(DiscardSourceTypeName), "Hand"),
+                false);
+        }
+
+        private static IDictionary CreateClaims(int discardId)
+        {
+            Type claimType = RequireType(DiscardClaimTypeName);
+            IDictionary claims = (IDictionary)Activator.CreateInstance(
+                typeof(Dictionary<,>).MakeGenericType(typeof(int), claimType));
+            claims.Add(discardId, Activator.CreateInstance(claimType));
+            return claims;
+        }
+
+        private static IList CreateTiles(params string[] codes)
+        {
+            IList tiles = CreateList(RequireType(TileTypeName));
+            for (int i = 0; i < codes.Length; i++)
+                tiles.Add(CreateTile(codes[i]));
+
+            return tiles;
+        }
+
+        private static IList CreateList(Type itemType)
+        {
+            return (IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(itemType));
+        }
+
+        private static object CreateTile(string code)
+        {
+            return Activator.CreateInstance(RequireType(TileTypeName), code);
+        }
+
+        private static object Seat(string name)
+        {
+            return Enum.Parse(RequireType(SeatIdTypeName), name);
+        }
+
+        private static Type RequireType(string typeName)
+        {
+            Type type = Type.GetType(typeName, true);
+            Assert.That(type, Is.Not.Null, $"Missing type: {typeName}");
+            return type;
+        }
+
+        private sealed class ReactionHighlightLifecycleFixture : IDisposable
+        {
+            private readonly MahjongGameFlowTestSession session;
+            private readonly GameObject uiRoot;
+            private readonly Component uiManager;
+            private readonly List<Component> riverViews;
+            private readonly Dictionary<string, object> providers;
+            private readonly object reactionWindow;
+            private bool disposed;
+
+            private ReactionHighlightLifecycleFixture(
+                MahjongGameFlowTestSession session,
+                GameObject uiRoot,
+                Component uiManager,
+                List<Component> riverViews,
+                Dictionary<string, object> providers,
+                object reactionWindow)
+            {
+                this.session = session;
+                this.uiRoot = uiRoot;
+                this.uiManager = uiManager;
+                this.riverViews = riverViews;
+                this.providers = providers;
+                this.reactionWindow = reactionWindow;
+            }
+
+            public int HighlightedTileCount
+            {
+                get
+                {
+                    int count = 0;
+                    for (int i = 0; i < riverViews.Count; i++)
+                    {
+                        Component[] tileViews = GetTileViews(riverViews[i].gameObject);
+                        for (int j = 0; j < tileViews.Length; j++)
+                        {
+                            if (IsReactionHighlighted(tileViews[j]))
+                                count++;
+                        }
+                    }
+
+                    return count;
+                }
+            }
+
+            public static ReactionHighlightLifecycleFixture Create(bool includeLocalCall)
+            {
+                MahjongGameFlowTestSession session = MahjongGameFlowTestSession.Create(
+                    new MahjongGameFlowTestOptions
+                    {
+                        RootName = "ReactionHighlightLifecycleFlow",
+                        AddEventNotifier = true,
+                        LogWarnings = false,
+                        ParticipantCount = 3,
+                        InitialHandTileCount = 0,
+                        AutoStart = false,
+                        UseFixedRandomSeed = true,
+                        FixedRandomSeed = 12345,
+                        EnableAutoDraw = false,
+                        RandomizeSelfSeat = false,
+                        FixedSelfSeatName = "East"
+                    });
+                GameObject uiRoot = null;
+                try
+                {
+                    Dictionary<string, object> providers = ConfigureAllLocalHumanPlayers(session);
+                    object start = session.Reflection.Invoke(session.GameFlow, "TryStartNewRound");
+                    Assert.That((bool)session.Reflection.GetProperty(start, "IsValid"), Is.True);
+
+                    int turnIndex = (int)session.Reflection.GetProperty(session.CurrentState, "TurnIndex");
+                    object sourceDiscard = session.Reflection.Invoke(
+                        session.CurrentState,
+                        "AddDiscard",
+                        session.DataFactory.CreateDiscardRecord("West", "5m", turnIndex));
+                    IList candidates = CreateList(RequireType(ReactionWindowCandidateTypeName));
+                    if (includeLocalCall)
+                        candidates.Add(CreatePonCandidate(session, "East"));
+                    candidates.Add(CreatePonCandidate(session, "South"));
+                    object reactionWindow = session.Reflection.Invoke(
+                        session.CurrentState,
+                        "BeginReactionWindow",
+                        sourceDiscard,
+                        candidates);
+                    object[] beginRequestArguments = { reactionWindow, null };
+                    Assert.That(
+                        (bool)session.Reflection.Invoke(
+                            session.GameFlow,
+                            "TryBeginReactionSeatAnswerRequests",
+                            beginRequestArguments),
+                        Is.True,
+                        beginRequestArguments[1] as string);
+
+                    uiRoot = new GameObject("ReactionHighlightLifecycleUi");
+                    Component uiManager = uiRoot.AddComponent(RequireType(UiManagerTypeName));
+                    List<Component> riverViews = new List<Component>();
+                    Component presenter = CreateAllDiscardRiverPresenter(uiRoot.transform, riverViews);
+                    Component tilePrefab = AssetDatabase.LoadAssetAtPath<GameObject>(RiverVariantPath)
+                        .GetComponent(RequireType(TileViewTypeName));
+                    for (int i = 0; i < riverViews.Count; i++)
+                        SetPrivateField(riverViews[i], "tilePrefab", tilePrefab);
+
+                    SetPrivateField(uiManager, "gameFlow", session.GameFlow);
+                    SetPrivateField(uiManager, "playerArea3DPresenter", presenter);
+                    return new ReactionHighlightLifecycleFixture(
+                        session,
+                        uiRoot,
+                        uiManager,
+                        riverViews,
+                        providers,
+                        reactionWindow);
+                }
+                catch
+                {
+                    if (uiRoot != null)
+                        UnityEngine.Object.DestroyImmediate(uiRoot);
+                    session.Dispose();
+                    throw;
+                }
+            }
+
+            public void RefreshForReactionWindowStarted()
+            {
+                Invoke(uiManager, "HandleReactionWindowChanged", reactionWindow);
+            }
+
+            public void RefreshForReactionWindowAnswered()
+            {
+                Invoke(uiManager, "HandleReactionWindowAnswered", (object)null);
+            }
+
+            public void RefreshForReactionWindowResolved()
+            {
+                Invoke(
+                    uiManager,
+                    "HandleReactionWindowResolved",
+                    Activator.CreateInstance(
+                        RequireType("MahjongPrototype.Domain.ReactionWindowResolution, Assembly-CSharp")));
+            }
+
+            public void RefreshForReactionWindowClosed()
+            {
+                Invoke(
+                    uiManager,
+                    "HandleReactionWindowClosed",
+                    session.Reflection.GetProperty(reactionWindow, "WindowId"));
+            }
+
+            public void SubmitResponse(string seatName, string answerKind)
+            {
+                object seat = Seat(seatName);
+                object playerId = session.Reflection.GetProperty(
+                    session.Reflection.Invoke(session.CurrentState, "GetSeatSlot", seat),
+                    "PlayerId");
+                object[] pendingArguments = { playerId, null };
+                Assert.That(
+                    (bool)session.Reflection.Invoke(
+                        session.GameFlow,
+                        "TryGetPendingReactionDecisionRequest",
+                        pendingArguments),
+                    Is.True);
+                object request = pendingArguments[1];
+                object reaction = session.Reflection.GetProperty(request, "Reaction");
+                object response = session.Reflection.CreateInstance(
+                    RequireType(DecisionResponseTypeName),
+                    session.Reflection.GetProperty(request, "RequestId"),
+                    Enum.Parse(RequireType(DecisionKindTypeName), "Reaction"),
+                    playerId,
+                    session.Reflection.GetProperty(request, "ActorSeat"),
+                    session.Reflection.GetProperty(request, "TurnIndex"),
+                    true,
+                    session.Reflection.CreateInstance(
+                        RequireType(ReactionDecisionResponseTypeName),
+                        session.Reflection.GetProperty(reaction, "WindowId"),
+                        Enum.Parse(RequireType(ReactionWindowSeatAnswerKindTypeName), answerKind),
+                        null));
+                Assert.That(
+                    (bool)session.Reflection.Invoke(
+                        providers[playerId.ToString()],
+                        "TrySubmitResponse",
+                        response),
+                    Is.True);
+                session.Reflection.Invoke(
+                    session.Reflection.GetProperty(session.GameFlow, "DecisionCoordinator"),
+                    "Pump");
+            }
+
+            public void Dispose()
+            {
+                if (disposed)
+                    return;
+
+                disposed = true;
+                if (uiRoot != null)
+                    UnityEngine.Object.DestroyImmediate(uiRoot);
+                session.Dispose();
+            }
+
+            private static Dictionary<string, object> ConfigureAllLocalHumanPlayers(
+                MahjongGameFlowTestSession session)
+            {
+                ReflectionTestAccess reflection = session.Reflection;
+                IList participants = CreateList(RequireType(MatchParticipantTypeName));
+                IList registrations = CreateList(RequireType(DecisionProviderRegistrationTypeName));
+                Dictionary<string, object> providers = new Dictionary<string, object>();
+                for (int i = 1; i <= 3; i++)
+                {
+                    string playerName = $"Player{i}";
+                    object playerId = session.DataFactory.ParsePlayerId(playerName);
+                    participants.Add(reflection.CreateInstance(
+                        RequireType(MatchParticipantTypeName),
+                        playerId,
+                        Enum.Parse(RequireType(ParticipantKindTypeName), "Human")));
+                    object provider = Activator.CreateInstance(RequireType(LocalUiDecisionProviderTypeName));
+                    providers.Add(playerName, provider);
+                    registrations.Add(reflection.CreateInstance(
+                        RequireType(DecisionProviderRegistrationTypeName),
+                        playerId,
+                        Enum.Parse(RequireType(DecisionProviderRouteTypeName), "LocalUi"),
+                        provider));
+                }
+
+                reflection.Invoke(
+                    session.GameFlow,
+                    "ConfigureMatch",
+                    reflection.CreateInstance(RequireType(MatchRosterTypeName), participants),
+                    reflection.CreateInstance(RequireType(DecisionProviderRegistryTypeName), registrations));
+                return providers;
+            }
+
+            private static object CreatePonCandidate(
+                MahjongGameFlowTestSession session,
+                string seatName)
+            {
+                return session.Reflection.InvokeStatic(
+                    RequireType(ReactionWindowCandidateTypeName),
+                    "CreatePon",
+                    Seat(seatName),
+                    CreateTile("5m"));
+            }
         }
 
         private static void SetPrivateField(object target, string fieldName, object value)

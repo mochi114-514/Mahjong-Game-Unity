@@ -62,13 +62,21 @@ namespace MahjongPrototype.UI3D
 
         public void Refresh(MahjongGameState state, bool canUseSelfInput)
         {
+            Refresh(state, canUseSelfInput, null);
+        }
+
+        public void Refresh(
+            MahjongGameState state,
+            bool canUseSelfInput,
+            int? reactionHighlightDiscardId)
+        {
             if (state == null)
                 return;
 
             SubscribePlayerEvents();
             RefreshHand(state, canUseSelfInput);
             RefreshDrawnTile(state, canUseSelfInput);
-            RefreshDiscardRiver(state);
+            RefreshDiscardRiver(state, reactionHighlightDiscardId);
             RefreshOpenMelds(state);
         }
 
@@ -204,6 +212,13 @@ namespace MahjongPrototype.UI3D
 
         public void RefreshDiscardRiver(MahjongGameState state)
         {
+            RefreshDiscardRiver(state, null);
+        }
+
+        public void RefreshDiscardRiver(
+            MahjongGameState state,
+            int? reactionHighlightDiscardId)
+        {
             if (state == null)
                 return;
 
@@ -223,7 +238,7 @@ namespace MahjongPrototype.UI3D
                 if (controller == null)
                     continue;
 
-                RenderDiscardRiver(controller, state, seat);
+                RenderDiscardRiver(controller, state, seat, reactionHighlightDiscardId);
                 renderedViewSlots.Add(viewSlot);
             }
 
@@ -231,6 +246,14 @@ namespace MahjongPrototype.UI3D
         }
 
         public void RefreshDiscardRiverForSeat(MahjongGameState state, SeatId seat)
+        {
+            RefreshDiscardRiverForSeat(state, seat, null);
+        }
+
+        public void RefreshDiscardRiverForSeat(
+            MahjongGameState state,
+            SeatId seat,
+            int? reactionHighlightDiscardId)
         {
             if (state == null)
                 return;
@@ -247,13 +270,14 @@ namespace MahjongPrototype.UI3D
                 return;
             }
 
-            RenderDiscardRiver(controller, state, seat);
+            RenderDiscardRiver(controller, state, seat, reactionHighlightDiscardId);
         }
 
         private static void RenderDiscardRiver(
             Mahjong3DPlayerUiController controller,
             MahjongGameState state,
-            SeatId seat)
+            SeatId seat,
+            int? reactionHighlightDiscardId)
         {
             PlayerSeat playerSeat = state.GetPlayerSeat(seat);
             controller.RenderDiscardRiver(
@@ -261,7 +285,8 @@ namespace MahjongPrototype.UI3D
                 state.DiscardClaims,
                 seat,
                 playerSeat.IsReachDeclared,
-                playerSeat.ReachDeclaredTurnIndex);
+                playerSeat.ReachDeclaredTurnIndex,
+                reactionHighlightDiscardId);
         }
 
         public void ClearDiscardRivers()
@@ -270,6 +295,14 @@ namespace MahjongPrototype.UI3D
             ClearDiscardRiver(ViewSlot.NextLeft);
             ClearDiscardRiver(ViewSlot.AcrossTop);
             ClearDiscardRiver(ViewSlot.PreviousRight);
+        }
+
+        public void ClearDiscardReactionHighlights()
+        {
+            ClearDiscardReactionHighlights(ViewSlot.SelfBottom);
+            ClearDiscardReactionHighlights(ViewSlot.NextLeft);
+            ClearDiscardReactionHighlights(ViewSlot.AcrossTop);
+            ClearDiscardReactionHighlights(ViewSlot.PreviousRight);
         }
 
         public void RefreshOpenMelds(MahjongGameState state)
@@ -609,6 +642,13 @@ namespace MahjongPrototype.UI3D
             Mahjong3DPlayerUiController controller = GetPlayerUiController(viewSlot);
             if (controller != null)
                 controller.ClearDiscardRiver();
+        }
+
+        private void ClearDiscardReactionHighlights(ViewSlot viewSlot)
+        {
+            Mahjong3DPlayerUiController controller = GetPlayerUiController(viewSlot);
+            if (controller != null)
+                controller.ClearDiscardReactionHighlights();
         }
 
         private void ClearUnrenderedOpenMelds(HashSet<ViewSlot> renderedViewSlots)

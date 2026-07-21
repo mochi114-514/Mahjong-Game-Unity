@@ -78,6 +78,8 @@ namespace MahjongPrototype.UI
         private bool warnedMissingZeroHanTenpaiController;
         private bool warnedMissingFuritenController;
         private MahjongRoundProgressController subscribedRoundProgressController;
+        private int? reactionHighlightDiscardId;
+        private int? resolvedReactionWindowIdAwaitingClosed;
         private void Reset()
         {
             CacheReferences();
@@ -135,6 +137,8 @@ namespace MahjongPrototype.UI
             UnsubscribeNotifications();
             inputController?.ClearReactionResponseBindings();
             ponDecisionController?.ClearReactionMeldCallDecision();
+            resolvedReactionWindowIdAwaitingClosed = null;
+            ClearDiscardReactionHighlights();
         }
 
         public void Refresh(MahjongGameState state)
@@ -146,12 +150,15 @@ namespace MahjongPrototype.UI
         {
             if (state == null)
             {
+                reactionHighlightDiscardId = null;
+                resolvedReactionWindowIdAwaitingClosed = null;
                 inputController?.ClearReactionResponseBindings();
                 ClearRoundResultUi();
                 RefreshTableCenterUi(null);
                 RefreshPonDecision(null);
                 ClearZeroHanTenpaiUi();
                 ClearFuritenUi();
+                ClearDiscardReactionHighlights();
                 return;
             }
 
@@ -181,11 +188,14 @@ namespace MahjongPrototype.UI
             if (gameFlow == null)
             {
                 WarnMissingOnce(ref warnedMissingFlow, "MahjongGameFlow is not assigned.");
+                reactionHighlightDiscardId = null;
+                resolvedReactionWindowIdAwaitingClosed = null;
                 inputController?.ClearReactionResponseBindings();
                 ClearRoundResultUi();
                 RefreshPonDecision(null);
                 ClearZeroHanTenpaiUi();
                 ClearFuritenUi();
+                ClearDiscardReactionHighlights();
                 return;
             }
 
@@ -562,6 +572,8 @@ namespace MahjongPrototype.UI
 
         private void HandleReactionWindowChanged(ReactionWindow _)
         {
+            resolvedReactionWindowIdAwaitingClosed = null;
+            RefreshDiscardRiversForReactionHighlight();
             RefreshGlobalStatus();
             RefreshWinDecisionUi();
             RefreshPonDecisionUi();
@@ -571,6 +583,7 @@ namespace MahjongPrototype.UI
 
         private void HandleReactionWindowAnswered(ReactionWindowAnswerResult _)
         {
+            RefreshDiscardRiversForReactionHighlight();
             RefreshGlobalStatus();
             RefreshWinDecisionUi();
             RefreshPonDecisionUi();
@@ -585,10 +598,11 @@ namespace MahjongPrototype.UI
                 resolution.Candidate != null)
             {
                 RefreshPlayerHandForSeat(resolution.Candidate.Seat);
-                RefreshPlayerDiscardRiverForSeat(resolution.SourceDiscard.ActorSeat);
                 RefreshPlayerOpenMeldsForSeat(resolution.Candidate.Seat);
             }
 
+            RefreshDiscardRiversForReactionHighlight();
+            resolvedReactionWindowIdAwaitingClosed = resolution.WindowId;
             RefreshGlobalStatus();
             RefreshWinDecisionUi();
             RefreshPonDecisionUi();
@@ -608,8 +622,13 @@ namespace MahjongPrototype.UI
             RefreshInteractionUi();
         }
 
-        private void HandleReactionWindowClosed(int _)
+        private void HandleReactionWindowClosed(int windowId)
         {
+            if (resolvedReactionWindowIdAwaitingClosed == windowId)
+                resolvedReactionWindowIdAwaitingClosed = null;
+            else
+                RefreshDiscardRiversForReactionHighlight();
+
             RefreshGlobalStatus();
             RefreshWinDecisionUi();
             RefreshPonDecisionUi();
@@ -781,7 +800,11 @@ namespace MahjongPrototype.UI
 
             if (gameFlow != null)
                 playerArea3DPresenter.SetViewContext(gameFlow.ViewContext);
-            playerArea3DPresenter.Refresh(state, CanUseSelfGameplayInput(state));
+            reactionHighlightDiscardId = ResolveReactionHighlightDiscardId(state);
+            playerArea3DPresenter.Refresh(
+                state,
+                CanUseSelfGameplayInput(state),
+                reactionHighlightDiscardId);
         }
 
         private void RefreshTableCenterUi(MahjongGameState state)
@@ -818,7 +841,35 @@ namespace MahjongPrototype.UI
                 return;
 
             ConfigurePresentationViewContext();
-            playerArea3DPresenter.RefreshDiscardRiverForSeat(state, seat);
+            reactionHighlightDiscardId = ResolveReactionHighlightDiscardId(state);
+            playerArea3DPresenter.RefreshDiscardRiverForSeat(
+                state,
+                seat,
+                reactionHighlightDiscardId);
+        }
+
+        private void RefreshDiscardRiversForReactionHighlight()
+        {
+            MahjongGameState state = gameFlow != null ? gameFlow.CurrentState : null;
+            if (state == null)
+            {
+                reactionHighlightDiscardId = null;
+                ClearDiscardReactionHighlights();
+                return;
+            }
+
+            reactionHighlightDiscardId = ResolveReactionHighlightDiscardId(state);
+            if (playerArea3DPresenter == null)
+                return;
+
+            ConfigurePresentationViewContext();
+            playerArea3DPresenter.RefreshDiscardRiver(state, reactionHighlightDiscardId);
+        }
+
+        private void ClearDiscardReactionHighlights()
+        {
+            if (playerArea3DPresenter != null)
+                playerArea3DPresenter.ClearDiscardReactionHighlights();
         }
 
         private void RefreshPlayerHandForSeat(SeatId seat)
@@ -1221,6 +1272,41 @@ namespace MahjongPrototype.UI
 
             request = pending;
             return true;
+        }
+
+        private int? ResolveReactionHighlightDiscardId(MahjongGameState state)
+        {
+            if (!TryGetSelfReactionDecisionRequest(state, out DecisionRequest request))
+                return null;
+
+            return ResolveReactionHighlightDiscardId(state.Discards, request.Reaction);
+        }
+
+        private static int? ResolveReactionHighlightDiscardId(
+            IReadOnlyList<DiscardRecord> discards,
+            ReactionDecisionRequest reaction)
+        {
+            if (discards == null || reaction == null ||
+                reaction.SourceKind != ReactionWindowSourceKind.Discard ||
+                (!reaction.Allows(ReactionWindowSeatAnswerKind.Pon) &&
+                 !reaction.Allows(ReactionWindowSeatAnswerKind.Chi) &&
+                 !reaction.Allows(ReactionWindowSeatAnswerKind.Daiminkan)))
+            {
+                return null;
+            }
+
+            for (int i = 0; i < discards.Count; i++)
+            {
+                DiscardRecord record = discards[i];
+                if (record.ActorSeat == reaction.SourceSeat &&
+                    record.Tile == reaction.SourceTile &&
+                    record.TurnIndex == reaction.SourceTurnIndex)
+                {
+                    return record.Id;
+                }
+            }
+
+            return null;
         }
 
         private bool TryGetSelfDecisionRequest(

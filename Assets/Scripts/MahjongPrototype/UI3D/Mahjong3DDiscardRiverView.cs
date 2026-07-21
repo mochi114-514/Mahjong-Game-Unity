@@ -27,7 +27,7 @@ namespace MahjongPrototype.UI3D
 
         public void RenderDiscardRiver(IReadOnlyList<DiscardRecord> discards, SeatId dataSeat)
         {
-            RenderDiscardRiver(discards, null, dataSeat, false, 0);
+            RenderDiscardRiver(discards, null, dataSeat, false, 0, null);
         }
 
         public void RenderDiscardRiver(
@@ -35,7 +35,7 @@ namespace MahjongPrototype.UI3D
             IReadOnlyDictionary<int, DiscardClaim> discardClaims,
             SeatId dataSeat)
         {
-            RenderDiscardRiver(discards, discardClaims, dataSeat, false, 0);
+            RenderDiscardRiver(discards, discardClaims, dataSeat, false, 0, null);
         }
 
         public void RenderDiscardRiver(
@@ -44,6 +44,23 @@ namespace MahjongPrototype.UI3D
             SeatId dataSeat,
             bool isReachDeclared,
             int reachDeclaredTurnIndex)
+        {
+            RenderDiscardRiver(
+                discards,
+                discardClaims,
+                dataSeat,
+                isReachDeclared,
+                reachDeclaredTurnIndex,
+                null);
+        }
+
+        public void RenderDiscardRiver(
+            IReadOnlyList<DiscardRecord> discards,
+            IReadOnlyDictionary<int, DiscardClaim> discardClaims,
+            SeatId dataSeat,
+            bool isReachDeclared,
+            int reachDeclaredTurnIndex,
+            int? reactionHighlightDiscardId)
         {
             Clear();
 
@@ -83,6 +100,10 @@ namespace MahjongPrototype.UI3D
                     : Quaternion.identity;
                 tile.transform.localScale = Vector3.one;
                 tile.Initialize(riverIndex, record.Tile, true, false);
+                SetReactionHighlight(
+                    tile,
+                    reactionHighlightDiscardId.HasValue &&
+                    record.Id == reactionHighlightDiscardId.Value);
                 activeTiles.Add(tile);
                 previousTileSpacing = tileSpacing;
                 previousTileX = tileX;
@@ -109,10 +130,31 @@ namespace MahjongPrototype.UI3D
             {
                 Mahjong3DTileView tile = activeTiles[i];
                 if (tile != null)
+                {
+                    SetReactionHighlight(tile, false);
                     DestroyTile(tile);
+                }
             }
 
             activeTiles.Clear();
+        }
+
+        public void ClearReactionHighlights()
+        {
+            for (int i = 0; i < activeTiles.Count; i++)
+            {
+                Mahjong3DTileView tile = activeTiles[i];
+                if (tile != null)
+                    SetReactionHighlight(tile, false);
+            }
+        }
+
+        private static void SetReactionHighlight(Mahjong3DTileView tile, bool highlighted)
+        {
+            Mahjong3DTileReactionHighlight reactionHighlight =
+                tile.GetComponent<Mahjong3DTileReactionHighlight>();
+            if (reactionHighlight != null)
+                reactionHighlight.SetHighlighted(highlighted);
         }
 
         private static void DestroyTile(Mahjong3DTileView tile)
