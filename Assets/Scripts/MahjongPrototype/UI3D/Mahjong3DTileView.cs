@@ -37,12 +37,15 @@ namespace MahjongPrototype.UI3D
         [SerializeField] private bool debugDimVisual;
 
         public event Action<int> Clicked;
+        public event Action<Mahjong3DTileView> HoverEntered;
+        public event Action<Mahjong3DTileView> HoverExited;
 
         public int HandIndex { get; private set; } = -1;
         public Tile? Tile { get; private set; }
         public bool FaceUp { get; private set; } = true;
         public bool Interactable { get; private set; }
         public bool IsDimmed { get; private set; }
+        public bool IsHovered { get; private set; }
 
         private bool warnedMissingFrontFaceMeshFilter;
         private bool warnedMissingTileFaceCatalog;
@@ -52,6 +55,11 @@ namespace MahjongPrototype.UI3D
         private Renderer[] resolvedDimTargetRenderers;
         private readonly Dictionary<Renderer, Material[]> originalSharedMaterialsByRenderer =
             new Dictionary<Renderer, Material[]>();
+
+        private void OnDisable()
+        {
+            NotifyHoverExited();
+        }
 
         private void OnValidate()
         {
@@ -63,6 +71,7 @@ namespace MahjongPrototype.UI3D
 
         public void Initialize(int handIndex)
         {
+            NotifyHoverExited();
             HandIndex = handIndex;
             Tile = null;
             FaceUp = true;
@@ -72,6 +81,7 @@ namespace MahjongPrototype.UI3D
 
         public void Initialize(int handIndex, Tile tile, bool faceUp, bool interactable)
         {
+            NotifyHoverExited();
             HandIndex = handIndex;
             Tile = tile;
             FaceUp = faceUp;
@@ -87,6 +97,24 @@ namespace MahjongPrototype.UI3D
                 return;
 
             Clicked?.Invoke(HandIndex);
+        }
+
+        public void NotifyHoverEntered()
+        {
+            if (IsHovered)
+                return;
+
+            IsHovered = true;
+            HoverEntered?.Invoke(this);
+        }
+
+        public void NotifyHoverExited()
+        {
+            if (!IsHovered)
+                return;
+
+            IsHovered = false;
+            HoverExited?.Invoke(this);
         }
 
         public void SetInteractable(bool interactable)

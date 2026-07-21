@@ -18,6 +18,8 @@ namespace MahjongPrototype.UI3D
         private readonly List<Mahjong3DTileView> activeTiles = new List<Mahjong3DTileView>();
 
         public event Action<int> TileClicked;
+        public event Action<int, Tile> TileHoverEntered;
+        public event Action<int, Tile> TileHoverExited;
 
         public void RenderHand(IReadOnlyList<Tile> handTiles, bool faceUp, bool interactable)
         {
@@ -39,6 +41,8 @@ namespace MahjongPrototype.UI3D
                 Mahjong3DTileView tile = InstantiateTile(root, i);
                 tile.Initialize(i, handTiles[i], faceUp, interactable);
                 tile.Clicked += HandleTileClicked;
+                tile.HoverEntered += HandleTileHoverEntered;
+                tile.HoverExited += HandleTileHoverExited;
                 activeTiles.Add(tile);
             }
         }
@@ -62,6 +66,8 @@ namespace MahjongPrototype.UI3D
             {
                 Mahjong3DTileView tile = InstantiateTile(root, i);
                 tile.Initialize(i);
+                tile.HoverEntered += HandleTileHoverEntered;
+                tile.HoverExited += HandleTileHoverExited;
                 activeTiles.Add(tile);
             }
         }
@@ -123,7 +129,10 @@ namespace MahjongPrototype.UI3D
                 Mahjong3DTileView tile = activeTiles[i];
                 if (tile != null)
                 {
+                    tile.NotifyHoverExited();
                     tile.Clicked -= HandleTileClicked;
+                    tile.HoverEntered -= HandleTileHoverEntered;
+                    tile.HoverExited -= HandleTileHoverExited;
                     tile.SetDimmed(false);
                     DestroyTile(tile);
                 }
@@ -143,6 +152,18 @@ namespace MahjongPrototype.UI3D
         private void HandleTileClicked(int handIndex)
         {
             TileClicked?.Invoke(handIndex);
+        }
+
+        private void HandleTileHoverEntered(Mahjong3DTileView tileView)
+        {
+            if (tileView != null && tileView.Tile.HasValue)
+                TileHoverEntered?.Invoke(tileView.HandIndex, tileView.Tile.Value);
+        }
+
+        private void HandleTileHoverExited(Mahjong3DTileView tileView)
+        {
+            if (tileView != null && tileView.Tile.HasValue)
+                TileHoverExited?.Invoke(tileView.HandIndex, tileView.Tile.Value);
         }
 
         private static bool ContainsIndex(IReadOnlyCollection<int> indices, int index)

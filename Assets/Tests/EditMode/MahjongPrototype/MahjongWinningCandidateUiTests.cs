@@ -168,6 +168,47 @@ namespace MahjongPrototype.Tests
         private const string TmpTextTypeName = "TMPro.TMP_Text, Unity.TextMeshPro";
 
         [Test]
+        public void SetCandidates_UsesOneHeadinglessGroupAndKeepsZeroCountCandidate()
+        {
+            WinningTileCandidateEvaluatorTestDriver evaluator =
+                WinningTileCandidateEvaluatorTestDriver.Create();
+            object state = evaluator.CreateGameState();
+            evaluator.AddHand(
+                state,
+                "East",
+                "1m 2m 3m 1p 2p 3p 1s 2s 3s E E E C");
+            evaluator.AddDiscard(state, "South", "C", 1);
+            evaluator.AddDiscard(state, "West", "C", 2);
+            evaluator.AddDiscard(state, "North", "C", 3);
+            object candidates = evaluator.EvaluateCurrent(state);
+
+            WithSceneController((reflection, controller, root) =>
+            {
+                reflection.Invoke(controller, "SetCandidates", candidates);
+
+                Assert.That(root.activeSelf, Is.True);
+                Assert.That(reflection.GetProperty(controller, "SpawnedGroupCount"),
+                    Is.EqualTo(1));
+                Component group = root.GetComponentInChildren(
+                    reflection.RequireType(GroupViewTypeName),
+                    true);
+                GameObject headingRoot = (GameObject)reflection.GetPrivateField(
+                    group,
+                    "headingRoot");
+                Component candidate = root.GetComponentInChildren(
+                    reflection.RequireType(CandidateViewTypeName),
+                    true);
+                Component countText = (Component)reflection.GetPrivateField(
+                    candidate,
+                    "countText");
+
+                Assert.That(headingRoot.activeSelf, Is.False);
+                Assert.That(reflection.GetProperty(countText, "text").ToString(),
+                    Does.StartWith("0"));
+            });
+        }
+
+        [Test]
         public void SetGroups_SingleGroupOmitsHeadingAndKeepsZeroCountCandidate()
         {
             WinningTileCandidateEvaluatorTestDriver evaluator =

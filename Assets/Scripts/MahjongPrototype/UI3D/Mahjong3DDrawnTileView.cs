@@ -19,6 +19,8 @@ namespace MahjongPrototype.UI3D
         private bool warnedMissingTilePrefab;
 
         public event Action DrawnTileClicked;
+        public event Action<Tile> DrawnTileHoverEntered;
+        public event Action<Tile> DrawnTileHoverExited;
         public float HandGap => handGap;
 
         public void Render(Tile? drawnTile, bool faceUp, bool interactable)
@@ -73,6 +75,8 @@ namespace MahjongPrototype.UI3D
             activeTile.transform.localScale = Vector3.one;
             activeTile.Initialize(0, drawnTile.Value, faceUp, tileInteractable);
             activeTile.Clicked += HandleTileClicked;
+            activeTile.HoverEntered += HandleTileHoverEntered;
+            activeTile.HoverExited += HandleTileHoverExited;
         }
 
         public void Rebuild(Tile? drawnTile)
@@ -84,7 +88,10 @@ namespace MahjongPrototype.UI3D
         {
             if (activeTile != null)
             {
+                activeTile.NotifyHoverExited();
                 activeTile.Clicked -= HandleTileClicked;
+                activeTile.HoverEntered -= HandleTileHoverEntered;
+                activeTile.HoverExited -= HandleTileHoverExited;
                 activeTile.SetDimmed(false);
                 DestroyTile(activeTile);
             }
@@ -122,6 +129,18 @@ namespace MahjongPrototype.UI3D
         private void HandleTileClicked(int _)
         {
             DrawnTileClicked?.Invoke();
+        }
+
+        private void HandleTileHoverEntered(Mahjong3DTileView tileView)
+        {
+            if (tileView != null && tileView.Tile.HasValue)
+                DrawnTileHoverEntered?.Invoke(tileView.Tile.Value);
+        }
+
+        private void HandleTileHoverExited(Mahjong3DTileView tileView)
+        {
+            if (tileView != null && tileView.Tile.HasValue)
+                DrawnTileHoverExited?.Invoke(tileView.Tile.Value);
         }
 
         private Transform GetSpawnRoot()

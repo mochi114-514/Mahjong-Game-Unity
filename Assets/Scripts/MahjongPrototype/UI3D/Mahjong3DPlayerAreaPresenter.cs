@@ -21,9 +21,12 @@ namespace MahjongPrototype.UI3D
             new HashSet<Mahjong3DPlayerUiController>();
         private Mahjong3DPlayerUiController drawnTileSubscribedController;
         private MahjongViewContext viewContext;
+        private Mahjong3DTileHoverInfo? activeTileHover;
 
         public event Action<SeatId, int> HandTileClicked;
         public event Action DrawnTileClicked;
+        public event Action<Mahjong3DTileHoverInfo> TileHoverEntered;
+        public event Action<Mahjong3DTileHoverInfo> TileHoverExited;
 
         /// <summary>
         /// Sets the terminal-local point of view used to map data seats to
@@ -52,11 +55,13 @@ namespace MahjongPrototype.UI3D
 
         private void OnDisable()
         {
+            ClearActiveTileHover();
             UnsubscribePlayerEvents();
         }
 
         private void OnDestroy()
         {
+            ClearActiveTileHover();
             UnsubscribePlayerEvents();
         }
 
@@ -520,6 +525,8 @@ namespace MahjongPrototype.UI3D
                 return;
 
             controller.HandTileClicked += HandleHandTileClicked;
+            controller.TileHoverEntered += HandleTileHoverEntered;
+            controller.TileHoverExited += HandleTileHoverExited;
             handEventSubscribedControllers.Add(controller);
         }
 
@@ -544,7 +551,11 @@ namespace MahjongPrototype.UI3D
             foreach (Mahjong3DPlayerUiController controller in handEventSubscribedControllers)
             {
                 if (controller != null)
+                {
                     controller.HandTileClicked -= HandleHandTileClicked;
+                    controller.TileHoverEntered -= HandleTileHoverEntered;
+                    controller.TileHoverExited -= HandleTileHoverExited;
+                }
             }
 
             handEventSubscribedControllers.Clear();
@@ -567,6 +578,34 @@ namespace MahjongPrototype.UI3D
         private void HandleDrawnTileClicked()
         {
             DrawnTileClicked?.Invoke();
+        }
+
+        private void HandleTileHoverEntered(Mahjong3DTileHoverInfo hoverInfo)
+        {
+            if (activeTileHover.HasValue && activeTileHover.Value.Equals(hoverInfo))
+                return;
+
+            ClearActiveTileHover();
+            activeTileHover = hoverInfo;
+            TileHoverEntered?.Invoke(hoverInfo);
+        }
+
+        private void HandleTileHoverExited(Mahjong3DTileHoverInfo hoverInfo)
+        {
+            if (!activeTileHover.HasValue || !activeTileHover.Value.Equals(hoverInfo))
+                return;
+
+            ClearActiveTileHover();
+        }
+
+        private void ClearActiveTileHover()
+        {
+            if (!activeTileHover.HasValue)
+                return;
+
+            Mahjong3DTileHoverInfo previous = activeTileHover.Value;
+            activeTileHover = null;
+            TileHoverExited?.Invoke(previous);
         }
 
         private void ClearUnrenderedPlayerHands(HashSet<ViewSlot> renderedViewSlots)

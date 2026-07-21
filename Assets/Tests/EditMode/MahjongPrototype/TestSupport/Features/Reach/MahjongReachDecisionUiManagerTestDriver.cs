@@ -20,6 +20,8 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
             "MahjongPrototype.UI.MahjongWinningCandidateGroupView, Assembly-CSharp";
         private const string WinningTileViewTypeName =
             "MahjongPrototype.UI.MahjongWinningTileCandidateView, Assembly-CSharp";
+        private const string TileHoverInfoTypeName =
+            "MahjongPrototype.UI3D.Mahjong3DTileHoverInfo, Assembly-CSharp";
         private const string GroupPrefabPath =
             "Assets/Prefab/Mahjong Winning Candidate Group.prefab";
         private const string CandidatePrefabPath =
@@ -40,6 +42,8 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
         private Component decisionController;
         private GameObject winningCandidateRoot;
         private Component winningCandidateController;
+        private object currentHoverInfo;
+        private object savedReachCandidate;
         private bool disposed;
 
         private MahjongReachDecisionUiManagerTestDriver(
@@ -169,6 +173,140 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
             flowSupport.RequestDeclineReach();
         }
 
+        public void HoverFirstReachCandidate(string seatName = "East")
+        {
+            savedReachCandidate = GetReachCandidate(0);
+            HoverCandidate(savedReachCandidate, seatName);
+        }
+
+        public void HoverSavedReachCandidate(string seatName = "East")
+        {
+            Assert.That(savedReachCandidate, Is.Not.Null);
+            HoverCandidate(savedReachCandidate, seatName);
+        }
+
+        public void HoverReachNonCandidate()
+        {
+            object candidates = reflection.GetProperty(
+                flowSupport.CurrentState,
+                "ReachDiscardCandidates");
+            object selfSeat = flowSupport.DataFactory.ParseSeat("East");
+            object player = reflection.Invoke(
+                flowSupport.CurrentState,
+                "GetPlayerSeat",
+                selfSeat);
+            object hand = reflection.GetProperty(player, "Hand");
+            object handTiles = reflection.Invoke(hand, "GetTiles");
+
+            for (int handIndex = 0;
+                 handIndex < flowSupport.Collections.Count(handTiles);
+                 handIndex++)
+            {
+                object tile = flowSupport.Collections.Item(handTiles, handIndex);
+                if (ContainsReachCandidate(candidates, "Hand", handIndex, tile))
+                    continue;
+
+                object sourceSample = reflection.GetProperty(GetReachCandidate(0), "Source");
+                object handSource = Enum.Parse(sourceSample.GetType(), "Hand");
+                currentHoverInfo = CreateHoverInfo(
+                    selfSeat,
+                    handSource,
+                    handIndex,
+                    tile);
+                reflection.Invoke(uiManager, "HandleTileHoverEntered", currentHoverInfo);
+                return;
+            }
+
+            Assert.Fail("A non-reach hand tile candidate was not found.");
+        }
+
+        public void ExitCurrentHover()
+        {
+            Assert.That(currentHoverInfo, Is.Not.Null);
+            reflection.Invoke(uiManager, "HandleTileHoverExited", currentHoverInfo);
+            currentHoverInfo = null;
+        }
+
+        public void ClearDrawnTileDirectly()
+        {
+            object selfSeat = flowSupport.DataFactory.ParseSeat("East");
+            object player = reflection.Invoke(
+                flowSupport.CurrentState,
+                "GetPlayerSeat",
+                selfSeat);
+            reflection.Invoke(player, "ClearDrawnTile");
+        }
+
+        public void HoverFirstHandTile()
+        {
+            HoverHandTile(0);
+        }
+
+        public void HoverHandTile(int handIndex)
+        {
+            object candidate = savedReachCandidate ?? GetReachCandidate(0);
+            object sourceSample = reflection.GetProperty(candidate, "Source");
+            object handSource = Enum.Parse(sourceSample.GetType(), "Hand");
+            object selfSeat = flowSupport.DataFactory.ParseSeat("East");
+            object player = reflection.Invoke(
+                flowSupport.CurrentState,
+                "GetPlayerSeat",
+                selfSeat);
+            object hand = reflection.GetProperty(player, "Hand");
+            object tile = flowSupport.Collections.Item(
+                reflection.Invoke(hand, "GetTiles"),
+                handIndex);
+            currentHoverInfo = CreateHoverInfo(selfSeat, handSource, handIndex, tile);
+            reflection.Invoke(uiManager, "HandleTileHoverEntered", currentHoverInfo);
+        }
+
+        public void DeclareReachAndDiscardSavedCandidate()
+        {
+            Assert.That(savedReachCandidate, Is.Not.Null);
+            flowSupport.RequestDeclareReach();
+            string source = reflection.GetProperty(savedReachCandidate, "Source").ToString();
+            if (source == "DrawnTile")
+            {
+                flowSupport.RequestDiscardDrawnTile();
+                return;
+            }
+
+            flowSupport.RequestDiscard(
+                (int)reflection.GetProperty(savedReachCandidate, "HandIndex"));
+        }
+
+        public void SetDrawnTileDirectly(string tileCode)
+        {
+            object selfSeat = flowSupport.DataFactory.ParseSeat("East");
+            object player = reflection.Invoke(
+                flowSupport.CurrentState,
+                "GetPlayerSeat",
+                selfSeat);
+            if ((bool)reflection.GetProperty(player, "HasDrawnTile"))
+                return;
+
+            reflection.Invoke(
+                player,
+                "SetDrawnTile",
+                flowSupport.DataFactory.CreateTile(tileCode));
+        }
+
+        public void HoverCurrentDrawnTile()
+        {
+            Assert.That(savedReachCandidate, Is.Not.Null);
+            object selfSeat = flowSupport.DataFactory.ParseSeat("East");
+            object player = reflection.Invoke(
+                flowSupport.CurrentState,
+                "GetPlayerSeat",
+                selfSeat);
+            object drawnTile = reflection.GetProperty(player, "DrawnTile");
+            Assert.That(drawnTile, Is.Not.Null);
+            object sourceSample = reflection.GetProperty(savedReachCandidate, "Source");
+            object drawnSource = Enum.Parse(sourceSample.GetType(), "DrawnTile");
+            currentHoverInfo = CreateHoverInfo(selfSeat, drawnSource, -1, drawnTile);
+            reflection.Invoke(uiManager, "HandleTileHoverEntered", currentHoverInfo);
+        }
+
         public void EnsureReachDecisionController()
         {
             reflection.Invoke(uiManager, "EnsureReachDecisionController");
@@ -182,6 +320,8 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
         public bool IsReachDecisionPending =>
             (bool)reflection.GetProperty(flowSupport.CurrentState, "IsReachDecisionPending");
 
+        public bool IsSelfReachDeclared => flowSupport.IsReachDeclared("East");
+
         public bool DecisionAreaActive => decisionArea.activeSelf;
 
         public bool WinningCandidateRootActive =>
@@ -190,6 +330,15 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
         public int SpawnedWinningGroupCount => winningCandidateController == null
             ? 0
             : (int)reflection.GetProperty(winningCandidateController, "SpawnedGroupCount");
+
+        public int SpawnedWinningCandidateCount => winningCandidateRoot == null
+            ? 0
+            : winningCandidateRoot.GetComponentsInChildren(
+                reflection.RequireType(WinningTileViewTypeName),
+                true).Length;
+
+        public bool HasHoveredSelfTile =>
+            reflection.GetPrivateField(uiManager, "hoveredSelfTile") != null;
 
         public bool DecisionAreaHasController =>
             decisionArea.GetComponent(controllerType) != null;
@@ -211,6 +360,60 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
         {
             if (decisionArea == null)
                 CreateDecisionArea("ReachDecisionArea", true);
+        }
+
+        private object GetReachCandidate(int index)
+        {
+            object candidates = reflection.GetProperty(
+                flowSupport.CurrentState,
+                "ReachDiscardCandidates");
+            Assert.That(flowSupport.Collections.Count(candidates), Is.GreaterThan(index));
+            return flowSupport.Collections.Item(candidates, index);
+        }
+
+        private void HoverCandidate(object candidate, string seatName)
+        {
+            currentHoverInfo = CreateHoverInfo(
+                flowSupport.DataFactory.ParseSeat(seatName),
+                reflection.GetProperty(candidate, "Source"),
+                (int)reflection.GetProperty(candidate, "HandIndex"),
+                reflection.GetProperty(candidate, "Tile"));
+            reflection.Invoke(uiManager, "HandleTileHoverEntered", currentHoverInfo);
+        }
+
+        private object CreateHoverInfo(
+            object seat,
+            object source,
+            int handIndex,
+            object tile)
+        {
+            return reflection.CreateInstance(
+                reflection.RequireType(TileHoverInfoTypeName),
+                seat,
+                source,
+                handIndex,
+                tile);
+        }
+
+        private bool ContainsReachCandidate(
+            object candidates,
+            string sourceName,
+            int handIndex,
+            object tile)
+        {
+            int count = flowSupport.Collections.Count(candidates);
+            for (int i = 0; i < count; i++)
+            {
+                object candidate = flowSupport.Collections.Item(candidates, i);
+                if (reflection.GetProperty(candidate, "Source").ToString() == sourceName &&
+                    (int)reflection.GetProperty(candidate, "HandIndex") == handIndex &&
+                    reflection.GetProperty(candidate, "Tile").Equals(tile))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 }

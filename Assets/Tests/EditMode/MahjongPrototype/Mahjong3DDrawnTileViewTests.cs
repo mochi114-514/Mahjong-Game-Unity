@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq.Expressions;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
@@ -17,8 +18,97 @@ namespace MahjongPrototype.Tests
             "MahjongPrototype.UI3D.Mahjong3DDrawnTileView, Assembly-CSharp";
         private const string Mahjong3DPlayerUiControllerTypeName =
             "MahjongPrototype.UI3D.Mahjong3DPlayerUiController, Assembly-CSharp";
+        private const string Mahjong3DPlayerAreaPresenterTypeName =
+            "MahjongPrototype.UI3D.Mahjong3DPlayerAreaPresenter, Assembly-CSharp";
         private const string Mahjong3DTileViewTypeName =
             "MahjongPrototype.UI3D.Mahjong3DTileView, Assembly-CSharp";
+
+        [Test]
+        public void HandAndDrawnHover_RelayThroughPresenterAndClearBeforeRegeneration()
+        {
+            GameObject presenterRoot = new GameObject("PlayerAreaHoverRelayTest");
+            GameObject controllerRoot = new GameObject("PlayerController");
+            GameObject handViewObject = new GameObject("HandView");
+            GameObject drawnViewObject = new GameObject("DrawnView");
+            GameObject handSpawnRoot = new GameObject("HandSpawnRoot");
+            GameObject drawnSpawnRoot = new GameObject("DrawnSpawnRoot");
+            GameObject prefab = new GameObject("TilePrefab");
+            presenterRoot.SetActive(false);
+            controllerRoot.transform.SetParent(presenterRoot.transform);
+            handViewObject.transform.SetParent(controllerRoot.transform);
+            drawnViewObject.transform.SetParent(controllerRoot.transform);
+            handSpawnRoot.transform.SetParent(handViewObject.transform);
+            drawnSpawnRoot.transform.SetParent(drawnViewObject.transform);
+            try
+            {
+                object presenter = presenterRoot.AddComponent(
+                    Type.GetType(Mahjong3DPlayerAreaPresenterTypeName, true));
+                object controller = controllerRoot.AddComponent(
+                    Type.GetType(Mahjong3DPlayerUiControllerTypeName, true));
+                object handView = handViewObject.AddComponent(
+                    Type.GetType(Mahjong3DHandViewTypeName, true));
+                object drawnView = drawnViewObject.AddComponent(
+                    Type.GetType(Mahjong3DDrawnTileViewTypeName, true));
+                object tilePrefab = prefab.AddComponent(
+                    Type.GetType(Mahjong3DTileViewTypeName, true));
+
+                SetPrivateField(handView, "spawnRoot", handSpawnRoot.transform);
+                SetPrivateField(handView, "tilePrefab", tilePrefab);
+                SetPrivateField(drawnView, "spawnRoot", drawnSpawnRoot.transform);
+                SetPrivateField(drawnView, "tilePrefab", tilePrefab);
+                SetPrivateField(controller, "handView", handView);
+                SetPrivateField(controller, "drawnTileView", drawnView);
+                SetPrivateField(presenter, "selfBottomPlayerUiController", controller);
+
+                List<object> enters = new List<object>();
+                List<object> exits = new List<object>();
+                Subscribe(presenter, "TileHoverEntered", args => enters.Add(args[0]));
+                Subscribe(presenter, "TileHoverExited", args => exits.Add(args[0]));
+                presenterRoot.SetActive(true);
+                Invoke(controller, "SubscribeViewEvents");
+                Invoke(presenter, "SubscribePlayerEvents");
+
+                Invoke(
+                    controller,
+                    "RenderHand",
+                    CreateTileList("1m", "2m"),
+                    Seat("East"),
+                    false,
+                    false);
+                Invoke(controller, "RenderDrawnTile", CreateTile("3m"), false, false);
+
+                Component handTile = handSpawnRoot.GetComponentsInChildren(
+                    Type.GetType(Mahjong3DTileViewTypeName, true),
+                    true)[1];
+                Assert.That(GetProperty(handTile, "Interactable"), Is.False);
+                Invoke(handTile, "NotifyHoverEntered");
+
+                AssertHoverInfo(enters[0], "East", "Hand", 1, "2m");
+                Invoke(
+                    controller,
+                    "RenderHand",
+                    CreateTileList("4m"),
+                    Seat("East"),
+                    true,
+                    true);
+                Assert.That(exits.Count, Is.EqualTo(1));
+                AssertHoverInfo(exits[0], "East", "Hand", 1, "2m");
+
+                Component drawnTile = GetSingleTileView(drawnSpawnRoot);
+                Invoke(drawnTile, "NotifyHoverEntered");
+                Assert.That(enters.Count, Is.EqualTo(2));
+                AssertHoverInfo(enters[1], "East", "DrawnTile", -1, "3m");
+
+                Invoke(controller, "ClearDrawnTile");
+                Assert.That(exits.Count, Is.EqualTo(2));
+                AssertHoverInfo(exits[1], "East", "DrawnTile", -1, "3m");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(prefab);
+                UnityEngine.Object.DestroyImmediate(presenterRoot);
+            }
+        }
 
         [Test]
         public void SetReachCandidateInteractable_DimsButKeepsNonCandidateClickable()
@@ -208,6 +298,46 @@ namespace MahjongPrototype.Tests
                 BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
             Assert.That(property, Is.Not.Null);
             return property.GetValue(target);
+        }
+
+        private static void AssertHoverInfo(
+            object hoverInfo,
+            string seat,
+            string source,
+            int handIndex,
+            string tileCode)
+        {
+            Assert.That(GetProperty(hoverInfo, "SeatId").ToString(), Is.EqualTo(seat));
+            Assert.That(GetProperty(hoverInfo, "Source").ToString(), Is.EqualTo(source));
+            Assert.That(GetProperty(hoverInfo, "HandIndex"), Is.EqualTo(handIndex));
+            Assert.That(GetProperty(hoverInfo, "Tile").ToString(), Is.EqualTo(tileCode));
+        }
+
+        private static void Subscribe(object target, string eventName, Action<object[]> callback)
+        {
+            EventInfo eventInfo = target.GetType().GetEvent(
+                eventName,
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.That(eventInfo, Is.Not.Null);
+            MethodInfo invokeMethod = eventInfo.EventHandlerType.GetMethod("Invoke");
+            ParameterInfo[] eventParameters = invokeMethod.GetParameters();
+            ParameterExpression[] parameters = new ParameterExpression[eventParameters.Length];
+            Expression[] boxedParameters = new Expression[eventParameters.Length];
+            for (int i = 0; i < eventParameters.Length; i++)
+            {
+                parameters[i] = Expression.Parameter(eventParameters[i].ParameterType);
+                boxedParameters[i] = Expression.Convert(parameters[i], typeof(object));
+            }
+
+            MethodCallExpression body = Expression.Call(
+                Expression.Constant(callback),
+                typeof(Action<object[]>).GetMethod("Invoke"),
+                Expression.NewArrayInit(typeof(object), boxedParameters));
+            Delegate handler = Expression.Lambda(
+                eventInfo.EventHandlerType,
+                body,
+                parameters).Compile();
+            eventInfo.AddEventHandler(target, handler);
         }
 
         private static void SetPrivateField(object target, string fieldName, object value)

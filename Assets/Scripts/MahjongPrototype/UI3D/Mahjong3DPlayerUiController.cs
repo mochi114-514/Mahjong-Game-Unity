@@ -6,6 +6,51 @@ using UnityEngine;
 
 namespace MahjongPrototype.UI3D
 {
+    public readonly struct Mahjong3DTileHoverInfo : IEquatable<Mahjong3DTileHoverInfo>
+    {
+        public Mahjong3DTileHoverInfo(
+            SeatId seatId,
+            DiscardSource source,
+            int handIndex,
+            Tile tile)
+        {
+            SeatId = seatId;
+            Source = source;
+            HandIndex = handIndex;
+            Tile = tile;
+        }
+
+        public SeatId SeatId { get; }
+        public DiscardSource Source { get; }
+        public int HandIndex { get; }
+        public Tile Tile { get; }
+
+        public bool Equals(Mahjong3DTileHoverInfo other)
+        {
+            return SeatId == other.SeatId &&
+                Source == other.Source &&
+                HandIndex == other.HandIndex &&
+                Tile == other.Tile;
+        }
+
+        public override bool Equals(object obj)
+        {
+            return obj is Mahjong3DTileHoverInfo other && Equals(other);
+        }
+
+        public override int GetHashCode()
+        {
+            unchecked
+            {
+                int hash = (int)SeatId;
+                hash = (hash * 397) ^ (int)Source;
+                hash = (hash * 397) ^ HandIndex;
+                hash = (hash * 397) ^ Tile.GetHashCode();
+                return hash;
+            }
+        }
+    }
+
     // PROTOTYPE: 3D companion for one player's tile area.
     [DisallowMultipleComponent]
     [AddComponentMenu("Mahjong Prototype/UI3D/Mahjong 3D Player UI Controller")]
@@ -27,9 +72,12 @@ namespace MahjongPrototype.UI3D
         private bool warnedMissingOpenMeldView;
         private bool isHandViewSubscribed;
         private bool isDrawnTileViewSubscribed;
+        private Mahjong3DTileHoverInfo? activeTileHover;
 
         public event Action<SeatId, int> HandTileClicked;
         public event Action DrawnTileClicked;
+        public event Action<Mahjong3DTileHoverInfo> TileHoverEntered;
+        public event Action<Mahjong3DTileHoverInfo> TileHoverExited;
 
         public ViewSlot ViewSlot => viewSlot;
         public Mahjong3DHandView HandView => handView;
@@ -45,11 +93,13 @@ namespace MahjongPrototype.UI3D
 
         private void OnDisable()
         {
+            ClearActiveTileHover();
             UnsubscribeViewEvents();
         }
 
         private void OnDestroy()
         {
+            ClearActiveTileHover();
             UnsubscribeViewEvents();
         }
 
@@ -59,6 +109,7 @@ namespace MahjongPrototype.UI3D
             bool faceUp,
             bool interactable)
         {
+            ClearActiveTileHover();
             handDataSeat = dataSeat;
 
             if (handView == null)
@@ -270,6 +321,8 @@ namespace MahjongPrototype.UI3D
                 return;
 
             handView.TileClicked += HandleHandTileClicked;
+            handView.TileHoverEntered += HandleHandTileHoverEntered;
+            handView.TileHoverExited += HandleHandTileHoverExited;
             isHandViewSubscribed = true;
         }
 
@@ -279,6 +332,8 @@ namespace MahjongPrototype.UI3D
                 return;
 
             drawnTileView.DrawnTileClicked += HandleDrawnTileClicked;
+            drawnTileView.DrawnTileHoverEntered += HandleDrawnTileHoverEntered;
+            drawnTileView.DrawnTileHoverExited += HandleDrawnTileHoverExited;
             isDrawnTileViewSubscribed = true;
         }
 
@@ -294,6 +349,8 @@ namespace MahjongPrototype.UI3D
                 return;
 
             handView.TileClicked -= HandleHandTileClicked;
+            handView.TileHoverEntered -= HandleHandTileHoverEntered;
+            handView.TileHoverExited -= HandleHandTileHoverExited;
             isHandViewSubscribed = false;
         }
 
@@ -303,6 +360,8 @@ namespace MahjongPrototype.UI3D
                 return;
 
             drawnTileView.DrawnTileClicked -= HandleDrawnTileClicked;
+            drawnTileView.DrawnTileHoverEntered -= HandleDrawnTileHoverEntered;
+            drawnTileView.DrawnTileHoverExited -= HandleDrawnTileHoverExited;
             isDrawnTileViewSubscribed = false;
         }
 
@@ -314,6 +373,70 @@ namespace MahjongPrototype.UI3D
         private void HandleDrawnTileClicked()
         {
             DrawnTileClicked?.Invoke();
+        }
+
+        private void HandleHandTileHoverEntered(int handIndex, Tile tile)
+        {
+            SetActiveTileHover(new Mahjong3DTileHoverInfo(
+                handDataSeat,
+                DiscardSource.Hand,
+                handIndex,
+                tile));
+        }
+
+        private void HandleHandTileHoverExited(int handIndex, Tile tile)
+        {
+            ClearActiveTileHover(new Mahjong3DTileHoverInfo(
+                handDataSeat,
+                DiscardSource.Hand,
+                handIndex,
+                tile));
+        }
+
+        private void HandleDrawnTileHoverEntered(Tile tile)
+        {
+            SetActiveTileHover(new Mahjong3DTileHoverInfo(
+                handDataSeat,
+                DiscardSource.DrawnTile,
+                -1,
+                tile));
+        }
+
+        private void HandleDrawnTileHoverExited(Tile tile)
+        {
+            ClearActiveTileHover(new Mahjong3DTileHoverInfo(
+                handDataSeat,
+                DiscardSource.DrawnTile,
+                -1,
+                tile));
+        }
+
+        private void SetActiveTileHover(Mahjong3DTileHoverInfo hoverInfo)
+        {
+            if (activeTileHover.HasValue && activeTileHover.Value.Equals(hoverInfo))
+                return;
+
+            ClearActiveTileHover();
+            activeTileHover = hoverInfo;
+            TileHoverEntered?.Invoke(hoverInfo);
+        }
+
+        private void ClearActiveTileHover(Mahjong3DTileHoverInfo hoverInfo)
+        {
+            if (!activeTileHover.HasValue || !activeTileHover.Value.Equals(hoverInfo))
+                return;
+
+            ClearActiveTileHover();
+        }
+
+        private void ClearActiveTileHover()
+        {
+            if (!activeTileHover.HasValue)
+                return;
+
+            Mahjong3DTileHoverInfo previous = activeTileHover.Value;
+            activeTileHover = null;
+            TileHoverExited?.Invoke(previous);
         }
 
         private void RepositionDrawnTileAtHandEnd()

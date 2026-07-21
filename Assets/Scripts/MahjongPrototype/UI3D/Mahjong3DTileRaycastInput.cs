@@ -24,6 +24,7 @@ namespace MahjongPrototype.UI3D
         private PointerEventData pointerEventData;
         private EventSystem pointerEventSystem;
         private bool warnedMissingCamera;
+        private Mahjong3DTileView hoveredTileView;
 
         private void Awake()
         {
@@ -33,6 +34,8 @@ namespace MahjongPrototype.UI3D
 
         private void Update()
         {
+            UpdateMouseHover();
+
             if (!TryGetPrimaryPointerDown(out Vector2 screenPosition))
                 return;
 
@@ -40,6 +43,63 @@ namespace MahjongPrototype.UI3D
                 return;
 
             TryNotifyTileClick(screenPosition);
+        }
+
+        private void OnDisable()
+        {
+            SetHoveredTile(null);
+        }
+
+        private void UpdateMouseHover()
+        {
+            Mouse mouse = Mouse.current;
+            if (mouse == null)
+            {
+                SetHoveredTile(null);
+                return;
+            }
+
+            Vector2 screenPosition = mouse.position.ReadValue();
+            if (IsPointerOverUi(screenPosition))
+            {
+                SetHoveredTile(null);
+                return;
+            }
+
+            Camera cameraToUse = raycastCamera != null ? raycastCamera : Camera.main;
+            if (cameraToUse == null)
+            {
+                SetHoveredTile(null);
+                WarnMissingCameraOnce();
+                return;
+            }
+
+            Ray ray = cameraToUse.ScreenPointToRay(screenPosition);
+            if (!Physics.Raycast(
+                    ray,
+                    out RaycastHit hit,
+                    maxDistance,
+                    tileLayerMask,
+                    queryTriggerInteraction))
+            {
+                SetHoveredTile(null);
+                return;
+            }
+
+            SetHoveredTile(hit.collider.GetComponentInParent<Mahjong3DTileView>());
+        }
+
+        private void SetHoveredTile(Mahjong3DTileView nextTileView)
+        {
+            if (hoveredTileView == nextTileView)
+                return;
+
+            Mahjong3DTileView previousTileView = hoveredTileView;
+            hoveredTileView = nextTileView;
+            if (previousTileView != null)
+                previousTileView.NotifyHoverExited();
+            if (hoveredTileView != null)
+                hoveredTileView.NotifyHoverEntered();
         }
 
         private bool TryGetPrimaryPointerDown(out Vector2 screenPosition)

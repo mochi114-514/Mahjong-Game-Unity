@@ -1,4 +1,5 @@
 using System;
+using System.Linq.Expressions;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
@@ -12,6 +13,76 @@ namespace MahjongPrototype.Tests
             "MahjongPrototype.UI3D.Mahjong3DTileView, Assembly-CSharp";
         private const string BaseColorPropertyName = "_BaseColor";
         private static readonly Color ExpectedDimmedTint = new Color(0.25f, 0.25f, 0.25f, 1f);
+
+        [Test]
+        public void RaycastHover_TargetChangesNotifyOnceAndIgnoreInteractable()
+        {
+            GameObject inputObject = new GameObject("TileRaycastHoverInputTest");
+            GameObject firstObject = new GameObject("FirstTile");
+            GameObject secondObject = new GameObject("SecondTile");
+            try
+            {
+                object input = inputObject.AddComponent(Type.GetType(
+                    "MahjongPrototype.UI3D.Mahjong3DTileRaycastInput, Assembly-CSharp",
+                    true));
+                object first = firstObject.AddComponent(Type.GetType(Mahjong3DTileViewTypeName, true));
+                object second = secondObject.AddComponent(Type.GetType(Mahjong3DTileViewTypeName, true));
+                int firstEnterCount = 0;
+                int firstExitCount = 0;
+                int secondEnterCount = 0;
+                int secondExitCount = 0;
+                Subscribe(first, "HoverEntered", _ => firstEnterCount++);
+                Subscribe(first, "HoverExited", _ => firstExitCount++);
+                Subscribe(second, "HoverEntered", _ => secondEnterCount++);
+                Subscribe(second, "HoverExited", _ => secondExitCount++);
+
+                Assert.That(GetProperty(first, "Interactable"), Is.False);
+                Invoke(input, "SetHoveredTile", first);
+                Invoke(input, "SetHoveredTile", first);
+                Invoke(input, "SetHoveredTile", second);
+                Invoke(input, "SetHoveredTile", new object[] { null });
+
+                Assert.That(firstEnterCount, Is.EqualTo(1));
+                Assert.That(firstExitCount, Is.EqualTo(1));
+                Assert.That(secondEnterCount, Is.EqualTo(1));
+                Assert.That(secondExitCount, Is.EqualTo(1));
+                Assert.That(GetProperty(first, "IsHovered"), Is.False);
+                Assert.That(GetProperty(second, "IsHovered"), Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(inputObject);
+                UnityEngine.Object.DestroyImmediate(firstObject);
+                UnityEngine.Object.DestroyImmediate(secondObject);
+            }
+        }
+
+        [Test]
+        public void RaycastHover_OnDisableExitsCurrentTile()
+        {
+            GameObject inputObject = new GameObject("TileRaycastHoverDisableTest");
+            GameObject tileObject = new GameObject("HoveredTile");
+            try
+            {
+                object input = inputObject.AddComponent(Type.GetType(
+                    "MahjongPrototype.UI3D.Mahjong3DTileRaycastInput, Assembly-CSharp",
+                    true));
+                object tile = tileObject.AddComponent(Type.GetType(Mahjong3DTileViewTypeName, true));
+                int exitCount = 0;
+                Subscribe(tile, "HoverExited", _ => exitCount++);
+
+                Invoke(input, "SetHoveredTile", tile);
+                Invoke(input, "OnDisable");
+
+                Assert.That(exitCount, Is.EqualTo(1));
+                Assert.That(GetProperty(tile, "IsHovered"), Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(inputObject);
+                UnityEngine.Object.DestroyImmediate(tileObject);
+            }
+        }
 
         [Test]
         public void OverrideMaterialMode_SetDimmedTrue_ReplacesSharedMaterials()
@@ -355,6 +426,34 @@ namespace MahjongPrototype.Tests
                 BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
             Assert.That(property, Is.Not.Null);
             return property.GetValue(target);
+        }
+
+        private static void Subscribe(object target, string eventName, Action<object[]> callback)
+        {
+            EventInfo eventInfo = target.GetType().GetEvent(
+                eventName,
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.That(eventInfo, Is.Not.Null);
+            MethodInfo invokeMethod = eventInfo.EventHandlerType.GetMethod("Invoke");
+            ParameterInfo[] eventParameters = invokeMethod.GetParameters();
+            ParameterExpression[] parameters = new ParameterExpression[eventParameters.Length];
+            Expression[] boxedParameters = new Expression[eventParameters.Length];
+            for (int i = 0; i < eventParameters.Length; i++)
+            {
+                parameters[i] = Expression.Parameter(eventParameters[i].ParameterType);
+                boxedParameters[i] = Expression.Convert(parameters[i], typeof(object));
+            }
+
+            MethodInfo callbackInvoke = typeof(Action<object[]>).GetMethod("Invoke");
+            MethodCallExpression body = Expression.Call(
+                Expression.Constant(callback),
+                callbackInvoke,
+                Expression.NewArrayInit(typeof(object), boxedParameters));
+            Delegate handler = Expression.Lambda(
+                eventInfo.EventHandlerType,
+                body,
+                parameters).Compile();
+            eventInfo.AddEventHandler(target, handler);
         }
 
         private static void SetDimVisualMode(object target, string modeName)

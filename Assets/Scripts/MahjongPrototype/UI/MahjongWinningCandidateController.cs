@@ -51,29 +51,23 @@ namespace MahjongPrototype.UI
                 if (group == null || group.WinningTiles.Count <= 0)
                     continue;
 
-                MahjongWinningCandidateGroupView groupView = Instantiate(
-                    groupViewPrefab,
-                    groupsContainer);
-                groupView.SetHeading(
+                SpawnGroup(
+                    group.WinningTiles,
                     showDiscardHeadings,
                     BuildDiscardHeading(group.DiscardCandidates));
-
-                int spawnedCandidateCount = PopulateCandidates(groupView, group.WinningTiles);
-                if (spawnedCandidateCount <= 0)
-                {
-                    DestroyView(groupView.gameObject);
-                    continue;
-                }
-
-                groupView.gameObject.SetActive(true);
-                spawnedGroups.Add(groupView);
             }
 
-            if (spawnedGroups.Count <= 0)
+            ShowPopulatedRoot();
+        }
+
+        public void SetCandidates(IReadOnlyList<WinningTileCandidate> candidates)
+        {
+            Clear();
+            if (!CanPopulate() || candidates == null || candidates.Count <= 0)
                 return;
 
-            root.SetActive(true);
-            RebuildLayout();
+            SpawnGroup(candidates, false, string.Empty);
+            ShowPopulatedRoot();
         }
 
         public void Clear()
@@ -121,6 +115,35 @@ namespace MahjongPrototype.UI
             }
 
             return spawnedCount;
+        }
+
+        private void SpawnGroup(
+            IReadOnlyList<WinningTileCandidate> candidates,
+            bool showHeading,
+            string heading)
+        {
+            MahjongWinningCandidateGroupView groupView = Instantiate(
+                groupViewPrefab,
+                groupsContainer);
+            groupView.SetHeading(showHeading, heading);
+
+            if (PopulateCandidates(groupView, candidates) <= 0)
+            {
+                DestroyView(groupView.gameObject);
+                return;
+            }
+
+            groupView.gameObject.SetActive(true);
+            spawnedGroups.Add(groupView);
+        }
+
+        private void ShowPopulatedRoot()
+        {
+            if (spawnedGroups.Count <= 0)
+                return;
+
+            root.SetActive(true);
+            RebuildLayout();
         }
 
         private bool CanPopulate()
