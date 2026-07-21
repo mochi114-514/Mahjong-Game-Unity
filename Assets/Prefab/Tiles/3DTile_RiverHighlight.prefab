@@ -376,11 +376,11 @@ MonoBehaviour:
   highlightRenderer: {fileID: 3333705602799434640}
   shellTransform: {fileID: 3925207678452379195}
   applyShellScale: 1
-  shellScale: 1.02
+  shellScale: 1.03
   applyVertexExtrusion: 0
   vertexExtrusion: 0
-  fresnelPower: 4
-  fresnelIntensity: 1
+  fresnelPower: 0.75
+  fresnelIntensity: 2
   rimColor: {r: 1, g: 0.88, b: 0.55, a: 1}
   alpha: 0.18
   pulsePeriod: 2
