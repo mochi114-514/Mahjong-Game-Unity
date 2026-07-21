@@ -4,8 +4,9 @@ Shader "Mahjong Prototype/Reaction Highlight Shell"
     {
         [MainColor] _RimColor("Rim Color", Color) = (1, 0.88, 0.55, 1)
         _Alpha("Alpha", Range(0, 1)) = 0.18
-        _FresnelPower("Fresnel Power", Range(0.5, 8)) = 4
-        _FresnelIntensity("Fresnel Intensity", Range(0, 2)) = 1
+        _FresnelPower("Fresnel Power", Range(0.5, 8)) = 0.75
+        _FresnelIntensity("Fresnel Intensity", Range(0, 2)) = 2
+        _SurfaceIntensity("Surface Intensity", Range(0, 2)) = 0
         _PulseStrength("Pulse Strength", Range(0, 2)) = 1
         _VertexExtrusion("Vertex Normal Extrusion", Range(0, 0.01)) = 0
     }
@@ -41,6 +42,7 @@ Shader "Mahjong Prototype/Reaction Highlight Shell"
                 half _Alpha;
                 half _FresnelPower;
                 half _FresnelIntensity;
+                half _SurfaceIntensity;
                 half _PulseStrength;
                 half _VertexExtrusion;
             CBUFFER_END
@@ -87,9 +89,11 @@ Shader "Mahjong Prototype/Reaction Highlight Shell"
                 half fresnel = pow(
                     saturate(1.0h - saturate(dot(normalWS, viewDirectionWS))),
                     max(_FresnelPower, 0.001h));
-                half rimStrength = saturate(fresnel * _FresnelIntensity * _PulseStrength);
-                half finalAlpha = saturate(rimStrength * _Alpha);
-                half3 finalColor = lerp(half3(1.0h, 1.0h, 1.0h), _RimColor.rgb, rimStrength);
+                half fresnelStrength = saturate(fresnel * _FresnelIntensity);
+                half surfaceStrength = saturate(_SurfaceIntensity);
+                half highlightStrength = saturate(max(fresnelStrength, surfaceStrength) * _PulseStrength);
+                half finalAlpha = saturate(highlightStrength * _Alpha);
+                half3 finalColor = lerp(half3(1.0h, 1.0h, 1.0h), _RimColor.rgb, highlightStrength);
 
                 return half4(finalColor * finalAlpha, finalAlpha);
             }

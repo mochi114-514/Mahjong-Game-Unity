@@ -27,7 +27,9 @@ namespace MahjongPrototype.Tests
                 Invoke(fixture.Highlight, "StartHighlight");
 
                 Assert.That(fixture.Renderer.enabled, Is.True);
-                Assert.That(fixture.Renderer.transform.localScale, Is.EqualTo(Vector3.one * 1.02f));
+                Assert.That(fixture.FaceRenderer.enabled, Is.True);
+                Assert.That(fixture.Renderer.transform.localScale, Is.EqualTo(Vector3.one * 1.03f));
+                Assert.That(fixture.FaceRenderer.transform.localScale, Is.EqualTo(Vector3.one));
                 Assert.That(GetProperty(fixture.Highlight, "IsHighlighted"), Is.True);
             }
             finally
@@ -45,14 +47,21 @@ namespace MahjongPrototype.Tests
                 MaterialPropertyBlock baselineBlock = new MaterialPropertyBlock();
                 baselineBlock.SetFloat("_Alpha", 0.42f);
                 fixture.Renderer.SetPropertyBlock(baselineBlock);
+                MaterialPropertyBlock faceBaselineBlock = new MaterialPropertyBlock();
+                faceBaselineBlock.SetFloat("_Alpha", 0.27f);
+                fixture.FaceRenderer.SetPropertyBlock(faceBaselineBlock);
 
                 Invoke(fixture.Highlight, "StartHighlight");
                 Invoke(fixture.Highlight, "StopHighlight");
 
                 MaterialPropertyBlock restoredBlock = new MaterialPropertyBlock();
                 fixture.Renderer.GetPropertyBlock(restoredBlock);
+                MaterialPropertyBlock restoredFaceBlock = new MaterialPropertyBlock();
+                fixture.FaceRenderer.GetPropertyBlock(restoredFaceBlock);
                 Assert.That(fixture.Renderer.enabled, Is.False);
+                Assert.That(fixture.FaceRenderer.enabled, Is.False);
                 Assert.That(restoredBlock.GetFloat("_Alpha"), Is.EqualTo(0.42f).Within(0.0001f));
+                Assert.That(restoredFaceBlock.GetFloat("_Alpha"), Is.EqualTo(0.27f).Within(0.0001f));
                 Assert.That(fixture.Renderer.transform.localScale, Is.EqualTo(Vector3.one));
                 Assert.That(GetProperty(fixture.Highlight, "IsHighlighted"), Is.False);
             }
@@ -71,16 +80,98 @@ namespace MahjongPrototype.Tests
                 MaterialPropertyBlock baselineBlock = new MaterialPropertyBlock();
                 baselineBlock.SetFloat("_Alpha", 0.37f);
                 fixture.Renderer.SetPropertyBlock(baselineBlock);
+                MaterialPropertyBlock faceBaselineBlock = new MaterialPropertyBlock();
+                faceBaselineBlock.SetFloat("_Alpha", 0.23f);
+                fixture.FaceRenderer.SetPropertyBlock(faceBaselineBlock);
                 Invoke(fixture.Highlight, "StartHighlight");
 
                 Invoke(fixture.Highlight, "OnDisable");
 
                 MaterialPropertyBlock restoredBlock = new MaterialPropertyBlock();
                 fixture.Renderer.GetPropertyBlock(restoredBlock);
+                MaterialPropertyBlock restoredFaceBlock = new MaterialPropertyBlock();
+                fixture.FaceRenderer.GetPropertyBlock(restoredFaceBlock);
                 Assert.That(fixture.Renderer.enabled, Is.False);
+                Assert.That(fixture.FaceRenderer.enabled, Is.False);
                 Assert.That(restoredBlock.GetFloat("_Alpha"), Is.EqualTo(0.37f).Within(0.0001f));
+                Assert.That(restoredFaceBlock.GetFloat("_Alpha"), Is.EqualTo(0.23f).Within(0.0001f));
                 Assert.That(fixture.Renderer.transform.localScale, Is.EqualTo(Vector3.one));
                 Assert.That(GetProperty(fixture.Highlight, "IsHighlighted"), Is.False);
+            }
+            finally
+            {
+                fixture.Dispose();
+            }
+        }
+
+        [Test]
+        public void StartHighlight_SynchronizesCurrentFrontFaceMesh()
+        {
+            HighlightTestFixture fixture = CreateFixture();
+            Mesh updatedFrontFaceMesh = CreateTestMesh("UpdatedFrontFaceMesh");
+            try
+            {
+                fixture.FrontFaceMeshFilter.sharedMesh = updatedFrontFaceMesh;
+
+                Invoke(fixture.Highlight, "StartHighlight");
+
+                Assert.That(fixture.FaceHighlightMeshFilter.sharedMesh, Is.SameAs(updatedFrontFaceMesh));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(updatedFrontFaceMesh);
+                fixture.Dispose();
+            }
+        }
+
+        [Test]
+        public void StartHighlight_UsesSameRimColorAndPulseForShellAndFace()
+        {
+            HighlightTestFixture fixture = CreateFixture();
+            try
+            {
+                Invoke(fixture.Highlight, "StartHighlight");
+
+                MaterialPropertyBlock shellBlock = new MaterialPropertyBlock();
+                fixture.Renderer.GetPropertyBlock(shellBlock);
+                MaterialPropertyBlock faceBlock = new MaterialPropertyBlock();
+                fixture.FaceRenderer.GetPropertyBlock(faceBlock);
+                int rimColorId = Shader.PropertyToID("_RimColor");
+                int pulseStrengthId = Shader.PropertyToID("_PulseStrength");
+                int alphaId = Shader.PropertyToID("_Alpha");
+                int surfaceIntensityId = Shader.PropertyToID("_SurfaceIntensity");
+                int vertexExtrusionId = Shader.PropertyToID("_VertexExtrusion");
+
+                Assert.That(faceBlock.GetColor(rimColorId), Is.EqualTo(shellBlock.GetColor(rimColorId)));
+                Assert.That(faceBlock.GetFloat(pulseStrengthId), Is.EqualTo(shellBlock.GetFloat(pulseStrengthId)));
+                Assert.That(shellBlock.GetFloat(alphaId), Is.EqualTo(0.18f).Within(0.0001f));
+                Assert.That(faceBlock.GetFloat(alphaId), Is.EqualTo(0.3f).Within(0.0001f));
+                Assert.That(shellBlock.GetFloat(surfaceIntensityId), Is.Zero);
+                Assert.That(faceBlock.GetFloat(surfaceIntensityId), Is.EqualTo(1f).Within(0.0001f));
+                Assert.That(faceBlock.GetFloat(vertexExtrusionId), Is.EqualTo(0.001f).Within(0.0001f));
+            }
+            finally
+            {
+                fixture.Dispose();
+            }
+        }
+
+        [Test]
+        public void ShellScale_UsesOnePointZeroOneToOnePointZeroFiveRange()
+        {
+            HighlightTestFixture fixture = CreateFixture();
+            try
+            {
+                FieldInfo field = fixture.Highlight.GetType().GetField(
+                    "shellScale",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                UnityEngine.RangeAttribute range = (UnityEngine.RangeAttribute)Attribute.GetCustomAttribute(
+                    field,
+                    typeof(UnityEngine.RangeAttribute));
+
+                Assert.That(range.min, Is.EqualTo(1.01f));
+                Assert.That(range.max, Is.EqualTo(1.05f));
+                Assert.That((float)field.GetValue(fixture.Highlight), Is.EqualTo(1.03f));
             }
             finally
             {
@@ -97,6 +188,8 @@ namespace MahjongPrototype.Tests
             Component tileView = variant.GetComponent(Type.GetType(TileViewTypeName, true));
             MeshRenderer shellRenderer = variant.transform.Find("Tile Prefab/ReactionHighlightShell")
                 .GetComponent<MeshRenderer>();
+            MeshRenderer faceRenderer = variant.transform.Find("Tile Prefab/ReactionHighlightFace")
+                .GetComponent<MeshRenderer>();
             SerializedObject serializedTileView = new SerializedObject(tileView);
             SerializedProperty dimTargets = serializedTileView.FindProperty("dimTargetRenderers");
 
@@ -105,6 +198,7 @@ namespace MahjongPrototype.Tests
             {
                 UnityEngine.Object target = dimTargets.GetArrayElementAtIndex(i).objectReferenceValue;
                 Assert.That(target, Is.Not.SameAs(shellRenderer));
+                Assert.That(target, Is.Not.SameAs(faceRenderer));
             }
         }
 
@@ -120,6 +214,7 @@ namespace MahjongPrototype.Tests
                 MeshRenderer frontFace = CreateChildRenderer(root.transform, "FrontFace", originalMaterial);
                 MeshRenderer backFace = CreateChildRenderer(root.transform, "BackFace", originalMaterial);
                 MeshRenderer shell = CreateChildRenderer(root.transform, "ReactionHighlightShell", originalMaterial);
+                MeshRenderer face = CreateChildRenderer(root.transform, "ReactionHighlightFace", originalMaterial);
                 Component tileView = root.AddComponent(Type.GetType(TileViewTypeName, true));
                 SetPrivateField(tileView, "dimTargetRenderers", new Renderer[] { tileBody, frontFace, backFace });
                 SetPrivateField(tileView, "dimmedOverrideMaterial", dimmedMaterial);
@@ -130,6 +225,7 @@ namespace MahjongPrototype.Tests
                 Assert.That(frontFace.sharedMaterial, Is.SameAs(dimmedMaterial));
                 Assert.That(backFace.sharedMaterial, Is.SameAs(dimmedMaterial));
                 Assert.That(shell.sharedMaterial, Is.SameAs(originalMaterial));
+                Assert.That(face.sharedMaterial, Is.SameAs(originalMaterial));
             }
             finally
             {
@@ -146,11 +242,18 @@ namespace MahjongPrototype.Tests
             Assert.That(variant, Is.Not.Null);
 
             MeshFilter tileBody = variant.transform.Find("Tile Prefab/TileBody").GetComponent<MeshFilter>();
+            MeshFilter frontFace = variant.transform.Find("Tile Prefab/FrontFace").GetComponent<MeshFilter>();
             MeshFilter shell = variant.transform.Find("Tile Prefab/ReactionHighlightShell").GetComponent<MeshFilter>();
+            MeshFilter face = variant.transform.Find("Tile Prefab/ReactionHighlightFace").GetComponent<MeshFilter>();
             MeshRenderer shellRenderer = shell.GetComponent<MeshRenderer>();
+            MeshRenderer faceRenderer = face.GetComponent<MeshRenderer>();
 
             Assert.That(shell.sharedMesh, Is.SameAs(tileBody.sharedMesh));
+            Assert.That(face.sharedMesh, Is.SameAs(frontFace.sharedMesh));
             Assert.That(shellRenderer.enabled, Is.False);
+            Assert.That(faceRenderer.enabled, Is.False);
+            Assert.That(faceRenderer.sharedMaterial, Is.SameAs(shellRenderer.sharedMaterial));
+            Assert.That(faceRenderer.transform.localScale, Is.EqualTo(Vector3.one));
         }
 
         [Test]
@@ -193,11 +296,33 @@ namespace MahjongPrototype.Tests
             renderer.sharedMaterial = CreateTestMaterial();
             renderer.enabled = false;
 
+            GameObject frontFace = new GameObject("FrontFace");
+            frontFace.transform.SetParent(root.transform, false);
+            MeshFilter frontFaceMeshFilter = frontFace.AddComponent<MeshFilter>();
+            frontFaceMeshFilter.sharedMesh = CreateTestMesh("FrontFaceMesh");
+
+            GameObject face = new GameObject("ReactionHighlightFace");
+            face.transform.SetParent(root.transform, false);
+            MeshFilter faceHighlightMeshFilter = face.AddComponent<MeshFilter>();
+            faceHighlightMeshFilter.sharedMesh = CreateTestMesh("OriginalFaceHighlightMesh");
+            MeshRenderer faceRenderer = face.AddComponent<MeshRenderer>();
+            faceRenderer.sharedMaterial = CreateTestMaterial();
+            faceRenderer.enabled = false;
+
             Component highlight = root.AddComponent(Type.GetType(HighlightTypeName, true));
             SetPrivateField(highlight, "highlightRenderer", renderer);
+            SetPrivateField(highlight, "faceHighlightRenderer", faceRenderer);
             SetPrivateField(highlight, "shellTransform", shell.transform);
+            SetPrivateField(highlight, "frontFaceMeshFilter", frontFaceMeshFilter);
+            SetPrivateField(highlight, "faceHighlightMeshFilter", faceHighlightMeshFilter);
 
-            return new HighlightTestFixture(root, renderer, highlight);
+            return new HighlightTestFixture(
+                root,
+                renderer,
+                faceRenderer,
+                frontFaceMeshFilter,
+                faceHighlightMeshFilter,
+                highlight);
         }
 
         private static Material CreateTestMaterial()
@@ -205,6 +330,17 @@ namespace MahjongPrototype.Tests
             Shader shader = Shader.Find(HighlightShaderName);
             Assert.That(shader, Is.Not.Null);
             return new Material(shader);
+        }
+
+        private static Mesh CreateTestMesh(string meshName)
+        {
+            Mesh mesh = new Mesh
+            {
+                name = meshName
+            };
+            mesh.vertices = new[] { Vector3.zero, Vector3.right, Vector3.up };
+            mesh.triangles = new[] { 0, 1, 2 };
+            return mesh;
         }
 
         private static MeshRenderer CreateChildRenderer(Transform parent, string name, Material material)
@@ -255,19 +391,46 @@ namespace MahjongPrototype.Tests
         {
             private readonly GameObject root;
 
-            public HighlightTestFixture(GameObject root, MeshRenderer renderer, Component highlight)
+            public HighlightTestFixture(
+                GameObject root,
+                MeshRenderer renderer,
+                MeshRenderer faceRenderer,
+                MeshFilter frontFaceMeshFilter,
+                MeshFilter faceHighlightMeshFilter,
+                Component highlight)
             {
                 this.root = root;
                 Renderer = renderer;
+                FaceRenderer = faceRenderer;
+                FrontFaceMeshFilter = frontFaceMeshFilter;
+                FaceHighlightMeshFilter = faceHighlightMeshFilter;
                 Highlight = (Behaviour)highlight;
             }
 
             public MeshRenderer Renderer { get; }
 
+            public MeshRenderer FaceRenderer { get; }
+
+            public MeshFilter FrontFaceMeshFilter { get; }
+
+            public MeshFilter FaceHighlightMeshFilter { get; }
+
             public Behaviour Highlight { get; }
 
             public void Dispose()
             {
+                if (Renderer != null && Renderer.sharedMaterial != null)
+                    UnityEngine.Object.DestroyImmediate(Renderer.sharedMaterial);
+
+                if (FaceRenderer != null && FaceRenderer.sharedMaterial != null)
+                    UnityEngine.Object.DestroyImmediate(FaceRenderer.sharedMaterial);
+
+                if (FrontFaceMeshFilter != null && FrontFaceMeshFilter.sharedMesh != null)
+                    UnityEngine.Object.DestroyImmediate(FrontFaceMeshFilter.sharedMesh);
+
+                if (FaceHighlightMeshFilter != null && FaceHighlightMeshFilter.sharedMesh != null)
+                    UnityEngine.Object.DestroyImmediate(FaceHighlightMeshFilter.sharedMesh);
+
                 if (root != null)
                     UnityEngine.Object.DestroyImmediate(root);
             }

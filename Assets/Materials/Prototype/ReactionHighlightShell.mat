@@ -26,9 +26,10 @@ Material:
     m_Ints: []
     m_Floats:
     - _Alpha: 0.18
-    - _FresnelIntensity: 1
-    - _FresnelPower: 4
+    - _FresnelIntensity: 2
+    - _FresnelPower: 0.75
     - _PulseStrength: 1
+    - _SurfaceIntensity: 0
     - _VertexExtrusion: 0
     m_Colors:
     - _RimColor: {r: 1, g: 0.88, b: 0.55, a: 1}

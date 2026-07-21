@@ -14,34 +14,47 @@ namespace MahjongPrototype.UI3D
         private static readonly int AlphaPropertyId = Shader.PropertyToID("_Alpha");
         private static readonly int FresnelPowerPropertyId = Shader.PropertyToID("_FresnelPower");
         private static readonly int FresnelIntensityPropertyId = Shader.PropertyToID("_FresnelIntensity");
+        private static readonly int SurfaceIntensityPropertyId = Shader.PropertyToID("_SurfaceIntensity");
         private static readonly int PulseStrengthPropertyId = Shader.PropertyToID("_PulseStrength");
         private static readonly int VertexExtrusionPropertyId = Shader.PropertyToID("_VertexExtrusion");
 
         [Header("References")]
         [SerializeField] private MeshRenderer highlightRenderer;
+        [SerializeField] private MeshRenderer faceHighlightRenderer;
         [SerializeField] private Transform shellTransform;
+        [SerializeField] private MeshFilter frontFaceMeshFilter;
+        [SerializeField] private MeshFilter faceHighlightMeshFilter;
 
         [Header("Shell Shape")]
         [SerializeField] private bool applyShellScale = true;
-        [SerializeField, Range(1.01f, 1.03f)] private float shellScale = 1.02f;
+        [SerializeField, Range(1.01f, 1.05f)] private float shellScale = 1.03f;
         [SerializeField] private bool applyVertexExtrusion;
         [SerializeField, Range(0f, 0.01f)] private float vertexExtrusion;
 
         [Header("Fresnel")]
-        [SerializeField, Range(0.5f, 8f)] private float fresnelPower = 4f;
-        [SerializeField, Range(0f, 2f)] private float fresnelIntensity = 1f;
+        [SerializeField, Range(0.5f, 8f)] private float fresnelPower = 0.75f;
+        [SerializeField, Range(0f, 2f)] private float fresnelIntensity = 2f;
         [SerializeField] private Color rimColor = new Color(1f, 0.88f, 0.55f, 1f);
         [SerializeField, Range(0f, 1f)] private float alpha = 0.18f;
+
+        [Header("Face Surface")]
+        [SerializeField, Range(0f, 1f)] private float faceAlpha = 0.3f;
+        [SerializeField, Range(0f, 2f)] private float faceSurfaceIntensity = 1f;
+        [SerializeField, Range(0f, 0.01f)] private float faceVertexExtrusion = 0.001f;
 
         [Header("Pulse")]
         [SerializeField, Min(0.1f)] private float pulsePeriod = 2f;
         [SerializeField, Range(0f, 2f)] private float pulseMinStrength = 0.85f;
         [SerializeField, Range(0f, 2f)] private float pulseMaxStrength = 1f;
 
-        private MaterialPropertyBlock workingPropertyBlock;
-        private MaterialPropertyBlock originalPropertyBlock;
-        private bool hasCapturedRendererState;
-        private bool originalRendererEnabled;
+        private MaterialPropertyBlock shellWorkingPropertyBlock;
+        private MaterialPropertyBlock faceWorkingPropertyBlock;
+        private MaterialPropertyBlock originalShellPropertyBlock;
+        private MaterialPropertyBlock originalFacePropertyBlock;
+        private bool hasCapturedShellRendererState;
+        private bool hasCapturedFaceRendererState;
+        private bool originalShellRendererEnabled;
+        private bool originalFaceRendererEnabled;
         private bool hasCapturedTransformState;
         private Vector3 originalLocalScale;
 
@@ -55,19 +68,28 @@ namespace MahjongPrototype.UI3D
             if (IsHighlighted)
                 return;
 
-            if (highlightRenderer == null)
+            if (highlightRenderer == null && faceHighlightRenderer == null)
             {
-                Debug.LogWarning($"{nameof(Mahjong3DTileReactionHighlight)}: Highlight Renderer is not assigned.", this);
+                Debug.LogWarning($"{nameof(Mahjong3DTileReactionHighlight)}: Highlight Renderers are not assigned.", this);
                 return;
             }
 
             if (shellTransform == null)
-                shellTransform = highlightRenderer.transform;
+                shellTransform = highlightRenderer != null ? highlightRenderer.transform : null;
 
             CaptureOriginalState();
+            SyncFaceMesh();
             ApplyShellTransform();
-            ApplyPropertyBlock(EvaluatePulseStrength());
-            highlightRenderer.enabled = true;
+            float pulseStrength = EvaluatePulseStrength();
+            ApplyShellPropertyBlock(pulseStrength);
+            ApplyFacePropertyBlock(pulseStrength);
+
+            if (highlightRenderer != null)
+                highlightRenderer.enabled = true;
+
+            if (faceHighlightRenderer != null)
+                faceHighlightRenderer.enabled = true;
+
             IsHighlighted = true;
         }
 
@@ -76,18 +98,26 @@ namespace MahjongPrototype.UI3D
         /// </summary>
         public void StopHighlight()
         {
-            if (highlightRenderer != null && hasCapturedRendererState)
+            if (highlightRenderer != null && hasCapturedShellRendererState)
             {
-                highlightRenderer.enabled = originalRendererEnabled;
-                highlightRenderer.SetPropertyBlock(originalPropertyBlock);
+                highlightRenderer.enabled = originalShellRendererEnabled;
+                highlightRenderer.SetPropertyBlock(originalShellPropertyBlock);
+            }
+
+            if (faceHighlightRenderer != null && hasCapturedFaceRendererState)
+            {
+                faceHighlightRenderer.enabled = originalFaceRendererEnabled;
+                faceHighlightRenderer.SetPropertyBlock(originalFacePropertyBlock);
             }
 
             if (shellTransform != null && hasCapturedTransformState)
                 shellTransform.localScale = originalLocalScale;
 
-            hasCapturedRendererState = false;
+            hasCapturedShellRendererState = false;
+            hasCapturedFaceRendererState = false;
             hasCapturedTransformState = false;
-            originalPropertyBlock = null;
+            originalShellPropertyBlock = null;
+            originalFacePropertyBlock = null;
             IsHighlighted = false;
         }
 
@@ -101,10 +131,12 @@ namespace MahjongPrototype.UI3D
 
         private void Update()
         {
-            if (!IsHighlighted || highlightRenderer == null)
+            if (!IsHighlighted)
                 return;
 
-            ApplyPropertyBlock(EvaluatePulseStrength());
+            float pulseStrength = EvaluatePulseStrength();
+            ApplyShellPropertyBlock(pulseStrength);
+            ApplyFacePropertyBlock(pulseStrength);
         }
 
         private void OnDisable()
@@ -126,12 +158,20 @@ namespace MahjongPrototype.UI3D
 
         private void CaptureOriginalState()
         {
-            if (!hasCapturedRendererState)
+            if (!hasCapturedShellRendererState && highlightRenderer != null)
             {
-                originalRendererEnabled = highlightRenderer.enabled;
-                originalPropertyBlock = new MaterialPropertyBlock();
-                highlightRenderer.GetPropertyBlock(originalPropertyBlock);
-                hasCapturedRendererState = true;
+                originalShellRendererEnabled = highlightRenderer.enabled;
+                originalShellPropertyBlock = new MaterialPropertyBlock();
+                highlightRenderer.GetPropertyBlock(originalShellPropertyBlock);
+                hasCapturedShellRendererState = true;
+            }
+
+            if (!hasCapturedFaceRendererState && faceHighlightRenderer != null)
+            {
+                originalFaceRendererEnabled = faceHighlightRenderer.enabled;
+                originalFacePropertyBlock = new MaterialPropertyBlock();
+                faceHighlightRenderer.GetPropertyBlock(originalFacePropertyBlock);
+                hasCapturedFaceRendererState = true;
             }
 
             if (!hasCapturedTransformState && shellTransform != null)
@@ -151,19 +191,48 @@ namespace MahjongPrototype.UI3D
                 : originalLocalScale;
         }
 
-        private void ApplyPropertyBlock(float pulseStrength)
+        private void SyncFaceMesh()
         {
-            workingPropertyBlock ??= new MaterialPropertyBlock();
-            highlightRenderer.GetPropertyBlock(workingPropertyBlock);
-            workingPropertyBlock.SetColor(RimColorPropertyId, rimColor);
-            workingPropertyBlock.SetFloat(AlphaPropertyId, alpha);
-            workingPropertyBlock.SetFloat(FresnelPowerPropertyId, fresnelPower);
-            workingPropertyBlock.SetFloat(FresnelIntensityPropertyId, fresnelIntensity);
-            workingPropertyBlock.SetFloat(PulseStrengthPropertyId, pulseStrength);
-            workingPropertyBlock.SetFloat(
+            if (frontFaceMeshFilter == null || faceHighlightMeshFilter == null)
+                return;
+
+            faceHighlightMeshFilter.sharedMesh = frontFaceMeshFilter.sharedMesh;
+        }
+
+        private void ApplyShellPropertyBlock(float pulseStrength)
+        {
+            if (highlightRenderer == null)
+                return;
+
+            shellWorkingPropertyBlock ??= new MaterialPropertyBlock();
+            highlightRenderer.GetPropertyBlock(shellWorkingPropertyBlock);
+            shellWorkingPropertyBlock.SetColor(RimColorPropertyId, rimColor);
+            shellWorkingPropertyBlock.SetFloat(AlphaPropertyId, alpha);
+            shellWorkingPropertyBlock.SetFloat(FresnelPowerPropertyId, fresnelPower);
+            shellWorkingPropertyBlock.SetFloat(FresnelIntensityPropertyId, fresnelIntensity);
+            shellWorkingPropertyBlock.SetFloat(SurfaceIntensityPropertyId, 0f);
+            shellWorkingPropertyBlock.SetFloat(PulseStrengthPropertyId, pulseStrength);
+            shellWorkingPropertyBlock.SetFloat(
                 VertexExtrusionPropertyId,
                 applyVertexExtrusion ? vertexExtrusion : 0f);
-            highlightRenderer.SetPropertyBlock(workingPropertyBlock);
+            highlightRenderer.SetPropertyBlock(shellWorkingPropertyBlock);
+        }
+
+        private void ApplyFacePropertyBlock(float pulseStrength)
+        {
+            if (faceHighlightRenderer == null)
+                return;
+
+            faceWorkingPropertyBlock ??= new MaterialPropertyBlock();
+            faceHighlightRenderer.GetPropertyBlock(faceWorkingPropertyBlock);
+            faceWorkingPropertyBlock.SetColor(RimColorPropertyId, rimColor);
+            faceWorkingPropertyBlock.SetFloat(AlphaPropertyId, faceAlpha);
+            faceWorkingPropertyBlock.SetFloat(FresnelPowerPropertyId, fresnelPower);
+            faceWorkingPropertyBlock.SetFloat(FresnelIntensityPropertyId, 0f);
+            faceWorkingPropertyBlock.SetFloat(SurfaceIntensityPropertyId, faceSurfaceIntensity);
+            faceWorkingPropertyBlock.SetFloat(PulseStrengthPropertyId, pulseStrength);
+            faceWorkingPropertyBlock.SetFloat(VertexExtrusionPropertyId, faceVertexExtrusion);
+            faceHighlightRenderer.SetPropertyBlock(faceWorkingPropertyBlock);
         }
 
         private float EvaluatePulseStrength()
