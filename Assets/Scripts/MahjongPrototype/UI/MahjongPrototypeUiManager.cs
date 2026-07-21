@@ -48,6 +48,9 @@ namespace MahjongPrototype.UI
         [Header("Reach Decision")]
         [SerializeField] private MahjongReachDecisionController reachDecisionController;
 
+        [Header("Winning Candidates")]
+        [SerializeField] private MahjongWinningCandidateController winningCandidateController;
+
         [Header("Round Result")]
         [SerializeField] private MahjongRoundResultController roundResultController;
 
@@ -80,6 +83,8 @@ namespace MahjongPrototype.UI
         private MahjongRoundProgressController subscribedRoundProgressController;
         private int? reactionHighlightDiscardId;
         private int? resolvedReactionWindowIdAwaitingClosed;
+        private readonly WinningTileCandidateEvaluator winningTileCandidateEvaluator =
+            new WinningTileCandidateEvaluator();
         private void Reset()
         {
             CacheReferences();
@@ -100,6 +105,7 @@ namespace MahjongPrototype.UI
             EnsureWinDecisionController();
             EnsurePonDecisionController();
             EnsureReachDecisionController();
+            EnsureWinningCandidateController();
             EnsureRoundResultController();
             EnsureRoundProgressController();
             SubscribeRoundProgressPresentation();
@@ -120,6 +126,7 @@ namespace MahjongPrototype.UI
             EnsureWinDecisionController();
             EnsurePonDecisionController();
             EnsureReachDecisionController();
+            EnsureWinningCandidateController();
             EnsureRoundResultController();
             EnsureRoundProgressController();
             SubscribeRoundProgressPresentation();
@@ -138,6 +145,7 @@ namespace MahjongPrototype.UI
             inputController?.ClearReactionResponseBindings();
             ponDecisionController?.ClearReactionMeldCallDecision();
             resolvedReactionWindowIdAwaitingClosed = null;
+            winningCandidateController?.Clear();
             ClearDiscardReactionHighlights();
         }
 
@@ -156,6 +164,7 @@ namespace MahjongPrototype.UI
                 ClearRoundResultUi();
                 RefreshTableCenterUi(null);
                 RefreshPonDecision(null);
+                RefreshReachDecision(null);
                 ClearZeroHanTenpaiUi();
                 ClearFuritenUi();
                 ClearDiscardReactionHighlights();
@@ -193,6 +202,7 @@ namespace MahjongPrototype.UI
                 inputController?.ClearReactionResponseBindings();
                 ClearRoundResultUi();
                 RefreshPonDecision(null);
+                RefreshReachDecision(null);
                 ClearZeroHanTenpaiUi();
                 ClearFuritenUi();
                 ClearDiscardReactionHighlights();
@@ -239,6 +249,12 @@ namespace MahjongPrototype.UI
 
             if (roundProgressController == null)
                 roundProgressController = GetComponentInChildren<MahjongRoundProgressController>(true);
+
+            if (winningCandidateController == null)
+            {
+                winningCandidateController =
+                    GetComponentInChildren<MahjongWinningCandidateController>(true);
+            }
         }
 
         private void SubscribeNotifications()
@@ -429,6 +445,15 @@ namespace MahjongPrototype.UI
             if (roundResultController == null)
             {
                 roundResultController = GetComponentInChildren<MahjongRoundResultController>(true);
+            }
+        }
+
+        private void EnsureWinningCandidateController()
+        {
+            if (winningCandidateController == null)
+            {
+                winningCandidateController =
+                    GetComponentInChildren<MahjongWinningCandidateController>(true);
             }
         }
 
@@ -772,6 +797,7 @@ namespace MahjongPrototype.UI
         private void HandleGameEnded(RoundResult _)
         {
             ClearRoundResultUi();
+            RefreshReachDecisionUi();
         }
 
         private void RefreshDisplay(MahjongGameState state)
@@ -1107,30 +1133,44 @@ namespace MahjongPrototype.UI
             if (reachDecisionController == null)
                 EnsureReachDecisionController();
 
-            if (reachDecisionController != null)
-            {
-                bool showSelfReachDecision = TryGetSelfDecisionRequest(
-                    state,
-                    DecisionKind.Reach,
-                    out DecisionRequest reachRequest);
-                if (showSelfReachDecision)
-                    inputController?.SetReachDecisionResponseBindings(reachRequest.RequestId);
-                else
-                    inputController?.ClearReachDecisionResponseBindings();
+            if (winningCandidateController == null)
+                EnsureWinningCandidateController();
 
-                bool showSelfReachCancel =
-                    state != null &&
-                    state.IsReachDiscardSelectionPending &&
-                    IsSelfSeat(state.ReachDecisionSeat);
+            bool showSelfReachDecision = TryGetSelfDecisionRequest(
+                state,
+                DecisionKind.Reach,
+                out DecisionRequest reachRequest);
+            if (showSelfReachDecision)
+                inputController?.SetReachDecisionResponseBindings(reachRequest.RequestId);
+            else
+                inputController?.ClearReachDecisionResponseBindings();
+
+            bool showSelfReachCancel =
+                state != null &&
+                state.IsReachDiscardSelectionPending &&
+                IsSelfSeat(state.ReachDecisionSeat);
+            if (reachDecisionController != null)
                 reachDecisionController.SetReachUiVisible(showSelfReachDecision, showSelfReachCancel);
+
+            if (!showSelfReachDecision ||
+                !TryGetSelfSeat(state, out SeatId selfSeat))
+            {
+                winningCandidateController?.Clear();
+                return;
             }
+
+            IReadOnlyList<ReachWinningCandidateGroup> groups =
+                winningTileCandidateEvaluator.GroupReachCandidates(
+                    state,
+                    selfSeat,
+                    state.ReachDiscardCandidates);
+            winningCandidateController?.SetGroups(groups);
         }
 
         private void RefreshReachDecisionUi()
         {
             MahjongGameState state = gameFlow != null ? gameFlow.CurrentState : null;
-            if (state != null)
-                RefreshReachDecision(state);
+            RefreshReachDecision(state);
         }
 
         private void RefreshRoundResult(MahjongGameState state)

@@ -476,8 +476,8 @@ MonoBehaviour:
   fresnelPower: 0.75
   fresnelIntensity: 2
   rimColor: {r: 1, g: 0, b: 0.08701134, a: 1}
-  alpha: 0.4
-  faceAlpha: 0.5
+  alpha: 0.5
+  faceAlpha: 0.45
   faceSurfaceIntensity: 2
   faceVertexExtrusion: 0.001
   pulsePeriod: 2

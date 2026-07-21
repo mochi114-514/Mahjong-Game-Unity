@@ -55,5 +55,59 @@ namespace MahjongPrototype.Tests
                 Assert.That(driver.UiManagerControllerReferenceIsNull, Is.True);
             }
         }
+
+        [Test]
+        public void UiManagerRefreshReachDecision_ShowsAndClearsCandidatesWithReachButton()
+        {
+            using (MahjongReachDecisionUiManagerTestDriver driver =
+                MahjongReachDecisionUiManagerTestDriver.Create())
+            {
+                driver.PrepareReachableGameState();
+                driver.CreateDecisionArea("ReachDecisionArea", false);
+                driver.AddDecisionControllerToArea();
+                driver.AssignControllerToUiManager();
+                driver.CreateAndAssignWinningCandidateController();
+
+                driver.RefreshReachDecision();
+
+                Assert.That(driver.DecisionAreaActive, Is.True);
+                Assert.That(driver.WinningCandidateRootActive, Is.True);
+                Assert.That(driver.SpawnedWinningGroupCount, Is.GreaterThan(0));
+
+                driver.AcceptReach();
+                driver.RefreshReachDecision();
+
+                Assert.That(driver.DecisionAreaActive, Is.False);
+                Assert.That(driver.WinningCandidateRootActive, Is.False);
+                Assert.That(driver.SpawnedWinningGroupCount, Is.Zero);
+            }
+        }
+
+        [Test]
+        public void UiManagerRefreshReachDecision_DeclineNullAndDisableLeaveNoCandidates()
+        {
+            using (MahjongReachDecisionUiManagerTestDriver driver =
+                MahjongReachDecisionUiManagerTestDriver.Create())
+            {
+                driver.PrepareReachableGameState();
+                driver.CreateDecisionArea("ReachDecisionArea", false);
+                driver.AddDecisionControllerToArea();
+                driver.AssignControllerToUiManager();
+                driver.CreateAndAssignWinningCandidateController();
+
+                driver.RefreshReachDecision();
+                driver.DeclineReach();
+                driver.RefreshReachDecision();
+
+                Assert.That(driver.DecisionAreaActive, Is.False);
+                Assert.That(driver.WinningCandidateRootActive, Is.False);
+
+                driver.RefreshReachDecisionWithNullState();
+                driver.InvokeUiManagerOnDisable();
+
+                Assert.That(driver.WinningCandidateRootActive, Is.False);
+                Assert.That(driver.SpawnedWinningGroupCount, Is.Zero);
+            }
+        }
     }
 }

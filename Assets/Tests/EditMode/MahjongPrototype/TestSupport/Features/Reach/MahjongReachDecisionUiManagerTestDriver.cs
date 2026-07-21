@@ -1,6 +1,8 @@
 using System;
 using MahjongPrototype.Tests.TestSupport.Core;
 using MahjongPrototype.Tests.TestSupport.Unity;
+using NUnit.Framework;
+using UnityEditor;
 using UnityEngine;
 using UnityEngine.TestTools;
 
@@ -12,29 +14,46 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
             "MahjongPrototype.UI.MahjongReachDecisionController, Assembly-CSharp";
         private const string UiManagerTypeName =
             "MahjongPrototype.UI.MahjongPrototypeUiManager, Assembly-CSharp";
+        private const string WinningCandidateControllerTypeName =
+            "MahjongPrototype.UI.MahjongWinningCandidateController, Assembly-CSharp";
+        private const string WinningGroupViewTypeName =
+            "MahjongPrototype.UI.MahjongWinningCandidateGroupView, Assembly-CSharp";
+        private const string WinningTileViewTypeName =
+            "MahjongPrototype.UI.MahjongWinningTileCandidateView, Assembly-CSharp";
+        private const string GroupPrefabPath =
+            "Assets/Prefab/Mahjong Winning Candidate Group.prefab";
+        private const string CandidatePrefabPath =
+            "Assets/Prefab/Mahjong Winning Tile Candidate.prefab";
+        private const string CatalogPath =
+            "Assets/Scripts/MahjongPrototype/ScriptableObjects/MahjongTileSpriteCatalog.asset";
 
         private readonly ReflectionTestAccess reflection;
         private readonly UnityObjectTestOwner owner;
         private readonly Type controllerType;
         private readonly Type uiManagerType;
+        private readonly Type winningCandidateControllerType;
         private readonly GameObject root;
         private readonly GameObject uiObject;
         private readonly Component uiManager;
         private ReachGameFlowTestSupport flowSupport;
         private GameObject decisionArea;
         private Component decisionController;
+        private GameObject winningCandidateRoot;
+        private Component winningCandidateController;
         private bool disposed;
 
         private MahjongReachDecisionUiManagerTestDriver(
             ReflectionTestAccess reflection,
             UnityObjectTestOwner owner,
             Type controllerType,
-            Type uiManagerType)
+            Type uiManagerType,
+            Type winningCandidateControllerType)
         {
             this.reflection = reflection;
             this.owner = owner;
             this.controllerType = controllerType;
             this.uiManagerType = uiManagerType;
+            this.winningCandidateControllerType = winningCandidateControllerType;
 
             root = owner.Own(new GameObject("MahjongReachDecisionUiManagerTestDriver"));
             uiObject = new GameObject("MahjongUiManager");
@@ -50,7 +69,8 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
                 reflection,
                 new UnityObjectTestOwner(),
                 reflection.RequireType(ControllerTypeName),
-                reflection.RequireType(UiManagerTypeName));
+                reflection.RequireType(UiManagerTypeName),
+                reflection.RequireType(WinningCandidateControllerTypeName));
         }
 
         public void PrepareReachableGameState()
@@ -79,9 +99,74 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
             reflection.SetPrivateField(uiManager, "reachDecisionController", decisionController);
         }
 
+        public void CreateAndAssignWinningCandidateController()
+        {
+            winningCandidateRoot = new GameObject("WinningCandidateRoot");
+            winningCandidateRoot.transform.SetParent(uiObject.transform);
+            GameObject groups = new GameObject("Groups");
+            groups.transform.SetParent(winningCandidateRoot.transform);
+
+            winningCandidateController =
+                uiObject.AddComponent(winningCandidateControllerType);
+            GameObject groupPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(GroupPrefabPath);
+            GameObject candidatePrefab =
+                AssetDatabase.LoadAssetAtPath<GameObject>(CandidatePrefabPath);
+            Assert.That(groupPrefab, Is.Not.Null);
+            Assert.That(candidatePrefab, Is.Not.Null);
+
+            reflection.SetPrivateField(
+                winningCandidateController,
+                "root",
+                winningCandidateRoot);
+            reflection.SetPrivateField(
+                winningCandidateController,
+                "groupsContainer",
+                groups.transform);
+            reflection.SetPrivateField(
+                winningCandidateController,
+                "groupViewPrefab",
+                groupPrefab.GetComponent(reflection.RequireType(WinningGroupViewTypeName)));
+            reflection.SetPrivateField(
+                winningCandidateController,
+                "candidateViewPrefab",
+                candidatePrefab.GetComponent(reflection.RequireType(WinningTileViewTypeName)));
+            reflection.SetPrivateField(
+                winningCandidateController,
+                "tileSpriteCatalog",
+                AssetDatabase.LoadAssetAtPath<ScriptableObject>(CatalogPath));
+            reflection.SetPrivateField(
+                uiManager,
+                "winningCandidateController",
+                winningCandidateController);
+            winningCandidateRoot.SetActive(false);
+        }
+
         public void RefreshReachDecision()
         {
             reflection.Invoke(uiManager, "RefreshReachDecision", flowSupport.CurrentState);
+        }
+
+        public void RefreshReachDecisionWithNullState()
+        {
+            reflection.Invoke(
+                uiManager,
+                "RefreshReachDecision",
+                new object[] { null });
+        }
+
+        public void InvokeUiManagerOnDisable()
+        {
+            reflection.Invoke(uiManager, "OnDisable");
+        }
+
+        public void AcceptReach()
+        {
+            flowSupport.RequestDeclareReach();
+        }
+
+        public void DeclineReach()
+        {
+            flowSupport.RequestDeclineReach();
         }
 
         public void EnsureReachDecisionController()
@@ -98,6 +183,13 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
             (bool)reflection.GetProperty(flowSupport.CurrentState, "IsReachDecisionPending");
 
         public bool DecisionAreaActive => decisionArea.activeSelf;
+
+        public bool WinningCandidateRootActive =>
+            winningCandidateRoot != null && winningCandidateRoot.activeSelf;
+
+        public int SpawnedWinningGroupCount => winningCandidateController == null
+            ? 0
+            : (int)reflection.GetProperty(winningCandidateController, "SpawnedGroupCount");
 
         public bool DecisionAreaHasController =>
             decisionArea.GetComponent(controllerType) != null;
