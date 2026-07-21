@@ -2288,7 +2288,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI3D.Mahjong3DDiscardRiverView
   spawnRoot: {fileID: 636301887}
-  tilePrefab: {fileID: 3299337903893360087, guid: 4652b64a316cb7e46b53d7e16f9ff2f9, type: 3}
+  tilePrefab: {fileID: 1973773020475723886, guid: 4652b64a316cb7e46b53d7e16f9ff2f9, type: 3}
   columns: 6
   verticalTileSpacing: 1.6
   horizontalTileSpacing: 2.1
@@ -2390,7 +2390,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI3D.Mahjong3DDiscardRiverView
   spawnRoot: {fileID: 695813522}
-  tilePrefab: {fileID: 3299337903893360087, guid: 4652b64a316cb7e46b53d7e16f9ff2f9, type: 3}
+  tilePrefab: {fileID: 1973773020475723886, guid: 4652b64a316cb7e46b53d7e16f9ff2f9, type: 3}
   columns: 6
   verticalTileSpacing: 1.6
   horizontalTileSpacing: 2.1
@@ -4775,7 +4775,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI3D.Mahjong3DDiscardRiverView
   spawnRoot: {fileID: 1298846570}
-  tilePrefab: {fileID: 3299337903893360087, guid: 4652b64a316cb7e46b53d7e16f9ff2f9, type: 3}
+  tilePrefab: {fileID: 1973773020475723886, guid: 4652b64a316cb7e46b53d7e16f9ff2f9, type: 3}
   columns: 6
   verticalTileSpacing: 1.6
   horizontalTileSpacing: 2.1
@@ -5859,7 +5859,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI3D.Mahjong3DDiscardRiverView
   spawnRoot: {fileID: 1684105270}
-  tilePrefab: {fileID: 3299337903893360087, guid: 4652b64a316cb7e46b53d7e16f9ff2f9, type: 3}
+  tilePrefab: {fileID: 1973773020475723886, guid: 4652b64a316cb7e46b53d7e16f9ff2f9, type: 3}
   columns: 6
   verticalTileSpacing: 1.6
   horizontalTileSpacing: 2.1
