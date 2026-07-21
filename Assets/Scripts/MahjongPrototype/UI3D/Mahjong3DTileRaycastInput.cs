@@ -24,6 +24,7 @@ namespace MahjongPrototype.UI3D
         private PointerEventData pointerEventData;
         private EventSystem pointerEventSystem;
         private bool warnedMissingCamera;
+        private bool syncTransformsBeforeHoverRefresh;
         private Mahjong3DTileView hoveredTileView;
 
         public event System.Action HoverReevaluated;
@@ -58,8 +59,20 @@ namespace MahjongPrototype.UI3D
 
         public void RefreshHover()
         {
+            if (syncTransformsBeforeHoverRefresh)
+            {
+                // A hand redraw may have replaced the collider this frame.
+                syncTransformsBeforeHoverRefresh = false;
+                Physics.SyncTransforms();
+            }
+
             UpdateMouseHover();
             HoverReevaluated?.Invoke();
+        }
+
+        public void RequestHoverRefresh()
+        {
+            syncTransformsBeforeHoverRefresh = true;
         }
 
         private void UpdateMouseHover()

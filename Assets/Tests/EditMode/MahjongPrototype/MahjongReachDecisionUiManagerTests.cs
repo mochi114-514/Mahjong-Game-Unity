@@ -185,6 +185,82 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
+        public void ThirteenTileHover_TurnStartedThroughDrawRebuildKeepsRootVisibleUntilLateReevaluation()
+        {
+            using (MahjongReachDecisionUiManagerTestDriver driver =
+                MahjongReachDecisionUiManagerTestDriver.Create())
+            {
+                driver.PrepareReachableGameState();
+                driver.CreateAndAssignWinningCandidateController();
+                driver.HoverFirstReachCandidate();
+                driver.ExitCurrentHover();
+                driver.DeclineReach();
+                driver.ClearDrawnTileDirectly();
+                driver.RefreshReachDecision();
+                driver.HoverFirstHandTile();
+
+                Assert.That(driver.WinningCandidateRootActive, Is.True);
+
+                driver.NotifyTurnStarted();
+
+                Assert.That(driver.WinningCandidateRootActive, Is.True);
+                Assert.That(driver.IsHoverReevaluationPending, Is.True);
+
+                driver.SetDrawnTileDirectly("6m");
+                driver.NotifyTileDrawn("6m");
+
+                Assert.That(driver.WinningCandidateRootActive, Is.True);
+                Assert.That(driver.IsHoverReevaluationPending, Is.True);
+
+                driver.BeginCurrentHoverExit();
+
+                Assert.That(driver.WinningCandidateRootActive, Is.True);
+                Assert.That(driver.IsHoverReevaluationPending, Is.True);
+
+                driver.HoverCurrentDrawnTile();
+
+                Assert.That(driver.WinningCandidateRootActive, Is.True);
+                Assert.That(driver.IsHoverReevaluationPending, Is.False);
+
+                driver.CompleteHoverReevaluation();
+
+                Assert.That(driver.WinningCandidateRootActive, Is.True);
+            }
+        }
+
+        [Test]
+        public void HandAutoSortHoverExitThenDifferentHandTileKeepsRootVisibleUntilLateReevaluation()
+        {
+            using (MahjongReachDecisionUiManagerTestDriver driver =
+                MahjongReachDecisionUiManagerTestDriver.Create())
+            {
+                driver.PrepareReachableGameState();
+                driver.CreateAndAssignWinningCandidateController();
+                driver.HoverFirstReachCandidate();
+                driver.ExitCurrentHover();
+                driver.DeclineReach();
+                driver.ClearDrawnTileDirectly();
+                driver.RefreshReachDecision();
+                driver.HoverFirstHandTile();
+
+                driver.NotifyHandAutoSorted();
+
+                Assert.That(driver.WinningCandidateRootActive, Is.True);
+                Assert.That(driver.IsHoverReevaluationPending, Is.True);
+
+                driver.BeginCurrentHoverExit();
+                driver.HoverHandTile(1);
+
+                Assert.That(driver.WinningCandidateRootActive, Is.True);
+                Assert.That(driver.IsHoverReevaluationPending, Is.False);
+
+                driver.CompleteHoverReevaluation();
+
+                Assert.That(driver.WinningCandidateRootActive, Is.True);
+            }
+        }
+
+        [Test]
         public void HandRedrawHoverExitThenReplacementEnterKeepsCandidatesForTheNewTile()
         {
             using (MahjongReachDecisionUiManagerTestDriver driver =

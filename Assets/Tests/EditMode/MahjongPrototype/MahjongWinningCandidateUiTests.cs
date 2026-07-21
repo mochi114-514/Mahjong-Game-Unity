@@ -243,6 +243,33 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
+        public void SetCandidates_ChangedDisplayKeepsRootVisibleWhileReplacingViews()
+        {
+            WinningTileCandidateEvaluatorTestDriver evaluator =
+                WinningTileCandidateEvaluatorTestDriver.Create();
+            object state = evaluator.CreateGameState();
+            evaluator.AddHand(
+                state,
+                "East",
+                "1m 2m 3m 1p 2p 3p 1s 2s 3s E E E C");
+            object initialCandidates = evaluator.EvaluateCurrent(state);
+            evaluator.AddDiscard(state, "South", "C", 1);
+            object updatedCandidates = evaluator.EvaluateCurrent(state);
+
+            WithSceneController((reflection, controller, root) =>
+            {
+                reflection.Invoke(controller, "SetCandidates", initialCandidates);
+                Assert.That(root.activeSelf, Is.True);
+
+                reflection.Invoke(controller, "SetCandidates", updatedCandidates);
+
+                Assert.That(root.activeSelf, Is.True);
+                Assert.That(reflection.GetProperty(controller, "SpawnedGroupCount"),
+                    Is.EqualTo(1));
+            });
+        }
+
+        [Test]
         public void SetGroups_SingleGroupOmitsHeadingAndKeepsZeroCountCandidate()
         {
             WinningTileCandidateEvaluatorTestDriver evaluator =

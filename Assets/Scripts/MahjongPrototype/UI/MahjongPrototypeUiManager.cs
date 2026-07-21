@@ -621,8 +621,11 @@ namespace MahjongPrototype.UI
 
         private void RequestTileHoverReevaluation()
         {
-            if (hoveredSelfTile.HasValue || pendingTileHoverExit.HasValue)
-                tileHoverReevaluationPending = true;
+            if (!hoveredSelfTile.HasValue && !pendingTileHoverExit.HasValue)
+                return;
+
+            tileHoverReevaluationPending = true;
+            tileRaycastInput?.RequestHoverRefresh();
         }
 
         private void ClearTileHoverState()
@@ -693,6 +696,7 @@ namespace MahjongPrototype.UI
 
         private void HandleTurnStarted(SeatId _, int __)
         {
+            RequestTileHoverReevaluation();
             RefreshGlobalStatus();
             RefreshWinDecisionUi();
             RefreshPonDecisionUi();
@@ -836,6 +840,7 @@ namespace MahjongPrototype.UI
 
         private void HandleWinChecked(SeatId seat, int _, bool __)
         {
+            RequestTileHoverReevaluation();
             RefreshGlobalStatus();
             RefreshWinDecisionUi();
             RefreshPonDecisionUi();
@@ -868,6 +873,7 @@ namespace MahjongPrototype.UI
 
         private void HandleReachDecisionStarted(SeatId _, int __)
         {
+            RequestTileHoverReevaluation();
             RefreshGlobalStatus();
             RefreshReachDecisionUi();
             RefreshInteractionUi();
@@ -1324,11 +1330,11 @@ namespace MahjongPrototype.UI
             bool showSelfReachDecision,
             bool showSelfReachCancel)
         {
+            if (tileHoverReevaluationPending)
+                return;
+
             if (hoveredSelfTile.HasValue)
             {
-                if (tileHoverReevaluationPending)
-                    return;
-
                 IReadOnlyList<WinningTileCandidate> candidates = EvaluateHoveredTile(
                     state,
                     hoveredSelfTile.Value,
@@ -1526,6 +1532,7 @@ namespace MahjongPrototype.UI
 
         private void RefreshInteractionUi()
         {
+            RequestTileHoverReevaluation();
             MahjongGameState state = gameFlow != null ? gameFlow.CurrentState : null;
             if (state != null)
                 RefreshInteractionState(state);

@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using MahjongPrototype.Tests.TestSupport.Core;
 using MahjongPrototype.Tests.TestSupport.Unity;
 using NUnit.Framework;
@@ -22,6 +23,14 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
             "MahjongPrototype.UI.MahjongWinningTileCandidateView, Assembly-CSharp";
         private const string TileHoverInfoTypeName =
             "MahjongPrototype.UI3D.Mahjong3DTileHoverInfo, Assembly-CSharp";
+        private const string DrawResultTypeName =
+            "MahjongPrototype.Services.DrawResult, Assembly-CSharp";
+        private const string DrawPurposeTypeName =
+            "MahjongPrototype.Domain.DrawPurpose, Assembly-CSharp";
+        private const string DrawSourceTypeName =
+            "MahjongPrototype.Domain.DrawSource, Assembly-CSharp";
+        private const string ActiveSkillEffectTypeName =
+            "MahjongPrototype.Skills.ActiveSkillEffect, Assembly-CSharp";
         private const string GroupPrefabPath =
             "Assets/Prefab/Mahjong Winning Candidate Group.prefab";
         private const string CandidatePrefabPath =
@@ -273,6 +282,29 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
                 false);
         }
 
+        public void NotifyTurnStarted()
+        {
+            reflection.Invoke(
+                uiManager,
+                "HandleTurnStarted",
+                flowSupport.DataFactory.ParseSeat("East"),
+                0);
+        }
+
+        public void NotifyTileDrawn(string tileCode)
+        {
+            reflection.Invoke(uiManager, "HandleTileDrawn", CreateDrawResult(tileCode));
+        }
+
+        public void NotifyHandAutoSorted()
+        {
+            reflection.Invoke(
+                uiManager,
+                "HandleHandAutoSorted",
+                flowSupport.DataFactory.ParseSeat("East"),
+                0);
+        }
+
         public void ClearDrawnTileDirectly()
         {
             object selfSeat = flowSupport.DataFactory.ParseSeat("East");
@@ -442,6 +474,41 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
                 source,
                 handIndex,
                 tile);
+        }
+
+        private object CreateDrawResult(string tileCode)
+        {
+            Type drawResultType = reflection.RequireType(DrawResultTypeName);
+            Type drawPurposeType = reflection.RequireType(DrawPurposeTypeName);
+            Type drawSourceType = reflection.RequireType(DrawSourceTypeName);
+            ConstructorInfo constructor = drawResultType.GetConstructor(new[]
+            {
+                typeof(bool),
+                flowSupport.Types.SeatId,
+                flowSupport.Types.Tile,
+                drawPurposeType,
+                drawSourceType,
+                typeof(int),
+                reflection.RequireType(ActiveSkillEffectTypeName),
+                typeof(bool),
+                typeof(bool),
+                typeof(string)
+            });
+            Assert.That(constructor, Is.Not.Null);
+
+            return constructor.Invoke(new[]
+            {
+                (object)true,
+                flowSupport.DataFactory.ParseSeat("East"),
+                flowSupport.DataFactory.CreateTile(tileCode),
+                Enum.Parse(drawPurposeType, "TurnDraw"),
+                Enum.Parse(drawSourceType, "Normal"),
+                70,
+                null,
+                false,
+                false,
+                string.Empty
+            });
         }
 
         private bool ContainsReachCandidate(
