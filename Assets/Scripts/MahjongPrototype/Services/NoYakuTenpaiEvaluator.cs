@@ -5,17 +5,13 @@ namespace MahjongPrototype.Services
 {
     public sealed class NoYakuTenpaiEvaluator
     {
-        private const int BaseHandTileCount = 13;
-        private const int TileTypeCount = 34;
-        private const int FirstPinTypeIndex = 9;
-        private const int FirstSouTypeIndex = 18;
-        private const int FirstHonorTypeIndex = 27;
-
         private readonly WinDeclarationEvaluator winDeclarationEvaluator;
+        private readonly WinningTileWaitEnumerator waitEnumerator;
 
         public NoYakuTenpaiEvaluator(WinDeclarationEvaluator winDeclarationEvaluator)
         {
             this.winDeclarationEvaluator = winDeclarationEvaluator;
+            waitEnumerator = new WinningTileWaitEnumerator();
         }
 
         public NoYakuTenpaiEvaluationResult Evaluate(
@@ -48,16 +44,18 @@ namespace MahjongPrototype.Services
             if (winDeclarationEvaluator == null)
                 return NoYakuTenpaiEvaluationResult.NotEvaluated;
 
-            if (!TryBuildTypeCounts(handTiles, melds, out int[] typeCounts))
+            if (!waitEnumerator.TryEnumerateWinningTiles(
+                    handTiles,
+                    melds,
+                    out IReadOnlyList<Tile> winningTiles))
+            {
                 return NoYakuTenpaiEvaluationResult.NotTenpai;
+            }
 
             bool hasWinningShapeWait = false;
-            for (int typeIndex = 0; typeIndex < TileTypeCount; typeIndex++)
+            for (int i = 0; i < winningTiles.Count; i++)
             {
-                if (typeCounts[typeIndex] >= 4)
-                    continue;
-
-                Tile winningTile = CreateTileFromTypeIndex(typeIndex);
+                Tile winningTile = winningTiles[i];
                 WinDeclarationEvaluationResult result =
                     winDeclarationEvaluator.EvaluateWithTile(
                         new WinDeclarationEvaluationContext(
@@ -88,70 +86,6 @@ namespace MahjongPrototype.Services
             return hasWinningShapeWait
                 ? NoYakuTenpaiEvaluationResult.Tenpai(false)
                 : NoYakuTenpaiEvaluationResult.NotTenpai;
-        }
-
-        private static bool TryBuildTypeCounts(
-            IReadOnlyList<Tile> handTiles,
-            IReadOnlyList<PlayerMeld> melds,
-            out int[] typeCounts)
-        {
-            typeCounts = new int[TileTypeCount];
-
-            if (!PlayerMeldRules.TryGetExpectedConcealedTileCount(
-                    BaseHandTileCount,
-                    melds,
-                    out int expectedConcealedTileCount) ||
-                handTiles == null || handTiles.Count != expectedConcealedTileCount)
-                return false;
-
-            for (int i = 0; i < handTiles.Count; i++)
-            {
-                Tile tile = handTiles[i];
-                int typeIndex = tile.TypeIndex;
-                if (!tile.IsValid || typeIndex < 0 || typeIndex >= TileTypeCount)
-                    return false;
-
-                typeCounts[typeIndex]++;
-                if (typeCounts[typeIndex] > 4)
-                    return false;
-            }
-
-            return PlayerMeldRules.TryAddPhysicalTileCounts(melds, typeCounts, 4);
-        }
-
-        private static Tile CreateTileFromTypeIndex(int typeIndex)
-        {
-            if (typeIndex < 0 || typeIndex >= TileTypeCount)
-                return default;
-
-            if (typeIndex < FirstPinTypeIndex)
-                return Tile.CreateNumber(TileSuit.Man, typeIndex + 1);
-
-            if (typeIndex < FirstSouTypeIndex)
-                return Tile.CreateNumber(TileSuit.Pin, typeIndex - FirstPinTypeIndex + 1);
-
-            if (typeIndex < FirstHonorTypeIndex)
-                return Tile.CreateNumber(TileSuit.Sou, typeIndex - FirstSouTypeIndex + 1);
-
-            switch (typeIndex)
-            {
-                case 27:
-                    return Tile.CreateHonor(HonorKind.East);
-                case 28:
-                    return Tile.CreateHonor(HonorKind.South);
-                case 29:
-                    return Tile.CreateHonor(HonorKind.West);
-                case 30:
-                    return Tile.CreateHonor(HonorKind.North);
-                case 31:
-                    return Tile.CreateHonor(HonorKind.White);
-                case 32:
-                    return Tile.CreateHonor(HonorKind.Green);
-                case 33:
-                    return Tile.CreateHonor(HonorKind.Red);
-                default:
-                    return default;
-            }
         }
     }
 }
