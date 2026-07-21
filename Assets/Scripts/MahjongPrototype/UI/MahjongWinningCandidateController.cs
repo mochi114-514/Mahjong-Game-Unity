@@ -10,6 +10,12 @@ namespace MahjongPrototype.UI
     [AddComponentMenu("Mahjong Prototype/UI/Mahjong Winning Candidate Controller")]
     public sealed class MahjongWinningCandidateController : MonoBehaviour
     {
+        private enum DisplayMode
+        {
+            Candidates = 0,
+            ReachGroups = 1
+        }
+
         [SerializeField] private GameObject root;
         [SerializeField] private Transform groupsContainer;
         [SerializeField] private MahjongWinningCandidateGroupView groupViewPrefab;
@@ -20,6 +26,9 @@ namespace MahjongPrototype.UI
             new List<MahjongWinningCandidateGroupView>();
         private readonly HashSet<int> warnedMissingSpriteTypeIndexes =
             new HashSet<int>();
+        private readonly List<DisplayGroupState> displayedGroups =
+            new List<DisplayGroupState>();
+        private DisplayMode? displayedMode;
         private bool warnedMissingRoot;
         private bool warnedMissingGroupsContainer;
         private bool warnedMissingGroupPrefab;
@@ -36,15 +45,32 @@ namespace MahjongPrototype.UI
 
         public void SetGroups(IReadOnlyList<ReachWinningCandidateGroup> groups)
         {
-            Clear();
-            if (!CanPopulate() || groups == null)
+            if (groups == null)
+            {
+                Clear();
                 return;
+            }
 
             int visibleGroupCount = CountVisibleGroups(groups);
             if (visibleGroupCount <= 0)
+            {
+                Clear();
                 return;
+            }
 
             bool showDiscardHeadings = visibleGroupCount > 1;
+            List<DisplayGroupState> nextDisplayGroups =
+                BuildGroupDisplayStates(groups, showDiscardHeadings);
+            if (HasSameDisplay(DisplayMode.ReachGroups, nextDisplayGroups))
+                return;
+
+            if (!CanPopulate())
+            {
+                Clear();
+                return;
+            }
+
+            ClearSpawnedGroups();
             for (int i = 0; i < groups.Count; i++)
             {
                 ReachWinningCandidateGroup group = groups[i];
@@ -57,20 +83,49 @@ namespace MahjongPrototype.UI
                     BuildDiscardHeading(group.DiscardCandidates));
             }
 
-            ShowPopulatedRoot();
+            ShowPopulatedRoot(DisplayMode.ReachGroups, nextDisplayGroups);
         }
 
         public void SetCandidates(IReadOnlyList<WinningTileCandidate> candidates)
         {
-            Clear();
-            if (!CanPopulate() || candidates == null || candidates.Count <= 0)
+            if (candidates == null || candidates.Count <= 0)
+            {
+                Clear();
+                return;
+            }
+
+            List<DisplayGroupState> nextDisplayGroups =
+                new List<DisplayGroupState>
+                {
+                    new DisplayGroupState(
+                        false,
+                        string.Empty,
+                        BuildCandidateDisplayStates(candidates),
+                        new List<DiscardCandidateDisplayState>())
+                };
+            if (HasSameDisplay(DisplayMode.Candidates, nextDisplayGroups))
                 return;
 
+            if (!CanPopulate())
+            {
+                Clear();
+                return;
+            }
+
+            ClearSpawnedGroups();
             SpawnGroup(candidates, false, string.Empty);
-            ShowPopulatedRoot();
+            ShowPopulatedRoot(DisplayMode.Candidates, nextDisplayGroups);
         }
 
         public void Clear()
+        {
+            ClearSpawnedGroups();
+            ClearDisplayState();
+            if (root != null)
+                root.SetActive(false);
+        }
+
+        private void ClearSpawnedGroups()
         {
             for (int i = spawnedGroups.Count - 1; i >= 0; i--)
             {
@@ -80,8 +135,6 @@ namespace MahjongPrototype.UI
             }
 
             spawnedGroups.Clear();
-            if (root != null)
-                root.SetActive(false);
         }
 
         private int PopulateCandidates(
@@ -137,13 +190,106 @@ namespace MahjongPrototype.UI
             spawnedGroups.Add(groupView);
         }
 
-        private void ShowPopulatedRoot()
+        private void ShowPopulatedRoot(
+            DisplayMode mode,
+            IReadOnlyList<DisplayGroupState> nextDisplayGroups)
         {
             if (spawnedGroups.Count <= 0)
+            {
+                ClearDisplayState();
+                if (root != null)
+                    root.SetActive(false);
                 return;
+            }
 
+            displayedMode = mode;
+            displayedGroups.Clear();
+            for (int i = 0; i < nextDisplayGroups.Count; i++)
+                displayedGroups.Add(nextDisplayGroups[i]);
             root.SetActive(true);
             RebuildLayout();
+        }
+
+        private bool HasSameDisplay(
+            DisplayMode mode,
+            IReadOnlyList<DisplayGroupState> nextDisplayGroups)
+        {
+            if (!displayedMode.HasValue || displayedMode.Value != mode ||
+                displayedGroups.Count != nextDisplayGroups.Count)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < displayedGroups.Count; i++)
+            {
+                if (!displayedGroups[i].Equals(nextDisplayGroups[i]))
+                    return false;
+            }
+
+            return true;
+        }
+
+        private void ClearDisplayState()
+        {
+            displayedMode = null;
+            displayedGroups.Clear();
+        }
+
+        private static List<DisplayGroupState> BuildGroupDisplayStates(
+            IReadOnlyList<ReachWinningCandidateGroup> groups,
+            bool showDiscardHeadings)
+        {
+            List<DisplayGroupState> states = new List<DisplayGroupState>();
+            for (int i = 0; i < groups.Count; i++)
+            {
+                ReachWinningCandidateGroup group = groups[i];
+                if (group == null || group.WinningTiles.Count <= 0)
+                    continue;
+
+                states.Add(new DisplayGroupState(
+                    showDiscardHeadings,
+                    BuildDiscardHeading(group.DiscardCandidates),
+                    BuildCandidateDisplayStates(group.WinningTiles),
+                    BuildDiscardCandidateDisplayStates(group.DiscardCandidates)));
+            }
+
+            return states;
+        }
+
+        private static List<WinningCandidateDisplayState> BuildCandidateDisplayStates(
+            IReadOnlyList<WinningTileCandidate> candidates)
+        {
+            List<WinningCandidateDisplayState> states =
+                new List<WinningCandidateDisplayState>(candidates.Count);
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                WinningTileCandidate candidate = candidates[i];
+                states.Add(new WinningCandidateDisplayState(
+                    candidate.Tile.TypeIndex,
+                    candidate.VisibleRemainingCount));
+            }
+
+            return states;
+        }
+
+        private static List<DiscardCandidateDisplayState> BuildDiscardCandidateDisplayStates(
+            IReadOnlyList<ReachDiscardCandidate> discardCandidates)
+        {
+            List<DiscardCandidateDisplayState> states =
+                new List<DiscardCandidateDisplayState>();
+            if (discardCandidates == null)
+                return states;
+
+            for (int i = 0; i < discardCandidates.Count; i++)
+            {
+                ReachDiscardCandidate candidate = discardCandidates[i];
+                states.Add(new DiscardCandidateDisplayState(
+                    candidate.Source,
+                    candidate.HandIndex,
+                    candidate.Tile.TypeIndex));
+            }
+
+            return states;
         }
 
         private bool CanPopulate()
@@ -283,6 +429,96 @@ namespace MahjongPrototype.UI
 
             warned = true;
             Debug.LogWarning($"{nameof(MahjongWinningCandidateController)}: {message}", this);
+        }
+
+        private sealed class DisplayGroupState
+        {
+            public DisplayGroupState(
+                bool showHeading,
+                string heading,
+                IReadOnlyList<WinningCandidateDisplayState> candidates,
+                IReadOnlyList<DiscardCandidateDisplayState> discardCandidates)
+            {
+                ShowHeading = showHeading;
+                Heading = heading ?? string.Empty;
+                Candidates = candidates;
+                DiscardCandidates = discardCandidates;
+            }
+
+            private bool ShowHeading { get; }
+            private string Heading { get; }
+            private IReadOnlyList<WinningCandidateDisplayState> Candidates { get; }
+            private IReadOnlyList<DiscardCandidateDisplayState> DiscardCandidates { get; }
+
+            public bool Equals(DisplayGroupState other)
+            {
+                return other != null &&
+                    ShowHeading == other.ShowHeading &&
+                    Heading == other.Heading &&
+                    HasSameItems(Candidates, other.Candidates) &&
+                    HasSameItems(DiscardCandidates, other.DiscardCandidates);
+            }
+
+            private static bool HasSameItems<T>(
+                IReadOnlyList<T> left,
+                IReadOnlyList<T> right)
+                where T : struct, System.IEquatable<T>
+            {
+                if (left.Count != right.Count)
+                    return false;
+
+                for (int i = 0; i < left.Count; i++)
+                {
+                    if (!left[i].Equals(right[i]))
+                        return false;
+                }
+
+                return true;
+            }
+        }
+
+        private readonly struct WinningCandidateDisplayState :
+            System.IEquatable<WinningCandidateDisplayState>
+        {
+            public WinningCandidateDisplayState(int typeIndex, int visibleRemainingCount)
+            {
+                TypeIndex = typeIndex;
+                VisibleRemainingCount = visibleRemainingCount;
+            }
+
+            private int TypeIndex { get; }
+            private int VisibleRemainingCount { get; }
+
+            public bool Equals(WinningCandidateDisplayState other)
+            {
+                return TypeIndex == other.TypeIndex &&
+                    VisibleRemainingCount == other.VisibleRemainingCount;
+            }
+        }
+
+        private readonly struct DiscardCandidateDisplayState :
+            System.IEquatable<DiscardCandidateDisplayState>
+        {
+            public DiscardCandidateDisplayState(
+                DiscardSource source,
+                int handIndex,
+                int tileTypeIndex)
+            {
+                Source = source;
+                HandIndex = handIndex;
+                TileTypeIndex = tileTypeIndex;
+            }
+
+            private DiscardSource Source { get; }
+            private int HandIndex { get; }
+            private int TileTypeIndex { get; }
+
+            public bool Equals(DiscardCandidateDisplayState other)
+            {
+                return Source == other.Source &&
+                    HandIndex == other.HandIndex &&
+                    TileTypeIndex == other.TileTypeIndex;
+            }
         }
 
         private static void DestroyView(GameObject target)

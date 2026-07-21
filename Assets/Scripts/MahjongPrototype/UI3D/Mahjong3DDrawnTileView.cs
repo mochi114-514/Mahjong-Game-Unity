@@ -150,6 +150,7 @@ namespace MahjongPrototype.UI3D
 
         private static void DestroyTile(Mahjong3DTileView tile)
         {
+            tile.gameObject.SetActive(false);
             if (Application.isPlaying)
                 Destroy(tile.gameObject);
             else

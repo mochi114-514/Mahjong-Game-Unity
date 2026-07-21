@@ -27,6 +27,9 @@ namespace MahjongPrototype.UI
         [Tooltip("Optional presenter for experimental 3D player area views.")]
         [SerializeField] private Mahjong3DPlayerAreaPresenter playerArea3DPresenter;
 
+        [Tooltip("Optional mouse hover input paired with the 3D player area presenter.")]
+        [SerializeField] private Mahjong3DTileRaycastInput tileRaycastInput;
+
         [Header("3D Table Center UI")]
         [Tooltip("Optional controller for the world-space table center UI.")]
         [SerializeField] private MahjongTableCenterUiController tableCenterUiController;
@@ -82,7 +85,10 @@ namespace MahjongPrototype.UI
         private bool warnedMissingFuritenController;
         private MahjongRoundProgressController subscribedRoundProgressController;
         private Mahjong3DPlayerAreaPresenter subscribedTileHoverPresenter;
+        private Mahjong3DTileRaycastInput subscribedTileRaycastInput;
         private Mahjong3DTileHoverInfo? hoveredSelfTile;
+        private Mahjong3DTileHoverInfo? pendingTileHoverExit;
+        private bool tileHoverReevaluationPending;
         private int? reactionHighlightDiscardId;
         private int? resolvedReactionWindowIdAwaitingClosed;
         private readonly WinningTileCandidateEvaluator winningTileCandidateEvaluator =
@@ -116,6 +122,7 @@ namespace MahjongPrototype.UI
             EnsureZeroHanTenpaiController();
             EnsureFuritenController();
             SubscribeTileHoverPresentation();
+            SubscribeTileHoverReevaluation();
             SubscribeNotifications();
             RefreshFromFlow();
         }
@@ -138,6 +145,7 @@ namespace MahjongPrototype.UI
             EnsureZeroHanTenpaiController();
             EnsureFuritenController();
             SubscribeTileHoverPresentation();
+            SubscribeTileHoverReevaluation();
             RefreshFromFlow();
             RefreshLogPreview();
         }
@@ -147,11 +155,12 @@ namespace MahjongPrototype.UI
             NotifyRoundProgressFallback();
             UnsubscribeRoundProgressPresentation();
             UnsubscribeTileHoverPresentation();
+            UnsubscribeTileHoverReevaluation();
             UnsubscribeNotifications();
             inputController?.ClearReactionResponseBindings();
             ponDecisionController?.ClearReactionMeldCallDecision();
             resolvedReactionWindowIdAwaitingClosed = null;
-            hoveredSelfTile = null;
+            ClearTileHoverState();
             winningCandidateController?.Clear();
             ClearDiscardReactionHighlights();
         }
@@ -165,7 +174,7 @@ namespace MahjongPrototype.UI
         {
             if (state == null)
             {
-                hoveredSelfTile = null;
+                ClearTileHoverState();
                 reactionHighlightDiscardId = null;
                 resolvedReactionWindowIdAwaitingClosed = null;
                 inputController?.ClearReactionResponseBindings();
@@ -179,6 +188,7 @@ namespace MahjongPrototype.UI
                 return;
             }
 
+            RequestTileHoverReevaluation();
             RefreshDisplay(state);
             RefreshTableCenterUi(state);
             RefreshPlayerArea3D(state);
@@ -204,7 +214,7 @@ namespace MahjongPrototype.UI
         {
             if (gameFlow == null)
             {
-                hoveredSelfTile = null;
+                ClearTileHoverState();
                 WarnMissingOnce(ref warnedMissingFlow, "MahjongGameFlow is not assigned.");
                 reactionHighlightDiscardId = null;
                 resolvedReactionWindowIdAwaitingClosed = null;
@@ -234,6 +244,12 @@ namespace MahjongPrototype.UI
 
             if (playerArea3DPresenter == null)
                 playerArea3DPresenter = GetComponentInChildren<Mahjong3DPlayerAreaPresenter>(true);
+
+            if (tileRaycastInput == null && playerArea3DPresenter != null)
+            {
+                tileRaycastInput =
+                    playerArea3DPresenter.GetComponent<Mahjong3DTileRaycastInput>();
+            }
 
             if (tableCenterUiController == null)
                 tableCenterUiController = GetComponentInChildren<MahjongTableCenterUiController>(true);
@@ -529,11 +545,38 @@ namespace MahjongPrototype.UI
             subscribedTileHoverPresenter = null;
         }
 
+        private void SubscribeTileHoverReevaluation()
+        {
+            if (subscribedTileRaycastInput == tileRaycastInput)
+                return;
+
+            UnsubscribeTileHoverReevaluation();
+            if (tileRaycastInput == null)
+                return;
+
+            subscribedTileRaycastInput = tileRaycastInput;
+            subscribedTileRaycastInput.HoverReevaluated += HandleTileHoverReevaluated;
+        }
+
+        private void UnsubscribeTileHoverReevaluation()
+        {
+            if (subscribedTileRaycastInput == null)
+                return;
+
+            subscribedTileRaycastInput.HoverReevaluated -= HandleTileHoverReevaluated;
+            subscribedTileRaycastInput = null;
+        }
+
         private void HandleTileHoverEntered(Mahjong3DTileHoverInfo hoverInfo)
         {
             MahjongGameState state = gameFlow != null ? gameFlow.CurrentState : null;
-            if (state == null || state.IsRoundEnded || state.IsGameEnded ||
-                !TryGetSelfSeat(state, out SeatId selfSeat) ||
+            if (state == null || state.IsRoundEnded || state.IsGameEnded)
+            {
+                ClearTileHoverState();
+                return;
+            }
+
+            if (!TryGetSelfSeat(state, out SeatId selfSeat) ||
                 hoverInfo.SeatId != selfSeat ||
                 !hoverInfo.Tile.IsValid)
             {
@@ -541,6 +584,8 @@ namespace MahjongPrototype.UI
             }
 
             hoveredSelfTile = hoverInfo;
+            pendingTileHoverExit = null;
+            tileHoverReevaluationPending = false;
             RefreshReachDecision(state);
         }
 
@@ -552,9 +597,39 @@ namespace MahjongPrototype.UI
                 return;
             }
 
-            hoveredSelfTile = null;
+            pendingTileHoverExit = hoverInfo;
+            tileHoverReevaluationPending = true;
+        }
+
+        private void HandleTileHoverReevaluated()
+        {
+            if (!tileHoverReevaluationPending && !pendingTileHoverExit.HasValue)
+                return;
+
+            if (pendingTileHoverExit.HasValue &&
+                hoveredSelfTile.HasValue &&
+                hoveredSelfTile.Value.Equals(pendingTileHoverExit.Value))
+            {
+                hoveredSelfTile = null;
+            }
+
+            pendingTileHoverExit = null;
+            tileHoverReevaluationPending = false;
             MahjongGameState state = gameFlow != null ? gameFlow.CurrentState : null;
             RefreshReachDecision(state);
+        }
+
+        private void RequestTileHoverReevaluation()
+        {
+            if (hoveredSelfTile.HasValue || pendingTileHoverExit.HasValue)
+                tileHoverReevaluationPending = true;
+        }
+
+        private void ClearTileHoverState()
+        {
+            hoveredSelfTile = null;
+            pendingTileHoverExit = null;
+            tileHoverReevaluationPending = false;
         }
 
         private void HandleRunStarted(string _)
@@ -567,7 +642,7 @@ namespace MahjongPrototype.UI
 
         private void HandleRoundStarted(int _, int __)
         {
-            hoveredSelfTile = null;
+            ClearTileHoverState();
             PlayRoundProgressForCurrentState();
             RefreshFromFlow(false);
             ClearZeroHanTenpaiUi();
@@ -627,7 +702,7 @@ namespace MahjongPrototype.UI
 
         private void HandleTileDrawn(DrawResult result)
         {
-            hoveredSelfTile = null;
+            RequestTileHoverReevaluation();
             if (!result.Success || result.Purpose == DrawPurpose.InitialDeal)
             {
                 RefreshReachDecisionUi();
@@ -648,7 +723,7 @@ namespace MahjongPrototype.UI
 
         private void HandleTileDiscarded(DiscardRecord record)
         {
-            hoveredSelfTile = null;
+            RequestTileHoverReevaluation();
             RefreshPlayerHandForSeat(record.ActorSeat);
             RefreshPlayerDrawnTileForSeat(record.ActorSeat);
             RefreshPlayerDiscardRiverForSeat(record.ActorSeat);
@@ -679,6 +754,7 @@ namespace MahjongPrototype.UI
             RefreshGlobalStatus();
             RefreshWinDecisionUi();
             RefreshPonDecisionUi();
+            RefreshReachDecisionUi();
             RefreshInteractionUi();
         }
 
@@ -698,12 +774,13 @@ namespace MahjongPrototype.UI
             RefreshGlobalStatus();
             RefreshWinDecisionUi();
             RefreshPonDecisionUi();
+            RefreshReachDecisionUi();
             RefreshInteractionUi();
         }
 
         private void HandleMeldDeclared(PlayerMeld meld)
         {
-            hoveredSelfTile = null;
+            RequestTileHoverReevaluation();
             if (meld == null)
                 return;
 
@@ -812,7 +889,7 @@ namespace MahjongPrototype.UI
 
         private void HandleReachDiscardSelectionStarted(SeatId _, int __)
         {
-            hoveredSelfTile = null;
+            RequestTileHoverReevaluation();
             RefreshGlobalStatus();
             RefreshReachDecisionUi();
             RefreshInteractionUi();
@@ -820,7 +897,7 @@ namespace MahjongPrototype.UI
 
         private void HandleReachDiscardSelectionCanceled(SeatId _, int __)
         {
-            hoveredSelfTile = null;
+            RequestTileHoverReevaluation();
             RefreshGlobalStatus();
             RefreshReachDecisionUi();
             RefreshInteractionUi();
@@ -828,7 +905,7 @@ namespace MahjongPrototype.UI
 
         private void HandleReachDeclared(SeatId _, int __)
         {
-            hoveredSelfTile = null;
+            RequestTileHoverReevaluation();
             RefreshGlobalStatus();
             RefreshReachDecisionUi();
             RefreshInteractionUi();
@@ -836,7 +913,7 @@ namespace MahjongPrototype.UI
 
         private void HandleReachDeclined(SeatId _, int __)
         {
-            hoveredSelfTile = null;
+            RequestTileHoverReevaluation();
             RefreshGlobalStatus();
             RefreshReachDecisionUi();
             RefreshInteractionUi();
@@ -844,14 +921,14 @@ namespace MahjongPrototype.UI
 
         private void HandleHandAutoSorted(SeatId seat, int _)
         {
-            hoveredSelfTile = null;
+            RequestTileHoverReevaluation();
             RefreshPlayerHandForSeat(seat);
             RefreshReachDecisionUi();
         }
 
         private void HandleRoundEnded(string _)
         {
-            hoveredSelfTile = null;
+            ClearTileHoverState();
             RefreshGlobalStatus();
             RefreshWinDecisionUi();
             RefreshReachDecisionUi();
@@ -872,7 +949,7 @@ namespace MahjongPrototype.UI
 
         private void HandleGameEnded(RoundResult _)
         {
-            hoveredSelfTile = null;
+            ClearTileHoverState();
             ClearRoundResultUi();
             RefreshReachDecisionUi();
         }
@@ -901,7 +978,13 @@ namespace MahjongPrototype.UI
             if (playerArea3DPresenter == null)
                 return;
 
+            if (tileRaycastInput == null)
+            {
+                tileRaycastInput =
+                    playerArea3DPresenter.GetComponent<Mahjong3DTileRaycastInput>();
+            }
             SubscribeTileHoverPresentation();
+            SubscribeTileHoverReevaluation();
             if (gameFlow != null)
                 playerArea3DPresenter.SetViewContext(gameFlow.ViewContext);
             reactionHighlightDiscardId = ResolveReactionHighlightDiscardId(state);
@@ -1209,7 +1292,7 @@ namespace MahjongPrototype.UI
         private void RefreshReachDecision(MahjongGameState state)
         {
             if (state == null || state.IsRoundEnded || state.IsGameEnded)
-                hoveredSelfTile = null;
+                ClearTileHoverState();
 
             if (reachDecisionController == null)
                 EnsureReachDecisionController();
@@ -1243,6 +1326,9 @@ namespace MahjongPrototype.UI
         {
             if (hoveredSelfTile.HasValue)
             {
+                if (tileHoverReevaluationPending)
+                    return;
+
                 IReadOnlyList<WinningTileCandidate> candidates = EvaluateHoveredTile(
                     state,
                     hoveredSelfTile.Value,
@@ -1374,6 +1460,7 @@ namespace MahjongPrototype.UI
 
         private void RefreshReachDecisionUi()
         {
+            RequestTileHoverReevaluation();
             MahjongGameState state = gameFlow != null ? gameFlow.CurrentState : null;
             RefreshReachDecision(state);
         }

@@ -179,6 +179,26 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
             HoverCandidate(savedReachCandidate, seatName);
         }
 
+        public void HoverFirstReachCandidateFromSource(string sourceName)
+        {
+            object candidates = reflection.GetProperty(
+                flowSupport.CurrentState,
+                "ReachDiscardCandidates");
+            int count = flowSupport.Collections.Count(candidates);
+            for (int i = 0; i < count; i++)
+            {
+                object candidate = flowSupport.Collections.Item(candidates, i);
+                if (reflection.GetProperty(candidate, "Source").ToString() != sourceName)
+                    continue;
+
+                savedReachCandidate = candidate;
+                HoverCandidate(savedReachCandidate, "East");
+                return;
+            }
+
+            Assert.Fail($"A reach candidate from {sourceName} was not found.");
+        }
+
         public void HoverSavedReachCandidate(string seatName = "East")
         {
             Assert.That(savedReachCandidate, Is.Not.Null);
@@ -222,9 +242,35 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
 
         public void ExitCurrentHover()
         {
+            BeginCurrentHoverExit();
+            CompleteHoverReevaluation();
+        }
+
+        public void BeginCurrentHoverExit()
+        {
             Assert.That(currentHoverInfo, Is.Not.Null);
             reflection.Invoke(uiManager, "HandleTileHoverExited", currentHoverInfo);
             currentHoverInfo = null;
+        }
+
+        public void CompleteHoverReevaluation()
+        {
+            reflection.Invoke(uiManager, "HandleTileHoverReevaluated");
+        }
+
+        public void RefreshReachDecisionUi()
+        {
+            reflection.Invoke(uiManager, "RefreshReachDecisionUi");
+        }
+
+        public void NotifyWinChecked()
+        {
+            reflection.Invoke(
+                uiManager,
+                "HandleWinChecked",
+                flowSupport.DataFactory.ParseSeat("East"),
+                0,
+                false);
         }
 
         public void ClearDrawnTileDirectly()
@@ -339,6 +385,9 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
 
         public bool HasHoveredSelfTile =>
             reflection.GetPrivateField(uiManager, "hoveredSelfTile") != null;
+
+        public bool IsHoverReevaluationPending =>
+            (bool)reflection.GetPrivateField(uiManager, "tileHoverReevaluationPending");
 
         public bool DecisionAreaHasController =>
             decisionArea.GetComponent(controllerType) != null;

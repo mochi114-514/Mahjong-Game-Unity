@@ -26,6 +26,8 @@ namespace MahjongPrototype.UI3D
         private bool warnedMissingCamera;
         private Mahjong3DTileView hoveredTileView;
 
+        public event System.Action HoverReevaluated;
+
         private void Awake()
         {
             if (raycastCamera == null)
@@ -34,8 +36,6 @@ namespace MahjongPrototype.UI3D
 
         private void Update()
         {
-            UpdateMouseHover();
-
             if (!TryGetPrimaryPointerDown(out Vector2 screenPosition))
                 return;
 
@@ -45,9 +45,21 @@ namespace MahjongPrototype.UI3D
             TryNotifyTileClick(screenPosition);
         }
 
+        private void LateUpdate()
+        {
+            RefreshHover();
+        }
+
         private void OnDisable()
         {
             SetHoveredTile(null);
+            HoverReevaluated?.Invoke();
+        }
+
+        public void RefreshHover()
+        {
+            UpdateMouseHover();
+            HoverReevaluated?.Invoke();
         }
 
         private void UpdateMouseHover()

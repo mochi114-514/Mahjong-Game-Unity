@@ -58,7 +58,7 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void RaycastHover_OnDisableExitsCurrentTile()
+        public void RaycastHover_OnDisableExitsCurrentTileAndRequestsReevaluation()
         {
             GameObject inputObject = new GameObject("TileRaycastHoverDisableTest");
             GameObject tileObject = new GameObject("HoveredTile");
@@ -69,12 +69,15 @@ namespace MahjongPrototype.Tests
                     true));
                 object tile = tileObject.AddComponent(Type.GetType(Mahjong3DTileViewTypeName, true));
                 int exitCount = 0;
+                int reevaluationCount = 0;
                 Subscribe(tile, "HoverExited", _ => exitCount++);
+                Subscribe(input, "HoverReevaluated", _ => reevaluationCount++);
 
                 Invoke(input, "SetHoveredTile", tile);
                 Invoke(input, "OnDisable");
 
                 Assert.That(exitCount, Is.EqualTo(1));
+                Assert.That(reevaluationCount, Is.EqualTo(1));
                 Assert.That(GetProperty(tile, "IsHovered"), Is.False);
             }
             finally

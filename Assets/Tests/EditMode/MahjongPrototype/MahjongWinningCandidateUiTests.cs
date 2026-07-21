@@ -209,6 +209,40 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
+        public void SetCandidates_SameDisplayKeepsExistingViewsAndVisibleRoot()
+        {
+            WinningTileCandidateEvaluatorTestDriver evaluator =
+                WinningTileCandidateEvaluatorTestDriver.Create();
+            object state = evaluator.CreateGameState();
+            evaluator.AddHand(
+                state,
+                "East",
+                "1m 2m 3m 1p 2p 3p 1s 2s 3s E E E C");
+            object candidates = evaluator.EvaluateCurrent(state);
+
+            WithSceneController((reflection, controller, root) =>
+            {
+                reflection.Invoke(controller, "SetCandidates", candidates);
+                Component initialGroup = root.GetComponentInChildren(
+                    reflection.RequireType(GroupViewTypeName),
+                    true);
+                Component initialCandidate = root.GetComponentInChildren(
+                    reflection.RequireType(CandidateViewTypeName),
+                    true);
+
+                reflection.Invoke(controller, "SetCandidates", candidates);
+
+                Assert.That(root.activeSelf, Is.True);
+                Assert.That(root.GetComponentInChildren(
+                    reflection.RequireType(GroupViewTypeName),
+                    true), Is.SameAs(initialGroup));
+                Assert.That(root.GetComponentInChildren(
+                    reflection.RequireType(CandidateViewTypeName),
+                    true), Is.SameAs(initialCandidate));
+            });
+        }
+
+        [Test]
         public void SetGroups_SingleGroupOmitsHeadingAndKeepsZeroCountCandidate()
         {
             WinningTileCandidateEvaluatorTestDriver evaluator =
@@ -250,6 +284,44 @@ namespace MahjongPrototype.Tests
                 Assert.That(headingRoot.activeSelf, Is.False);
                 Assert.That(reflection.GetProperty(countText, "text"), Is.EqualTo("0枚"));
                 Assert.That(reflection.GetProperty(countText, "raycastTarget"), Is.False);
+            });
+        }
+
+        [Test]
+        public void SetGroups_SameDisplayKeepsExistingViewsAndVisibleRoot()
+        {
+            WinningTileCandidateEvaluatorTestDriver evaluator =
+                WinningTileCandidateEvaluatorTestDriver.Create();
+            object state = evaluator.CreateGameState();
+            evaluator.AddHand(
+                state,
+                "East",
+                "1m 2m 3m 1p 2p 3p 1s 2s 3s E E E C");
+            evaluator.SetDrawnTile(state, "East", "1m");
+            object discards = evaluator.CreateReachCandidateList(
+                evaluator.CreateReachCandidate("Hand", 0, "1m"),
+                evaluator.CreateReachCandidate("DrawnTile", -1, "1m"));
+            object groups = evaluator.GroupReachCandidates(state, discards);
+
+            WithSceneController((reflection, controller, root) =>
+            {
+                reflection.Invoke(controller, "SetGroups", groups);
+                Component initialGroup = root.GetComponentInChildren(
+                    reflection.RequireType(GroupViewTypeName),
+                    true);
+                Component initialCandidate = root.GetComponentInChildren(
+                    reflection.RequireType(CandidateViewTypeName),
+                    true);
+
+                reflection.Invoke(controller, "SetGroups", groups);
+
+                Assert.That(root.activeSelf, Is.True);
+                Assert.That(root.GetComponentInChildren(
+                    reflection.RequireType(GroupViewTypeName),
+                    true), Is.SameAs(initialGroup));
+                Assert.That(root.GetComponentInChildren(
+                    reflection.RequireType(CandidateViewTypeName),
+                    true), Is.SameAs(initialCandidate));
             });
         }
 
