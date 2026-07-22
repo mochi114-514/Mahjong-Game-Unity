@@ -18,7 +18,7 @@ namespace MahjongPrototype.UI3D
         private bool tileInteractable = true;
         private bool warnedMissingTilePrefab;
 
-        public event Action DrawnTileClicked;
+        public event Action<Tile> DrawnTileClicked;
         public event Action<Tile> DrawnTileHoverEntered;
         public event Action<Tile> DrawnTileHoverExited;
         public float HandGap => handGap;
@@ -134,7 +134,8 @@ namespace MahjongPrototype.UI3D
 
         private void HandleTileClicked(int _)
         {
-            DrawnTileClicked?.Invoke();
+            if (activeTile != null && activeTile.Tile.HasValue)
+                DrawnTileClicked?.Invoke(activeTile.Tile.Value);
         }
 
         private void HandleTileHoverEntered(Mahjong3DTileView tileView)

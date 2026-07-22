@@ -13,11 +13,10 @@ namespace MahjongPrototype.UI
         [SerializeField] private MahjongGameFlow gameFlow;
         [Tooltip("Control area input event source.")]
         [SerializeField] private MahjongUiInputController inputController;
-        [Tooltip("3D player area tile-click event source.")]
+        [Tooltip("Retained scene reference; tile clicks are selected by MahjongPrototypeUiManager before routing.")]
         [SerializeField] private Mahjong3DPlayerAreaPresenter playerArea3DPresenter;
 
         private MahjongUiInputController subscribedInputController;
-        private Mahjong3DPlayerAreaPresenter subscribedPlayerArea3DPresenter;
         private bool warnedMissingFlow;
         private bool warnedMissingInputController;
 
@@ -57,6 +56,7 @@ namespace MahjongPrototype.UI
 
             if (playerArea3DPresenter == null)
                 playerArea3DPresenter = GetComponentInChildren<Mahjong3DPlayerAreaPresenter>(true);
+
         }
 
         public void RefreshSubscriptions()
@@ -68,13 +68,11 @@ namespace MahjongPrototype.UI
         {
             CacheReferences();
             SubscribeInputControllerEvents();
-            SubscribePlayerArea3DPresenterEvents();
         }
 
         private void UnsubscribeEvents()
         {
             UnsubscribeInputControllerEvents();
-            UnsubscribePlayerArea3DPresenterEvents();
         }
 
         private void SubscribeInputControllerEvents()
@@ -136,30 +134,6 @@ namespace MahjongPrototype.UI
             subscribedInputController.CancelReachRequested -= HandleCancelReachRequested;
             subscribedInputController.RoundResultConfirmRequested -= HandleRoundResultConfirmRequested;
             subscribedInputController = null;
-        }
-
-        private void SubscribePlayerArea3DPresenterEvents()
-        {
-            if (playerArea3DPresenter == null)
-                return;
-
-            if (subscribedPlayerArea3DPresenter == playerArea3DPresenter)
-                return;
-
-            UnsubscribePlayerArea3DPresenterEvents();
-            playerArea3DPresenter.HandTileClicked += HandleHandTileClicked;
-            playerArea3DPresenter.DrawnTileClicked += HandleDrawnTileClicked;
-            subscribedPlayerArea3DPresenter = playerArea3DPresenter;
-        }
-
-        private void UnsubscribePlayerArea3DPresenterEvents()
-        {
-            if (subscribedPlayerArea3DPresenter == null)
-                return;
-
-            subscribedPlayerArea3DPresenter.HandTileClicked -= HandleHandTileClicked;
-            subscribedPlayerArea3DPresenter.DrawnTileClicked -= HandleDrawnTileClicked;
-            subscribedPlayerArea3DPresenter = null;
         }
 
         private void HandleDrawRequested()
@@ -338,27 +312,29 @@ namespace MahjongPrototype.UI
             gameFlow.RequestAdvanceFromRoundResult();
         }
 
-        private void HandleHandTileClicked(SeatId dataSeat, int handIndex)
+        public bool TryDiscardHandFromTileSelection(SeatId dataSeat, int handIndex)
         {
             if (!TryGetGameFlow("Cannot discard because MahjongGameFlow is not assigned."))
-                return;
+                return false;
 
             MahjongGameState state = gameFlow.CurrentState;
             if (state == null || !TryGetLocalActor(state, out _, out SeatId actorSeat) ||
                 dataSeat != actorSeat)
-                return;
+            {
+                return false;
+            }
 
-            TryExecuteLocalTurnCommand(
+            return TryExecuteLocalTurnCommand(
                 MahjongAuthorityCommandKind.DiscardHandFromTileClick,
                 handIndex);
         }
 
-        private void HandleDrawnTileClicked()
+        public bool TryDiscardDrawnTileFromTileSelection()
         {
             if (!TryGetGameFlow("Cannot discard drawn tile because MahjongGameFlow is not assigned."))
-                return;
+                return false;
 
-            TryExecuteLocalTurnCommand(
+            return TryExecuteLocalTurnCommand(
                 MahjongAuthorityCommandKind.DiscardDrawnTileFromTileClick);
         }
 

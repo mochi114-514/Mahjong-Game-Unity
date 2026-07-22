@@ -202,6 +202,7 @@ MonoBehaviour:
   eventNotifier: {fileID: 1264733449}
   displayController: {fileID: 45752831}
   playerArea3DPresenter: {fileID: 1893660903}
+  tileRaycastInput: {fileID: 1893660904}
   tableCenterUiController: {fileID: 579311590}
   inputController: {fileID: 45752830}
   commandRouter: {fileID: 6100000003}
@@ -6946,6 +6947,7 @@ Transform:
   - {fileID: 1638928077}
   - {fileID: 905030593}
   - {fileID: 302940770}
+  - {fileID: 6100000601}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &1893660903
@@ -6980,9 +6982,67 @@ MonoBehaviour:
   tileLayerMask:
     serializedVersion: 2
     m_Bits: 64
+  tableInputLayerMask:
+    serializedVersion: 2
+    m_Bits: 128
   maxDistance: 500
   queryTriggerInteraction: 0
-  ignorePointerOverUi: 0
+  ignorePointerOverUi: 1
+  selectionClearProtectedUiRects:
+  - {fileID: 981048599}
+--- !u!1 &6100000600
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 6100000601}
+  - component: {fileID: 6100000602}
+  m_Layer: 7
+  m_Name: TableInputSurface
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &6100000601
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6100000600}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: -0.5, z: 22}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1893660902}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!65 &6100000602
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6100000600}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 66, y: 1, z: 48}
+  m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &1914715865
 GameObject:
   m_ObjectHideFlags: 0

@@ -17,7 +17,7 @@ namespace MahjongPrototype.UI3D
 
         private readonly List<Mahjong3DTileView> activeTiles = new List<Mahjong3DTileView>();
 
-        public event Action<int> TileClicked;
+        public event Action<int, Tile> TileClicked;
         public event Action<int, Tile> TileHoverEntered;
         public event Action<int, Tile> TileHoverExited;
 
@@ -166,7 +166,15 @@ namespace MahjongPrototype.UI3D
 
         private void HandleTileClicked(int handIndex)
         {
-            TileClicked?.Invoke(handIndex);
+            for (int i = 0; i < activeTiles.Count; i++)
+            {
+                Mahjong3DTileView tile = activeTiles[i];
+                if (tile == null || tile.HandIndex != handIndex || !tile.Tile.HasValue)
+                    continue;
+
+                TileClicked?.Invoke(handIndex, tile.Tile.Value);
+                return;
+            }
         }
 
         private void HandleTileHoverEntered(Mahjong3DTileView tileView)

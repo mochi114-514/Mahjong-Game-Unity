@@ -23,6 +23,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
             "MahjongPrototype.UI.MahjongWinningTileCandidateView, Assembly-CSharp";
         private const string TileHoverInfoTypeName =
             "MahjongPrototype.UI3D.Mahjong3DTileHoverInfo, Assembly-CSharp";
+        private const string TmpTextTypeName = "TMPro.TMP_Text, Unity.TextMeshPro";
         private const string DrawResultTypeName =
             "MahjongPrototype.Services.DrawResult, Assembly-CSharp";
         private const string DrawPurposeTypeName =
@@ -212,6 +213,39 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
         {
             Assert.That(savedReachCandidate, Is.Not.Null);
             HoverCandidate(savedReachCandidate, seatName);
+        }
+
+        public void SelectFirstReachCandidate()
+        {
+            savedReachCandidate = GetReachCandidate(0);
+            SelectCandidate(savedReachCandidate);
+        }
+
+        public void SelectHandTile(int handIndex)
+        {
+            object candidate = savedReachCandidate ?? GetReachCandidate(0);
+            object sourceSample = reflection.GetProperty(candidate, "Source");
+            object handSource = Enum.Parse(sourceSample.GetType(), "Hand");
+            object selfSeat = flowSupport.DataFactory.ParseSeat("East");
+            object player = reflection.Invoke(
+                flowSupport.CurrentState,
+                "GetPlayerSeat",
+                selfSeat);
+            object hand = reflection.GetProperty(player, "Hand");
+            object tile = flowSupport.Collections.Item(
+                reflection.Invoke(hand, "GetTiles"),
+                handIndex);
+            reflection.Invoke(
+                uiManager,
+                "HandleHandTileClicked",
+                selfSeat,
+                handIndex,
+                tile);
+        }
+
+        public void ClearSelectionFromTable()
+        {
+            reflection.Invoke(uiManager, "HandleTableInputSurfaceClicked");
         }
 
         public void HoverReachNonCandidate()
@@ -418,6 +452,29 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
         public bool HasHoveredSelfTile =>
             reflection.GetPrivateField(uiManager, "hoveredSelfTile") != null;
 
+        public bool HasSelectedSelfTile =>
+            reflection.GetPrivateField(uiManager, "selectedSelfTile") != null;
+
+        public string WinningHeadingText
+        {
+            get
+            {
+                if (winningCandidateRoot == null)
+                    return string.Empty;
+
+                Component[] texts = winningCandidateRoot.GetComponentsInChildren(
+                    reflection.RequireType(TmpTextTypeName),
+                    true);
+                for (int i = 0; i < texts.Length; i++)
+                {
+                    if (texts[i].name == "DiscardHeading")
+                        return reflection.GetProperty(texts[i], "text").ToString();
+                }
+
+                return string.Empty;
+            }
+        }
+
         public bool IsHoverReevaluationPending =>
             (bool)reflection.GetPrivateField(uiManager, "tileHoverReevaluationPending");
 
@@ -460,6 +517,26 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
                 (int)reflection.GetProperty(candidate, "HandIndex"),
                 reflection.GetProperty(candidate, "Tile"));
             reflection.Invoke(uiManager, "HandleTileHoverEntered", currentHoverInfo);
+        }
+
+        private void SelectCandidate(object candidate)
+        {
+            object source = reflection.GetProperty(candidate, "Source");
+            object seat = flowSupport.DataFactory.ParseSeat("East");
+            int handIndex = (int)reflection.GetProperty(candidate, "HandIndex");
+            object tile = reflection.GetProperty(candidate, "Tile");
+            if (source.ToString() == "Hand")
+            {
+                reflection.Invoke(
+                    uiManager,
+                    "HandleHandTileClicked",
+                    seat,
+                    handIndex,
+                    tile);
+                return;
+            }
+
+            reflection.Invoke(uiManager, "HandleDrawnTileClicked", seat, tile);
         }
 
         private object CreateHoverInfo(

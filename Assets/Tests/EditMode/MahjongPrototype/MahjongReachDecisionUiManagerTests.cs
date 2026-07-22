@@ -502,5 +502,55 @@ namespace MahjongPrototype.Tests
                 Assert.That(driver.SpawnedWinningGroupCount, Is.Zero);
             }
         }
+
+        [Test]
+        public void SelectedTile_KeepsWinningCandidatesWhileAnotherTileIsHovered()
+        {
+            using (MahjongReachDecisionUiManagerTestDriver driver =
+                MahjongReachDecisionUiManagerTestDriver.Create())
+            {
+                driver.PrepareReachableGameState();
+                driver.CreateAndAssignWinningCandidateController();
+                driver.SelectFirstReachCandidate();
+
+                Assert.That(driver.HasSelectedSelfTile, Is.True);
+                Assert.That(driver.WinningCandidateRootActive, Is.True);
+                int selectedCandidateCount = driver.SpawnedWinningCandidateCount;
+
+                driver.HoverReachNonCandidate();
+
+                Assert.That(driver.HasSelectedSelfTile, Is.True);
+                Assert.That(driver.WinningCandidateRootActive, Is.True);
+                Assert.That(driver.SpawnedWinningCandidateCount,
+                    Is.EqualTo(selectedCandidateCount));
+
+                driver.ClearSelectionFromTable();
+
+                Assert.That(driver.HasSelectedSelfTile, Is.False);
+                Assert.That(driver.WinningCandidateRootActive, Is.False);
+            }
+        }
+
+        [Test]
+        public void SelectedTileWithoutWait_ShowsNoWinningCandidatesMessage()
+        {
+            using (MahjongReachDecisionUiManagerTestDriver driver =
+                MahjongReachDecisionUiManagerTestDriver.Create())
+            {
+                driver.PrepareReachableGameState();
+                driver.CreateAndAssignWinningCandidateController();
+                driver.HoverFirstReachCandidate();
+                driver.ExitCurrentHover();
+                driver.DeclineReach();
+                driver.RefreshReachDecision();
+
+                driver.SelectHandTile(0);
+
+                Assert.That(driver.HasSelectedSelfTile, Is.True);
+                Assert.That(driver.WinningCandidateRootActive, Is.True);
+                Assert.That(driver.SpawnedWinningCandidateCount, Is.Zero);
+                Assert.That(driver.WinningHeadingText, Is.EqualTo("和了候補なし"));
+            }
+        }
     }
 }

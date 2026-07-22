@@ -270,6 +270,35 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
+        public void SetNoCandidates_ShowsOneHeadingOnlyGroup()
+        {
+            WithSceneController((reflection, controller, root) =>
+            {
+                reflection.Invoke(controller, "SetNoCandidates");
+
+                Assert.That(root.activeSelf, Is.True);
+                Assert.That(reflection.GetProperty(controller, "SpawnedGroupCount"),
+                    Is.EqualTo(1));
+                Assert.That(root.GetComponentsInChildren(
+                    reflection.RequireType(CandidateViewTypeName),
+                    true), Is.Empty);
+
+                Component group = root.GetComponentInChildren(
+                    reflection.RequireType(GroupViewTypeName),
+                    true);
+                GameObject headingRoot = (GameObject)reflection.GetPrivateField(
+                    group,
+                    "headingRoot");
+                Component headingText = (Component)reflection.GetPrivateField(
+                    group,
+                    "headingText");
+                Assert.That(headingRoot.activeSelf, Is.True);
+                Assert.That(reflection.GetProperty(headingText, "text").ToString(),
+                    Is.EqualTo("和了候補なし"));
+            });
+        }
+
+        [Test]
         public void SetGroups_SingleGroupOmitsHeadingAndKeepsZeroCountCandidate()
         {
             WinningTileCandidateEvaluatorTestDriver evaluator =

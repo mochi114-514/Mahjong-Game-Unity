@@ -21,7 +21,7 @@ namespace MahjongPrototype.Tests
             "MahjongPrototype.UI3D.Mahjong3DPlayerAreaPresenter, Assembly-CSharp";
 
         [Test]
-        public void RefreshSubscriptions_Subscribes3DPlayerAreaPresenterTileEventsOnce()
+        public void RefreshSubscriptions_DoesNotSubscribeDirectlyTo3DTileClicks()
         {
             GameObject root = new GameObject("CommandRouter3DSubscriptionTest");
             root.SetActive(false);
@@ -33,13 +33,12 @@ namespace MahjongPrototype.Tests
                 object router = root.AddComponent(Type.GetType(MahjongUiCommandRouterTypeName, true));
                 SetPrivateField(router, "gameFlow", gameFlow);
                 SetPrivateField(router, "inputController", inputController);
-                SetPrivateField(router, "playerArea3DPresenter", presenter);
 
                 Invoke(router, "RefreshSubscriptions");
                 Invoke(router, "RefreshSubscriptions");
 
-                Assert.That(CountEventSubscriberTarget(presenter, "HandTileClicked", router), Is.EqualTo(1));
-                Assert.That(CountEventSubscriberTarget(presenter, "DrawnTileClicked", router), Is.EqualTo(1));
+                Assert.That(CountEventSubscriberTarget(presenter, "HandTileClicked", router), Is.Zero);
+                Assert.That(CountEventSubscriberTarget(presenter, "DrawnTileClicked", router), Is.Zero);
             }
             finally
             {
@@ -48,7 +47,7 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void ThreeDHandTileClicked_RoutesDiscardCommand()
+        public void ConfirmedHandTileSelection_RoutesDiscardCommand()
         {
             GameObject root = new GameObject("CommandRouter3DHandDiscardTest");
             root.SetActive(false);
@@ -60,15 +59,19 @@ namespace MahjongPrototype.Tests
                 object router = root.AddComponent(Type.GetType(MahjongUiCommandRouterTypeName, true));
                 SetPrivateField(router, "gameFlow", gameFlow);
                 SetPrivateField(router, "inputController", inputController);
-                SetPrivateField(router, "playerArea3DPresenter", presenter);
                 Invoke(router, "RefreshSubscriptions");
 
                 Invoke(gameFlow, "StartNewRound");
                 Invoke(gameFlow, "RequestDraw");
                 object gameState = GetProperty(gameFlow, "CurrentState");
 
-                RaiseEvent(presenter, "HandTileClicked", ParseSeat("East"), 0);
+                bool accepted = (bool)Invoke(
+                    router,
+                    "TryDiscardHandFromTileSelection",
+                    ParseSeat("East"),
+                    0);
 
+                Assert.That(accepted, Is.True);
                 Assert.That(GetListCount(GetProperty(gameState, "Discards")), Is.EqualTo(1));
             }
             finally
@@ -78,7 +81,7 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void ThreeDDrawnTileClicked_RoutesDrawnTileDiscardCommand()
+        public void ConfirmedDrawnTileSelection_RoutesDrawnTileDiscardCommand()
         {
             GameObject root = new GameObject("CommandRouter3DDrawnDiscardTest");
             root.SetActive(false);
@@ -90,15 +93,15 @@ namespace MahjongPrototype.Tests
                 object router = root.AddComponent(Type.GetType(MahjongUiCommandRouterTypeName, true));
                 SetPrivateField(router, "gameFlow", gameFlow);
                 SetPrivateField(router, "inputController", inputController);
-                SetPrivateField(router, "playerArea3DPresenter", presenter);
                 Invoke(router, "RefreshSubscriptions");
 
                 Invoke(gameFlow, "StartNewRound");
                 Invoke(gameFlow, "RequestDraw");
                 object gameState = GetProperty(gameFlow, "CurrentState");
 
-                RaiseEvent(presenter, "DrawnTileClicked");
+                bool accepted = (bool)Invoke(router, "TryDiscardDrawnTileFromTileSelection");
 
+                Assert.That(accepted, Is.True);
                 object firstDiscard = GetListItem(GetProperty(gameState, "Discards"), 0);
                 Assert.That(GetProperty(firstDiscard, "Source").ToString(), Is.EqualTo("DrawnTile"));
             }
@@ -109,7 +112,7 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void ThreeDHandTileClicked_DuringTsumoDecision_UsesTheSingleDiscardIntent()
+        public void ConfirmedHandSelection_DuringTsumoDecision_UsesTheSingleDiscardIntent()
         {
             GameObject root = new GameObject("CommandRouter3DImplicitDecisionDiscardTest");
             root.SetActive(false);
@@ -121,7 +124,6 @@ namespace MahjongPrototype.Tests
                 object router = root.AddComponent(Type.GetType(MahjongUiCommandRouterTypeName, true));
                 SetPrivateField(router, "gameFlow", gameFlow);
                 SetPrivateField(router, "inputController", inputController);
-                SetPrivateField(router, "playerArea3DPresenter", presenter);
                 Invoke(router, "RefreshSubscriptions");
 
                 Invoke(gameFlow, "StartNewRound");
@@ -133,8 +135,13 @@ namespace MahjongPrototype.Tests
                     ParseSeat("East"),
                     (int)GetProperty(gameState, "TurnIndex"));
 
-                RaiseEvent(presenter, "HandTileClicked", ParseSeat("East"), 0);
+                bool accepted = (bool)Invoke(
+                    router,
+                    "TryDiscardHandFromTileSelection",
+                    ParseSeat("East"),
+                    0);
 
+                Assert.That(accepted, Is.True);
                 Assert.That((bool)GetProperty(gameState, "IsWinDecisionPending"), Is.False);
                 Assert.That(GetListCount(GetProperty(gameState, "Discards")), Is.EqualTo(1));
             }

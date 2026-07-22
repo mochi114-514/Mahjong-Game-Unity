@@ -14,11 +14,13 @@ namespace MahjongPrototype.UI3D
         [Header("Raycast")]
         [SerializeField] private Camera raycastCamera;
         [SerializeField] private LayerMask tileLayerMask = ~0;
+        [SerializeField] private LayerMask tableInputLayerMask;
         [SerializeField] private float maxDistance = 500f;
         [SerializeField] private QueryTriggerInteraction queryTriggerInteraction = QueryTriggerInteraction.UseGlobal;
 
         [Header("UI Blocking")]
         [SerializeField] private bool ignorePointerOverUi = true;
+        [SerializeField] private RectTransform[] selectionClearProtectedUiRects;
 
         private readonly List<RaycastResult> uiRaycastResults = new List<RaycastResult>();
         private PointerEventData pointerEventData;
@@ -28,6 +30,7 @@ namespace MahjongPrototype.UI3D
         private Mahjong3DTileView hoveredTileView;
 
         public event System.Action HoverReevaluated;
+        public event System.Action TableInputSurfaceClicked;
 
         private void Awake()
         {
@@ -40,10 +43,23 @@ namespace MahjongPrototype.UI3D
             if (!TryGetPrimaryPointerDown(out Vector2 screenPosition))
                 return;
 
-            if (ignorePointerOverUi && IsPointerOverUi(screenPosition))
+            ProcessPointerClick(screenPosition);
+        }
+
+        private void ProcessPointerClick(Vector2 screenPosition)
+        {
+            if (IsPointerProtectedByUi(screenPosition))
                 return;
 
-            TryNotifyTileClick(screenPosition);
+            if (TryNotifyTileClick(screenPosition))
+                return;
+
+            if (!IsTableInputSurfaceHit(screenPosition))
+                return;
+
+            SetHoveredTile(null);
+            HoverReevaluated?.Invoke();
+            TableInputSurfaceClicked?.Invoke();
         }
 
         private void LateUpdate()
@@ -85,7 +101,7 @@ namespace MahjongPrototype.UI3D
             }
 
             Vector2 screenPosition = mouse.position.ReadValue();
-            if (IsPointerOverUi(screenPosition))
+            if (IsPointerProtectedByUi(screenPosition))
             {
                 SetHoveredTile(null);
                 return;
@@ -173,13 +189,43 @@ namespace MahjongPrototype.UI3D
             return uiRaycastResults.Count > 0;
         }
 
-        private void TryNotifyTileClick(Vector2 screenPosition)
+        private bool IsPointerProtectedByUi(Vector2 screenPosition)
+        {
+            if (ignorePointerOverUi && IsPointerOverUi(screenPosition))
+                return true;
+
+            if (selectionClearProtectedUiRects == null)
+                return false;
+
+            for (int i = 0; i < selectionClearProtectedUiRects.Length; i++)
+            {
+                RectTransform protectedRect = selectionClearProtectedUiRects[i];
+                if (protectedRect == null || !protectedRect.gameObject.activeInHierarchy)
+                    continue;
+
+                Canvas canvas = protectedRect.GetComponentInParent<Canvas>();
+                Camera eventCamera = canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay
+                    ? canvas.worldCamera
+                    : null;
+                if (RectTransformUtility.RectangleContainsScreenPoint(
+                        protectedRect,
+                        screenPosition,
+                        eventCamera))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private bool TryNotifyTileClick(Vector2 screenPosition)
         {
             Camera cameraToUse = raycastCamera != null ? raycastCamera : Camera.main;
             if (cameraToUse == null)
             {
                 WarnMissingCameraOnce();
-                return;
+                return false;
             }
 
             Ray ray = cameraToUse.ScreenPointToRay(screenPosition);
@@ -190,14 +236,33 @@ namespace MahjongPrototype.UI3D
                     tileLayerMask,
                     queryTriggerInteraction))
             {
-                return;
+                return false;
             }
 
             Mahjong3DTileView tileView = hit.collider.GetComponentInParent<Mahjong3DTileView>();
-            if (tileView == null)
-                return;
+            if (tileView != null)
+                tileView.NotifyClicked();
 
-            tileView.NotifyClicked();
+            // Any tile-layer hit, including a non-interactable opponent, river,
+            // or meld tile, protects the current self selection from table clearing.
+            return true;
+        }
+
+        private bool IsTableInputSurfaceHit(Vector2 screenPosition)
+        {
+            Camera cameraToUse = raycastCamera != null ? raycastCamera : Camera.main;
+            if (cameraToUse == null)
+            {
+                WarnMissingCameraOnce();
+                return false;
+            }
+
+            Ray ray = cameraToUse.ScreenPointToRay(screenPosition);
+            return Physics.Raycast(
+                ray,
+                maxDistance,
+                tableInputLayerMask,
+                queryTriggerInteraction);
         }
 
         private void WarnMissingCameraOnce()

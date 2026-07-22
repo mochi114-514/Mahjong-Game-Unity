@@ -74,8 +74,8 @@ namespace MahjongPrototype.UI3D
         private bool isDrawnTileViewSubscribed;
         private Mahjong3DTileHoverInfo? activeTileHover;
 
-        public event Action<SeatId, int> HandTileClicked;
-        public event Action DrawnTileClicked;
+        public event Action<SeatId, int, Tile> HandTileClicked;
+        public event Action<SeatId, Tile> DrawnTileClicked;
         public event Action<Mahjong3DTileHoverInfo> TileHoverEntered;
         public event Action<Mahjong3DTileHoverInfo> TileHoverExited;
 
@@ -399,14 +399,14 @@ namespace MahjongPrototype.UI3D
             isDrawnTileViewSubscribed = false;
         }
 
-        private void HandleHandTileClicked(int handIndex)
+        private void HandleHandTileClicked(int handIndex, Tile tile)
         {
-            HandTileClicked?.Invoke(handDataSeat, handIndex);
+            HandTileClicked?.Invoke(handDataSeat, handIndex, tile);
         }
 
-        private void HandleDrawnTileClicked()
+        private void HandleDrawnTileClicked(Tile tile)
         {
-            DrawnTileClicked?.Invoke();
+            DrawnTileClicked?.Invoke(handDataSeat, tile);
         }
 
         private void HandleHandTileHoverEntered(int handIndex, Tile tile)

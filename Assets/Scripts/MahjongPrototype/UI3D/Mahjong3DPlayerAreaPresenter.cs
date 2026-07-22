@@ -23,8 +23,8 @@ namespace MahjongPrototype.UI3D
         private MahjongViewContext viewContext;
         private Mahjong3DTileHoverInfo? activeTileHover;
 
-        public event Action<SeatId, int> HandTileClicked;
-        public event Action DrawnTileClicked;
+        public event Action<SeatId, int, Tile> HandTileClicked;
+        public event Action<SeatId, Tile> DrawnTileClicked;
         public event Action<Mahjong3DTileHoverInfo> TileHoverEntered;
         public event Action<Mahjong3DTileHoverInfo> TileHoverExited;
 
@@ -432,6 +432,27 @@ namespace MahjongPrototype.UI3D
                 controller.ClearDimmedTiles();
         }
 
+        public void SetSelfSelectedHandTile(int handIndex)
+        {
+            Mahjong3DPlayerUiController controller = GetPlayerUiController(ViewSlot.SelfBottom);
+            if (controller != null)
+                controller.SetSelectedHandTile(handIndex);
+        }
+
+        public void SetSelfDrawnTileSelected(bool selected)
+        {
+            Mahjong3DPlayerUiController controller = GetPlayerUiController(ViewSlot.SelfBottom);
+            if (controller != null)
+                controller.SetDrawnTileSelected(selected);
+        }
+
+        public void ClearSelfTileSelectionVisual()
+        {
+            Mahjong3DPlayerUiController controller = GetPlayerUiController(ViewSlot.SelfBottom);
+            if (controller != null)
+                controller.ClearTileSelectionVisual();
+        }
+
         public Mahjong3DPlayerUiController GetPlayerUiController(ViewSlot viewSlot)
         {
             CachePlayerUiControllerReferences();
@@ -570,14 +591,14 @@ namespace MahjongPrototype.UI3D
             drawnTileSubscribedController = null;
         }
 
-        private void HandleHandTileClicked(SeatId dataSeat, int handIndex)
+        private void HandleHandTileClicked(SeatId dataSeat, int handIndex, Tile tile)
         {
-            HandTileClicked?.Invoke(dataSeat, handIndex);
+            HandTileClicked?.Invoke(dataSeat, handIndex, tile);
         }
 
-        private void HandleDrawnTileClicked()
+        private void HandleDrawnTileClicked(SeatId dataSeat, Tile tile)
         {
-            DrawnTileClicked?.Invoke();
+            DrawnTileClicked?.Invoke(dataSeat, tile);
         }
 
         private void HandleTileHoverEntered(Mahjong3DTileHoverInfo hoverInfo)
