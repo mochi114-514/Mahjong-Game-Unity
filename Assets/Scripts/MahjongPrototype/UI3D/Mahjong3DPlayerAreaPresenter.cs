@@ -304,6 +304,9 @@ namespace MahjongPrototype.UI3D
 
         public void ClearDiscardReactionHighlights()
         {
+            if (this == null)
+                return;
+
             ClearDiscardReactionHighlights(ViewSlot.SelfBottom);
             ClearDiscardReactionHighlights(ViewSlot.NextLeft);
             ClearDiscardReactionHighlights(ViewSlot.AcrossTop);
@@ -448,14 +451,29 @@ namespace MahjongPrototype.UI3D
 
         public void ClearSelfTileSelectionVisual()
         {
-            Mahjong3DPlayerUiController controller = GetPlayerUiController(ViewSlot.SelfBottom);
+            if (this == null)
+                return;
+
+            // During scene teardown the presenter hierarchy may already be
+            // partially destroyed. Clearing a visual must therefore use only
+            // the cached controller and never trigger a hierarchy search.
+            Mahjong3DPlayerUiController controller =
+                GetCachedPlayerUiController(ViewSlot.SelfBottom);
             if (controller != null)
                 controller.ClearTileSelectionVisual();
         }
 
         public Mahjong3DPlayerUiController GetPlayerUiController(ViewSlot viewSlot)
         {
+            if (this == null)
+                return null;
+
             CachePlayerUiControllerReferences();
+            return GetCachedPlayerUiController(viewSlot);
+        }
+
+        private Mahjong3DPlayerUiController GetCachedPlayerUiController(ViewSlot viewSlot)
+        {
             switch (viewSlot)
             {
                 case ViewSlot.SelfBottom:
@@ -504,6 +522,9 @@ namespace MahjongPrototype.UI3D
 
         private Mahjong3DPlayerUiController FindPlayerUiController(ViewSlot targetViewSlot)
         {
+            if (this == null)
+                return null;
+
             Mahjong3DPlayerUiController[] controllers = GetComponentsInChildren<Mahjong3DPlayerUiController>(true);
             for (int i = 0; i < controllers.Length; i++)
             {
@@ -517,6 +538,9 @@ namespace MahjongPrototype.UI3D
 
         private void CachePlayerUiControllerReferences()
         {
+            if (this == null)
+                return;
+
             if (selfBottomPlayerUiController == null)
                 selfBottomPlayerUiController = FindPlayerUiController(ViewSlot.SelfBottom);
 
@@ -706,7 +730,7 @@ namespace MahjongPrototype.UI3D
 
         private void ClearDiscardReactionHighlights(ViewSlot viewSlot)
         {
-            Mahjong3DPlayerUiController controller = GetPlayerUiController(viewSlot);
+            Mahjong3DPlayerUiController controller = GetCachedPlayerUiController(viewSlot);
             if (controller != null)
                 controller.ClearDiscardReactionHighlights();
         }

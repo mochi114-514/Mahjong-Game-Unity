@@ -270,31 +270,48 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void SetNoCandidates_ShowsOneHeadingOnlyGroup()
+        public void SetCandidates_EmptyOrNullClearsExistingDisplay()
         {
+            WinningTileCandidateEvaluatorTestDriver evaluator =
+                WinningTileCandidateEvaluatorTestDriver.Create();
+            object state = evaluator.CreateGameState();
+            evaluator.AddHand(
+                state,
+                "East",
+                "1m 2m 3m 1p 2p 3p 1s 2s 3s E E E C");
+            evaluator.AddDiscard(state, "South", "C", 1);
+            object candidates = evaluator.EvaluateCurrent(state);
+
             WithSceneController((reflection, controller, root) =>
             {
-                reflection.Invoke(controller, "SetNoCandidates");
-
+                reflection.Invoke(controller, "SetCandidates", candidates);
                 Assert.That(root.activeSelf, Is.True);
-                Assert.That(reflection.GetProperty(controller, "SpawnedGroupCount"),
-                    Is.EqualTo(1));
-                Assert.That(root.GetComponentsInChildren(
-                    reflection.RequireType(CandidateViewTypeName),
-                    true), Is.Empty);
 
-                Component group = root.GetComponentInChildren(
-                    reflection.RequireType(GroupViewTypeName),
-                    true);
-                GameObject headingRoot = (GameObject)reflection.GetPrivateField(
-                    group,
-                    "headingRoot");
-                Component headingText = (Component)reflection.GetPrivateField(
-                    group,
-                    "headingText");
-                Assert.That(headingRoot.activeSelf, Is.True);
-                Assert.That(reflection.GetProperty(headingText, "text").ToString(),
-                    Is.EqualTo("和了候補なし"));
+                Type candidatesParameterType = controller.GetType()
+                    .GetMethod("SetCandidates")
+                    .GetParameters()[0]
+                    .ParameterType;
+                object emptyCandidates = Activator.CreateInstance(
+                    typeof(System.Collections.Generic.List<>).MakeGenericType(
+                        candidatesParameterType.GetGenericArguments()[0]));
+                reflection.InvokeWithSignature(
+                    controller,
+                    "SetCandidates",
+                    new[] { candidatesParameterType },
+                    new[] { emptyCandidates });
+
+                Assert.That(root.activeSelf, Is.False);
+                Assert.That(reflection.GetProperty(controller, "SpawnedGroupCount"), Is.Zero);
+
+                reflection.Invoke(controller, "SetCandidates", candidates);
+                reflection.InvokeWithSignature(
+                    controller,
+                    "SetCandidates",
+                    new[] { candidatesParameterType },
+                    new object[] { null });
+
+                Assert.That(root.activeSelf, Is.False);
+                Assert.That(reflection.GetProperty(controller, "SpawnedGroupCount"), Is.Zero);
             });
         }
 

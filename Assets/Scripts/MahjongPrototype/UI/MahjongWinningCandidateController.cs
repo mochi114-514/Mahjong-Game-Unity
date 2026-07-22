@@ -13,11 +13,8 @@ namespace MahjongPrototype.UI
         private enum DisplayMode
         {
             Candidates = 0,
-            ReachGroups = 1,
-            NoCandidates = 2
+            ReachGroups = 1
         }
-
-        private const string NoCandidatesHeading = "和了候補なし";
 
         [SerializeField] private GameObject root;
         [SerializeField] private Transform groupsContainer;
@@ -118,36 +115,6 @@ namespace MahjongPrototype.UI
             ClearSpawnedGroups();
             SpawnGroup(candidates, false, string.Empty);
             ShowPopulatedRoot(DisplayMode.Candidates, nextDisplayGroups);
-        }
-
-        public void SetNoCandidates()
-        {
-            List<DisplayGroupState> nextDisplayGroups =
-                new List<DisplayGroupState>
-                {
-                    new DisplayGroupState(
-                        true,
-                        NoCandidatesHeading,
-                        new List<WinningCandidateDisplayState>(),
-                        new List<DiscardCandidateDisplayState>())
-                };
-            if (HasSameDisplay(DisplayMode.NoCandidates, nextDisplayGroups))
-                return;
-
-            if (!CanCreateGroup())
-            {
-                Clear();
-                return;
-            }
-
-            ClearSpawnedGroups();
-            MahjongWinningCandidateGroupView groupView = Instantiate(
-                groupViewPrefab,
-                groupsContainer);
-            groupView.SetHeading(true, NoCandidatesHeading);
-            groupView.gameObject.SetActive(true);
-            spawnedGroups.Add(groupView);
-            ShowPopulatedRoot(DisplayMode.NoCandidates, nextDisplayGroups);
         }
 
         public void Clear()
@@ -327,28 +294,6 @@ namespace MahjongPrototype.UI
 
         private bool CanPopulate()
         {
-            bool valid = CanCreateGroup();
-            if (candidateViewPrefab == null)
-            {
-                WarnMissingOnce(
-                    ref warnedMissingCandidatePrefab,
-                    "CandidateViewPrefab is not assigned.");
-                valid = false;
-            }
-
-            if (tileSpriteCatalog == null)
-            {
-                WarnMissingOnce(
-                    ref warnedMissingCatalog,
-                    "MahjongTileSpriteCatalog is not assigned.");
-                valid = false;
-            }
-
-            return valid;
-        }
-
-        private bool CanCreateGroup()
-        {
             bool valid = true;
             if (root == null)
             {
@@ -369,6 +314,22 @@ namespace MahjongPrototype.UI
                 WarnMissingOnce(
                     ref warnedMissingGroupPrefab,
                     "GroupViewPrefab is not assigned.");
+                valid = false;
+            }
+
+            if (candidateViewPrefab == null)
+            {
+                WarnMissingOnce(
+                    ref warnedMissingCandidatePrefab,
+                    "CandidateViewPrefab is not assigned.");
+                valid = false;
+            }
+
+            if (tileSpriteCatalog == null)
+            {
+                WarnMissingOnce(
+                    ref warnedMissingCatalog,
+                    "MahjongTileSpriteCatalog is not assigned.");
                 valid = false;
             }
 

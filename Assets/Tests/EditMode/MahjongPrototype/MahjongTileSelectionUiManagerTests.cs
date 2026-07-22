@@ -211,6 +211,33 @@ namespace MahjongPrototype.Tests
             }
         }
 
+        [Test]
+        public void OnDisable_ClearsSelection_WhenPresenterIsValid()
+        {
+            using (SelectionFixture fixture = new SelectionFixture())
+            {
+                fixture.SelectFirstHandTile();
+
+                Assert.DoesNotThrow(() => fixture.InvokeUiManagerOnDisable());
+
+                Assert.That(fixture.HasSelection, Is.False);
+            }
+        }
+
+        [Test]
+        public void OnDisable_ClearsSelection_WhenPresenterWasDestroyedFirst()
+        {
+            using (SelectionFixture fixture = new SelectionFixture())
+            {
+                fixture.SelectFirstHandTile();
+                fixture.DestroyPresenter();
+
+                Assert.DoesNotThrow(() => fixture.InvokeUiManagerOnDisable());
+
+                Assert.That(fixture.HasSelection, Is.False);
+            }
+        }
+
         private sealed class SelectionFixture : IDisposable
         {
             private const string FlowTypeName =
@@ -426,6 +453,16 @@ namespace MahjongPrototype.Tests
             {
                 Invoke(state, "EndRoundWithoutResult");
                 Invoke(manager, "HandleRoundEnded", "Test");
+            }
+
+            public void InvokeUiManagerOnDisable()
+            {
+                Invoke(manager, "OnDisable");
+            }
+
+            public void DestroyPresenter()
+            {
+                UnityEngine.Object.DestroyImmediate((UnityEngine.Object)presenter);
             }
 
             public void Dispose()

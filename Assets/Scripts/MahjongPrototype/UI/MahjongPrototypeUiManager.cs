@@ -220,12 +220,15 @@ namespace MahjongPrototype.UI
             UnsubscribeTileHoverPresentation();
             UnsubscribeTileHoverReevaluation();
             UnsubscribeNotifications();
-            inputController?.ClearReactionResponseBindings();
-            ponDecisionController?.ClearReactionMeldCallDecision();
+            if (inputController != null)
+                inputController.ClearReactionResponseBindings();
+            if (ponDecisionController != null)
+                ponDecisionController.ClearReactionMeldCallDecision();
             resolvedReactionWindowIdAwaitingClosed = null;
             ClearTileHoverState();
             ClearTileSelection(true, false);
-            winningCandidateController?.Clear();
+            if (winningCandidateController != null)
+                winningCandidateController.Clear();
             ClearDiscardReactionHighlights();
         }
 
@@ -787,8 +790,8 @@ namespace MahjongPrototype.UI
             bool hadSelection = selectedSelfTile.HasValue;
             selectedSelfTile = null;
 
-            if (clearVisual)
-                playerArea3DPresenter?.ClearSelfTileSelectionVisual();
+            if (clearVisual && playerArea3DPresenter != null)
+                playerArea3DPresenter.ClearSelfTileSelectionVisual();
 
             if (!refreshWinningCandidates || (!hadSelection && !clearVisual))
                 return;
@@ -1587,7 +1590,7 @@ namespace MahjongPrototype.UI
                     if (selectedCandidates.Count > 0)
                         winningCandidateController?.SetCandidates(selectedCandidates);
                     else
-                        winningCandidateController?.SetNoCandidates();
+                        winningCandidateController?.Clear();
                     return;
                 }
             }

@@ -532,7 +532,7 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void SelectedTileWithoutWait_ShowsNoWinningCandidatesMessage()
+        public void SelectedTileWithoutWait_HidesCandidatesAndDoesNotFallbackToHover()
         {
             using (MahjongReachDecisionUiManagerTestDriver driver =
                 MahjongReachDecisionUiManagerTestDriver.Create())
@@ -544,12 +544,22 @@ namespace MahjongPrototype.Tests
                 driver.DeclineReach();
                 driver.RefreshReachDecision();
 
+                driver.HoverSavedReachCandidate();
+                Assert.That(driver.WinningCandidateRootActive, Is.True);
+                Assert.That(driver.SpawnedWinningCandidateCount, Is.GreaterThan(0));
+                driver.ExitCurrentHover();
+
                 driver.SelectHandTile(0);
 
                 Assert.That(driver.HasSelectedSelfTile, Is.True);
-                Assert.That(driver.WinningCandidateRootActive, Is.True);
-                Assert.That(driver.SpawnedWinningCandidateCount, Is.Zero);
-                Assert.That(driver.WinningHeadingText, Is.EqualTo("和了候補なし"));
+                Assert.That(driver.WinningCandidateRootActive, Is.False);
+                Assert.That(driver.SpawnedWinningGroupCount, Is.Zero);
+
+                driver.HoverSavedReachCandidate();
+
+                Assert.That(driver.HasSelectedSelfTile, Is.True);
+                Assert.That(driver.WinningCandidateRootActive, Is.False);
+                Assert.That(driver.SpawnedWinningGroupCount, Is.Zero);
             }
         }
     }

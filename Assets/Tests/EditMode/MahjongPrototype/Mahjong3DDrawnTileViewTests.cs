@@ -243,6 +243,64 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
+        public void PresenterSelectionClear_UsesCachedControllerAndIgnoresDestroyedController()
+        {
+            GameObject presenterRoot = new GameObject("PlayerAreaSelectionClearTest");
+            GameObject controllerRoot = new GameObject("PlayerController");
+            GameObject handViewObject = new GameObject("HandView");
+            GameObject drawnViewObject = new GameObject("DrawnView");
+            GameObject prefab = new GameObject("Tile3DPrefab");
+            try
+            {
+                controllerRoot.transform.SetParent(presenterRoot.transform);
+                handViewObject.transform.SetParent(controllerRoot.transform);
+                drawnViewObject.transform.SetParent(controllerRoot.transform);
+                object presenter = presenterRoot.AddComponent(
+                    Type.GetType(Mahjong3DPlayerAreaPresenterTypeName, true));
+                object controller = controllerRoot.AddComponent(
+                    Type.GetType(Mahjong3DPlayerUiControllerTypeName, true));
+                object handView = handViewObject.AddComponent(
+                    Type.GetType(Mahjong3DHandViewTypeName, true));
+                object drawnView = drawnViewObject.AddComponent(
+                    Type.GetType(Mahjong3DDrawnTileViewTypeName, true));
+                object tilePrefab = prefab.AddComponent(
+                    Type.GetType(Mahjong3DTileViewTypeName, true));
+                SetPrivateField(handView, "tilePrefab", tilePrefab);
+                SetPrivateField(drawnView, "tilePrefab", tilePrefab);
+                SetPrivateField(controller, "handView", handView);
+                SetPrivateField(controller, "drawnTileView", drawnView);
+                SetPrivateField(presenter, "selfBottomPlayerUiController", controller);
+                Invoke(
+                    controller,
+                    "RenderHand",
+                    CreateTileList("1m", "2m"),
+                    Seat("East"),
+                    true,
+                    true);
+
+                Invoke(presenter, "SetSelfSelectedHandTile", 1);
+                Component[] handTiles = handViewObject.GetComponentsInChildren(
+                    Type.GetType(Mahjong3DTileViewTypeName, true));
+                Assert.That(GetProperty(handTiles[1], "IsSelected"), Is.True);
+
+                Invoke(presenter, "ClearSelfTileSelectionVisual");
+                Assert.That(GetProperty(handTiles[1], "IsSelected"), Is.False);
+
+                UnityEngine.Object.DestroyImmediate(controllerRoot);
+
+                Assert.DoesNotThrow(() =>
+                    Invoke(presenter, "ClearSelfTileSelectionVisual"));
+                Assert.DoesNotThrow(() =>
+                    Invoke(presenter, "ClearDiscardReactionHighlights"));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(prefab);
+                UnityEngine.Object.DestroyImmediate(presenterRoot);
+            }
+        }
+
+        [Test]
         public void RenderDrawnTile_FollowsTheHandEndAcrossDifferentSpawnRoots()
         {
             GameObject controllerRoot = new GameObject("PlayerUiControllerTest");

@@ -23,7 +23,6 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
             "MahjongPrototype.UI.MahjongWinningTileCandidateView, Assembly-CSharp";
         private const string TileHoverInfoTypeName =
             "MahjongPrototype.UI3D.Mahjong3DTileHoverInfo, Assembly-CSharp";
-        private const string TmpTextTypeName = "TMPro.TMP_Text, Unity.TextMeshPro";
         private const string DrawResultTypeName =
             "MahjongPrototype.Services.DrawResult, Assembly-CSharp";
         private const string DrawPurposeTypeName =
@@ -454,26 +453,6 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
 
         public bool HasSelectedSelfTile =>
             reflection.GetPrivateField(uiManager, "selectedSelfTile") != null;
-
-        public string WinningHeadingText
-        {
-            get
-            {
-                if (winningCandidateRoot == null)
-                    return string.Empty;
-
-                Component[] texts = winningCandidateRoot.GetComponentsInChildren(
-                    reflection.RequireType(TmpTextTypeName),
-                    true);
-                for (int i = 0; i < texts.Length; i++)
-                {
-                    if (texts[i].name == "DiscardHeading")
-                        return reflection.GetProperty(texts[i], "text").ToString();
-                }
-
-                return string.Empty;
-            }
-        }
 
         public bool IsHoverReevaluationPending =>
             (bool)reflection.GetPrivateField(uiManager, "tileHoverReevaluationPending");
