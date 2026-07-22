@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace MahjongPrototype.Domain
@@ -16,7 +17,8 @@ namespace MahjongPrototype.Domain
             WinType? winType,
             SeatId? sourceSeat,
             Tile? winningTile,
-            HandEvaluationCandidateResult selectedCandidate)
+            HandEvaluationCandidateResult selectedCandidate,
+            AbortiveDrawKind? abortiveDrawKind)
         {
             Type = type;
             WindProgress = windProgress;
@@ -27,6 +29,7 @@ namespace MahjongPrototype.Domain
             SourceSeat = sourceSeat;
             WinningTile = winningTile;
             SelectedCandidate = selectedCandidate;
+            AbortiveDrawKind = abortiveDrawKind;
         }
 
         public RoundResultType Type { get; }
@@ -38,6 +41,7 @@ namespace MahjongPrototype.Domain
         public SeatId? SourceSeat { get; }
         public Tile? WinningTile { get; }
         public HandEvaluationCandidateResult SelectedCandidate { get; }
+        public AbortiveDrawKind? AbortiveDrawKind { get; }
         public IReadOnlyList<EvaluatedYaku> Yakus =>
             SelectedCandidate == null ? EmptyYakus : SelectedCandidate.Yakus;
         public int TotalHan => SelectedCandidate == null ? 0 : SelectedCandidate.TotalHan;
@@ -63,7 +67,8 @@ namespace MahjongPrototype.Domain
                 winType,
                 sourceSeat,
                 winningTile,
-                selectedCandidate);
+                selectedCandidate,
+                null);
         }
 
         public static RoundResult CreateExhaustiveDraw(
@@ -80,7 +85,29 @@ namespace MahjongPrototype.Domain
                 null,
                 null,
                 null,
+                null,
                 null);
+        }
+
+        public static RoundResult CreateAbortiveDraw(
+            WindProgress windProgress,
+            int turnIndex,
+            AbortiveDrawKind kind)
+        {
+            if (!Enum.IsDefined(typeof(AbortiveDrawKind), kind))
+                throw new ArgumentOutOfRangeException(nameof(kind));
+
+            return new RoundResult(
+                RoundResultType.AbortiveDraw,
+                windProgress,
+                turnIndex,
+                false,
+                null,
+                null,
+                null,
+                null,
+                null,
+                kind);
         }
 
         private static int CountYakuman(HandEvaluationCandidateResult candidate)

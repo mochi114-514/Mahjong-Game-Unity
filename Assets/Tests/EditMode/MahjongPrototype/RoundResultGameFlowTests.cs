@@ -205,6 +205,217 @@ namespace MahjongPrototype.Tests
             }
         }
 
+        [Test]
+        public void AbortiveDraw_ClearsPendingWinRejectsDuplicateEndAndKeepsTypedResult()
+        {
+            using (Driver driver = Driver.Create(participantCount: 1))
+            {
+                driver.PrepareTsumoDecision(StandardHand, "C");
+                Assert.That(driver.IsWinDecisionPending, Is.True);
+
+                Assert.That(driver.TryEndAbortiveDraw("NineTerminalsAndHonors"), Is.True);
+
+                object result = driver.CurrentRoundResult;
+                Assert.That(driver.IsWinDecisionPending, Is.False);
+                Assert.That(driver.IsReactionWindowPending, Is.False);
+                Assert.That(driver.IsRoundResultPending, Is.True);
+                Assert.That(driver.TurnPhaseName, Is.EqualTo("RoundResult"));
+                Assert.That(driver.RoundResultTypeName, Is.EqualTo("AbortiveDraw"));
+                Assert.That(
+                    driver.RoundResultAbortiveDrawKindName,
+                    Is.EqualTo("NineTerminalsAndHonors"));
+                Assert.That(driver.RoundResultWinnerSeatName, Is.Null);
+                Assert.That(driver.RoundResultWinTypeName, Is.Null);
+                Assert.That(driver.RoundResultSourceSeatName, Is.Null);
+                Assert.That(driver.RoundResultWinningTileCode, Is.Null);
+                Assert.That(driver.RoundResultSelectedCandidate, Is.Null);
+                Assert.That(driver.RoundResultYakuCount, Is.EqualTo(0));
+                Assert.That(driver.RoundResultTotalHan, Is.EqualTo(0));
+                Assert.That(driver.RoundResultIsFinalRound, Is.False);
+
+                Assert.That(driver.TryEndAbortiveDraw("FourWinds"), Is.False);
+                Assert.That(driver.CurrentRoundResult, Is.SameAs(result));
+                Assert.That(
+                    driver.RoundResultAbortiveDrawKindName,
+                    Is.EqualTo("NineTerminalsAndHonors"));
+
+                driver.RequestDeclineWin();
+                driver.RequestDraw();
+                driver.RequestDiscardDrawnTile();
+                Assert.That(driver.CurrentRoundResult, Is.SameAs(result));
+            }
+        }
+
+        [Test]
+        public void AbortiveDraw_ClearsPendingReactionWindowAndStaleRonInput()
+        {
+            using (Driver driver = Driver.Create(participantCount: 2))
+            {
+                driver.PrepareRonDecision(StandardHand, "C", "West");
+                Assert.That(driver.IsReactionWindowPending, Is.True);
+
+                Assert.That(driver.TryEndAbortiveDraw("FourWinds"), Is.True);
+
+                object result = driver.CurrentRoundResult;
+                Assert.That(driver.IsReactionWindowPending, Is.False);
+                Assert.That(driver.IsWinDecisionPending, Is.False);
+                Assert.That(driver.CurrentReactionWindow, Is.Null);
+                driver.DeclareWin();
+                Assert.That(driver.CurrentRoundResult, Is.SameAs(result));
+                Assert.That(driver.RoundResultTypeName, Is.EqualTo("AbortiveDraw"));
+            }
+        }
+
+        [Test]
+        public void AbortiveDraw_ClearsPendingReachDecisionAndStaleReachInput()
+        {
+            using (Driver driver = Driver.Create(participantCount: 1))
+            {
+                driver.PrepareReachDecision();
+                Assert.That(driver.IsReachDecisionPending, Is.True);
+                Assert.That(driver.ReachDiscardCandidateCount, Is.GreaterThan(0));
+
+                Assert.That(driver.TryEndAbortiveDraw("FourReaches"), Is.True);
+
+                object result = driver.CurrentRoundResult;
+                Assert.That(driver.IsReachDecisionPending, Is.False);
+                Assert.That(driver.ReachDiscardCandidateCount, Is.EqualTo(0));
+                driver.RequestDeclareReach();
+                Assert.That(driver.CurrentRoundResult, Is.SameAs(result));
+                Assert.That(driver.TurnPhaseName, Is.EqualTo("RoundResult"));
+            }
+        }
+
+        [Test]
+        public void AbortiveDraw_ClearsPendingSelfKanDecisionAndStaleKanInput()
+        {
+            using (Driver driver = Driver.Create(participantCount: 1))
+            {
+                driver.PrepareAnkanDecision();
+                Assert.That(driver.IsSelfKanDecisionPending, Is.True);
+                Assert.That(driver.CurrentSelfKanDecision, Is.Not.Null);
+
+                Assert.That(driver.TryEndAbortiveDraw("FourKans"), Is.True);
+
+                object result = driver.CurrentRoundResult;
+                Assert.That(driver.IsSelfKanDecisionPending, Is.False);
+                Assert.That(driver.CurrentSelfKanDecision, Is.Null);
+                Assert.That(driver.TryRequestDeclareAnkan("P"), Is.False);
+                Assert.That(driver.CurrentRoundResult, Is.SameAs(result));
+                Assert.That(driver.TurnPhaseName, Is.EqualTo("RoundResult"));
+            }
+        }
+
+        [Test]
+        public void AbortiveDrawConfirmation_RepeatsRoundAndSeatsWithFreshRoundState()
+        {
+            using (Driver driver = Driver.Create(
+                       participantCount: 2,
+                       initialHandTileCount: 1))
+            {
+                driver.StartRound("East", 3, "East");
+                driver.RequestDraw();
+                driver.RequestDiscardDrawnTile();
+                Assert.That(driver.DiscardCount, Is.EqualTo(1));
+
+                object oldState = driver.CurrentState;
+                object oldWall = driver.CurrentWall;
+                object oldSelfPlayerSeat = driver.SelfPlayerSeat;
+                object oldDecisionProviderRegistry = driver.DecisionProviderRegistry;
+                string selfSeat = driver.SelfSeatName;
+                string player2Seat = driver.SeatByPlayerIdName("Player2");
+                string selfParticipantType = driver.ParticipantTypeName(selfSeat);
+                string player2ParticipantType = driver.ParticipantTypeName(player2Seat);
+
+                Assert.That(driver.TryEndAbortiveDraw("FourReaches"), Is.True);
+                object oldResult = driver.CurrentRoundResult;
+                driver.AdvanceFromRoundResult();
+
+                Assert.That(driver.CurrentState, Is.Not.SameAs(oldState));
+                Assert.That(driver.CurrentWall, Is.Not.SameAs(oldWall));
+                Assert.That(driver.SelfPlayerSeat, Is.Not.SameAs(oldSelfPlayerSeat));
+                Assert.That(
+                    driver.DecisionProviderRegistry,
+                    Is.SameAs(oldDecisionProviderRegistry));
+                Assert.That(driver.WindProgressRoundWindName, Is.EqualTo("East"));
+                Assert.That(driver.WindProgressHandNumber, Is.EqualTo(3));
+                Assert.That(driver.SelfSeatName, Is.EqualTo(selfSeat));
+                Assert.That(driver.SeatByPlayerIdName("Player2"), Is.EqualTo(player2Seat));
+                Assert.That(driver.ParticipantTypeName(selfSeat), Is.EqualTo(selfParticipantType));
+                Assert.That(
+                    driver.ParticipantTypeName(player2Seat),
+                    Is.EqualTo(player2ParticipantType));
+                Assert.That(driver.DiscardCount, Is.EqualTo(0));
+                Assert.That(driver.HandCount(selfSeat), Is.EqualTo(1));
+                Assert.That(driver.IsRoundResultPending, Is.False);
+                Assert.That(driver.CurrentRoundResultIsNull, Is.True);
+                Assert.That(driver.IsWinDecisionPending, Is.False);
+                Assert.That(driver.IsReachDecisionPending, Is.False);
+                Assert.That(driver.IsSelfKanDecisionPending, Is.False);
+                Assert.That(driver.IsReactionWindowPending, Is.False);
+                Assert.That(driver.PendingKakan, Is.Null);
+                Assert.That(driver.ActiveSkillEffectCount, Is.EqualTo(0));
+                Assert.That(driver.HasLastTurnDraw, Is.False);
+                Assert.That(driver.IsGameEnded, Is.False);
+                Assert.That(driver.RoundStartedCount, Is.EqualTo(2));
+
+                object repeatedState = driver.CurrentState;
+                driver.AdvanceFromRoundResult();
+                Assert.That(driver.CurrentState, Is.SameAs(repeatedState));
+                Assert.That(driver.CurrentRoundResult, Is.Null);
+                Assert.That(oldResult, Is.Not.Null);
+            }
+        }
+
+        [Test]
+        public void AbortiveDrawAfterSouthFour_RepeatsSouthFourWithoutGameEnd()
+        {
+            using (Driver driver = Driver.Create(participantCount: 1))
+            {
+                driver.StartRound("South", 4, "North");
+                Assert.That(driver.TryEndAbortiveDraw("FourKans"), Is.True);
+                Assert.That(driver.RoundResultIsFinalRound, Is.False);
+
+                driver.AdvanceFromRoundResult();
+
+                Assert.That(driver.IsGameEnded, Is.False);
+                Assert.That(driver.WindProgressRoundWindName, Is.EqualTo("South"));
+                Assert.That(driver.WindProgressHandNumber, Is.EqualTo(4));
+                Assert.That(driver.SelfSeatName, Is.EqualTo("North"));
+                Assert.That(driver.RoundStartedCount, Is.EqualTo(2));
+            }
+        }
+
+        [Test]
+        public void AbortiveDraw_EmitsTypedResultNotificationAndKindLog()
+        {
+            using (Driver driver = Driver.Create(
+                       participantCount: 1,
+                       addGameLogRecorder: true))
+            using (EventTrace trace = EventTrace.Subscribe(
+                driver.EventNotifier,
+                "AbortiveDrawResolved",
+                "RoundEnded",
+                "RoundResultReady"))
+            {
+                driver.StartNewRound();
+
+                Assert.That(driver.TryEndAbortiveDraw("FourWinds"), Is.True);
+
+                Assert.That(
+                    trace.FirstPayload("AbortiveDrawResolved").ToString(),
+                    Is.EqualTo("FourWinds"));
+                Assert.That(
+                    trace.FirstPayload("RoundEnded").ToString(),
+                    Is.EqualTo("AbortiveDraw:FourWinds"));
+                Assert.That(
+                    trace.FirstPayload("RoundResultReady"),
+                    Is.SameAs(driver.CurrentRoundResult));
+                Assert.That(driver.RecentLogContains("AbortiveDrawResolved"), Is.True);
+                Assert.That(driver.RecentLogContains("kind=FourWinds"), Is.True);
+            }
+        }
+
         private sealed class Driver : IDisposable
         {
             private const string SelectorTypeName =
@@ -220,7 +431,10 @@ namespace MahjongPrototype.Tests
                 selector = Reflection.CreateInstance(Reflection.RequireType(SelectorTypeName));
             }
 
-            public static Driver Create(int participantCount)
+            public static Driver Create(
+                int participantCount,
+                bool addGameLogRecorder = false,
+                int initialHandTileCount = 0)
             {
                 ReflectionTestAccess reflection = new ReflectionTestAccess();
                 CollectionTestAccess collections = new CollectionTestAccess(reflection);
@@ -233,9 +447,10 @@ namespace MahjongPrototype.Tests
                 {
                     RootName = "RoundResultGameFlowTest",
                     AddEventNotifier = true,
+                    AddGameLogRecorder = addGameLogRecorder,
                     LogWarnings = false,
                     ParticipantCount = participantCount,
-                    InitialHandTileCount = 0,
+                    InitialHandTileCount = initialHandTileCount,
                     AutoStart = false,
                     UseFixedRandomSeed = true,
                     FixedRandomSeed = 12345,
@@ -257,18 +472,41 @@ namespace MahjongPrototype.Tests
             }
 
             public object EventNotifier => session.EventNotifier;
+            public object DecisionProviderRegistry => Reflection.GetProperty(
+                session.GameFlow,
+                "DecisionProviderRegistry");
             public object CurrentState => session.CurrentState;
+            public object CurrentWall => Reflection.GetProperty(CurrentState, "Wall");
+            public object SelfPlayerSeat => Query.GetPlayerSeat(Query.SelfSeatName);
             public object CurrentRoundResult => Query.CurrentRoundResult;
             public bool CurrentRoundResultIsNull => Query.CurrentRoundResultIsNull;
             public bool IsRoundEnded => Query.IsRoundEnded;
             public bool IsRoundResultPending => Query.IsRoundResultPending;
             public bool IsGameEnded => Query.IsGameEnded;
+            public bool IsWinDecisionPending => Query.IsWinDecisionPending;
+            public bool IsReachDecisionPending => (bool)Reflection.GetProperty(
+                CurrentState,
+                "IsReachDecisionPending");
+            public bool IsSelfKanDecisionPending => (bool)Reflection.GetProperty(
+                CurrentState,
+                "IsSelfKanDecisionPending");
+            public bool IsReactionWindowPending => Query.IsReactionWindowPending;
+            public object CurrentReactionWindow => Query.CurrentReactionWindow;
+            public object PendingKakan => Reflection.GetProperty(CurrentState, "PendingKakan");
+            public object CurrentSelfKanDecision => Reflection.GetProperty(
+                CurrentState,
+                "CurrentSelfKanDecision");
+            public int ActiveSkillEffectCount => Query.ActiveSkillEffectCount;
+            public bool HasLastTurnDraw => Query.HasLastTurnDraw;
+            public int ReachDiscardCandidateCount => session.Collections.Count(
+                Reflection.GetProperty(CurrentState, "ReachDiscardCandidates"));
             public string TurnPhaseName => Query.TurnPhaseName;
             public string CurrentTurnName => Query.CurrentTurnName;
             public string WindProgressRoundWindName => Query.WindProgressRoundWindName;
             public int WindProgressHandNumber => Query.WindProgressHandNumber;
             public int WallCount => Query.WallCount;
             public int DiscardCount => Query.DiscardCount;
+            public string SelfSeatName => Query.SelfSeatName;
             public string RoundResultTypeName => Query.RoundResultTypeName;
             public string RoundResultWinnerSeatName => Query.RoundResultWinnerSeatNameOrNull;
             public string RoundResultWinTypeName => Query.RoundResultWinTypeNameOrNull;
@@ -278,6 +516,8 @@ namespace MahjongPrototype.Tests
             public int RoundResultYakuCount => Query.RoundResultYakuCount;
             public int RoundResultTotalHan => Query.RoundResultTotalHan;
             public bool RoundResultIsFinalRound => Query.RoundResultIsFinalRound;
+            public string RoundResultAbortiveDrawKindName =>
+                Query.RoundResultAbortiveDrawKindNameOrNull;
 
             public int RoundStartedCount => roundStartedCount;
 
@@ -327,6 +567,35 @@ namespace MahjongPrototype.Tests
                 Assert.That(Query.IsWinDecisionPending, Is.True);
             }
 
+            public void PrepareReachDecision()
+            {
+                StartNewRound();
+                DataFactory.AddHandTiles(
+                    Query.GetPlayerSeat("East"),
+                    "1m", "2m", "3m",
+                    "2p", "3p", "4p",
+                    "7s", "8s", "9s",
+                    "E", "E", "E",
+                    "5m");
+                Commands.RequestForceDrawSkill("6m");
+                Commands.RequestDraw();
+                Assert.That(TurnPhaseName, Is.EqualTo("ReachDecision"));
+            }
+
+            public void PrepareAnkanDecision()
+            {
+                StartNewRound();
+                DataFactory.AddHandTiles(
+                    Query.GetPlayerSeat("East"),
+                    "P", "P", "P",
+                    "1m", "4m", "7m", "9m",
+                    "1p", "4p", "7p",
+                    "1s", "4s", "7s");
+                DataFactory.SetDrawnTile(CurrentState, "East", "P");
+                Commands.ResolveAfterDraw("East");
+                Assert.That(TurnPhaseName, Is.EqualTo("SelfKanDecision"));
+            }
+
             public object SelectPendingCandidate()
             {
                 object evaluation = Query.PendingWinDeclarationEvaluation;
@@ -344,6 +613,11 @@ namespace MahjongPrototype.Tests
                 Commands.RequestAdvanceFromRoundResult();
             }
 
+            public bool TryEndAbortiveDraw(string kindName)
+            {
+                return Commands.TryEndAbortiveDraw(kindName);
+            }
+
             public void RequestDraw()
             {
                 Commands.RequestDraw();
@@ -352,6 +626,21 @@ namespace MahjongPrototype.Tests
             public void RequestDiscardDrawnTile()
             {
                 Commands.RequestDiscardDrawnTile();
+            }
+
+            public void RequestDeclineWin()
+            {
+                Commands.RequestDeclineWin();
+            }
+
+            public void RequestDeclareReach()
+            {
+                Reflection.Invoke(session.GameFlow, "RequestDeclareReach");
+            }
+
+            public bool TryRequestDeclareAnkan(string tileCode)
+            {
+                return Commands.TryRequestDeclareAnkanForSeat("East", tileCode);
             }
 
             public void RequestForceDrawSkill(string tileCode)
@@ -369,6 +658,36 @@ namespace MahjongPrototype.Tests
                 object wall = Reflection.GetProperty(session.CurrentState, "Wall");
                 IList tiles = (IList)Reflection.GetPrivateField(wall, "tiles");
                 tiles.Clear();
+            }
+
+            public string SeatByPlayerIdName(string playerIdName)
+            {
+                return Query.SeatByPlayerIdName(playerIdName);
+            }
+
+            public string ParticipantTypeName(string seatName)
+            {
+                return Query.ParticipantTypeNameOrNull(seatName);
+            }
+
+            public int HandCount(string seatName)
+            {
+                return Query.HandCount(seatName);
+            }
+
+            public bool RecentLogContains(string expectedText)
+            {
+                object lines = Reflection.GetStaticProperty(
+                    Reflection.RequireType(
+                        "MahjongPrototype.Logging.DevLog, Assembly-CSharp"),
+                    "RecentLines");
+                foreach (object line in (IEnumerable)lines)
+                {
+                    if (line != null && line.ToString().Contains(expectedText))
+                        return true;
+                }
+
+                return false;
             }
 
             public void Dispose()

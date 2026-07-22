@@ -10,6 +10,23 @@ namespace MahjongPrototype.Tests
     public sealed class RoundResultTests
     {
         [Test]
+        public void RoundResultType_KeepsExistingNumericValuesAndAppendsAbortiveDraw()
+        {
+            Driver driver = Driver.Create();
+
+            Assert.That(driver.RoundResultTypeValue("Win"), Is.EqualTo(1));
+            Assert.That(driver.RoundResultTypeValue("ExhaustiveDraw"), Is.EqualTo(2));
+            Assert.That(driver.RoundResultTypeValue("AbortiveDraw"), Is.EqualTo(3));
+            Assert.That(driver.AbortiveDrawKindNames, Is.EqualTo(new[]
+            {
+                "NineTerminalsAndHonors",
+                "FourWinds",
+                "FourReaches",
+                "FourKans"
+            }));
+        }
+
+        [Test]
         public void CreateWin_KeepsRoundAndWinFields()
         {
             Driver driver = Driver.Create();
@@ -35,6 +52,7 @@ namespace MahjongPrototype.Tests
             Assert.That(driver.SourceSeatName(result), Is.EqualTo("South"));
             Assert.That(driver.WinningTileCode(result), Is.EqualTo("C"));
             Assert.That(driver.SelectedCandidate(result), Is.SameAs(selectedCandidate));
+            Assert.That(driver.AbortiveDrawKindName(result), Is.Null);
         }
 
         [Test]
@@ -103,6 +121,7 @@ namespace MahjongPrototype.Tests
             Assert.That(driver.SourceSeatName(result), Is.Null);
             Assert.That(driver.WinningTileCode(result), Is.Null);
             Assert.That(driver.SelectedCandidate(result), Is.Null);
+            Assert.That(driver.AbortiveDrawKindName(result), Is.Null);
         }
 
         [Test]
@@ -117,6 +136,33 @@ namespace MahjongPrototype.Tests
             Assert.That(driver.HasYakuman(result), Is.False);
             Assert.That(driver.YakumanCount(result), Is.EqualTo(0));
             Assert.That(driver.IsFinalRound(result), Is.True);
+        }
+
+        [TestCase("NineTerminalsAndHonors")]
+        [TestCase("FourWinds")]
+        [TestCase("FourReaches")]
+        [TestCase("FourKans")]
+        public void CreateAbortiveDraw_KeepsOnlyAbortiveDrawFields(string kindName)
+        {
+            Driver driver = Driver.Create();
+
+            object result = driver.CreateAbortiveDraw("South", 4, 27, kindName);
+
+            Assert.That(driver.TypeName(result), Is.EqualTo("AbortiveDraw"));
+            Assert.That(driver.RoundWindName(result), Is.EqualTo("South"));
+            Assert.That(driver.HandNumber(result), Is.EqualTo(4));
+            Assert.That(driver.TurnIndex(result), Is.EqualTo(27));
+            Assert.That(driver.IsFinalRound(result), Is.False);
+            Assert.That(driver.AbortiveDrawKindName(result), Is.EqualTo(kindName));
+            Assert.That(driver.WinnerSeatName(result), Is.Null);
+            Assert.That(driver.WinTypeName(result), Is.Null);
+            Assert.That(driver.SourceSeatName(result), Is.Null);
+            Assert.That(driver.WinningTileCode(result), Is.Null);
+            Assert.That(driver.SelectedCandidate(result), Is.Null);
+            Assert.That(driver.YakuCount(result), Is.EqualTo(0));
+            Assert.That(driver.TotalHan(result), Is.EqualTo(0));
+            Assert.That(driver.HasYakuman(result), Is.False);
+            Assert.That(driver.YakumanCount(result), Is.EqualTo(0));
         }
 
         private readonly struct YakuSpec
@@ -149,6 +195,10 @@ namespace MahjongPrototype.Tests
                 "MahjongPrototype.Services.WinningCandidateSelector, Assembly-CSharp";
             private const string RoundResultTypeName =
                 "MahjongPrototype.Domain.RoundResult, Assembly-CSharp";
+            private const string RoundResultTypeEnumName =
+                "MahjongPrototype.Domain.RoundResultType, Assembly-CSharp";
+            private const string AbortiveDrawKindTypeName =
+                "MahjongPrototype.Domain.AbortiveDrawKind, Assembly-CSharp";
             private const string HandEvaluationResultTypeName =
                 "MahjongPrototype.Domain.HandEvaluationResult, Assembly-CSharp";
             private const string HandEvaluationCandidateTypeName =
@@ -180,6 +230,8 @@ namespace MahjongPrototype.Tests
             }
 
             private Type RoundResultType => reflection.RequireType(RoundResultTypeName);
+            private Type RoundResultTypeEnum => reflection.RequireType(RoundResultTypeEnumName);
+            private Type AbortiveDrawKindType => reflection.RequireType(AbortiveDrawKindTypeName);
             private Type HandEvaluationResultType => reflection.RequireType(HandEvaluationResultTypeName);
             private Type CandidateResultType =>
                 reflection.RequireType(HandEvaluationCandidateResultTypeName);
@@ -239,6 +291,20 @@ namespace MahjongPrototype.Tests
                     isFinalRound);
             }
 
+            public object CreateAbortiveDraw(
+                string roundWindName,
+                int handNumber,
+                int turnIndex,
+                string kindName)
+            {
+                return reflection.InvokeStatic(
+                    RoundResultType,
+                    "CreateAbortiveDraw",
+                    dataFactory.CreateWindProgress(roundWindName, handNumber),
+                    turnIndex,
+                    Enum.Parse(AbortiveDrawKindType, kindName));
+            }
+
             public object CreateEvaluation(params object[] candidates)
             {
                 return reflection.CreateInstance(
@@ -276,6 +342,11 @@ namespace MahjongPrototype.Tests
             public int TotalHan(object result) => (int)Property(result, "TotalHan");
             public bool HasYakuman(object result) => (bool)Property(result, "HasYakuman");
             public int YakumanCount(object result) => (int)Property(result, "YakumanCount");
+            public string AbortiveDrawKindName(object result) =>
+                NullableProperty(result, "AbortiveDrawKind");
+            public int RoundResultTypeValue(string name) =>
+                (int)Enum.Parse(RoundResultTypeEnum, name);
+            public string[] AbortiveDrawKindNames => Enum.GetNames(AbortiveDrawKindType);
 
             private object CreateSevenPairsCandidate()
             {

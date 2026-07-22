@@ -94,6 +94,74 @@ namespace MahjongPrototype.Tests
             Assert.That(driver.IsRoundResultPending, Is.True);
         }
 
+        [TestCase("NineTerminalsAndHonors")]
+        [TestCase("FourWinds")]
+        [TestCase("FourReaches")]
+        [TestCase("FourKans")]
+        public void EndAbortiveDraw_CreatesTypedPendingRoundResult(string kindName)
+        {
+            RoundLifecycleServiceTestDriver driver = RoundLifecycleServiceTestDriver.Create();
+            driver.StartRound("East", 3, "West");
+
+            object result = driver.EndAbortiveDraw(kindName);
+
+            Assert.That(driver.RoundResultTypeName(result), Is.EqualTo("AbortiveDraw"));
+            Assert.That(
+                driver.RoundResultAbortiveDrawKindName(result),
+                Is.EqualTo(kindName));
+            Assert.That(driver.RoundResultIsFinalRound(result), Is.False);
+            Assert.That(driver.IsRoundResultPending, Is.True);
+        }
+
+        [Test]
+        public void AdvanceFromAbortiveDraw_RepeatsWindProgressAndSelfSeat()
+        {
+            RoundLifecycleServiceTestDriver driver = RoundLifecycleServiceTestDriver.Create();
+            driver.StartRound("East", 3, "West");
+            driver.EndAbortiveDraw("FourWinds");
+
+            object transition = driver.AdvanceFromRoundResult();
+
+            Assert.That(driver.TransitionType(transition), Is.EqualTo("StartNextRound"));
+            Assert.That(driver.TransitionNextRoundWindName(transition), Is.EqualTo("East"));
+            Assert.That(driver.TransitionNextHandNumber(transition), Is.EqualTo(3));
+            Assert.That(driver.TransitionNextSelfSeatName(transition), Is.EqualTo("West"));
+            Assert.That(driver.IsGameEnded, Is.False);
+        }
+
+        [Test]
+        public void AdvanceFromFinalRoundAbortiveDraw_RepeatsSouthFourWithoutGameEnd()
+        {
+            RoundLifecycleServiceTestDriver driver = RoundLifecycleServiceTestDriver.Create();
+            driver.StartRound("South", 4, "North");
+            object result = driver.EndAbortiveDraw("FourKans");
+
+            object transition = driver.AdvanceFromRoundResult();
+
+            Assert.That(driver.RoundResultIsFinalRound(result), Is.False);
+            Assert.That(driver.TransitionType(transition), Is.EqualTo("StartNextRound"));
+            Assert.That(driver.TransitionNextRoundWindName(transition), Is.EqualTo("South"));
+            Assert.That(driver.TransitionNextHandNumber(transition), Is.EqualTo(4));
+            Assert.That(driver.TransitionNextSelfSeatName(transition), Is.EqualTo("North"));
+            Assert.That(driver.IsGameEnded, Is.False);
+        }
+
+        [Test]
+        public void EndAbortiveDraw_WhenRoundAlreadyEnded_DoesNotReplaceResult()
+        {
+            RoundLifecycleServiceTestDriver driver = RoundLifecycleServiceTestDriver.Create();
+            driver.StartRound("East", 1, "East");
+            object first = driver.EndAbortiveDraw("FourReaches");
+
+            object second = driver.EndAbortiveDraw("FourWinds");
+
+            Assert.That(second, Is.Null);
+            Assert.That(driver.CurrentRoundResult, Is.SameAs(first));
+            Assert.That(
+                driver.RoundResultAbortiveDrawKindName(driver.CurrentRoundResult),
+                Is.EqualTo("FourReaches"));
+        }
+
         [Test]
         public void EndRound_NonResultReasonEndsRoundWithoutRoundResult()
         {

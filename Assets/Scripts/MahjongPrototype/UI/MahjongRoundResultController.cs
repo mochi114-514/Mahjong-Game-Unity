@@ -100,7 +100,11 @@ namespace MahjongPrototype.UI
                 ref warnedMissingRoundResultRoot,
                 "RoundResultRoot is not assigned.");
             SetText(roundText, FormatWindProgress(result.WindProgress));
-            SetText(confirmButtonLabel, result.IsFinalRound ? "ゲーム終了" : "次局へ進む");
+            SetText(
+                confirmButtonLabel,
+                result.Type == RoundResultType.AbortiveDraw
+                    ? "同局をやり直す"
+                    : result.IsFinalRound ? "ゲーム終了" : "次局へ進む");
 
             switch (result.Type)
             {
@@ -109,6 +113,9 @@ namespace MahjongPrototype.UI
                     break;
                 case RoundResultType.ExhaustiveDraw:
                     SetExhaustiveDrawResult();
+                    break;
+                case RoundResultType.AbortiveDraw:
+                    SetAbortiveDrawResult(result);
                     break;
                 default:
                     SetExhaustiveDrawResult();
@@ -182,9 +189,19 @@ namespace MahjongPrototype.UI
 
         private void SetExhaustiveDrawResult()
         {
+            SetNonWinResult("流局");
+        }
+
+        private void SetAbortiveDrawResult(RoundResult result)
+        {
+            SetNonWinResult(FormatAbortiveDrawTitle(result.AbortiveDrawKind));
+        }
+
+        private void SetNonWinResult(string title)
+        {
             shouldRevealWinTypeSeal = false;
             ResetTotalPresentation();
-            SetText(titleText, "流局");
+            SetText(titleText, title);
             SetActiveOrWarn(
                 winDetailsRoot,
                 false,
@@ -199,6 +216,23 @@ namespace MahjongPrototype.UI
             ResetWinTypePresentation();
             SetTotalRevealVisible(true);
             SetConfirmInteractable(true);
+        }
+
+        private static string FormatAbortiveDrawTitle(AbortiveDrawKind? kind)
+        {
+            switch (kind)
+            {
+                case AbortiveDrawKind.NineTerminalsAndHonors:
+                    return "途中流局（九種九牌）";
+                case AbortiveDrawKind.FourWinds:
+                    return "途中流局（四風連打）";
+                case AbortiveDrawKind.FourReaches:
+                    return "途中流局（四家立直）";
+                case AbortiveDrawKind.FourKans:
+                    return "途中流局（四槓散了）";
+                default:
+                    return "途中流局";
+            }
         }
 
         private void PopulateYakuRows(IReadOnlyList<EvaluatedYaku> yakus)

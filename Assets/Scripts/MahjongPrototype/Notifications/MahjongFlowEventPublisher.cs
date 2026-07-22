@@ -46,6 +46,11 @@ namespace MahjongPrototype.Notifications
             notifierProvider()?.NotifyRoundResultReady(result);
         }
 
+        public void NotifyAbortiveDrawResolved(AbortiveDrawKind kind)
+        {
+            notifierProvider()?.NotifyAbortiveDrawResolved(kind);
+        }
+
         public void NotifyRoundResultConfirmed(RoundResult result)
         {
             notifierProvider()?.NotifyRoundResultConfirmed(result);

@@ -314,6 +314,39 @@ namespace MahjongPrototype.Tests
             }
         }
 
+        [TestCase("NineTerminalsAndHonors", "途中流局（九種九牌）")]
+        [TestCase("FourWinds", "途中流局（四風連打）")]
+        [TestCase("FourReaches", "途中流局（四家立直）")]
+        [TestCase("FourKans", "途中流局（四槓散了）")]
+        public void SetResult_AbortiveDraw_ShowsKindAndClearsWinPresentation(
+            string kindName,
+            string expectedTitle)
+        {
+            using (RoundResultControllerTestHarness harness =
+                   RoundResultControllerTestHarness.Create())
+            {
+                object result = harness.Data.CreateAbortiveDraw(
+                    "South",
+                    4,
+                    kindName);
+
+                harness.SetResult(result);
+
+                Assert.That(harness.RoundResultRootVisible, Is.True);
+                Assert.That(harness.WinDetailsVisible, Is.False);
+                Assert.That(harness.SourceSeatVisible, Is.False);
+                Assert.That(harness.TitleText, Is.EqualTo(expectedTitle));
+                Assert.That(harness.RoundText, Is.EqualTo("南四局"));
+                Assert.That(harness.WinnerText, Is.EqualTo(string.Empty));
+                Assert.That(harness.WinTypeText, Is.EqualTo(string.Empty));
+                Assert.That(harness.SourceSeatText, Is.EqualTo(string.Empty));
+                Assert.That(harness.WinningTileText, Is.EqualTo(string.Empty));
+                Assert.That(harness.YakuRowCount, Is.EqualTo(0));
+                Assert.That(harness.TotalText, Is.EqualTo(string.Empty));
+                Assert.That(harness.ConfirmButtonLabel, Is.EqualTo("同局をやり直す"));
+            }
+        }
+
         [TestCase("Tsumo")]
         [TestCase("Ron")]
         public void SetResult_Win_UsesExistingWinTypePresentationRoot(string winTypeName)
@@ -682,6 +715,24 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
+        public void RoundResultConfirmButton_AbortiveDraw_RepeatsSameFinalRoundAndSeat()
+        {
+            using (RoundResultUiConnectionDriver driver = RoundResultUiConnectionDriver.Create())
+            {
+                driver.PrepareAbortiveDrawResult("South", 4, "North", "FourKans");
+                driver.EnableRoundResultButtonRouting();
+
+                driver.ClickRoundResultConfirm();
+
+                Assert.That(driver.IsRoundResultPending, Is.False);
+                Assert.That(driver.IsGameEnded, Is.False);
+                Assert.That(driver.WindProgressRoundWindName, Is.EqualTo("South"));
+                Assert.That(driver.WindProgressHandNumber, Is.EqualTo(4));
+                Assert.That(driver.SelfSeatName, Is.EqualTo("North"));
+            }
+        }
+
+        [Test]
         public void UiManager_RoundResultReadyShowsAndConfirmedOrGameEndedClears()
         {
             using (RoundResultUiConnectionDriver driver = RoundResultUiConnectionDriver.Create())
@@ -997,6 +1048,8 @@ namespace MahjongPrototype.Tests
             "MahjongPrototype.Domain.SevenPairsAnalysis, Assembly-CSharp";
         private const string EvaluatedYakuTypeName =
             "MahjongPrototype.Domain.EvaluatedYaku, Assembly-CSharp";
+        private const string AbortiveDrawKindTypeName =
+            "MahjongPrototype.Domain.AbortiveDrawKind, Assembly-CSharp";
 
         private readonly ReflectionTestAccess reflection;
         private readonly MahjongTestTypes types;
@@ -1058,6 +1111,21 @@ namespace MahjongPrototype.Tests
                 dataFactory.CreateWindProgress(roundWindName, handNumber),
                 12,
                 isFinalRound);
+        }
+
+        public object CreateAbortiveDraw(
+            string roundWindName,
+            int handNumber,
+            string kindName)
+        {
+            return reflection.InvokeStatic(
+                RoundResultType,
+                "CreateAbortiveDraw",
+                dataFactory.CreateWindProgress(roundWindName, handNumber),
+                12,
+                Enum.Parse(
+                    reflection.RequireType(AbortiveDrawKindTypeName),
+                    kindName));
         }
 
         public object CreateCandidate(params YakuSpec[] yakuSpecs)
@@ -1629,6 +1697,7 @@ namespace MahjongPrototype.Tests
         public bool IsGameEnded => session.Query.IsGameEnded;
         public string WindProgressRoundWindName => session.Query.WindProgressRoundWindName;
         public int WindProgressHandNumber => session.Query.WindProgressHandNumber;
+        public string SelfSeatName => session.Query.SelfSeatName;
         public bool RoundResultRootVisible => roundResultHarness.RoundResultRootVisible;
         public string ResultTitleText => roundResultHarness.TitleText;
         public string ResultRoundText => roundResultHarness.RoundText;
@@ -1712,6 +1781,26 @@ namespace MahjongPrototype.Tests
                 session.DataFactory.ParseSeat("South"));
             ClearWall();
             session.Commands.RequestDraw();
+            Assert.That(IsRoundResultPending, Is.True);
+        }
+
+        public void PrepareAbortiveDrawResult(
+            string roundWindName,
+            int handNumber,
+            string selfSeatName,
+            string kindName)
+        {
+            object windProgress = session.DataFactory.CreateWindProgress(
+                roundWindName,
+                handNumber);
+            session.Reflection.InvokeWithSignature(
+                session.GameFlow,
+                "StartRound",
+                new[] { session.Types.WindProgress, typeof(bool), session.Types.SeatId },
+                windProgress,
+                false,
+                session.DataFactory.ParseSeat(selfSeatName));
+            Assert.That(session.Commands.TryEndAbortiveDraw(kindName), Is.True);
             Assert.That(IsRoundResultPending, Is.True);
         }
 

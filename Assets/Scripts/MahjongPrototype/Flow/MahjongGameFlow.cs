@@ -956,6 +956,33 @@ namespace MahjongPrototype
             }
         }
 
+        public bool TryEndAbortiveDraw(AbortiveDrawKind kind)
+        {
+            if (!CanUseGameState() || gameState.IsRoundEnded ||
+                !System.Enum.IsDefined(typeof(AbortiveDrawKind), kind))
+            {
+                return false;
+            }
+
+            EnsureRoundLifecycleService();
+            PrepareForRoundEnd();
+            RoundLifecycleEndResult endResult =
+                roundLifecycleService.EndAbortiveDraw(gameState, kind);
+            if (!endResult.WasEnded || endResult.RoundResult == null)
+                return false;
+
+            string reason = $"AbortiveDraw:{kind}";
+            EventPublisher.NotifyTurnDebug(
+                "RoundEnded",
+                $"phase={gameState.TurnPhase}; reason={reason}; windProgress={gameState.WindProgress}",
+                seat: gameState.CurrentTurn,
+                turnIndex: gameState.TurnIndex);
+            EventPublisher.NotifyAbortiveDrawResolved(kind);
+            EventPublisher.NotifyRoundEnded(reason);
+            EventPublisher.NotifyRoundResultReady(endResult.RoundResult);
+            return true;
+        }
+
         public void RequestDraw()
         {
             if (!CanUseSelfTurnInput("DrawBlocked"))
@@ -3107,10 +3134,7 @@ namespace MahjongPrototype
             ReactionWindowResolution reactionResolution)
         {
             EnsureRoundLifecycleService();
-            cpuTurnController?.CancelPendingTurn();
-            CancelPendingDecisions();
-            CancelPendingAutoDiscardDrawnTile();
-            handAutoSortService?.ClearDeferred();
+            PrepareForRoundEnd();
             RoundLifecycleEndResult endResult = roundLifecycleService.EndRound(
                 gameState,
                 reason,
@@ -3126,6 +3150,14 @@ namespace MahjongPrototype
             EventPublisher.NotifyRoundEnded(reason);
             if (roundResult != null)
                 EventPublisher.NotifyRoundResultReady(roundResult);
+        }
+
+        private void PrepareForRoundEnd()
+        {
+            cpuTurnController?.CancelPendingTurn();
+            CancelPendingDecisions();
+            CancelPendingAutoDiscardDrawnTile();
+            handAutoSortService?.ClearDeferred();
         }
 
         private void NotifySkillResolutionEvents(DrawResult result)

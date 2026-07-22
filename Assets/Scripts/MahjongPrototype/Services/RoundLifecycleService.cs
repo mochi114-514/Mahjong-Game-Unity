@@ -48,6 +48,27 @@ namespace MahjongPrototype.Services
             return new RoundLifecycleEndResult(roundResult);
         }
 
+        public RoundLifecycleEndResult EndAbortiveDraw(
+            MahjongGameState gameState,
+            AbortiveDrawKind kind)
+        {
+            if (gameState == null)
+                throw new ArgumentNullException(nameof(gameState));
+            if (!Enum.IsDefined(typeof(AbortiveDrawKind), kind))
+                throw new ArgumentOutOfRangeException(nameof(kind));
+            if (gameState.IsRoundEnded)
+                return RoundLifecycleEndResult.NoEnd;
+
+            RoundResult roundResult = RoundResult.CreateAbortiveDraw(
+                gameState.WindProgress,
+                gameState.TurnIndex,
+                kind);
+            gameState.ClearWinDecision();
+            gameState.ClearReachDecision();
+            gameState.BeginRoundResult(roundResult);
+            return new RoundLifecycleEndResult(roundResult);
+        }
+
         public RoundResult GetPendingRoundResult(MahjongGameState gameState)
         {
             if (gameState == null || !gameState.IsRoundResultPending)
@@ -61,6 +82,16 @@ namespace MahjongPrototype.Services
             RoundResult result = GetPendingRoundResult(gameState);
             if (result == null)
                 return RoundLifecycleTransition.NoTransition;
+
+            if (result.Type == RoundResultType.AbortiveDraw)
+            {
+                WindProgress repeatedWindProgress = gameState.WindProgress;
+                SeatId repeatedSelfSeat = gameState.SelfSeat;
+                gameState.CompleteRoundResult(false);
+                return RoundLifecycleTransition.StartNextRound(
+                    repeatedWindProgress,
+                    repeatedSelfSeat);
+            }
 
             if (IsFinalRound(gameState.WindProgress))
             {
@@ -147,11 +178,21 @@ namespace MahjongPrototype.Services
 
     public readonly struct RoundLifecycleEndResult
     {
-        public RoundLifecycleEndResult(RoundResult roundResult)
+        private RoundLifecycleEndResult(bool wasEnded, RoundResult roundResult)
         {
+            WasEnded = wasEnded;
             RoundResult = roundResult;
         }
 
+        public RoundLifecycleEndResult(RoundResult roundResult)
+            : this(true, roundResult)
+        {
+        }
+
+        public static RoundLifecycleEndResult NoEnd =>
+            new RoundLifecycleEndResult(false, null);
+
+        public bool WasEnded { get; }
         public RoundResult RoundResult { get; }
     }
 

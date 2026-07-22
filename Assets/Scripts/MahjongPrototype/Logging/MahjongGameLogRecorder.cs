@@ -58,6 +58,7 @@ namespace MahjongPrototype.Logging
             eventNotifier.ReactionWindowResolved += HandleReactionWindowResolved;
             eventNotifier.ReactionWindowClosed += HandleReactionWindowClosed;
             eventNotifier.MeldDeclared += HandleMeldDeclared;
+            eventNotifier.AbortiveDrawResolved += HandleAbortiveDrawResolved;
             eventNotifier.RoundEnded += HandleRoundEnded;
             eventNotifier.SeatSlotsAssigned += HandleSeatSlotsAssigned;
             eventNotifier.TurnDebug += HandleTurnDebug;
@@ -91,6 +92,7 @@ namespace MahjongPrototype.Logging
             eventNotifier.ReactionWindowResolved -= HandleReactionWindowResolved;
             eventNotifier.ReactionWindowClosed -= HandleReactionWindowClosed;
             eventNotifier.MeldDeclared -= HandleMeldDeclared;
+            eventNotifier.AbortiveDrawResolved -= HandleAbortiveDrawResolved;
             eventNotifier.RoundEnded -= HandleRoundEnded;
             eventNotifier.SeatSlotsAssigned -= HandleSeatSlotsAssigned;
             eventNotifier.TurnDebug -= HandleTurnDebug;
@@ -248,6 +250,18 @@ namespace MahjongPrototype.Logging
                 "GameFlow",
                 "RoundEnded",
                 reason,
+                seat: state != null ? state.CurrentTurn : (SeatId?)null,
+                wallCount: state != null ? state.Wall.Count : (int?)null,
+                turnIndex: state != null ? state.TurnIndex : (int?)null);
+        }
+
+        private void HandleAbortiveDrawResolved(AbortiveDrawKind kind)
+        {
+            MahjongGameState state = GetCurrentState();
+            DevLog.Record(
+                "GameFlow",
+                "AbortiveDrawResolved",
+                $"kind={kind}",
                 seat: state != null ? state.CurrentTurn : (SeatId?)null,
                 wallCount: state != null ? state.Wall.Count : (int?)null,
                 turnIndex: state != null ? state.TurnIndex : (int?)null);

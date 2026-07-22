@@ -224,6 +224,15 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
             reflection.Invoke(GameFlow, "RequestAdvanceFromRoundResult");
         }
 
+        public bool TryEndAbortiveDraw(string kindName)
+        {
+            object kind = System.Enum.Parse(
+                reflection.RequireType(
+                    "MahjongPrototype.Domain.AbortiveDrawKind, Assembly-CSharp"),
+                kindName);
+            return (bool)reflection.Invoke(GameFlow, "TryEndAbortiveDraw", kind);
+        }
+
         public void StartTurn(string seatName, int turnIndex)
         {
             reflection.Invoke(GameFlow, "StartTurn", dataFactory.ParseSeat(seatName), turnIndex);

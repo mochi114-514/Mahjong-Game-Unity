@@ -37,6 +37,7 @@ namespace MahjongPrototype.Notifications
         public event Action<SeatId, int> ReachDeclined;
         public event Action<SeatId, int> HandAutoSorted;
         public event Action<string> RoundEnded;
+        public event Action<AbortiveDrawKind> AbortiveDrawResolved;
         public event Action<RoundResult> RoundResultReady;
         public event Action<RoundResult> RoundResultConfirmed;
         public event Action<RoundResult> GameEnded;
@@ -227,6 +228,12 @@ namespace MahjongPrototype.Notifications
         public void NotifyRoundEnded(string reason)
         {
             RoundEnded?.Invoke(reason);
+            NotifyAny();
+        }
+
+        public void NotifyAbortiveDrawResolved(AbortiveDrawKind kind)
+        {
+            AbortiveDrawResolved?.Invoke(kind);
             NotifyAny();
         }
 

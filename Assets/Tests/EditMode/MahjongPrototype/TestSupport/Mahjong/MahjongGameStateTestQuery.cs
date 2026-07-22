@@ -122,6 +122,8 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
             (int)reflection.GetProperty(RoundResultProperty("WindProgress"), "HandNumber");
         public int RoundResultTurnIndex => (int)RoundResultProperty("TurnIndex");
         public bool RoundResultIsFinalRound => (bool)RoundResultProperty("IsFinalRound");
+        public string RoundResultAbortiveDrawKindNameOrNull =>
+            NullablePropertyString(CurrentRoundResult, "AbortiveDrawKind");
         public string RoundResultWinnerSeatNameOrNull =>
             NullablePropertyString(CurrentRoundResult, "WinnerSeat");
         public string RoundResultWinTypeNameOrNull =>

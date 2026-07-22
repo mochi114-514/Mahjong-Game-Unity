@@ -106,6 +106,20 @@ namespace MahjongPrototype.Tests.TestSupport.Features.WindProgress
             return reflection.GetProperty(endResult, "RoundResult");
         }
 
+        public object EndAbortiveDraw(string kindName)
+        {
+            object kind = Enum.Parse(
+                reflection.RequireType(
+                    "MahjongPrototype.Domain.AbortiveDrawKind, Assembly-CSharp"),
+                kindName);
+            object endResult = reflection.Invoke(
+                service,
+                "EndAbortiveDraw",
+                gameState,
+                kind);
+            return reflection.GetProperty(endResult, "RoundResult");
+        }
+
         public object EndWinWithSelectedCandidate()
         {
             lastSelectedCandidate = CreateSelectedCandidate();
@@ -168,6 +182,12 @@ namespace MahjongPrototype.Tests.TestSupport.Features.WindProgress
         public object RoundResultSelectedCandidate(object result)
         {
             return reflection.GetProperty(result, "SelectedCandidate");
+        }
+
+        public string RoundResultAbortiveDrawKindName(object result)
+        {
+            object kind = reflection.GetProperty(result, "AbortiveDrawKind");
+            return kind?.ToString();
         }
 
         private object CreateSelectedCandidate()
