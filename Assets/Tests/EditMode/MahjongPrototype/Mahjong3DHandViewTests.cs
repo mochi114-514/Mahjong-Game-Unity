@@ -162,6 +162,48 @@ namespace MahjongPrototype.Tests
             }
         }
 
+        [Test]
+        public void SetSelectedTileByIndex_SelectsOnlyMatchingTileAndClearsPreviousSelection()
+        {
+            GameObject root = new GameObject("Hand3DViewSelectionTest");
+            GameObject prefab = new GameObject("Tile3DPrefab");
+            try
+            {
+                object view = root.AddComponent(Type.GetType(Mahjong3DHandViewTypeName, true));
+                object tilePrefab = prefab.AddComponent(Type.GetType(Mahjong3DTileViewTypeName, true));
+                SetPrivateField(view, "tilePrefab", tilePrefab);
+                Invoke(
+                    view,
+                    "RenderHand",
+                    CreateTileList(CreateTile("1m"), CreateTile("2m"), CreateTile("3m")),
+                    true,
+                    true);
+
+                Component[] tileViews = root.GetComponentsInChildren(
+                    Type.GetType(Mahjong3DTileViewTypeName, true));
+                Invoke(view, "SetSelectedTileByIndex", 1);
+
+                Assert.That(GetProperty(tileViews[0], "IsSelected"), Is.False);
+                Assert.That(GetProperty(tileViews[1], "IsSelected"), Is.True);
+                Assert.That(GetProperty(tileViews[2], "IsSelected"), Is.False);
+
+                Invoke(view, "SetSelectedTileByIndex", 2);
+
+                Assert.That(GetProperty(tileViews[0], "IsSelected"), Is.False);
+                Assert.That(GetProperty(tileViews[1], "IsSelected"), Is.False);
+                Assert.That(GetProperty(tileViews[2], "IsSelected"), Is.True);
+
+                Invoke(view, "ClearSelectedTile");
+                for (int i = 0; i < tileViews.Length; i++)
+                    Assert.That(GetProperty(tileViews[i], "IsSelected"), Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(prefab);
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
         private static object CreateTileList(params object[] tiles)
         {
             Type tileType = Type.GetType(TileTypeName, true);

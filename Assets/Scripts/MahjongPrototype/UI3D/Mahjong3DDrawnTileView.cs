@@ -126,6 +126,12 @@ namespace MahjongPrototype.UI3D
                 activeTile.SetDimmed(dimmed);
         }
 
+        public void SetSelected(bool selected)
+        {
+            if (activeTile != null)
+                activeTile.SetSelected(selected);
+        }
+
         private void HandleTileClicked(int _)
         {
             DrawnTileClicked?.Invoke();

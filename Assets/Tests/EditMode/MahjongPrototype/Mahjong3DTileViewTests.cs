@@ -2,6 +2,7 @@ using System;
 using System.Linq.Expressions;
 using System.Reflection;
 using NUnit.Framework;
+using UnityEditor;
 using UnityEngine;
 using UnityEngine.TestTools;
 
@@ -11,6 +12,7 @@ namespace MahjongPrototype.Tests
     {
         private const string Mahjong3DTileViewTypeName =
             "MahjongPrototype.UI3D.Mahjong3DTileView, Assembly-CSharp";
+        private const string TilePrefabPath = "Assets/Prefab/Tiles/3DTile.prefab";
         private const string BaseColorPropertyName = "_BaseColor";
         private static readonly Color ExpectedDimmedTint = new Color(0.25f, 0.25f, 0.25f, 1f);
 
@@ -85,6 +87,182 @@ namespace MahjongPrototype.Tests
                 UnityEngine.Object.DestroyImmediate(inputObject);
                 UnityEngine.Object.DestroyImmediate(tileObject);
             }
+        }
+
+        [Test]
+        public void HoverVisual_EntersAndExitsWithoutChangingRotationOrScale()
+        {
+            GameObject tileObject = new GameObject("Tile3DHoverTransformVisualTest");
+            GameObject visualObject = new GameObject("VisualRoot");
+            visualObject.transform.SetParent(tileObject.transform);
+            visualObject.transform.localPosition = new Vector3(0.1f, 0.2f, 0.3f);
+            visualObject.transform.localRotation = Quaternion.Euler(2f, 10f, 3f);
+            visualObject.transform.localScale = new Vector3(1.1f, 0.9f, 1.2f);
+            try
+            {
+                object tileView = tileObject.AddComponent(Type.GetType(Mahjong3DTileViewTypeName, true));
+                SetPrivateField(tileView, "visualRoot", visualObject.transform);
+                SetPrivateField(tileView, "hoverPositionOffset", new Vector3(0f, 0.15f, 0f));
+                Invoke(tileView, "Initialize", 0);
+
+                Vector3 basePosition = visualObject.transform.localPosition;
+                Quaternion baseRotation = visualObject.transform.localRotation;
+                Vector3 baseScale = visualObject.transform.localScale;
+                Invoke(tileView, "NotifyHoverEntered");
+
+                Assert.That(GetProperty(tileView, "IsHovered"), Is.True);
+                AssertVectorApproximately(
+                    visualObject.transform.localPosition,
+                    basePosition + new Vector3(0f, 0.15f, 0f));
+                Assert.That(Quaternion.Angle(visualObject.transform.localRotation, baseRotation), Is.LessThan(0.001f));
+                AssertVectorApproximately(visualObject.transform.localScale, baseScale);
+
+                Invoke(tileView, "NotifyHoverExited");
+
+                Assert.That(GetProperty(tileView, "IsHovered"), Is.False);
+                AssertVectorApproximately(visualObject.transform.localPosition, basePosition);
+                Assert.That(Quaternion.Angle(visualObject.transform.localRotation, baseRotation), Is.LessThan(0.001f));
+                AssertVectorApproximately(visualObject.transform.localScale, baseScale);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(tileObject);
+            }
+        }
+
+        [Test]
+        public void SelectedVisual_OverridesHoverAndDeselectsToNormalPose()
+        {
+            GameObject tileObject = new GameObject("Tile3DSelectedTransformVisualTest");
+            GameObject visualObject = new GameObject("VisualRoot");
+            visualObject.transform.SetParent(tileObject.transform);
+            visualObject.transform.localRotation = Quaternion.Euler(0f, 15f, 0f);
+            try
+            {
+                object tileView = tileObject.AddComponent(Type.GetType(Mahjong3DTileViewTypeName, true));
+                SetPrivateField(tileView, "visualRoot", visualObject.transform);
+                SetPrivateField(tileView, "hoverPositionOffset", new Vector3(0f, 0.1f, 0f));
+                SetPrivateField(tileView, "selectedPositionOffset", new Vector3(0f, 0.4f, 0f));
+                SetPrivateField(tileView, "selectedRotationAngle", -5f);
+                Invoke(tileView, "Initialize", 0);
+
+                Vector3 basePosition = visualObject.transform.localPosition;
+                Quaternion baseRotation = visualObject.transform.localRotation;
+                Invoke(tileView, "NotifyHoverEntered");
+                Invoke(tileView, "SetSelected", true);
+
+                Vector3 selectedPosition = basePosition + new Vector3(0f, 0.4f, 0f);
+                Quaternion selectedRotation = baseRotation * Quaternion.Euler(-5f, 0f, 0f);
+                Assert.That(GetProperty(tileView, "IsSelected"), Is.True);
+                AssertVectorApproximately(visualObject.transform.localPosition, selectedPosition);
+                Assert.That(
+                    Quaternion.Angle(visualObject.transform.localRotation, selectedRotation),
+                    Is.LessThan(0.001f));
+
+                Invoke(tileView, "NotifyHoverExited");
+                Invoke(tileView, "NotifyHoverEntered");
+
+                AssertVectorApproximately(visualObject.transform.localPosition, selectedPosition);
+                Assert.That(
+                    Quaternion.Angle(visualObject.transform.localRotation, selectedRotation),
+                    Is.LessThan(0.001f));
+
+                Invoke(tileView, "NotifyHoverExited");
+                Invoke(tileView, "SetSelected", false);
+
+                Assert.That(GetProperty(tileView, "IsSelected"), Is.False);
+                AssertVectorApproximately(visualObject.transform.localPosition, basePosition);
+                Assert.That(Quaternion.Angle(visualObject.transform.localRotation, baseRotation), Is.LessThan(0.001f));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(tileObject);
+            }
+        }
+
+        [Test]
+        public void Initialize_ClearsSelectedStateAndRestoresTransformVisualBaseline()
+        {
+            GameObject tileObject = new GameObject("Tile3DSelectionReinitializeTest");
+            GameObject visualObject = new GameObject("VisualRoot");
+            visualObject.transform.SetParent(tileObject.transform);
+            visualObject.transform.localPosition = new Vector3(0f, 0.25f, 0f);
+            try
+            {
+                object tileView = tileObject.AddComponent(Type.GetType(Mahjong3DTileViewTypeName, true));
+                SetPrivateField(tileView, "visualRoot", visualObject.transform);
+                SetPrivateField(tileView, "selectedPositionOffset", new Vector3(0f, 0.4f, 0f));
+                Invoke(tileView, "Initialize", 0);
+                Vector3 basePosition = visualObject.transform.localPosition;
+
+                Invoke(tileView, "SetSelected", true);
+                Invoke(tileView, "Initialize", 1);
+
+                Assert.That(GetProperty(tileView, "IsSelected"), Is.False);
+                Assert.That(GetProperty(tileView, "IsHovered"), Is.False);
+                AssertVectorApproximately(visualObject.transform.localPosition, basePosition);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(tileObject);
+            }
+        }
+
+        [Test]
+        public void DimmedAndSelectedStates_CoexistWithoutClearingEitherVisual()
+        {
+            GameObject tileObject = new GameObject("Tile3DDimmedSelectedTest");
+            GameObject visualObject = new GameObject("VisualRoot");
+            GameObject rendererObject = new GameObject("TileBody");
+            Material originalMaterial = CreateTestMaterial("OriginalTileMaterial");
+            Material dimmedMaterial = CreateTestMaterial("DimmedTileMaterial");
+            visualObject.transform.SetParent(tileObject.transform);
+            rendererObject.transform.SetParent(visualObject.transform);
+            try
+            {
+                Renderer renderer = rendererObject.AddComponent<MeshRenderer>();
+                renderer.sharedMaterial = originalMaterial;
+                object tileView = CreateTileView(tileObject, visualObject.transform);
+                SetPrivateField(tileView, "visualRoot", visualObject.transform);
+                SetPrivateField(tileView, "selectedPositionOffset", new Vector3(0f, 0.4f, 0f));
+                SetPrivateField(tileView, "dimmedOverrideMaterial", dimmedMaterial);
+                Invoke(tileView, "Initialize", 0);
+
+                Invoke(tileView, "SetDimmed", true);
+                Invoke(tileView, "SetSelected", true);
+
+                Assert.That(GetProperty(tileView, "IsDimmed"), Is.True);
+                Assert.That(GetProperty(tileView, "IsSelected"), Is.True);
+                Assert.That(renderer.sharedMaterial, Is.SameAs(dimmedMaterial));
+                AssertVectorApproximately(
+                    visualObject.transform.localPosition,
+                    new Vector3(0f, 0.4f, 0f));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(originalMaterial);
+                UnityEngine.Object.DestroyImmediate(dimmedMaterial);
+                UnityEngine.Object.DestroyImmediate(tileObject);
+            }
+        }
+
+        [Test]
+        public void SelectableTilePrefab_SeparatesVisualRootFromLayoutRootAndCollider()
+        {
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(TilePrefabPath);
+            Assert.That(prefab, Is.Not.Null);
+
+            Component tileView = prefab.GetComponent(Type.GetType(Mahjong3DTileViewTypeName, true));
+            Transform visual = (Transform)GetPrivateField(tileView, "visualRoot");
+            BoxCollider collider = prefab.GetComponent<BoxCollider>();
+
+            Assert.That(visual, Is.Not.Null);
+            Assert.That(visual.name, Is.EqualTo("VisualRoot"));
+            Assert.That(visual.parent, Is.SameAs(prefab.transform));
+            Assert.That(visual, Is.Not.SameAs(prefab.transform));
+            Assert.That(collider, Is.Not.Null);
+            Assert.That(collider.transform, Is.SameAs(prefab.transform));
+            Assert.That(visual.Find("Tile Prefab"), Is.Not.Null);
         }
 
         [Test]
@@ -400,6 +578,14 @@ namespace MahjongPrototype.Tests
                 "Alpha component differs.");
         }
 
+        private static void AssertVectorApproximately(
+            Vector3 actual,
+            Vector3 expected,
+            float tolerance = 0.0001f)
+        {
+            Assert.That(Vector3.Distance(actual, expected), Is.LessThan(tolerance));
+        }
+
         private static object Invoke(object target, string methodName, params object[] args)
         {
             MethodInfo method = null;
@@ -475,6 +661,15 @@ namespace MahjongPrototype.Tests
                 BindingFlags.NonPublic | BindingFlags.Instance);
             Assert.That(field, Is.Not.Null);
             field.SetValue(target, value);
+        }
+
+        private static object GetPrivateField(object target, string fieldName)
+        {
+            FieldInfo field = target.GetType().GetField(
+                fieldName,
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.That(field, Is.Not.Null);
+            return field.GetValue(target);
         }
     }
 }

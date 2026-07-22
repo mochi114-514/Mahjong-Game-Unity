@@ -226,6 +226,40 @@ namespace MahjongPrototype.UI3D
                 drawnTileView.SetDimmed(false);
         }
 
+        public void SetSelectedHandTile(int handIndex)
+        {
+            if (handView == null)
+            {
+                WarnMissingOnce(ref warnedMissingHandView, "3D hand view is not assigned.");
+                return;
+            }
+
+            handView.SetSelectedTileByIndex(handIndex);
+            if (drawnTileView != null)
+                drawnTileView.SetSelected(false);
+        }
+
+        public void SetDrawnTileSelected(bool selected)
+        {
+            if (drawnTileView == null)
+            {
+                WarnMissingOnce(ref warnedMissingDrawnTileView, "3D drawn tile view is not assigned.");
+                return;
+            }
+
+            drawnTileView.SetSelected(selected);
+            if (selected && handView != null)
+                handView.ClearSelectedTile();
+        }
+
+        public void ClearTileSelectionVisual()
+        {
+            if (handView != null)
+                handView.ClearSelectedTile();
+            if (drawnTileView != null)
+                drawnTileView.SetSelected(false);
+        }
+
         public void RenderDiscardRiver(IReadOnlyList<DiscardRecord> discards, SeatId dataSeat)
         {
             RenderDiscardRiver(discards, null, dataSeat, false, 0, null);

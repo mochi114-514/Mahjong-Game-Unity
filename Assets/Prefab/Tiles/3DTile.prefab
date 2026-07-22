@@ -31,7 +31,7 @@ Transform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
-  - {fileID: 6411022808984222683}
+  - {fileID: 7429815031229784101}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &3781737991026447910
@@ -48,7 +48,16 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MahjongPrototype.UI3D.Mahjong3DTileView
   frontFaceMeshFilter: {fileID: 8926789879712744578}
   tileFaceCatalog: {fileID: 11400000, guid: 67bd77193bd7b4244ab364b23c14e1eb, type: 2}
-  dimTargetRoot: {fileID: 6411022808984222683}
+  visualRoot: {fileID: 7429815031229784101}
+  hoverPositionOffset: {x: 0, y: 0.12, z: 0}
+  selectedPositionOffset: {x: 0, y: 0.38, z: 0}
+  selectedRotationAngle: -4
+  hoverTransitionDuration: 0.08
+  selectionTransitionDuration: 0.1
+  selectionOvershootAmount: 0.08
+  selectionAnimationDuration: 0.18
+  deselectionTransitionDuration: 0.1
+  dimTargetRoot: {fileID: 7429815031229784101}
   dimTargetRenderers: []
   dimVisualMode: 1
   dimmedOverrideMaterial: {fileID: 2100000, guid: 9b933e43ceb647c3a33b6b81c510686a, type: 2}
@@ -80,13 +89,45 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 1.8832576, y: 2.5046444, z: 1.4883237}
   m_Center: {x: 0.0185287, y: -0.021595001, z: -0.21970189}
+--- !u!1 &7429815031229784100
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 7429815031229784101}
+  m_Layer: 6
+  m_Name: VisualRoot
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &7429815031229784101
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7429815031229784100}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 6411022808984222683}
+  m_Father: {fileID: 3974349850563558511}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &5629063610638710292
 PrefabInstance:
   m_ObjectHideFlags: 0
   serializedVersion: 2
   m_Modification:
     serializedVersion: 3
-    m_TransformParent: {fileID: 3974349850563558511}
+    m_TransformParent: {fileID: 7429815031229784101}
     m_Modifications:
     - target: {fileID: 2349094947022695, guid: 1175b8eae4f2acc409cddeef86a95b0e, type: 3}
       propertyPath: m_Name

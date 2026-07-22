@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using MahjongPrototype.Domain;
 using UnityEngine;
@@ -19,6 +20,17 @@ namespace MahjongPrototype.UI3D
         [Header("3D Face Mesh")]
         [SerializeField] private MeshFilter frontFaceMeshFilter;
         [SerializeField] private Mahjong3DTileFaceCatalog tileFaceCatalog;
+
+        [Header("Pointer / Selection Transform Visual")]
+        [SerializeField] private Transform visualRoot;
+        [SerializeField] private Vector3 hoverPositionOffset = new Vector3(0f, 0.12f, 0f);
+        [SerializeField] private Vector3 selectedPositionOffset = new Vector3(0f, 0.38f, 0f);
+        [SerializeField] private float selectedRotationAngle = -4f;
+        [SerializeField, Min(0f)] private float hoverTransitionDuration = 0.08f;
+        [SerializeField, Min(0f)] private float selectionTransitionDuration = 0.1f;
+        [SerializeField, Min(0f)] private float selectionOvershootAmount = 0.08f;
+        [SerializeField, Min(0f)] private float selectionAnimationDuration = 0.18f;
+        [SerializeField, Min(0f)] private float deselectionTransitionDuration = 0.1f;
 
         [Header("Dim Visual")]
         [SerializeField] private Transform dimTargetRoot;
@@ -46,6 +58,7 @@ namespace MahjongPrototype.UI3D
         public bool Interactable { get; private set; }
         public bool IsDimmed { get; private set; }
         public bool IsHovered { get; private set; }
+        public bool IsSelected { get; private set; }
 
         private bool warnedMissingFrontFaceMeshFilter;
         private bool warnedMissingTileFaceCatalog;
@@ -55,15 +68,38 @@ namespace MahjongPrototype.UI3D
         private Renderer[] resolvedDimTargetRenderers;
         private readonly Dictionary<Renderer, Material[]> originalSharedMaterialsByRenderer =
             new Dictionary<Renderer, Material[]>();
+        private Coroutine transformVisualRoutine;
+        private Transform cachedVisualRoot;
+        private Vector3 baseVisualLocalPosition;
+        private Quaternion baseVisualLocalRotation;
+        private bool visualBaselineCached;
+
+        private void Awake()
+        {
+            EnsureVisualBaseline();
+        }
 
         private void OnDisable()
         {
             NotifyHoverExited();
+            IsSelected = false;
+            StopTransformVisualRoutine();
+            ResetTransformVisualImmediate();
+        }
+
+        private void OnDestroy()
+        {
+            StopTransformVisualRoutine();
         }
 
         private void OnValidate()
         {
             resolvedDimTargetRenderers = null;
+            if (cachedVisualRoot != visualRoot)
+            {
+                cachedVisualRoot = null;
+                visualBaselineCached = false;
+            }
 
             if (Application.isPlaying && IsDimmed)
                 ApplyDimmedVisual();
@@ -72,6 +108,7 @@ namespace MahjongPrototype.UI3D
         public void Initialize(int handIndex)
         {
             NotifyHoverExited();
+            ResetSelectionVisualState();
             HandIndex = handIndex;
             Tile = null;
             FaceUp = true;
@@ -82,6 +119,7 @@ namespace MahjongPrototype.UI3D
         public void Initialize(int handIndex, Tile tile, bool faceUp, bool interactable)
         {
             NotifyHoverExited();
+            ResetSelectionVisualState();
             HandIndex = handIndex;
             Tile = tile;
             FaceUp = faceUp;
@@ -105,6 +143,8 @@ namespace MahjongPrototype.UI3D
                 return;
 
             IsHovered = true;
+            if (!IsSelected)
+                AnimateToCurrentState(hoverTransitionDuration);
             HoverEntered?.Invoke(this);
         }
 
@@ -114,7 +154,21 @@ namespace MahjongPrototype.UI3D
                 return;
 
             IsHovered = false;
+            if (!IsSelected)
+                AnimateToCurrentState(hoverTransitionDuration);
             HoverExited?.Invoke(this);
+        }
+
+        public void SetSelected(bool selected)
+        {
+            if (IsSelected == selected)
+                return;
+
+            IsSelected = selected;
+            if (selected)
+                AnimateSelectionWithSingleOvershoot();
+            else
+                AnimateToCurrentState(deselectionTransitionDuration);
         }
 
         public void SetInteractable(bool interactable)
@@ -134,6 +188,226 @@ namespace MahjongPrototype.UI3D
 
             IsDimmed = dimmed;
             ApplyDimmedVisual();
+        }
+
+        private void ResetSelectionVisualState()
+        {
+            IsSelected = false;
+            StopTransformVisualRoutine();
+            ResetTransformVisualImmediate();
+        }
+
+        private void AnimateToCurrentState(float duration)
+        {
+            if (!TryGetCurrentTargetPose(out Vector3 targetPosition, out Quaternion targetRotation))
+                return;
+
+            StartTransformVisualTransition(targetPosition, targetRotation, duration);
+        }
+
+        private void AnimateSelectionWithSingleOvershoot()
+        {
+            if (!TryGetSelectedTargetPose(out Vector3 targetPosition, out Quaternion targetRotation))
+                return;
+
+            StopTransformVisualRoutine();
+            if (!CanAnimate(selectionAnimationDuration))
+            {
+                ApplyTransformVisualPose(targetPosition, targetRotation);
+                return;
+            }
+
+            float approachDuration = Mathf.Min(
+                Mathf.Max(0f, selectionTransitionDuration),
+                selectionAnimationDuration);
+            float settleDuration = selectionAnimationDuration - approachDuration;
+            if (selectionOvershootAmount <= 0f || approachDuration <= 0f || settleDuration <= 0f)
+            {
+                transformVisualRoutine = StartCoroutine(AnimateToPose(
+                    visualRoot.localPosition,
+                    visualRoot.localRotation,
+                    targetPosition,
+                    targetRotation,
+                    selectionAnimationDuration));
+                return;
+            }
+
+            Vector3 overshootPosition = targetPosition + (Vector3.up * selectionOvershootAmount);
+            transformVisualRoutine = StartCoroutine(AnimateSelectionPose(
+                visualRoot.localPosition,
+                visualRoot.localRotation,
+                overshootPosition,
+                targetPosition,
+                targetRotation,
+                approachDuration,
+                settleDuration));
+        }
+
+        private void StartTransformVisualTransition(
+            Vector3 targetPosition,
+            Quaternion targetRotation,
+            float duration)
+        {
+            StopTransformVisualRoutine();
+            if (!CanAnimate(duration))
+            {
+                ApplyTransformVisualPose(targetPosition, targetRotation);
+                return;
+            }
+
+            transformVisualRoutine = StartCoroutine(AnimateToPose(
+                visualRoot.localPosition,
+                visualRoot.localRotation,
+                targetPosition,
+                targetRotation,
+                duration));
+        }
+
+        private IEnumerator AnimateToPose(
+            Vector3 startPosition,
+            Quaternion startRotation,
+            Vector3 targetPosition,
+            Quaternion targetRotation,
+            float duration)
+        {
+            for (float elapsed = 0f; elapsed < duration; elapsed += Time.unscaledDeltaTime)
+            {
+                float progress = EaseOutCubic(elapsed / duration);
+                ApplyTransformVisualPose(
+                    Vector3.LerpUnclamped(startPosition, targetPosition, progress),
+                    Quaternion.SlerpUnclamped(startRotation, targetRotation, progress));
+                yield return null;
+            }
+
+            ApplyTransformVisualPose(targetPosition, targetRotation);
+            transformVisualRoutine = null;
+        }
+
+        private IEnumerator AnimateSelectionPose(
+            Vector3 startPosition,
+            Quaternion startRotation,
+            Vector3 overshootPosition,
+            Vector3 targetPosition,
+            Quaternion targetRotation,
+            float approachDuration,
+            float settleDuration)
+        {
+            for (float elapsed = 0f; elapsed < approachDuration; elapsed += Time.unscaledDeltaTime)
+            {
+                float progress = EaseOutCubic(elapsed / approachDuration);
+                ApplyTransformVisualPose(
+                    Vector3.LerpUnclamped(startPosition, overshootPosition, progress),
+                    Quaternion.SlerpUnclamped(startRotation, targetRotation, progress));
+                yield return null;
+            }
+
+            ApplyTransformVisualPose(overshootPosition, targetRotation);
+            for (float elapsed = 0f; elapsed < settleDuration; elapsed += Time.unscaledDeltaTime)
+            {
+                float progress = Mathf.SmoothStep(0f, 1f, elapsed / settleDuration);
+                ApplyTransformVisualPose(
+                    Vector3.LerpUnclamped(overshootPosition, targetPosition, progress),
+                    targetRotation);
+                yield return null;
+            }
+
+            ApplyTransformVisualPose(targetPosition, targetRotation);
+            transformVisualRoutine = null;
+        }
+
+        private bool TryGetCurrentTargetPose(
+            out Vector3 targetPosition,
+            out Quaternion targetRotation)
+        {
+            targetPosition = default;
+            targetRotation = default;
+            if (!EnsureVisualBaseline())
+                return false;
+
+            if (IsSelected)
+            {
+                targetPosition = baseVisualLocalPosition + selectedPositionOffset;
+                targetRotation = baseVisualLocalRotation * Quaternion.Euler(selectedRotationAngle, 0f, 0f);
+            }
+            else if (IsHovered)
+            {
+                targetPosition = baseVisualLocalPosition + hoverPositionOffset;
+                targetRotation = baseVisualLocalRotation;
+            }
+            else
+            {
+                targetPosition = baseVisualLocalPosition;
+                targetRotation = baseVisualLocalRotation;
+            }
+
+            return true;
+        }
+
+        private bool TryGetSelectedTargetPose(
+            out Vector3 targetPosition,
+            out Quaternion targetRotation)
+        {
+            targetPosition = default;
+            targetRotation = default;
+            if (!EnsureVisualBaseline())
+                return false;
+
+            targetPosition = baseVisualLocalPosition + selectedPositionOffset;
+            targetRotation = baseVisualLocalRotation * Quaternion.Euler(selectedRotationAngle, 0f, 0f);
+            return true;
+        }
+
+        private bool EnsureVisualBaseline()
+        {
+            if (visualRoot == null)
+                return false;
+
+            if (visualBaselineCached && cachedVisualRoot == visualRoot)
+                return true;
+
+            cachedVisualRoot = visualRoot;
+            baseVisualLocalPosition = visualRoot.localPosition;
+            baseVisualLocalRotation = visualRoot.localRotation;
+            visualBaselineCached = true;
+            return true;
+        }
+
+        private bool CanAnimate(float duration)
+        {
+            return duration > 0f && Application.isPlaying && isActiveAndEnabled &&
+                EnsureVisualBaseline();
+        }
+
+        private void StopTransformVisualRoutine()
+        {
+            if (transformVisualRoutine == null)
+                return;
+
+            StopCoroutine(transformVisualRoutine);
+            transformVisualRoutine = null;
+        }
+
+        private void ResetTransformVisualImmediate()
+        {
+            if (!EnsureVisualBaseline())
+                return;
+
+            ApplyTransformVisualPose(baseVisualLocalPosition, baseVisualLocalRotation);
+        }
+
+        private void ApplyTransformVisualPose(Vector3 localPosition, Quaternion localRotation)
+        {
+            if (visualRoot == null)
+                return;
+
+            visualRoot.localPosition = localPosition;
+            visualRoot.localRotation = localRotation;
+        }
+
+        private static float EaseOutCubic(float progress)
+        {
+            float inverse = 1f - Mathf.Clamp01(progress);
+            return 1f - (inverse * inverse * inverse);
         }
 
         private void ApplyDimmedVisual()

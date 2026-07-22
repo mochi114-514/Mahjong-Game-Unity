@@ -162,6 +162,87 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
+        public void SetSelected_AppliesAndClearsDrawnTileSelectionVisual()
+        {
+            GameObject root = new GameObject("Drawn3DViewSelectionTest");
+            GameObject prefab = new GameObject("Tile3DPrefab");
+            try
+            {
+                object view = root.AddComponent(Type.GetType(Mahjong3DDrawnTileViewTypeName, true));
+                object tilePrefab = prefab.AddComponent(Type.GetType(Mahjong3DTileViewTypeName, true));
+                SetPrivateField(view, "tilePrefab", tilePrefab);
+                Invoke(view, "Render", CreateTile("1m"), true, true);
+                Component tileView = GetSingleTileView(root);
+
+                Invoke(view, "SetSelected", true);
+                Assert.That(GetProperty(tileView, "IsSelected"), Is.True);
+
+                Invoke(view, "SetSelected", false);
+                Assert.That(GetProperty(tileView, "IsSelected"), Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(prefab);
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void PlayerControllerSelectionVisualApi_KeepsHandAndDrawnTileExclusive()
+        {
+            GameObject controllerRoot = new GameObject("PlayerUiSelectionVisualTest");
+            GameObject handViewObject = new GameObject("HandView");
+            GameObject drawnViewObject = new GameObject("DrawnView");
+            GameObject prefab = new GameObject("Tile3DPrefab");
+            try
+            {
+                object controller = controllerRoot.AddComponent(
+                    Type.GetType(Mahjong3DPlayerUiControllerTypeName, true));
+                object handView = handViewObject.AddComponent(Type.GetType(Mahjong3DHandViewTypeName, true));
+                object drawnView = drawnViewObject.AddComponent(
+                    Type.GetType(Mahjong3DDrawnTileViewTypeName, true));
+                object tilePrefab = prefab.AddComponent(Type.GetType(Mahjong3DTileViewTypeName, true));
+                SetPrivateField(handView, "tilePrefab", tilePrefab);
+                SetPrivateField(drawnView, "tilePrefab", tilePrefab);
+                SetPrivateField(controller, "handView", handView);
+                SetPrivateField(controller, "drawnTileView", drawnView);
+                Invoke(
+                    controller,
+                    "RenderHand",
+                    CreateTileList("1m", "2m"),
+                    Seat("East"),
+                    true,
+                    true);
+                Invoke(controller, "RenderDrawnTile", CreateTile("3m"), true, true);
+
+                Component[] handTiles = handViewObject.GetComponentsInChildren(
+                    Type.GetType(Mahjong3DTileViewTypeName, true));
+                Component drawnTile = GetSingleTileView(drawnViewObject);
+                Invoke(controller, "SetSelectedHandTile", 1);
+
+                Assert.That(GetProperty(handTiles[0], "IsSelected"), Is.False);
+                Assert.That(GetProperty(handTiles[1], "IsSelected"), Is.True);
+                Assert.That(GetProperty(drawnTile, "IsSelected"), Is.False);
+
+                Invoke(controller, "SetDrawnTileSelected", true);
+
+                Assert.That(GetProperty(handTiles[0], "IsSelected"), Is.False);
+                Assert.That(GetProperty(handTiles[1], "IsSelected"), Is.False);
+                Assert.That(GetProperty(drawnTile, "IsSelected"), Is.True);
+
+                Invoke(controller, "ClearTileSelectionVisual");
+                Assert.That(GetProperty(drawnTile, "IsSelected"), Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(prefab);
+                UnityEngine.Object.DestroyImmediate(handViewObject);
+                UnityEngine.Object.DestroyImmediate(drawnViewObject);
+                UnityEngine.Object.DestroyImmediate(controllerRoot);
+            }
+        }
+
+        [Test]
         public void RenderDrawnTile_FollowsTheHandEndAcrossDifferentSpawnRoots()
         {
             GameObject controllerRoot = new GameObject("PlayerUiControllerTest");

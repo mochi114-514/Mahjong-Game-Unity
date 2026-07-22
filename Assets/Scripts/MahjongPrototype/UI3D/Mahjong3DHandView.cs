@@ -122,6 +122,21 @@ namespace MahjongPrototype.UI3D
             }
         }
 
+        public void SetSelectedTileByIndex(int handIndex)
+        {
+            for (int i = 0; i < activeTiles.Count; i++)
+            {
+                Mahjong3DTileView tile = activeTiles[i];
+                if (tile != null)
+                    tile.SetSelected(tile.HandIndex == handIndex);
+            }
+        }
+
+        public void ClearSelectedTile()
+        {
+            SetSelectedTileByIndex(-1);
+        }
+
         public void Clear()
         {
             for (int i = 0; i < activeTiles.Count; i++)
