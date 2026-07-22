@@ -548,7 +548,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
 
                 object group = flowSupport.Collections.Item(groups, 0);
                 object candidates = reflection.GetProperty(group, "Candidates");
-                return BuildWinningCandidateSignature(candidates);
+                return BuildDisplayedCandidateSignature(candidates);
             }
         }
 
@@ -563,7 +563,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
                 flowSupport.CurrentState,
                 flowSupport.DataFactory.ParseSeat("East"),
                 GetReachCandidate(index));
-            return BuildWinningCandidateSignature(candidates);
+            return BuildEvaluatorCandidateSignature(candidates);
         }
 
         public bool IsHoverReevaluationPending =>
@@ -600,13 +600,27 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
             return flowSupport.Collections.Item(candidates, index);
         }
 
-        private string BuildWinningCandidateSignature(object candidates)
+        private string BuildDisplayedCandidateSignature(object candidates)
         {
             string[] states = new string[flowSupport.Collections.Count(candidates)];
             for (int i = 0; i < states.Length; i++)
             {
                 object candidate = flowSupport.Collections.Item(candidates, i);
                 states[i] = reflection.GetProperty(candidate, "TypeIndex") + ":" +
+                    reflection.GetProperty(candidate, "VisibleRemainingCount");
+            }
+
+            return string.Join(",", states);
+        }
+
+        private string BuildEvaluatorCandidateSignature(object candidates)
+        {
+            string[] states = new string[flowSupport.Collections.Count(candidates)];
+            for (int i = 0; i < states.Length; i++)
+            {
+                object candidate = flowSupport.Collections.Item(candidates, i);
+                object tile = reflection.GetProperty(candidate, "Tile");
+                states[i] = reflection.GetProperty(tile, "TypeIndex") + ":" +
                     reflection.GetProperty(candidate, "VisibleRemainingCount");
             }
 
