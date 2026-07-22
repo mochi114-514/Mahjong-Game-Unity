@@ -57,7 +57,7 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void ReachDecisionStart_HidesCandidatesUntilAValidCandidateIsSelected()
+        public void ReachDecisionStart_DoesNotAutoDisplayCandidates()
         {
             using (MahjongReachDecisionUiManagerTestDriver driver =
                 MahjongReachDecisionUiManagerTestDriver.Create())
@@ -71,12 +71,26 @@ namespace MahjongPrototype.Tests
                 driver.RefreshReachDecision();
 
                 Assert.That(driver.DecisionAreaActive, Is.True);
+                Assert.That(driver.HasSelectedSelfTile, Is.False);
                 Assert.That(driver.WinningCandidateRootActive, Is.False);
                 Assert.That(driver.SpawnedWinningGroupCount, Is.Zero);
+            }
+        }
 
-                driver.SelectFirstReachCandidate();
+        [Test]
+        public void ReachDecision_ValidCandidateHoverDisplaysWithoutSelection()
+        {
+            using (MahjongReachDecisionUiManagerTestDriver driver =
+                MahjongReachDecisionUiManagerTestDriver.Create())
+            {
+                driver.PrepareReachableGameState();
+                driver.CreateAndAssignWinningCandidateController();
+                driver.RefreshReachDecision();
 
-                Assert.That(driver.HasSelectedSelfTile, Is.True);
+                driver.HoverFirstReachCandidate();
+
+                Assert.That(driver.HasSelectedSelfTile, Is.False);
+                Assert.That(driver.HasHoveredSelfTile, Is.True);
                 Assert.That(driver.WinningCandidateRootActive, Is.True);
                 Assert.That(driver.SpawnedWinningCandidateCount, Is.GreaterThan(0));
             }
@@ -96,76 +110,16 @@ namespace MahjongPrototype.Tests
 
                 Assert.That(driver.HasSelectedSelfTile, Is.False);
                 Assert.That(driver.WinningCandidateRootActive, Is.False);
-            }
-        }
 
-        [Test]
-        public void UndeclaredReach_HoverDoesNotDisplayUntilTheTileIsSelected()
-        {
-            using (MahjongReachDecisionUiManagerTestDriver driver =
-                MahjongReachDecisionUiManagerTestDriver.Create())
-            {
-                driver.PrepareReachableGameState();
-                driver.CreateAndAssignWinningCandidateController();
-                driver.HoverFirstReachCandidate();
+                driver.HoverReachNonCandidate();
 
                 Assert.That(driver.HasHoveredSelfTile, Is.True);
                 Assert.That(driver.WinningCandidateRootActive, Is.False);
-
-                driver.SelectSavedReachCandidate();
-
-                Assert.That(driver.HasSelectedSelfTile, Is.True);
-                Assert.That(driver.WinningCandidateRootActive, Is.True);
-                Assert.That(driver.SpawnedWinningCandidateCount, Is.GreaterThan(0));
             }
         }
 
         [Test]
-        public void UndeclaredReach_ChangingSelectionRefreshesTheSelectedCandidateDisplay()
-        {
-            using (MahjongReachDecisionUiManagerTestDriver driver =
-                MahjongReachDecisionUiManagerTestDriver.Create())
-            {
-                driver.PrepareReachableGameState();
-                driver.CreateAndAssignWinningCandidateController();
-                Assert.That(driver.ReachCandidateCount, Is.GreaterThan(1));
-
-                driver.SelectReachCandidate(0);
-                string firstSelection = driver.SelectedTileIdentity;
-                string firstSignature = driver.WinningCandidateSignature;
-
-                driver.SelectReachCandidate(1);
-
-                Assert.That(driver.SelectedTileIdentity, Is.Not.EqualTo(firstSelection));
-                Assert.That(driver.WinningCandidateRootActive, Is.True);
-                Assert.That(driver.WinningCandidateSignature, Is.Not.Empty);
-                Assert.That(firstSignature, Is.Not.Empty);
-            }
-        }
-
-        [Test]
-        public void UndeclaredReach_ClearingSelectionHidesDisplayWithoutHoverFallback()
-        {
-            using (MahjongReachDecisionUiManagerTestDriver driver =
-                MahjongReachDecisionUiManagerTestDriver.Create())
-            {
-                driver.PrepareReachableGameState();
-                driver.CreateAndAssignWinningCandidateController();
-                driver.SelectFirstReachCandidate();
-                Assert.That(driver.WinningCandidateRootActive, Is.True);
-
-                driver.ClearSelectionFromTable();
-                driver.HoverSavedReachCandidate();
-
-                Assert.That(driver.HasSelectedSelfTile, Is.False);
-                Assert.That(driver.HasHoveredSelfTile, Is.True);
-                Assert.That(driver.WinningCandidateRootActive, Is.False);
-                Assert.That(driver.SpawnedWinningGroupCount, Is.Zero);
-            }
-        }
-
-        [Test]
-        public void UndeclaredReach_SelectedTileWithoutWaitHidesDisplayAndKeepsSelection()
+        public void UndeclaredReach_HoverDisplaysCandidatesWithoutSelection()
         {
             using (MahjongReachDecisionUiManagerTestDriver driver =
                 MahjongReachDecisionUiManagerTestDriver.Create())
@@ -177,16 +131,101 @@ namespace MahjongPrototype.Tests
                 driver.DeclineReach();
                 driver.RefreshReachDecision();
 
-                driver.SelectHandTile(0);
+                driver.HoverSavedReachCandidate();
+
+                Assert.That(driver.HasSelectedSelfTile, Is.False);
+                Assert.That(driver.HasHoveredSelfTile, Is.True);
+                Assert.That(driver.WinningCandidateRootActive, Is.True);
+                Assert.That(driver.WinningCandidateSignature, Is.Not.Empty);
+            }
+        }
+
+        [Test]
+        public void HoveringDifferentTilesUpdatesTheCandidateDisplaySource()
+        {
+            using (MahjongReachDecisionUiManagerTestDriver driver =
+                MahjongReachDecisionUiManagerTestDriver.Create())
+            {
+                driver.PrepareReachableGameState();
+                driver.CreateAndAssignWinningCandidateController();
+                Assert.That(driver.ReachCandidateCount, Is.GreaterThan(1));
+
+                driver.HoverReachCandidate(0);
+                string firstHover = driver.HoveredTileIdentity;
+                Assert.That(driver.WinningCandidateSignature,
+                    Is.EqualTo(driver.EvaluateAfterDiscardSignatureForReachCandidate(0)));
+
+                driver.HoverReachCandidate(1);
+
+                Assert.That(driver.HoveredTileIdentity, Is.Not.EqualTo(firstHover));
+                Assert.That(driver.HasSelectedSelfTile, Is.False);
+                Assert.That(driver.WinningCandidateRootActive, Is.True);
+                Assert.That(driver.WinningCandidateSignature,
+                    Is.EqualTo(driver.EvaluateAfterDiscardSignatureForReachCandidate(1)));
+            }
+        }
+
+        [Test]
+        public void SelectionDoesNotOverrideHoveredCandidateDisplay()
+        {
+            using (MahjongReachDecisionUiManagerTestDriver driver =
+                MahjongReachDecisionUiManagerTestDriver.Create())
+            {
+                driver.PrepareReachableGameState();
+                driver.CreateAndAssignWinningCandidateController();
+                Assert.That(driver.ReachCandidateCount, Is.GreaterThan(1));
+
+                driver.SelectReachCandidate(0);
+                string selection = driver.SelectedTileIdentity;
+
+                Assert.That(driver.WinningCandidateRootActive, Is.False);
+
+                driver.HoverReachCandidate(1);
+
+                Assert.That(driver.SelectedTileIdentity, Is.EqualTo(selection));
+                Assert.That(driver.HasHoveredSelfTile, Is.True);
+                Assert.That(driver.HoveredTileIdentity, Is.Not.EqualTo(selection));
+                Assert.That(driver.WinningCandidateRootActive, Is.True);
+            }
+        }
+
+        [Test]
+        public void HoverExitHidesCandidatesAndKeepsSelection()
+        {
+            using (MahjongReachDecisionUiManagerTestDriver driver =
+                MahjongReachDecisionUiManagerTestDriver.Create())
+            {
+                driver.PrepareReachableGameState();
+                driver.CreateAndAssignWinningCandidateController();
+                driver.SelectFirstReachCandidate();
+                driver.HoverSavedReachCandidate();
+
+                Assert.That(driver.WinningCandidateRootActive, Is.True);
+
+                driver.ExitCurrentHover();
 
                 Assert.That(driver.HasSelectedSelfTile, Is.True);
                 Assert.That(driver.WinningCandidateRootActive, Is.False);
                 Assert.That(driver.SpawnedWinningGroupCount, Is.Zero);
+            }
+        }
 
-                driver.HoverSavedReachCandidate();
+        [Test]
+        public void HoverWithoutCandidatesHidesTheUi()
+        {
+            using (MahjongReachDecisionUiManagerTestDriver driver =
+                MahjongReachDecisionUiManagerTestDriver.Create())
+            {
+                driver.PrepareReachableGameState();
+                driver.CreateAndAssignWinningCandidateController();
+                driver.HoverFirstReachCandidate();
+                Assert.That(driver.WinningCandidateRootActive, Is.True);
 
-                Assert.That(driver.HasSelectedSelfTile, Is.True);
+                driver.HoverReachNonCandidate();
+
+                Assert.That(driver.HasHoveredSelfTile, Is.True);
                 Assert.That(driver.WinningCandidateRootActive, Is.False);
+                Assert.That(driver.SpawnedWinningGroupCount, Is.Zero);
             }
         }
 
@@ -211,7 +250,7 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void ReachDeclared_HoverUsesTheFixedWaitAndExitHidesItEvenWhenSelected()
+        public void ReachDeclared_HoverUsesTheFixedWaitRegardlessOfSelection()
         {
             using (MahjongReachDecisionUiManagerTestDriver driver =
                 MahjongReachDecisionUiManagerTestDriver.Create())

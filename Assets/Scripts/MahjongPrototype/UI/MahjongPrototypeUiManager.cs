@@ -1572,14 +1572,13 @@ namespace MahjongPrototype.UI
             bool showSelfReachDecision,
             bool showSelfReachCancel)
         {
-            if (!TryGetSelfSeat(state, out SeatId selfSeat))
-            {
-                ClearWinningCandidates();
-                return;
-            }
-
-            PlayerSeat selfPlayer = state.GetPlayerSeat(selfSeat);
-            if (selfPlayer == null)
+            if (!TryGetSelfSeat(state, out SeatId selfSeat) ||
+                !hoveredSelfTile.HasValue ||
+                !TryGetCurrentHoveredTile(
+                    state,
+                    selfSeat,
+                    hoveredSelfTile.Value,
+                    out PlayerSeat selfPlayer))
             {
                 ClearWinningCandidates();
                 return;
@@ -1587,84 +1586,32 @@ namespace MahjongPrototype.UI
 
             if (selfPlayer.IsReachDeclared)
             {
-                RefreshDeclaredReachWinningCandidates(state, selfSeat);
+                SetWinningCandidates(
+                    winningTileCandidateEvaluator.EvaluateCurrentHand(state, selfSeat));
                 return;
             }
 
-            RefreshUndeclaredReachWinningCandidates(
-                state,
-                showSelfReachDecision,
-                showSelfReachCancel);
-        }
-
-        private void RefreshDeclaredReachWinningCandidates(
-            MahjongGameState state,
-            SeatId selfSeat)
-        {
-            if (!hoveredSelfTile.HasValue ||
-                !TryGetCurrentHoveredTile(
+            SetWinningCandidates(
+                EvaluateHoveredTile(
                     state,
                     selfSeat,
                     hoveredSelfTile.Value,
-                    out _))
-            {
-                ClearWinningCandidates();
-                return;
-            }
-
-            SetWinningCandidates(
-                winningTileCandidateEvaluator.EvaluateCurrentHand(state, selfSeat));
-        }
-
-        private void RefreshUndeclaredReachWinningCandidates(
-            MahjongGameState state,
-            bool showSelfReachDecision,
-            bool showSelfReachCancel)
-        {
-            if (!selectedSelfTile.HasValue)
-            {
-                ClearWinningCandidates();
-                return;
-            }
-
-            TileSelectionIdentity selection = selectedSelfTile.Value;
-            if (!IsTileSelectionCurrentAndSelectable(state, selection))
-            {
-                ClearTileSelection(true, false);
-                ClearWinningCandidates();
-                return;
-            }
-
-            SetWinningCandidates(
-                EvaluateSelectedTile(
-                    state,
-                    selection.ToTileInfo(),
                     showSelfReachDecision,
                     showSelfReachCancel));
         }
 
-        private IReadOnlyList<WinningTileCandidate> EvaluateSelectedTile(
+        private IReadOnlyList<WinningTileCandidate> EvaluateHoveredTile(
             MahjongGameState state,
-            Mahjong3DTileHoverInfo selectedTile,
+            SeatId selfSeat,
+            Mahjong3DTileHoverInfo hoveredTile,
             bool showSelfReachDecision,
             bool showSelfReachCancel)
         {
-            if (!TryGetSelfSeat(state, out SeatId selfSeat) ||
-                selectedTile.SeatId != selfSeat ||
-                !TryGetCurrentHoveredTile(
-                    state,
-                    selfSeat,
-                    selectedTile,
-                    out PlayerSeat player))
-            {
-                return System.Array.Empty<WinningTileCandidate>();
-            }
-
             if (showSelfReachDecision || showSelfReachCancel)
             {
                 if (!TryFindReachDiscardCandidate(
                         state.ReachDiscardCandidates,
-                        selectedTile,
+                        hoveredTile,
                         out ReachDiscardCandidate reachCandidate))
                 {
                     return System.Array.Empty<WinningTileCandidate>();
@@ -1676,22 +1623,14 @@ namespace MahjongPrototype.UI
                     reachCandidate);
             }
 
-            if (player.HasDrawnTile)
-            {
-                ReachDiscardCandidate discardCandidate = new ReachDiscardCandidate(
-                    selectedTile.Source,
-                    selectedTile.HandIndex,
-                    selectedTile.Tile);
-                return winningTileCandidateEvaluator.EvaluateAfterDiscard(
-                    state,
-                    selfSeat,
-                    discardCandidate);
-            }
-
-            if (selectedTile.Source != DiscardSource.Hand)
-                return System.Array.Empty<WinningTileCandidate>();
-
-            return winningTileCandidateEvaluator.EvaluateCurrentHand(state, selfSeat);
+            ReachDiscardCandidate discardCandidate = new ReachDiscardCandidate(
+                hoveredTile.Source,
+                hoveredTile.HandIndex,
+                hoveredTile.Tile);
+            return winningTileCandidateEvaluator.EvaluateAfterDiscard(
+                state,
+                selfSeat,
+                discardCandidate);
         }
 
         private void SetWinningCandidates(IReadOnlyList<WinningTileCandidate> candidates)

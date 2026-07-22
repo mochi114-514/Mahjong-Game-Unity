@@ -184,7 +184,12 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
 
         public void HoverFirstReachCandidate(string seatName = "East")
         {
-            savedReachCandidate = GetReachCandidate(0);
+            HoverReachCandidate(0, seatName);
+        }
+
+        public void HoverReachCandidate(int index, string seatName = "East")
+        {
+            savedReachCandidate = GetReachCandidate(index);
             HoverCandidate(savedReachCandidate, seatName);
         }
 
@@ -517,6 +522,17 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
             }
         }
 
+        public string HoveredTileIdentity
+        {
+            get
+            {
+                object hover = reflection.GetPrivateField(uiManager, "hoveredSelfTile");
+                return reflection.GetProperty(hover, "Source") + ":" +
+                    reflection.GetProperty(hover, "HandIndex") + ":" +
+                    reflection.GetProperty(hover, "Tile");
+            }
+        }
+
         public string WinningCandidateSignature
         {
             get
@@ -532,16 +548,22 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
 
                 object group = flowSupport.Collections.Item(groups, 0);
                 object candidates = reflection.GetProperty(group, "Candidates");
-                string[] states = new string[flowSupport.Collections.Count(candidates)];
-                for (int i = 0; i < states.Length; i++)
-                {
-                    object candidate = flowSupport.Collections.Item(candidates, i);
-                    states[i] = reflection.GetProperty(candidate, "TypeIndex") + ":" +
-                        reflection.GetProperty(candidate, "VisibleRemainingCount");
-                }
-
-                return string.Join(",", states);
+                return BuildWinningCandidateSignature(candidates);
             }
+        }
+
+        public string EvaluateAfterDiscardSignatureForReachCandidate(int index)
+        {
+            object evaluator = reflection.GetPrivateField(
+                uiManager,
+                "winningTileCandidateEvaluator");
+            object candidates = reflection.Invoke(
+                evaluator,
+                "EvaluateAfterDiscard",
+                flowSupport.CurrentState,
+                flowSupport.DataFactory.ParseSeat("East"),
+                GetReachCandidate(index));
+            return BuildWinningCandidateSignature(candidates);
         }
 
         public bool IsHoverReevaluationPending =>
@@ -576,6 +598,19 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
                 "ReachDiscardCandidates");
             Assert.That(flowSupport.Collections.Count(candidates), Is.GreaterThan(index));
             return flowSupport.Collections.Item(candidates, index);
+        }
+
+        private string BuildWinningCandidateSignature(object candidates)
+        {
+            string[] states = new string[flowSupport.Collections.Count(candidates)];
+            for (int i = 0; i < states.Length; i++)
+            {
+                object candidate = flowSupport.Collections.Item(candidates, i);
+                states[i] = reflection.GetProperty(candidate, "TypeIndex") + ":" +
+                    reflection.GetProperty(candidate, "VisibleRemainingCount");
+            }
+
+            return string.Join(",", states);
         }
 
         private void HoverCandidate(object candidate, string seatName)
