@@ -762,7 +762,7 @@ namespace MahjongPrototype.UI
                 return false;
             }
 
-            if (state.IsReachDiscardSelectionPending)
+            if (state.IsReachDecisionPending || state.IsReachDiscardSelectionPending)
             {
                 return state.ReachDecisionSeat == selfSeat &&
                     TryFindReachDiscardCandidate(
@@ -1572,70 +1572,90 @@ namespace MahjongPrototype.UI
             bool showSelfReachDecision,
             bool showSelfReachCancel)
         {
-            if (selectedSelfTile.HasValue)
+            if (!TryGetSelfSeat(state, out SeatId selfSeat))
             {
-                TileSelectionIdentity selection = selectedSelfTile.Value;
-                if (!IsTileSelectionCurrentAndSelectable(state, selection))
-                {
-                    ClearTileSelection(true, false);
-                }
-                else
-                {
-                    IReadOnlyList<WinningTileCandidate> selectedCandidates =
-                        EvaluateHoveredTile(
-                            state,
-                            selection.ToTileInfo(),
-                            showSelfReachDecision,
-                            showSelfReachCancel);
-                    if (selectedCandidates.Count > 0)
-                        winningCandidateController?.SetCandidates(selectedCandidates);
-                    else
-                        winningCandidateController?.Clear();
-                    return;
-                }
-            }
-
-            if (tileHoverReevaluationPending)
-                return;
-
-            if (hoveredSelfTile.HasValue)
-            {
-                IReadOnlyList<WinningTileCandidate> candidates = EvaluateHoveredTile(
-                    state,
-                    hoveredSelfTile.Value,
-                    showSelfReachDecision,
-                    showSelfReachCancel);
-                if (candidates.Count > 0)
-                    winningCandidateController?.SetCandidates(candidates);
-                else
-                    winningCandidateController?.Clear();
+                ClearWinningCandidates();
                 return;
             }
 
-            if (!showSelfReachDecision ||
-                !TryGetSelfSeat(state, out SeatId selfSeat))
+            PlayerSeat selfPlayer = state.GetPlayerSeat(selfSeat);
+            if (selfPlayer == null)
             {
-                winningCandidateController?.Clear();
+                ClearWinningCandidates();
                 return;
             }
 
-            IReadOnlyList<ReachWinningCandidateGroup> groups =
-                winningTileCandidateEvaluator.GroupReachCandidates(
-                    state,
-                    selfSeat,
-                    state.ReachDiscardCandidates);
-            winningCandidateController?.SetGroups(groups);
+            if (selfPlayer.IsReachDeclared)
+            {
+                RefreshDeclaredReachWinningCandidates(state, selfSeat);
+                return;
+            }
+
+            RefreshUndeclaredReachWinningCandidates(
+                state,
+                showSelfReachDecision,
+                showSelfReachCancel);
         }
 
-        private IReadOnlyList<WinningTileCandidate> EvaluateHoveredTile(
+        private void RefreshDeclaredReachWinningCandidates(
             MahjongGameState state,
-            Mahjong3DTileHoverInfo hoverInfo,
+            SeatId selfSeat)
+        {
+            if (!hoveredSelfTile.HasValue ||
+                !TryGetCurrentHoveredTile(
+                    state,
+                    selfSeat,
+                    hoveredSelfTile.Value,
+                    out _))
+            {
+                ClearWinningCandidates();
+                return;
+            }
+
+            SetWinningCandidates(
+                winningTileCandidateEvaluator.EvaluateCurrentHand(state, selfSeat));
+        }
+
+        private void RefreshUndeclaredReachWinningCandidates(
+            MahjongGameState state,
+            bool showSelfReachDecision,
+            bool showSelfReachCancel)
+        {
+            if (!selectedSelfTile.HasValue)
+            {
+                ClearWinningCandidates();
+                return;
+            }
+
+            TileSelectionIdentity selection = selectedSelfTile.Value;
+            if (!IsTileSelectionCurrentAndSelectable(state, selection))
+            {
+                ClearTileSelection(true, false);
+                ClearWinningCandidates();
+                return;
+            }
+
+            SetWinningCandidates(
+                EvaluateSelectedTile(
+                    state,
+                    selection.ToTileInfo(),
+                    showSelfReachDecision,
+                    showSelfReachCancel));
+        }
+
+        private IReadOnlyList<WinningTileCandidate> EvaluateSelectedTile(
+            MahjongGameState state,
+            Mahjong3DTileHoverInfo selectedTile,
             bool showSelfReachDecision,
             bool showSelfReachCancel)
         {
             if (!TryGetSelfSeat(state, out SeatId selfSeat) ||
-                hoverInfo.SeatId != selfSeat ||
-                !TryGetCurrentHoveredTile(state, selfSeat, hoverInfo, out PlayerSeat player))
+                selectedTile.SeatId != selfSeat ||
+                !TryGetCurrentHoveredTile(
+                    state,
+                    selfSeat,
+                    selectedTile,
+                    out PlayerSeat player))
             {
                 return System.Array.Empty<WinningTileCandidate>();
             }
@@ -1644,7 +1664,7 @@ namespace MahjongPrototype.UI
             {
                 if (!TryFindReachDiscardCandidate(
                         state.ReachDiscardCandidates,
-                        hoverInfo,
+                        selectedTile,
                         out ReachDiscardCandidate reachCandidate))
                 {
                     return System.Array.Empty<WinningTileCandidate>();
@@ -1656,25 +1676,36 @@ namespace MahjongPrototype.UI
                     reachCandidate);
             }
 
-            if (player.IsReachDeclared)
-                return winningTileCandidateEvaluator.EvaluateCurrentHand(state, selfSeat);
-
             if (player.HasDrawnTile)
             {
                 ReachDiscardCandidate discardCandidate = new ReachDiscardCandidate(
-                    hoverInfo.Source,
-                    hoverInfo.HandIndex,
-                    hoverInfo.Tile);
+                    selectedTile.Source,
+                    selectedTile.HandIndex,
+                    selectedTile.Tile);
                 return winningTileCandidateEvaluator.EvaluateAfterDiscard(
                     state,
                     selfSeat,
                     discardCandidate);
             }
 
-            if (hoverInfo.Source != DiscardSource.Hand)
+            if (selectedTile.Source != DiscardSource.Hand)
                 return System.Array.Empty<WinningTileCandidate>();
 
             return winningTileCandidateEvaluator.EvaluateCurrentHand(state, selfSeat);
+        }
+
+        private void SetWinningCandidates(IReadOnlyList<WinningTileCandidate> candidates)
+        {
+            if (candidates != null && candidates.Count > 0)
+                winningCandidateController?.SetCandidates(candidates);
+            else
+                ClearWinningCandidates();
+        }
+
+        private void ClearWinningCandidates()
+        {
+            if (winningCandidateController != null)
+                winningCandidateController.Clear();
         }
 
         private static bool TryGetCurrentHoveredTile(

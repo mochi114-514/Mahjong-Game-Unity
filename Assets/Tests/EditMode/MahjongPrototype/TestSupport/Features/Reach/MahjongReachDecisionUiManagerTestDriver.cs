@@ -220,6 +220,51 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
             SelectCandidate(savedReachCandidate);
         }
 
+        public void SelectReachCandidate(int index)
+        {
+            savedReachCandidate = GetReachCandidate(index);
+            SelectCandidate(savedReachCandidate);
+        }
+
+        public void SelectSavedReachCandidate()
+        {
+            Assert.That(savedReachCandidate, Is.Not.Null);
+            SelectCandidate(savedReachCandidate);
+        }
+
+        public void SelectReachNonCandidate()
+        {
+            object candidates = reflection.GetProperty(
+                flowSupport.CurrentState,
+                "ReachDiscardCandidates");
+            object selfSeat = flowSupport.DataFactory.ParseSeat("East");
+            object player = reflection.Invoke(
+                flowSupport.CurrentState,
+                "GetPlayerSeat",
+                selfSeat);
+            object hand = reflection.GetProperty(player, "Hand");
+            object handTiles = reflection.Invoke(hand, "GetTiles");
+
+            for (int handIndex = 0;
+                 handIndex < flowSupport.Collections.Count(handTiles);
+                 handIndex++)
+            {
+                object tile = flowSupport.Collections.Item(handTiles, handIndex);
+                if (ContainsReachCandidate(candidates, "Hand", handIndex, tile))
+                    continue;
+
+                reflection.Invoke(
+                    uiManager,
+                    "HandleHandTileClicked",
+                    selfSeat,
+                    handIndex,
+                    tile);
+                return;
+            }
+
+            Assert.Fail("A non-reach hand tile candidate was not found.");
+        }
+
         public void SelectHandTile(int handIndex)
         {
             object candidate = savedReachCandidate ?? GetReachCandidate(0);
@@ -431,6 +476,9 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
         public bool IsReachDecisionPending =>
             (bool)reflection.GetProperty(flowSupport.CurrentState, "IsReachDecisionPending");
 
+        public int ReachCandidateCount => flowSupport.Collections.Count(
+            reflection.GetProperty(flowSupport.CurrentState, "ReachDiscardCandidates"));
+
         public bool IsSelfReachDeclared => flowSupport.IsReachDeclared("East");
 
         public bool DecisionAreaActive => decisionArea.activeSelf;
@@ -453,6 +501,48 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Reach
 
         public bool HasSelectedSelfTile =>
             reflection.GetPrivateField(uiManager, "selectedSelfTile") != null;
+
+        public int SelectedHandIndex => (int)reflection.GetProperty(
+            reflection.GetPrivateField(uiManager, "selectedSelfTile"),
+            "HandIndex");
+
+        public string SelectedTileIdentity
+        {
+            get
+            {
+                object selection = reflection.GetPrivateField(uiManager, "selectedSelfTile");
+                return reflection.GetProperty(selection, "Source") + ":" +
+                    reflection.GetProperty(selection, "HandIndex") + ":" +
+                    reflection.GetProperty(selection, "Tile");
+            }
+        }
+
+        public string WinningCandidateSignature
+        {
+            get
+            {
+                if (winningCandidateController == null)
+                    return string.Empty;
+
+                object groups = reflection.GetPrivateField(
+                    winningCandidateController,
+                    "displayedGroups");
+                if (flowSupport.Collections.Count(groups) <= 0)
+                    return string.Empty;
+
+                object group = flowSupport.Collections.Item(groups, 0);
+                object candidates = reflection.GetProperty(group, "Candidates");
+                string[] states = new string[flowSupport.Collections.Count(candidates)];
+                for (int i = 0; i < states.Length; i++)
+                {
+                    object candidate = flowSupport.Collections.Item(candidates, i);
+                    states[i] = reflection.GetProperty(candidate, "TypeIndex") + ":" +
+                        reflection.GetProperty(candidate, "VisibleRemainingCount");
+                }
+
+                return string.Join(",", states);
+            }
+        }
 
         public bool IsHoverReevaluationPending =>
             (bool)reflection.GetPrivateField(uiManager, "tileHoverReevaluationPending");

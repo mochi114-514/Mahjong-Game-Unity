@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using MahjongPrototype.Domain;
 using MahjongPrototype.Services;
 using UnityEngine;
 using UnityEngine.UI;
@@ -12,8 +11,7 @@ namespace MahjongPrototype.UI
     {
         private enum DisplayMode
         {
-            Candidates = 0,
-            ReachGroups = 1
+            Candidates = 0
         }
 
         [SerializeField] private GameObject root;
@@ -43,49 +41,6 @@ namespace MahjongPrototype.UI
             Clear();
         }
 
-        public void SetGroups(IReadOnlyList<ReachWinningCandidateGroup> groups)
-        {
-            if (groups == null)
-            {
-                Clear();
-                return;
-            }
-
-            int visibleGroupCount = CountVisibleGroups(groups);
-            if (visibleGroupCount <= 0)
-            {
-                Clear();
-                return;
-            }
-
-            bool showDiscardHeadings = visibleGroupCount > 1;
-            List<DisplayGroupState> nextDisplayGroups =
-                BuildGroupDisplayStates(groups, showDiscardHeadings);
-            if (HasSameDisplay(DisplayMode.ReachGroups, nextDisplayGroups))
-                return;
-
-            if (!CanPopulate())
-            {
-                Clear();
-                return;
-            }
-
-            ClearSpawnedGroups();
-            for (int i = 0; i < groups.Count; i++)
-            {
-                ReachWinningCandidateGroup group = groups[i];
-                if (group == null || group.WinningTiles.Count <= 0)
-                    continue;
-
-                SpawnGroup(
-                    group.WinningTiles,
-                    showDiscardHeadings,
-                    BuildDiscardHeading(group.DiscardCandidates));
-            }
-
-            ShowPopulatedRoot(DisplayMode.ReachGroups, nextDisplayGroups);
-        }
-
         public void SetCandidates(IReadOnlyList<WinningTileCandidate> candidates)
         {
             if (candidates == null || candidates.Count <= 0)
@@ -98,10 +53,7 @@ namespace MahjongPrototype.UI
                 new List<DisplayGroupState>
                 {
                     new DisplayGroupState(
-                        false,
-                        string.Empty,
-                        BuildCandidateDisplayStates(candidates),
-                        new List<DiscardCandidateDisplayState>())
+                        BuildCandidateDisplayStates(candidates))
                 };
             if (HasSameDisplay(DisplayMode.Candidates, nextDisplayGroups))
                 return;
@@ -235,27 +187,6 @@ namespace MahjongPrototype.UI
             displayedGroups.Clear();
         }
 
-        private static List<DisplayGroupState> BuildGroupDisplayStates(
-            IReadOnlyList<ReachWinningCandidateGroup> groups,
-            bool showDiscardHeadings)
-        {
-            List<DisplayGroupState> states = new List<DisplayGroupState>();
-            for (int i = 0; i < groups.Count; i++)
-            {
-                ReachWinningCandidateGroup group = groups[i];
-                if (group == null || group.WinningTiles.Count <= 0)
-                    continue;
-
-                states.Add(new DisplayGroupState(
-                    showDiscardHeadings,
-                    BuildDiscardHeading(group.DiscardCandidates),
-                    BuildCandidateDisplayStates(group.WinningTiles),
-                    BuildDiscardCandidateDisplayStates(group.DiscardCandidates)));
-            }
-
-            return states;
-        }
-
         private static List<WinningCandidateDisplayState> BuildCandidateDisplayStates(
             IReadOnlyList<WinningTileCandidate> candidates)
         {
@@ -267,26 +198,6 @@ namespace MahjongPrototype.UI
                 states.Add(new WinningCandidateDisplayState(
                     candidate.Tile.TypeIndex,
                     candidate.VisibleRemainingCount));
-            }
-
-            return states;
-        }
-
-        private static List<DiscardCandidateDisplayState> BuildDiscardCandidateDisplayStates(
-            IReadOnlyList<ReachDiscardCandidate> discardCandidates)
-        {
-            List<DiscardCandidateDisplayState> states =
-                new List<DiscardCandidateDisplayState>();
-            if (discardCandidates == null)
-                return states;
-
-            for (int i = 0; i < discardCandidates.Count; i++)
-            {
-                ReachDiscardCandidate candidate = discardCandidates[i];
-                states.Add(new DiscardCandidateDisplayState(
-                    candidate.Source,
-                    candidate.HandIndex,
-                    candidate.Tile.TypeIndex));
             }
 
             return states;
@@ -345,72 +256,6 @@ namespace MahjongPrototype.UI
                 LayoutRebuilder.ForceRebuildLayoutImmediate(rootRect);
         }
 
-        private static int CountVisibleGroups(
-            IReadOnlyList<ReachWinningCandidateGroup> groups)
-        {
-            int count = 0;
-            for (int i = 0; i < groups.Count; i++)
-            {
-                if (groups[i] != null && groups[i].WinningTiles.Count > 0)
-                    count++;
-            }
-
-            return count;
-        }
-
-        private static string BuildDiscardHeading(
-            IReadOnlyList<ReachDiscardCandidate> discardCandidates)
-        {
-            if (discardCandidates == null || discardCandidates.Count <= 0)
-                return string.Empty;
-
-            List<string> names = new List<string>();
-            HashSet<int> addedTypeIndexes = new HashSet<int>();
-            for (int i = 0; i < discardCandidates.Count; i++)
-            {
-                Tile tile = discardCandidates[i].Tile;
-                if (!tile.IsValid || !addedTypeIndexes.Add(tile.TypeIndex))
-                    continue;
-
-                names.Add(FormatTileName(tile));
-            }
-
-            return names.Count > 0 ? string.Join("・", names) + "切り" : string.Empty;
-        }
-
-        private static string FormatTileName(Tile tile)
-        {
-            if (tile.IsNumberTile)
-            {
-                string[] rankNames =
-                    { "", "一", "二", "三", "四", "五", "六", "七", "八", "九" };
-                string suitName = tile.Suit == TileSuit.Man
-                    ? "萬"
-                    : tile.Suit == TileSuit.Pin ? "筒" : "索";
-                return rankNames[tile.Rank] + suitName;
-            }
-
-            switch (tile.Honor)
-            {
-                case HonorKind.East:
-                    return "東";
-                case HonorKind.South:
-                    return "南";
-                case HonorKind.West:
-                    return "西";
-                case HonorKind.North:
-                    return "北";
-                case HonorKind.White:
-                    return "白";
-                case HonorKind.Green:
-                    return "發";
-                case HonorKind.Red:
-                    return "中";
-                default:
-                    return tile.Code;
-            }
-        }
-
         private void WarnMissingSpriteOnce(int typeIndex)
         {
             if (!warnedMissingSpriteTypeIndexes.Add(typeIndex))
@@ -434,29 +279,17 @@ namespace MahjongPrototype.UI
         private sealed class DisplayGroupState
         {
             public DisplayGroupState(
-                bool showHeading,
-                string heading,
-                IReadOnlyList<WinningCandidateDisplayState> candidates,
-                IReadOnlyList<DiscardCandidateDisplayState> discardCandidates)
+                IReadOnlyList<WinningCandidateDisplayState> candidates)
             {
-                ShowHeading = showHeading;
-                Heading = heading ?? string.Empty;
                 Candidates = candidates;
-                DiscardCandidates = discardCandidates;
             }
 
-            private bool ShowHeading { get; }
-            private string Heading { get; }
             private IReadOnlyList<WinningCandidateDisplayState> Candidates { get; }
-            private IReadOnlyList<DiscardCandidateDisplayState> DiscardCandidates { get; }
 
             public bool Equals(DisplayGroupState other)
             {
                 return other != null &&
-                    ShowHeading == other.ShowHeading &&
-                    Heading == other.Heading &&
-                    HasSameItems(Candidates, other.Candidates) &&
-                    HasSameItems(DiscardCandidates, other.DiscardCandidates);
+                    HasSameItems(Candidates, other.Candidates);
             }
 
             private static bool HasSameItems<T>(
@@ -493,31 +326,6 @@ namespace MahjongPrototype.UI
             {
                 return TypeIndex == other.TypeIndex &&
                     VisibleRemainingCount == other.VisibleRemainingCount;
-            }
-        }
-
-        private readonly struct DiscardCandidateDisplayState :
-            System.IEquatable<DiscardCandidateDisplayState>
-        {
-            public DiscardCandidateDisplayState(
-                DiscardSource source,
-                int handIndex,
-                int tileTypeIndex)
-            {
-                Source = source;
-                HandIndex = handIndex;
-                TileTypeIndex = tileTypeIndex;
-            }
-
-            private DiscardSource Source { get; }
-            private int HandIndex { get; }
-            private int TileTypeIndex { get; }
-
-            public bool Equals(DiscardCandidateDisplayState other)
-            {
-                return Source == other.Source &&
-                    HandIndex == other.HandIndex &&
-                    TileTypeIndex == other.TileTypeIndex;
             }
         }
 
