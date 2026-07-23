@@ -12,8 +12,12 @@ namespace MahjongPrototype
         [SerializeField, Min(0f)] private float cpuDiscardDelaySeconds = 0.75f;
 
         private int operationVersion;
+        private int activeOperationVersion;
 
         public float CpuDiscardDelaySeconds => cpuDiscardDelaySeconds;
+        public int OperationVersion => operationVersion;
+        public bool IsCpuTurnRunning =>
+            activeOperationVersion != 0 && activeOperationVersion == operationVersion;
 
         private void OnDisable()
         {
@@ -33,6 +37,7 @@ namespace MahjongPrototype
                 return;
 
             int startedOperationVersion = operationVersion;
+            activeOperationVersion = startedOperationVersion;
             StartCoroutine(RunCpuTurn(
                 gateway,
                 gameState,
@@ -45,6 +50,7 @@ namespace MahjongPrototype
         public void CancelPendingTurn()
         {
             operationVersion++;
+            activeOperationVersion = 0;
             StopAllCoroutines();
         }
 
@@ -56,46 +62,54 @@ namespace MahjongPrototype
             int turnIndex,
             int startedOperationVersion)
         {
-            PlayerSeat playerSeat = gameState.GetPlayerSeat(seat);
-            if (!playerSeat.HasDrawnTile)
+            try
             {
-                if (!gateway.RequestDrawForCpu(playerId, seat, turnIndex))
+                PlayerSeat playerSeat = gameState.GetPlayerSeat(seat);
+                if (!playerSeat.HasDrawnTile)
+                {
+                    if (!gateway.RequestDrawForCpu(playerId, seat, turnIndex))
+                        yield break;
+                }
+
+                if (!IsSameCpuTurn(
+                        gateway,
+                        gameState,
+                        playerId,
+                        seat,
+                        turnIndex,
+                        startedOperationVersion))
+                {
+                    LogPausedWinDecision(gameState, seat, turnIndex);
                     yield break;
-            }
+                }
 
-            if (!IsSameCpuTurn(
-                    gateway,
-                    gameState,
-                    playerId,
-                    seat,
-                    turnIndex,
-                    startedOperationVersion))
+                if (cpuDiscardDelaySeconds > 0f)
+                    yield return new WaitForSeconds(cpuDiscardDelaySeconds);
+                else
+                    yield return null;
+
+                if (!IsSameCpuTurn(
+                        gateway,
+                        gameState,
+                        playerId,
+                        seat,
+                        turnIndex,
+                        startedOperationVersion))
+                {
+                    yield break;
+                }
+
+                if (!gameState.GetPlayerSeat(seat).HasDrawnTile)
+                    yield break;
+
+                // PROTOTYPE: The first CPU implementation always discards its drawn tile.
+                gateway.RequestDiscardDrawnTileForCpu(playerId, seat, turnIndex);
+            }
+            finally
             {
-                LogPausedWinDecision(gameState, seat, turnIndex);
-                yield break;
+                if (activeOperationVersion == startedOperationVersion)
+                    activeOperationVersion = 0;
             }
-
-            if (cpuDiscardDelaySeconds > 0f)
-                yield return new WaitForSeconds(cpuDiscardDelaySeconds);
-            else
-                yield return null;
-
-            if (!IsSameCpuTurn(
-                    gateway,
-                    gameState,
-                    playerId,
-                    seat,
-                    turnIndex,
-                    startedOperationVersion))
-            {
-                yield break;
-            }
-
-            if (!gameState.GetPlayerSeat(seat).HasDrawnTile)
-                yield break;
-
-            // PROTOTYPE: The first CPU implementation always discards its drawn tile.
-            gateway.RequestDiscardDrawnTileForCpu(playerId, seat, turnIndex);
         }
 
         private bool IsSameCpuTurn(

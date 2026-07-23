@@ -22,8 +22,8 @@ namespace MahjongPrototype.Tests
                 Assert.That(driver.TurnIndex, Is.EqualTo(1));
                 Assert.That(driver.Player2HasDrawnTile, Is.True);
 
-                yield return null;
-                yield return null;
+                yield return driver.WaitForCpuDiscardAndNextTurn(
+                    expectedNextTurnIndex: 2);
 
                 Assert.That(driver.HasCpuDiscardRecord, Is.True);
                 Assert.That(driver.CpuDiscardActorSeatName, Is.EqualTo("East"));
@@ -44,8 +44,8 @@ namespace MahjongPrototype.Tests
 
                 Assert.That(driver.Player2HasDrawnTile, Is.True);
 
-                yield return null;
-                yield return null;
+                yield return driver.WaitForCpuDiscardAndNextTurn(
+                    expectedNextTurnIndex: 3);
 
                 Assert.That(driver.HasCpuDiscardRecord, Is.True);
                 Assert.That(driver.CpuDiscardActorSeatName, Is.EqualTo(driver.Player2SeatName));

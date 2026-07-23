@@ -1,5 +1,7 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
+using NUnit.Framework;
 
 namespace MahjongPrototype.Tests.TestSupport.Features.Turn
 {
@@ -149,6 +151,31 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Turn
 
         public int EventIndex(string eventName) => eventOrder.IndexOf(eventName);
 
+        public IEnumerator WaitForCpuDiscardAndNextTurn(
+            int expectedNextTurnIndex,
+            int maxFrames = 30)
+        {
+            for (int frame = 0; frame < maxFrames; frame++)
+            {
+                // MahjongGameFlow normally pumps here from Update. Pumping at
+                // the same authority boundary makes a queued provider reply
+                // observable without fabricating any decision response.
+                PumpDecisionCoordinator();
+
+                if (HasCpuDiscardRecord &&
+                    CurrentTurnName == SelfSeatName &&
+                    TurnIndex == expectedNextTurnIndex)
+                {
+                    yield break;
+                }
+
+                yield return null;
+            }
+
+            Assert.Fail(
+                $"CPU turn did not complete within {maxFrames} frames. {DescribeCpuTurnState()}");
+        }
+
         public object CurrentStateToken => support.StateToken;
         public string SelfSeatName => support.SelfSeatName;
         public string Player2SeatName => support.SeatByPlayerId("Player2");
@@ -174,6 +201,72 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Turn
 
             disposed = true;
             support.Dispose();
+        }
+
+        private string DescribeCpuTurnState()
+        {
+            object coordinator = support.Reflection.GetProperty(
+                support.GameFlow,
+                "DecisionCoordinator");
+            int coordinatorPendingCount = coordinator != null
+                ? (int)support.Reflection.GetProperty(coordinator, "PendingCount")
+                : -1;
+            int queuedResponseCount = coordinator != null
+                ? (int)support.Reflection.GetProperty(
+                    coordinator,
+                    "QueuedResponseCount")
+                : -1;
+            object controller = support.Reflection.GetPrivateField(
+                support.GameFlow,
+                "cpuTurnController");
+            string controllerState = controller == null
+                ? "missing"
+                : $"running={support.Reflection.GetProperty(controller, "IsCpuTurnRunning")}; " +
+                  $"operationVersion={support.Reflection.GetProperty(controller, "OperationVersion")}";
+
+            return
+                $"phase={TurnPhaseName}; currentSeat={CurrentTurnName}; turnIndex={TurnIndex}; " +
+                $"cpuSeat={Player2SeatName}; cpuHasDrawnTile={Player2HasDrawnTile}; " +
+                $"cpuDiscardRecorded={HasCpuDiscardRecord}; discardCount={DiscardCount}; " +
+                $"pendingDecisions={DescribePendingDecisionKinds()}; " +
+                $"decisionCoordinatorPending={coordinatorPendingCount}; " +
+                $"queuedResponses={queuedResponseCount}; cpuController={controllerState}; " +
+                $"events=[{string.Join(",", eventOrder)}]";
+        }
+
+        private string DescribePendingDecisionKinds()
+        {
+            List<string> kinds = new List<string>();
+            CollectPendingDecisionKinds(
+                support.Reflection.GetPrivateField(
+                    support.GameFlow,
+                    "pendingDecisionRequestsById"),
+                false,
+                kinds);
+            CollectPendingDecisionKinds(
+                support.Reflection.GetPrivateField(
+                    support.GameFlow,
+                    "pendingReactionDecisionsByRequestId"),
+                true,
+                kinds);
+            return kinds.Count <= 0 ? "none" : string.Join(",", kinds);
+        }
+
+        private void CollectPendingDecisionKinds(
+            object dictionaryObject,
+            bool isReactionPending,
+            List<string> kinds)
+        {
+            if (!(dictionaryObject is IDictionary dictionary))
+                return;
+
+            foreach (DictionaryEntry entry in dictionary)
+            {
+                object request = isReactionPending
+                    ? support.Reflection.GetProperty(entry.Value, "Request")
+                    : entry.Value;
+                kinds.Add(support.Reflection.GetProperty(request, "Kind").ToString());
+            }
         }
     }
 }
