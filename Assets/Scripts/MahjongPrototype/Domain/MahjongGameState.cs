@@ -32,6 +32,9 @@ namespace MahjongPrototype.Domain
         private ReactionWindow reactionWindow;
         private SelfKanDecision selfKanDecision;
         private SelfKanCandidate pendingKakan;
+        private AbortiveDrawKind? abortiveDrawDecisionKind;
+        private SeatId abortiveDrawDecisionSeat;
+        private int abortiveDrawDecisionTurnIndex;
         private SeatId winDecisionSeat;
         private WinType? winDecisionType;
         private Tile? winningTile;
@@ -115,6 +118,11 @@ namespace MahjongPrototype.Domain
         public bool IsSelfKanDecisionPending => turnPhase == TurnPhaseType.SelfKanDecision;
         public SelfKanDecision CurrentSelfKanDecision => selfKanDecision;
         public SelfKanCandidate PendingKakan => pendingKakan;
+        public bool IsAbortiveDrawDecisionPending =>
+            turnPhase == TurnPhaseType.AbortiveDrawDecision;
+        public AbortiveDrawKind? AbortiveDrawDecisionKind => abortiveDrawDecisionKind;
+        public SeatId AbortiveDrawDecisionSeat => abortiveDrawDecisionSeat;
+        public int AbortiveDrawDecisionTurnIndex => abortiveDrawDecisionTurnIndex;
         public bool IsReachDiscardSelectionPending =>
             turnPhase == TurnPhaseType.ReachDiscardSelection;
         public SeatId ReachDecisionSeat { get; private set; }
@@ -125,6 +133,7 @@ namespace MahjongPrototype.Domain
             TurnPhase == TurnPhaseType.ReactionWindow ||
             TurnPhase == TurnPhaseType.ReachDecision ||
             TurnPhase == TurnPhaseType.SelfKanDecision ||
+            TurnPhase == TurnPhaseType.AbortiveDrawDecision ||
             TurnPhase == TurnPhaseType.RoundEnded ||
             TurnPhase == TurnPhaseType.RoundResult ||
             TurnPhase == TurnPhaseType.GameEnded;
@@ -800,6 +809,41 @@ namespace MahjongPrototype.Domain
             return true;
         }
 
+        public bool BeginAbortiveDrawDecision(
+            SeatId seat,
+            AbortiveDrawKind kind)
+        {
+            if (!Enum.IsDefined(typeof(AbortiveDrawKind), kind) ||
+                IsRoundEnded || CurrentTurn != seat ||
+                turnPhase != TurnPhaseType.WaitingForDiscard ||
+                !GetPlayerSeat(seat).HasDrawnTile)
+            {
+                return false;
+            }
+
+            TransitionTo(TurnPhaseType.AbortiveDrawDecision);
+            abortiveDrawDecisionKind = kind;
+            abortiveDrawDecisionSeat = seat;
+            abortiveDrawDecisionTurnIndex = TurnIndex;
+            return true;
+        }
+
+        public bool TryDeclineAbortiveDrawDecision(SeatId seat)
+        {
+            if (!IsAbortiveDrawDecisionPending ||
+                !abortiveDrawDecisionKind.HasValue ||
+                abortiveDrawDecisionSeat != seat ||
+                abortiveDrawDecisionTurnIndex != TurnIndex ||
+                CurrentTurn != seat ||
+                !GetPlayerSeat(seat).HasDrawnTile)
+            {
+                return false;
+            }
+
+            TransitionTo(TurnPhaseType.WaitingForDiscard);
+            return true;
+        }
+
         public bool TryAcceptSelfKanDecision(SelfKanCandidate candidate)
         {
             if (!IsSelfKanDecisionPending || selfKanDecision == null ||
@@ -927,6 +971,8 @@ namespace MahjongPrototype.Domain
             }
             if (nextPhase != TurnPhaseType.SelfKanDecision)
                 ClearSelfKanDecisionData();
+            if (nextPhase != TurnPhaseType.AbortiveDrawDecision)
+                ClearAbortiveDrawDecisionData();
             if (nextPhase != TurnPhaseType.RoundResult &&
                 nextPhase != TurnPhaseType.GameEnded)
             {
@@ -973,6 +1019,13 @@ namespace MahjongPrototype.Domain
         private void ClearSelfKanDecisionData()
         {
             selfKanDecision = null;
+        }
+
+        private void ClearAbortiveDrawDecisionData()
+        {
+            abortiveDrawDecisionKind = null;
+            abortiveDrawDecisionSeat = default;
+            abortiveDrawDecisionTurnIndex = 0;
         }
 
         public void ClearIppatsuEligibilityForAllPlayers()

@@ -61,6 +61,8 @@ namespace MahjongPrototype
         private readonly DiscardService discardService = new DiscardService();
         private readonly WinChecker winChecker = new WinChecker();
         private readonly ReachChecker reachChecker = new ReachChecker();
+        private readonly NineTerminalsAndHonorsEvaluator
+            nineTerminalsAndHonorsEvaluator = new NineTerminalsAndHonorsEvaluator();
         private readonly SkillSystem skillSystem = new SkillSystem();
         private readonly SkillReservationService skillReservationService = new SkillReservationService();
 
@@ -150,6 +152,7 @@ namespace MahjongPrototype
                 case TurnPhase.WinDecision:
                 case TurnPhase.ReachDecision:
                 case TurnPhase.SelfKanDecision:
+                case TurnPhase.AbortiveDrawDecision:
                 case TurnPhase.ReachDiscardSelection:
                     return true;
                 default:
@@ -368,6 +371,8 @@ namespace MahjongPrototype
                     return TryExecuteReachDecisionResponse(request, response);
                 case DecisionKind.SelfKan:
                     return TryExecuteSelfKanDecisionResponse(request, response);
+                case DecisionKind.AbortiveDraw:
+                    return TryExecuteAbortiveDrawDecisionResponse(request, response);
                 default:
                     return DecisionResponseResult.Rejected("DecisionKindNotIntegrated");
             }
@@ -510,9 +515,56 @@ namespace MahjongPrototype
                     : DecisionResponseResult.Rejected("WinDeclarationRejected");
             }
 
-            return TryDeclineWinDecisionForSeat(response.ActorSeat)
+            return TryDeclineWinDecisionForSeat(
+                    response.ActorSeat,
+                    !request.WinDeclaration.IsRinshanDraw)
                 ? DecisionResponseResult.Succeeded()
                 : DecisionResponseResult.Rejected("WinDecisionStale");
+        }
+
+        private DecisionResponseResult TryExecuteAbortiveDrawDecisionResponse(
+            DecisionRequest request,
+            DecisionResponse response)
+        {
+            if (request.AbortiveDraw == null ||
+                request.AbortiveDraw.Kind !=
+                    AbortiveDrawKind.NineTerminalsAndHonors ||
+                !gameState.IsAbortiveDrawDecisionPending ||
+                gameState.AbortiveDrawDecisionKind != request.AbortiveDraw.Kind ||
+                gameState.AbortiveDrawDecisionSeat != response.ActorSeat ||
+                gameState.AbortiveDrawDecisionTurnIndex != response.TurnIndex ||
+                !CanDeclareNineTerminalsAndHonors(response.ActorSeat))
+            {
+                return DecisionResponseResult.Rejected("AbortiveDrawDecisionStale");
+            }
+
+            pendingDecisionRequestsById.Remove(request.RequestId);
+            if (response.Accepted)
+            {
+                return TryEndAbortiveDraw(request.AbortiveDraw.Kind)
+                    ? DecisionResponseResult.Succeeded()
+                    : DecisionResponseResult.Rejected("AbortiveDrawRejected");
+            }
+
+            AbortiveDrawKind kind = request.AbortiveDraw.Kind;
+            if (!gameState.TryDeclineAbortiveDrawDecision(response.ActorSeat))
+                return DecisionResponseResult.Rejected("AbortiveDrawDecisionStale");
+
+            EventPublisher.NotifyTurnDebug(
+                "AbortiveDrawDecisionDeclined",
+                $"kind={kind}; phase={gameState.TurnPhase}",
+                seat: response.ActorSeat,
+                turnIndex: response.TurnIndex);
+            EventPublisher.NotifyAbortiveDrawDecisionDeclined(
+                response.ActorSeat,
+                kind,
+                response.TurnIndex);
+            ContinueAfterDeclinedAbortiveDraw(response.ActorSeat);
+            TryContinueCpuTurnAfterAbortiveDrawDecision(
+                response.PlayerId,
+                response.ActorSeat,
+                response.TurnIndex);
+            return DecisionResponseResult.Succeeded();
         }
 
         private DecisionResponseResult TryExecuteReachDecisionResponse(
@@ -1456,6 +1508,7 @@ namespace MahjongPrototype
                 case TurnPhase.WinDecision:
                 case TurnPhase.ReachDecision:
                 case TurnPhase.SelfKanDecision:
+                case TurnPhase.AbortiveDrawDecision:
                 case TurnPhase.ReachDiscardSelection:
                     return true;
                 default:
@@ -1487,6 +1540,10 @@ namespace MahjongPrototype
                 }
                 case TurnPhase.SelfKanDecision:
                     return TryDismissSelfKanDecisionForTileClick(actorSeat, out reason);
+                case TurnPhase.AbortiveDrawDecision:
+                    return TryDismissAbortiveDrawDecisionForTileClick(
+                        actorSeat,
+                        out reason);
                 case TurnPhase.ReachDiscardSelection:
                 {
                     if (IsValidReachDiscardCandidate(actorSeat, source, handIndex))
@@ -2880,14 +2937,18 @@ namespace MahjongPrototype
                 gameState,
                 isRinshanDraw);
             if (evaluation.DecisionStarted &&
-                !TryBeginWinDeclarationDecisionRequest(out string requestReason))
+                !TryBeginWinDeclarationDecisionRequest(
+                    isRinshanDraw,
+                    out string requestReason))
             {
                 NotifyTurnBlocked("WinBlocked", requestReason);
                 // A provider route may be configured without a strategy (for
                 // example the intentionally unimplemented network path). Do
                 // not leave a newly-created self-draw decision pending
                 // forever when no provider can receive it.
-                TryDeclineWinDecisionForSeat(gameState.WinDecisionSeat);
+                TryDeclineWinDecisionForSeat(
+                    gameState.WinDecisionSeat,
+                    !isRinshanDraw);
             }
             NotifyWinDecisionStartedIfNeeded(evaluation);
             NotifyWinCheckResults(evaluation);
@@ -2900,6 +2961,33 @@ namespace MahjongPrototype
             if (gameState.IsWinDecisionPending)
                 return;
 
+            if (gameState.IsAbortiveDrawDecisionPending)
+                return;
+
+            if (!isRinshanDraw &&
+                TryBeginNineTerminalsAndHonorsDecisionAfterDraw(seat))
+            {
+                return;
+            }
+
+            ContinueAfterDeclinedAbortiveDraw(seat);
+        }
+
+        private void ContinueAfterDeclinedTsumo(
+            SeatId seat,
+            bool allowNineTerminalsAndHonors = true)
+        {
+            if (allowNineTerminalsAndHonors &&
+                TryBeginNineTerminalsAndHonorsDecisionAfterDraw(seat))
+            {
+                return;
+            }
+
+            ContinueAfterDeclinedAbortiveDraw(seat);
+        }
+
+        private void ContinueAfterDeclinedAbortiveDraw(SeatId seat)
+        {
             if (TryBeginSelfKanDecisionAfterDraw(seat))
                 return;
 
@@ -2912,18 +3000,95 @@ namespace MahjongPrototype
             TryBeginReachDecisionAfterDraw(seat);
         }
 
-        private void ContinueAfterDeclinedTsumo(SeatId seat)
+        private bool TryBeginNineTerminalsAndHonorsDecisionAfterDraw(SeatId seat)
         {
-            if (TryBeginSelfKanDecisionAfterDraw(seat))
-                return;
-
-            if (ShouldAutoDiscardDrawnTileAfterDraw(seat))
+            const AbortiveDrawKind kind =
+                AbortiveDrawKind.NineTerminalsAndHonors;
+            if (gameState == null || gameState.CurrentTurn != seat)
+                return false;
+            if (gameState.IsAbortiveDrawDecisionPending)
             {
-                TryAutoDiscardDrawnTileAfterDraw(seat);
-                return;
+                return gameState.AbortiveDrawDecisionKind == kind &&
+                    gameState.AbortiveDrawDecisionSeat == seat &&
+                    gameState.AbortiveDrawDecisionTurnIndex == gameState.TurnIndex;
+            }
+            if (gameState.TurnPhase != TurnPhase.WaitingForDiscard ||
+                !CanDeclareNineTerminalsAndHonors(seat) ||
+                !gameState.BeginAbortiveDrawDecision(seat, kind))
+            {
+                return false;
             }
 
-            TryBeginReachDecisionAfterDraw(seat);
+            if (!TryBeginAbortiveDrawDecisionRequest(
+                    seat,
+                    kind,
+                    out string requestReason))
+            {
+                gameState.TryDeclineAbortiveDrawDecision(seat);
+                NotifyTurnBlocked(
+                    "AbortiveDrawDecisionBlocked",
+                    requestReason);
+                return false;
+            }
+
+            EventPublisher.NotifyTurnDebug(
+                "AbortiveDrawDecisionStarted",
+                $"kind={kind}; phase={gameState.TurnPhase}",
+                seat: seat,
+                turnIndex: gameState.TurnIndex);
+            EventPublisher.NotifyAbortiveDrawDecisionStarted(
+                seat,
+                kind,
+                gameState.TurnIndex);
+            return true;
+        }
+
+        private bool TryDismissAbortiveDrawDecisionForTileClick(
+            SeatId actorSeat,
+            out string reason)
+        {
+            reason = string.Empty;
+            if (!gameState.IsAbortiveDrawDecisionPending ||
+                !gameState.AbortiveDrawDecisionKind.HasValue ||
+                gameState.AbortiveDrawDecisionSeat != actorSeat ||
+                gameState.AbortiveDrawDecisionTurnIndex != gameState.TurnIndex)
+            {
+                reason = "AbortiveDrawDecisionMissing";
+                return false;
+            }
+
+            if (!TryCancelPendingDecisionForTileClick(
+                    actorSeat,
+                    DecisionKind.AbortiveDraw,
+                    out reason))
+            {
+                return false;
+            }
+
+            AbortiveDrawKind kind = gameState.AbortiveDrawDecisionKind.Value;
+            int turnIndex = gameState.AbortiveDrawDecisionTurnIndex;
+            if (!gameState.TryDeclineAbortiveDrawDecision(actorSeat))
+            {
+                reason = "AbortiveDrawDecisionMissing";
+                return false;
+            }
+
+            EventPublisher.NotifyAbortiveDrawDecisionDeclined(
+                actorSeat,
+                kind,
+                turnIndex);
+            return true;
+        }
+
+        private bool CanDeclareNineTerminalsAndHonors(SeatId seat)
+        {
+            if (gameState == null || gameState.CurrentTurn != seat)
+                return false;
+
+            return nineTerminalsAndHonorsEvaluator.CanDeclare(
+                gameState.GetPlayerSeat(seat),
+                gameState.Discards,
+                gameState.HasCallOccurred);
         }
 
         private bool TryBeginSelfKanDecisionAfterDraw(SeatId seat)
@@ -4046,7 +4211,9 @@ namespace MahjongPrototype
                 request.TurnIndex == response.TurnIndex;
         }
 
-        private bool TryBeginWinDeclarationDecisionRequest(out string reason)
+        private bool TryBeginWinDeclarationDecisionRequest(
+            bool isRinshanDraw,
+            out string reason)
         {
             reason = string.Empty;
             if (gameState == null || !gameState.IsWinDecisionPending ||
@@ -4081,7 +4248,49 @@ namespace MahjongPrototype
                 new WinDeclarationDecisionRequest(
                     gameState.WinDecisionType.Value,
                     gameState.WinningTile,
-                    gameState.WinSourceSeat));
+                    gameState.WinSourceSeat,
+                    isRinshanDraw));
+            return TryQueueDecisionRequest(request, out reason);
+        }
+
+        private bool TryBeginAbortiveDrawDecisionRequest(
+            SeatId seat,
+            AbortiveDrawKind kind,
+            out string reason)
+        {
+            reason = string.Empty;
+            if (gameState == null ||
+                !gameState.IsAbortiveDrawDecisionPending ||
+                gameState.AbortiveDrawDecisionSeat != seat ||
+                gameState.AbortiveDrawDecisionKind != kind ||
+                gameState.AbortiveDrawDecisionTurnIndex != gameState.TurnIndex)
+            {
+                reason = "AbortiveDrawDecisionMissing";
+                return false;
+            }
+
+            SeatSlot slot = gameState.GetSeatSlot(seat);
+            if (!slot.HasPlayer)
+            {
+                reason = "AbortiveDrawDecisionPlayerMissing";
+                return false;
+            }
+
+            if (TryGetPendingDecisionRequest(
+                    slot.PlayerId.Value,
+                    DecisionKind.AbortiveDraw,
+                    out _))
+            {
+                return true;
+            }
+
+            DecisionRequest request = new DecisionRequest(
+                AllocateDecisionRequestId(),
+                DecisionKind.AbortiveDraw,
+                slot.PlayerId.Value,
+                seat,
+                gameState.TurnIndex,
+                new AbortiveDrawDecisionRequest(kind));
             return TryQueueDecisionRequest(request, out reason);
         }
 
@@ -4264,7 +4473,9 @@ namespace MahjongPrototype
             return false;
         }
 
-        private bool TryDeclineWinDecisionForSeat(SeatId actorSeat)
+        private bool TryDeclineWinDecisionForSeat(
+            SeatId actorSeat,
+            bool allowNineTerminalsAndHonors = true)
         {
             if (!CanUseGameState() || !gameState.IsWinDecisionPending ||
                 gameState.WinDecisionSeat != actorSeat ||
@@ -4283,7 +4494,9 @@ namespace MahjongPrototype
                 result.Seat,
                 result.WinType,
                 result.TurnIndex);
-            ContinueAfterDeclinedTsumo(result.Seat);
+            ContinueAfterDeclinedTsumo(
+                result.Seat,
+                allowNineTerminalsAndHonors);
             return true;
         }
 
@@ -4484,6 +4697,37 @@ namespace MahjongPrototype
             Warn("User input is only available during the self player's turn.");
             NotifyTurnBlocked(blockedEventName, "NotSelfTurn");
             return false;
+        }
+
+        private void TryContinueCpuTurnAfterAbortiveDrawDecision(
+            PlayerId playerId,
+            SeatId seat,
+            int turnIndex)
+        {
+            if (gameState == null || gameState.CurrentTurn != seat ||
+                gameState.TurnIndex != turnIndex ||
+                gameState.TurnPhase != TurnPhase.WaitingForDiscard ||
+                decisionProviderRegistry == null ||
+                !decisionProviderRegistry.TryResolve(
+                    playerId,
+                    out DecisionProviderRegistration registration) ||
+                registration.Route != DecisionProviderRoute.CpuAgent)
+            {
+                return;
+            }
+
+            SeatSlot slot = gameState.GetSeatSlot(seat);
+            if (slot.PlayerId != playerId)
+                return;
+
+            // The CPU draw coroutine stops while an optional decision is
+            // pending. Resume through the same authority command used by the
+            // controller so declining cannot leave the turn suspended.
+            TryExecuteCommand(new MahjongAuthorityCommand(
+                MahjongAuthorityCommandKind.DiscardDrawnTile,
+                playerId,
+                seat,
+                turnIndex));
         }
 
         private void NotifyTurnBlocked(string eventName, string reason)

@@ -96,6 +96,8 @@ namespace MahjongPrototype.UI
             inputController.WinRequested += HandleWinRequested;
             inputController.DeclineWinRequested += HandleDeclineWinRequested;
             inputController.WinDecisionResponseRequested += HandleWinDecisionResponseRequested;
+            inputController.AbortiveDrawDecisionResponseRequested +=
+                HandleAbortiveDrawDecisionResponseRequested;
             inputController.MeldCallRequested += HandleMeldCallRequested;
             inputController.DeclineMeldCallsRequested += HandleDeclineMeldCallsRequested;
             inputController.ReactionResponseRequested += HandleReactionResponseRequested;
@@ -122,6 +124,8 @@ namespace MahjongPrototype.UI
             subscribedInputController.WinRequested -= HandleWinRequested;
             subscribedInputController.DeclineWinRequested -= HandleDeclineWinRequested;
             subscribedInputController.WinDecisionResponseRequested -= HandleWinDecisionResponseRequested;
+            subscribedInputController.AbortiveDrawDecisionResponseRequested -=
+                HandleAbortiveDrawDecisionResponseRequested;
             subscribedInputController.MeldCallRequested -= HandleMeldCallRequested;
             subscribedInputController.DeclineMeldCallsRequested -= HandleDeclineMeldCallsRequested;
             subscribedInputController.ReactionResponseRequested -= HandleReactionResponseRequested;
@@ -194,6 +198,22 @@ namespace MahjongPrototype.UI
             TrySubmitBoundDecisionResponse(
                 requestId,
                 DecisionKind.WinDeclaration,
+                accepted);
+        }
+
+        private void HandleAbortiveDrawDecisionResponseRequested(
+            long requestId,
+            bool accepted)
+        {
+            if (!TryGetGameFlow(
+                    "Cannot submit abortive draw decision because MahjongGameFlow is not assigned."))
+            {
+                return;
+            }
+
+            TrySubmitBoundDecisionResponse(
+                requestId,
+                DecisionKind.AbortiveDraw,
                 accepted);
         }
 

@@ -261,6 +261,45 @@ namespace MahjongPrototype.Tests
             }
         }
 
+        [Test]
+        public void AbortiveDrawResponseBindings_UseWinButtonsWithoutLegacyWinEvents()
+        {
+            using (MahjongUiInputControllerTestDriver driver =
+                MahjongUiInputControllerTestDriver.Create(
+                    "AbortiveDrawInputBindingTest"))
+            {
+                long actualRequestId = 0;
+                bool? actualAccepted = null;
+                EventInfo eventInfo = driver.Controller.GetType().GetEvent(
+                    "AbortiveDrawDecisionResponseRequested");
+                Assert.That(eventInfo, Is.Not.Null);
+                eventInfo.AddEventHandler(
+                    driver.Controller,
+                    new Action<long, bool>((requestId, accepted) =>
+                    {
+                        actualRequestId = requestId;
+                        actualAccepted = accepted;
+                    }));
+
+                driver.SubscribeAllRequestEvents();
+                driver.Reflection.Invoke(
+                    driver.Controller,
+                    "SetAbortiveDrawDecisionResponseBindings",
+                    901L);
+                driver.EnableController();
+
+                driver.ClickWin();
+                Assert.That(actualRequestId, Is.EqualTo(901));
+                Assert.That(actualAccepted, Is.True);
+                Assert.That(driver.WinCount, Is.EqualTo(0));
+
+                driver.ClickDeclineWin();
+                Assert.That(actualRequestId, Is.EqualTo(901));
+                Assert.That(actualAccepted, Is.False);
+                Assert.That(driver.DeclineWinCount, Is.EqualTo(0));
+            }
+        }
+
         private static Delegate CreateReactionInputHandler(
             Type handlerType,
             Action<long, int, string, int?> recorder)

@@ -116,6 +116,41 @@ namespace MahjongPrototype.Tests
         }
 
         [UnityTest]
+        public IEnumerator CpuTurn_NineTerminalsDecision_AutoDeclinesAndContinues()
+        {
+            using (CpuTurnGameFlowTestDriver driver =
+                CpuTurnGameFlowTestDriver.CreateForCpuNineTerminals())
+            {
+                driver.StartNewRound();
+                driver.PreparePlayer2NineTerminalsOnNextDraw();
+                driver.SubscribeCpuTurnEventTrace();
+
+                driver.RequestSelfDiscardDrawnTile();
+
+                yield return null;
+                Assert.That(
+                    driver.TurnPhaseName,
+                    Is.EqualTo("AbortiveDrawDecision"));
+                driver.PumpDecisionCoordinator();
+                for (int frame = 0; frame < 5; frame++)
+                    yield return null;
+
+                Assert.That(driver.IsRoundEnded, Is.False);
+                Assert.That(
+                    driver.HasCpuDiscardRecord,
+                    Is.True,
+                    $"phase={driver.TurnPhaseName}; current={driver.CurrentTurnName}; " +
+                    $"discards={driver.DiscardCount}");
+                Assert.That(
+                    driver.CpuDiscardActorSeatName,
+                    Is.EqualTo(driver.Player2SeatName));
+                Assert.That(driver.CurrentTurnName, Is.EqualTo(driver.SelfSeatName));
+                Assert.That(driver.TurnPhaseName, Is.Not.EqualTo("AbortiveDrawDecision"));
+                Assert.That(driver.DiscardCount, Is.EqualTo(2));
+            }
+        }
+
+        [UnityTest]
         public IEnumerator RemoteHumanTurn_DoesNotStartCpuAutoDiscard()
         {
             using (CpuTurnGameFlowTestDriver driver = CpuTurnGameFlowTestDriver.Create())

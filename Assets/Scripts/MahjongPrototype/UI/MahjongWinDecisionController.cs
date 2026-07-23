@@ -24,7 +24,25 @@ namespace MahjongPrototype.UI
         public void SetWinDecision(bool visible, WinType? winType)
         {
             SetWinButtonLabel(winType);
+            SetRootVisible(visible);
+        }
 
+        public void SetAbortiveDrawDecision(bool visible)
+        {
+            if (winButtonLabel != null)
+                winButtonLabel.text = "流局";
+            else
+            {
+                WarnMissingOnce(
+                    ref warnedMissingWinButtonLabel,
+                    "WinButtonLabel is not assigned.");
+            }
+
+            SetRootVisible(visible);
+        }
+
+        private void SetRootVisible(bool visible)
+        {
             if (winDecisionRoot != null)
             {
                 winDecisionRoot.SetActive(visible);

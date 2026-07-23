@@ -31,6 +31,14 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Turn
                 enableAutoDraw: enableAutoDraw);
         }
 
+        public static CpuTurnGameFlowTestDriver CreateForCpuNineTerminals()
+        {
+            return Create(
+                "CpuNineTerminalsGameFlowTest",
+                initialHandTileCount: 0,
+                enableAutoDraw: true);
+        }
+
         public static CpuTurnGameFlowTestDriver CreateForOpeningCpuTurn()
         {
             return Create(
@@ -88,6 +96,16 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Turn
                 "E", "E", "E",
                 "C");
             support.RequestForceDrawSkillForSeat(Player2SeatName, "C");
+        }
+
+        public void PreparePlayer2NineTerminalsOnNextDraw()
+        {
+            support.AddHandTilesForPlayerId(
+                "Player2",
+                "1m", "9m", "1p", "9p", "1s", "9s",
+                "E", "S", "W",
+                "2m", "3m", "4m", "5m");
+            support.RequestForceDrawSkillForSeat(Player2SeatName, "P");
         }
 
         public void SetSelfDrawnTile(string tileCode)

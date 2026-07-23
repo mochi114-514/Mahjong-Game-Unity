@@ -384,6 +384,8 @@ namespace MahjongPrototype.UI
             eventNotifier.ReachDecisionStarted += HandleReachDecisionStarted;
             eventNotifier.SelfKanDecisionStarted += HandleSelfKanDecisionStarted;
             eventNotifier.SelfKanDecisionDeclined += HandleSelfKanDecisionDeclined;
+            eventNotifier.AbortiveDrawDecisionStarted += HandleAbortiveDrawDecisionChanged;
+            eventNotifier.AbortiveDrawDecisionDeclined += HandleAbortiveDrawDecisionChanged;
             eventNotifier.ReachDiscardSelectionStarted += HandleReachDiscardSelectionStarted;
             eventNotifier.ReachDiscardSelectionCanceled += HandleReachDiscardSelectionCanceled;
             eventNotifier.ReachDeclared += HandleReachDeclared;
@@ -422,6 +424,8 @@ namespace MahjongPrototype.UI
             eventNotifier.ReachDecisionStarted -= HandleReachDecisionStarted;
             eventNotifier.SelfKanDecisionStarted -= HandleSelfKanDecisionStarted;
             eventNotifier.SelfKanDecisionDeclined -= HandleSelfKanDecisionDeclined;
+            eventNotifier.AbortiveDrawDecisionStarted -= HandleAbortiveDrawDecisionChanged;
+            eventNotifier.AbortiveDrawDecisionDeclined -= HandleAbortiveDrawDecisionChanged;
             eventNotifier.ReachDiscardSelectionStarted -= HandleReachDiscardSelectionStarted;
             eventNotifier.ReachDiscardSelectionCanceled -= HandleReachDiscardSelectionCanceled;
             eventNotifier.ReachDeclared -= HandleReachDeclared;
@@ -1128,6 +1132,19 @@ namespace MahjongPrototype.UI
             RefreshInteractionUi();
         }
 
+        private void HandleAbortiveDrawDecisionChanged(
+            SeatId _,
+            AbortiveDrawKind __,
+            int ___)
+        {
+            RequestTileHoverReevaluation();
+            RefreshGlobalStatus();
+            RefreshWinDecisionUi();
+            RefreshPonDecisionUi();
+            RefreshReachDecisionUi();
+            RefreshInteractionUi();
+        }
+
         private void HandleReachDiscardSelectionStarted(SeatId _, int __)
         {
             RequestTileHoverReevaluation();
@@ -1359,12 +1376,14 @@ namespace MahjongPrototype.UI
             {
                 inputController?.ClearReactionResponseBindings();
                 inputController?.ClearWinDecisionResponseBindings();
+                inputController?.ClearAbortiveDrawDecisionResponseBindings();
                 return;
             }
 
             if (TryGetSelfReactionDecisionRequest(state, out DecisionRequest request))
             {
                 inputController?.ClearWinDecisionResponseBindings();
+                inputController?.ClearAbortiveDrawDecisionResponseBindings();
                 ReactionDecisionRequest reaction = request.Reaction;
                 bool showRon = reaction.Allows(ReactionWindowSeatAnswerKind.Ron);
                 inputController?.SetReactionResponseBindings(
@@ -1397,6 +1416,19 @@ namespace MahjongPrototype.UI
             }
 
             inputController?.ClearWinDecisionResponseBindings();
+            if (TryGetSelfDecisionRequest(
+                    state,
+                    DecisionKind.AbortiveDraw,
+                    out DecisionRequest abortiveDrawRequest) &&
+                abortiveDrawRequest.AbortiveDraw != null)
+            {
+                inputController?.SetAbortiveDrawDecisionResponseBindings(
+                    abortiveDrawRequest.RequestId);
+                winDecisionController.SetAbortiveDrawDecision(true);
+                return;
+            }
+
+            inputController?.ClearAbortiveDrawDecisionResponseBindings();
             winDecisionController.SetWinDecision(false, null);
         }
 
@@ -1409,6 +1441,7 @@ namespace MahjongPrototype.UI
             {
                 inputController?.ClearReactionResponseBindings();
                 inputController?.ClearWinDecisionResponseBindings();
+                inputController?.ClearAbortiveDrawDecisionResponseBindings();
             }
         }
 

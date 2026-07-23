@@ -55,6 +55,8 @@ namespace MahjongPrototype.UI
         private UnityAction reactionDeclinePonAction;
         private UnityAction winDecisionAction;
         private UnityAction declineWinDecisionAction;
+        private UnityAction abortiveDrawDecisionAction;
+        private UnityAction declineAbortiveDrawDecisionAction;
         private Button selfKanDecisionDeclineButton;
         private UnityAction selfKanDecisionDeclineAction;
         private UnityAction reachDecisionAction;
@@ -73,6 +75,7 @@ namespace MahjongPrototype.UI
         public event Action<long, int, ReactionWindowSeatAnswerKind, int?>
             ReactionResponseRequested;
         public event Action<long, bool> WinDecisionResponseRequested;
+        public event Action<long, bool> AbortiveDrawDecisionResponseRequested;
         public event Action<long, bool> ReachDecisionResponseRequested;
         public event Action<long, bool, int> SelfKanDecisionResponseRequested;
         public event Action<SelfKanKind, int, int> SelfKanRequested;
@@ -91,6 +94,7 @@ namespace MahjongPrototype.UI
         {
             ClearReactionResponseBindings();
             ClearWinDecisionResponseBindings();
+            ClearAbortiveDrawDecisionResponseBindings();
             ClearSelfKanDecisionResponseBinding();
             ClearReachDecisionResponseBindings();
             UnregisterButtonListeners();
@@ -286,7 +290,8 @@ namespace MahjongPrototype.UI
 
         private void HandleWinClicked()
         {
-            if (reactionWinAction != null || winDecisionAction != null)
+            if (reactionWinAction != null || winDecisionAction != null ||
+                abortiveDrawDecisionAction != null)
                 return;
 
             WinRequested?.Invoke();
@@ -294,7 +299,9 @@ namespace MahjongPrototype.UI
 
         private void HandleDeclineWinClicked()
         {
-            if (reactionDeclineWinAction != null || declineWinDecisionAction != null)
+            if (reactionDeclineWinAction != null ||
+                declineWinDecisionAction != null ||
+                declineAbortiveDrawDecisionAction != null)
                 return;
 
             DeclineWinRequested?.Invoke();
@@ -409,6 +416,7 @@ namespace MahjongPrototype.UI
         /// </summary>
         public void SetWinDecisionResponseBindings(long requestId)
         {
+            ClearAbortiveDrawDecisionResponseBindings();
             ClearWinDecisionResponseBindings();
             if (requestId <= 0)
                 return;
@@ -440,6 +448,51 @@ namespace MahjongPrototype.UI
         public void RequestWinDecisionResponse(long requestId, bool accepted)
         {
             WinDecisionResponseRequested?.Invoke(requestId, accepted);
+        }
+
+        public void SetAbortiveDrawDecisionResponseBindings(long requestId)
+        {
+            ClearWinDecisionResponseBindings();
+            ClearAbortiveDrawDecisionResponseBindings();
+            if (requestId <= 0)
+                return;
+
+            if (winButton != null)
+            {
+                abortiveDrawDecisionAction =
+                    () => RequestAbortiveDrawDecisionResponse(requestId, true);
+                winButton.onClick.AddListener(abortiveDrawDecisionAction);
+            }
+
+            if (declineWinButton != null)
+            {
+                declineAbortiveDrawDecisionAction =
+                    () => RequestAbortiveDrawDecisionResponse(requestId, false);
+                declineWinButton.onClick.AddListener(
+                    declineAbortiveDrawDecisionAction);
+            }
+        }
+
+        public void ClearAbortiveDrawDecisionResponseBindings()
+        {
+            if (abortiveDrawDecisionAction != null && winButton != null)
+                winButton.onClick.RemoveListener(abortiveDrawDecisionAction);
+            if (declineAbortiveDrawDecisionAction != null &&
+                declineWinButton != null)
+            {
+                declineWinButton.onClick.RemoveListener(
+                    declineAbortiveDrawDecisionAction);
+            }
+
+            abortiveDrawDecisionAction = null;
+            declineAbortiveDrawDecisionAction = null;
+        }
+
+        public void RequestAbortiveDrawDecisionResponse(
+            long requestId,
+            bool accepted)
+        {
+            AbortiveDrawDecisionResponseRequested?.Invoke(requestId, accepted);
         }
 
         public void RequestReactionResponse(

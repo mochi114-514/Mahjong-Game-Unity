@@ -31,6 +31,8 @@ namespace MahjongPrototype.Notifications
         public event Action<SeatId, int> ReachDecisionStarted;
         public event Action<SeatId, int> SelfKanDecisionStarted;
         public event Action<SeatId, int> SelfKanDecisionDeclined;
+        public event Action<SeatId, AbortiveDrawKind, int> AbortiveDrawDecisionStarted;
+        public event Action<SeatId, AbortiveDrawKind, int> AbortiveDrawDecisionDeclined;
         public event Action<SeatId, int> ReachDiscardSelectionStarted;
         public event Action<SeatId, int> ReachDiscardSelectionCanceled;
         public event Action<SeatId, int> ReachDeclared;
@@ -144,6 +146,24 @@ namespace MahjongPrototype.Notifications
                 seat,
                 turnIndex,
                 nameof(SelfKanDecisionDeclined));
+            NotifyAny();
+        }
+
+        public void NotifyAbortiveDrawDecisionStarted(
+            SeatId seat,
+            AbortiveDrawKind kind,
+            int turnIndex)
+        {
+            AbortiveDrawDecisionStarted?.Invoke(seat, kind, turnIndex);
+            NotifyAny();
+        }
+
+        public void NotifyAbortiveDrawDecisionDeclined(
+            SeatId seat,
+            AbortiveDrawKind kind,
+            int turnIndex)
+        {
+            AbortiveDrawDecisionDeclined?.Invoke(seat, kind, turnIndex);
             NotifyAny();
         }
 

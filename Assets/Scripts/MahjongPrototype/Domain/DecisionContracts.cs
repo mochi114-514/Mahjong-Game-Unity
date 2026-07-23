@@ -8,7 +8,8 @@ namespace MahjongPrototype.Domain
         WinDeclaration = 0,
         Reaction = 1,
         Reach = 2,
-        SelfKan = 3
+        SelfKan = 3,
+        AbortiveDraw = 4
     }
 
     /// <summary>
@@ -51,6 +52,7 @@ namespace MahjongPrototype.Domain
                 reaction,
                 null,
                 null,
+                null,
                 null)
         {
         }
@@ -70,6 +72,7 @@ namespace MahjongPrototype.Domain
                 turnIndex,
                 null,
                 winDeclaration,
+                null,
                 null,
                 null)
         {
@@ -91,6 +94,7 @@ namespace MahjongPrototype.Domain
                 null,
                 null,
                 reach,
+                null,
                 null)
         {
         }
@@ -111,7 +115,29 @@ namespace MahjongPrototype.Domain
                 null,
                 null,
                 null,
-                selfKan)
+                selfKan,
+                null)
+        {
+        }
+
+        public DecisionRequest(
+            long requestId,
+            DecisionKind kind,
+            PlayerId playerId,
+            SeatId actorSeat,
+            int turnIndex,
+            AbortiveDrawDecisionRequest abortiveDraw)
+            : this(
+                requestId,
+                kind,
+                playerId,
+                actorSeat,
+                turnIndex,
+                null,
+                null,
+                null,
+                null,
+                abortiveDraw)
         {
         }
 
@@ -124,7 +150,8 @@ namespace MahjongPrototype.Domain
             ReactionDecisionRequest reaction,
             WinDeclarationDecisionRequest winDeclaration,
             ReachDecisionRequest reach,
-            SelfKanDecisionRequest selfKan)
+            SelfKanDecisionRequest selfKan,
+            AbortiveDrawDecisionRequest abortiveDraw)
         {
             RequestId = requestId;
             Kind = kind;
@@ -135,6 +162,7 @@ namespace MahjongPrototype.Domain
             WinDeclaration = winDeclaration;
             Reach = reach;
             SelfKan = selfKan;
+            AbortiveDraw = abortiveDraw;
         }
 
         public long RequestId { get; }
@@ -150,6 +178,7 @@ namespace MahjongPrototype.Domain
         public WinDeclarationDecisionRequest WinDeclaration { get; }
         public ReachDecisionRequest Reach { get; }
         public SelfKanDecisionRequest SelfKan { get; }
+        public AbortiveDrawDecisionRequest AbortiveDraw { get; }
 
         public bool TryValidateResponsePayload(
             DecisionResponse response,
@@ -185,6 +214,13 @@ namespace MahjongPrototype.Domain
                         return false;
                     }
                     return SelfKan.TryValidateResponse(response, out reason);
+                case DecisionKind.AbortiveDraw:
+                    if (AbortiveDraw == null)
+                    {
+                        reason = "AbortiveDrawDecisionRequestMissing";
+                        return false;
+                    }
+                    return true;
                 default:
                     reason = "DecisionKindUnsupported";
                     return false;
@@ -291,16 +327,19 @@ namespace MahjongPrototype.Domain
         public WinDeclarationDecisionRequest(
             WinType winType,
             Tile? winningTile,
-            SeatId? sourceSeat)
+            SeatId? sourceSeat,
+            bool isRinshanDraw = false)
         {
             WinType = winType;
             WinningTile = winningTile;
             SourceSeat = sourceSeat;
+            IsRinshanDraw = isRinshanDraw;
         }
 
         public WinType WinType { get; }
         public Tile? WinningTile { get; }
         public SeatId? SourceSeat { get; }
+        public bool IsRinshanDraw { get; }
     }
 
     /// <summary>
@@ -310,6 +349,19 @@ namespace MahjongPrototype.Domain
     /// </summary>
     public sealed class ReachDecisionRequest
     {
+    }
+
+    public sealed class AbortiveDrawDecisionRequest
+    {
+        public AbortiveDrawDecisionRequest(AbortiveDrawKind kind)
+        {
+            if (!Enum.IsDefined(typeof(AbortiveDrawKind), kind))
+                throw new ArgumentOutOfRangeException(nameof(kind));
+
+            Kind = kind;
+        }
+
+        public AbortiveDrawKind Kind { get; }
     }
 
     /// <summary>

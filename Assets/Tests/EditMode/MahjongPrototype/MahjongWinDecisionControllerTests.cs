@@ -110,6 +110,51 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
+        public void AbortiveDrawDecision_UsesDrawLabel_ThenRestoresTsumoAndRonLabels()
+        {
+            GameObject controllerObject =
+                new GameObject("AbortiveDrawDecisionControllerTest");
+            controllerObject.SetActive(false);
+            GameObject root = new GameObject("WinDecisionRoot");
+            root.transform.SetParent(controllerObject.transform);
+            GameObject labelObject = new GameObject("WinLabel");
+            labelObject.transform.SetParent(root.transform);
+
+            try
+            {
+                Component label = labelObject.AddComponent(
+                    Type.GetType(TextMeshProUguiTypeName, true));
+                Component controller = controllerObject.AddComponent(
+                    Type.GetType(ControllerTypeName, true));
+                SetPrivateField(controller, "winDecisionRoot", root);
+                SetPrivateField(controller, "winButtonLabel", label);
+                controllerObject.SetActive(true);
+
+                Invoke(controller, "SetAbortiveDrawDecision", true);
+                Assert.That(GetProperty(label, "text"), Is.EqualTo("流局"));
+                Assert.That(root.activeSelf, Is.True);
+
+                Invoke(
+                    controller,
+                    "SetWinDecision",
+                    true,
+                    Enum.Parse(Type.GetType(WinTypeName, true), "Tsumo"));
+                Assert.That(GetProperty(label, "text"), Is.EqualTo("ツモ"));
+
+                Invoke(
+                    controller,
+                    "SetWinDecision",
+                    true,
+                    Enum.Parse(Type.GetType(WinTypeName, true), "Ron"));
+                Assert.That(GetProperty(label, "text"), Is.EqualTo("ロン"));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(controllerObject);
+            }
+        }
+
+        [Test]
         public void SetVisibleTrue_DoesNotGetHiddenByEnable()
         {
             GameObject controllerObject = new GameObject("WinDecisionEnableVisibilityTest");

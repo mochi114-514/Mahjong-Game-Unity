@@ -78,11 +78,12 @@ namespace MahjongPrototype
                 return;
             }
 
-            if (request.Kind == DecisionKind.SelfKan)
+            if (request.Kind == DecisionKind.SelfKan ||
+                request.Kind == DecisionKind.AbortiveDraw)
             {
-                // No CPU self-kan strategy is in scope. Explicitly declining
-                // still closes the authority-issued request, so a CPU turn
-                // cannot remain pending forever when a candidate exists.
+                // No CPU self-kan or abortive-draw strategy is in scope.
+                // Explicitly declining still closes the authority-issued
+                // request, so a CPU turn cannot remain pending forever.
                 respond(new DecisionResponse(
                     request.RequestId,
                     request.Kind,
