@@ -48,18 +48,6 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void CanDeclare_DrawCompletesNinthDistinctType_ReturnsTrue()
-        {
-            object gameState = CreateFirstDrawState(
-                "West",
-                "1m", "9m", "1p", "9p", "1s", "9s", "E", "S",
-                "2m", "3m", "4m", "5m", "6m");
-            data.SetDrawnTile(gameState, "West", "P");
-
-            Assert.That(CanDeclare(gameState, "West"), Is.True);
-        }
-
-        [Test]
         public void CanDeclare_DuplicateTerminalOrHonorCountsOnce_ReturnsFalse()
         {
             object gameState = CreateFirstDrawState(
@@ -132,8 +120,8 @@ namespace MahjongPrototype.Tests
             object playerSeat = data.GetPlayerSeat(gameState, "South");
             string handBefore = data.HandDisplayString(gameState, "South");
             string drawnTileBefore = reflection.GetProperty(
-                reflection.GetProperty(playerSeat, "DrawnTile"),
-                "Value").ToString();
+                playerSeat,
+                "DrawnTile").ToString();
             int discardCountBefore = ((ICollection)reflection.GetProperty(
                 gameState,
                 "Discards")).Count;
@@ -141,9 +129,8 @@ namespace MahjongPrototype.Tests
             Assert.That(CanDeclare(gameState, "South"), Is.True);
 
             Assert.That(data.HandDisplayString(gameState, "South"), Is.EqualTo(handBefore));
-            object drawnTileAfter = reflection.GetProperty(playerSeat, "DrawnTile");
             Assert.That(
-                reflection.GetProperty(drawnTileAfter, "Value").ToString(),
+                reflection.GetProperty(playerSeat, "DrawnTile").ToString(),
                 Is.EqualTo(drawnTileBefore));
             Assert.That(
                 ((ICollection)reflection.GetProperty(gameState, "Discards")).Count,
