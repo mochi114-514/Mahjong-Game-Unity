@@ -63,6 +63,8 @@ namespace MahjongPrototype
         private readonly ReachChecker reachChecker = new ReachChecker();
         private readonly NineTerminalsAndHonorsEvaluator
             nineTerminalsAndHonorsEvaluator = new NineTerminalsAndHonorsEvaluator();
+        private readonly FourWindsEvaluator fourWindsEvaluator =
+            new FourWindsEvaluator();
         private readonly SkillSystem skillSystem = new SkillSystem();
         private readonly SkillReservationService skillReservationService = new SkillReservationService();
 
@@ -2465,6 +2467,15 @@ namespace MahjongPrototype
 
         private void AdvanceOrEndAfterDiscard(DiscardRecord record)
         {
+            if (fourWindsEvaluator.IsSatisfied(
+                    gameState.ActiveTurnSeats,
+                    gameState.Discards,
+                    gameState.HasCallOccurred) &&
+                TryEndAbortiveDraw(AbortiveDrawKind.FourWinds))
+            {
+                return;
+            }
+
             if (record.IsLastLiveWallDiscard)
             {
             EndRound(RoundLifecycleService.RoundEndReasonWallEmpty);
