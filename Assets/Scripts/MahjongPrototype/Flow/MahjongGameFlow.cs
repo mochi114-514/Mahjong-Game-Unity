@@ -65,6 +65,8 @@ namespace MahjongPrototype
             nineTerminalsAndHonorsEvaluator = new NineTerminalsAndHonorsEvaluator();
         private readonly FourWindsEvaluator fourWindsEvaluator =
             new FourWindsEvaluator();
+        private readonly FourReachesEvaluator fourReachesEvaluator =
+            new FourReachesEvaluator();
         private readonly SkillSystem skillSystem = new SkillSystem();
         private readonly SkillReservationService skillReservationService = new SkillReservationService();
 
@@ -2476,6 +2478,16 @@ namespace MahjongPrototype
                 return;
             }
 
+            if (fourReachesEvaluator.IsSatisfied(
+                    gameState.ActiveTurnSeats,
+                    GetActivePlayerSeats(),
+                    gameState.Discards,
+                    record) &&
+                TryEndAbortiveDraw(AbortiveDrawKind.FourReaches))
+            {
+                return;
+            }
+
             if (record.IsLastLiveWallDiscard)
             {
             EndRound(RoundLifecycleService.RoundEndReasonWallEmpty);
@@ -2483,6 +2495,15 @@ namespace MahjongPrototype
             }
 
             AdvanceTurn();
+        }
+
+        private PlayerSeat[] GetActivePlayerSeats()
+        {
+            PlayerSeat[] playerSeats = new PlayerSeat[gameState.ActiveTurnSeats.Count];
+            for (int i = 0; i < playerSeats.Length; i++)
+                playerSeats[i] = gameState.GetPlayerSeat(gameState.ActiveTurnSeats[i]);
+
+            return playerSeats;
         }
 
         private void CompleteDiscard(DiscardRecord record)
