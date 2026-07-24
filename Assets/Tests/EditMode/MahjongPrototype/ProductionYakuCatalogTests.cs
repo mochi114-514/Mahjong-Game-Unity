@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using MahjongPrototype.Tests.TestSupport.Features.Win;
 using NUnit.Framework;
 using UnityEditor;
 
@@ -128,6 +129,58 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
+        public void ProductionCatalog_OpenSanshokuDoukou_CopiesTwoHanToEvaluatedYaku()
+        {
+            using (WinDeclarationEvaluatorTestDriver driver =
+                WinDeclarationEvaluatorTestDriver.Create())
+            {
+                object result = driver.EvaluateWithTile(
+                    LoadCatalog(),
+                    "5p 5p 5p 5s 5s 5s 1m 2m 3m 7p",
+                    "7p",
+                    "Ron",
+                    isClosed: false,
+                    melds: driver.CreateOpenPonMelds("5m"));
+                object candidate =
+                    driver.FindCandidateContainingYaku(result, "SanshokuDoukou");
+
+                Assert.That(driver.IsWinningShape(result), Is.True);
+                Assert.That(candidate, Is.Not.Null);
+                Assert.That(driver.CandidateYakuCount(candidate), Is.EqualTo(1));
+                Assert.That(
+                    driver.CandidateYakuHanName(candidate, "SanshokuDoukou"),
+                    Is.EqualTo("Two"));
+                Assert.That(driver.CandidateTotalHan(candidate), Is.EqualTo(2));
+            }
+        }
+
+        [Test]
+        public void ProductionCatalog_OpenSanshokuDoujun_KeepsOneOpenHan()
+        {
+            using (WinDeclarationEvaluatorTestDriver driver =
+                WinDeclarationEvaluatorTestDriver.Create())
+            {
+                object result = driver.EvaluateWithTile(
+                    LoadCatalog(),
+                    "1p 2p 3p 1s 2s 3s 7m 8m 9m 5p",
+                    "5p",
+                    "Ron",
+                    isClosed: false,
+                    melds: driver.CreateOpenChiMelds("1m 2m 3m", "1m"));
+                object candidate =
+                    driver.FindCandidateContainingYaku(result, "SanshokuDoujun");
+
+                Assert.That(driver.IsWinningShape(result), Is.True);
+                Assert.That(candidate, Is.Not.Null);
+                Assert.That(driver.CandidateYakuCount(candidate), Is.EqualTo(1));
+                Assert.That(
+                    driver.CandidateYakuHanName(candidate, "SanshokuDoujun"),
+                    Is.EqualTo("One"));
+                Assert.That(driver.CandidateTotalHan(candidate), Is.EqualTo(1));
+            }
+        }
+
+        [Test]
         public void ProductionCatalog_OnlySpecifiedKindsHaveDoubleYakumanMultiplier()
         {
             string[] actualDoubleYakumanKinds = LoadDefinitions()
@@ -227,7 +280,7 @@ namespace MahjongPrototype.Tests
             new ExpectedDefinition("MenzenTsumo", "門前清自摸和", "One", "None", 0),
             new ExpectedDefinition("Reach", "リーチ", "One", "None", 0),
             new ExpectedDefinition("Ippatsu", "一発", "One", "None", 0),
-            new ExpectedDefinition("HaiteiRaoyue", "海底撈月", "One", "One", 0),
+            new ExpectedDefinition("HaiteiRaoyue", "海底摸月", "One", "One", 0),
             new ExpectedDefinition("HouteiRaoyui", "河底撈魚", "One", "One", 0),
             new ExpectedDefinition("Tanyao", "断么九", "One", "One", 0),
             new ExpectedDefinition("Pinfu", "平和", "One", "None", 0),
@@ -242,11 +295,11 @@ namespace MahjongPrototype.Tests
             new ExpectedDefinition("YakuhaiGreenDragon", "發", "One", "One", 0),
             new ExpectedDefinition("YakuhaiRedDragon", "中", "One", "One", 0),
             new ExpectedDefinition("DoubleReach", "ダブルリーチ", "Two", "None", 0),
-            new ExpectedDefinition("SanshokuDoukou", "三色同刻", "Two", "One", 0),
+            new ExpectedDefinition("SanshokuDoukou", "三色同刻", "Two", "Two", 0),
             new ExpectedDefinition("SanshokuDoujun", "三色同順", "Two", "One", 0),
             new ExpectedDefinition("Ittsuu", "一気通貫", "Two", "One", 0),
             new ExpectedDefinition("Chanta", "混全帯么九", "Two", "One", 0),
-            new ExpectedDefinition("Junchan", "純全帯幺九", "Three", "Two", 0),
+            new ExpectedDefinition("Junchan", "純全帯么九", "Three", "Two", 0),
             new ExpectedDefinition("Shousangen", "小三元", "Two", "Two", 0),
             new ExpectedDefinition("Daisangen", "大三元", "None", "None", 1),
             new ExpectedDefinition("Honitsu", "混一色", "Three", "Two", 0),
