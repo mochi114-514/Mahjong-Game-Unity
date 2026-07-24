@@ -294,14 +294,29 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
             string yakuKindName,
             string closedHanName,
             string openHanName,
-            bool isYakuman = false,
+            int yakumanMultiplier = 0,
             bool isEnabled = true)
         {
             return DataFactory.CreateYakuDefinition(
                 yakuKindName,
                 closedHanName,
                 openHanName,
-                isYakuman,
+                yakumanMultiplier,
+                isEnabled);
+        }
+
+        public object CreateYakuDefinition(
+            string yakuKindName,
+            string closedHanName,
+            string openHanName,
+            bool isYakuman,
+            bool isEnabled = true)
+        {
+            return CreateYakuDefinition(
+                yakuKindName,
+                closedHanName,
+                openHanName,
+                isYakuman ? 1 : 0,
                 isEnabled);
         }
 

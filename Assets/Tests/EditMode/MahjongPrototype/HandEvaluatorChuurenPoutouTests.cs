@@ -403,7 +403,7 @@ namespace MahjongPrototype.Tests
                 "ChuurenPoutou",
                 "None",
                 "None",
-                isYakuman: true);
+                yakumanMultiplier: 1);
         }
 
         private static object CreateJunseiDefinition(
@@ -413,7 +413,7 @@ namespace MahjongPrototype.Tests
                 "JunseiChuurenPoutou",
                 "None",
                 "None",
-                isYakuman: true);
+                yakumanMultiplier: 2);
         }
 
         private static void AssertJunseiOnly(
@@ -426,6 +426,12 @@ namespace MahjongPrototype.Tests
             Assert.That(driver.CandidateContainsYaku(candidate, "ChuurenPoutou"), Is.False);
             Assert.That(driver.CandidateHasYakuman(candidate), Is.True);
             Assert.That(driver.CandidateTotalHan(candidate), Is.EqualTo(0));
+            Assert.That(driver.CandidateTotalYakumanMultiplier(candidate), Is.EqualTo(2));
+            Assert.That(
+                driver.CandidateYakuYakumanMultiplier(
+                    candidate,
+                    "JunseiChuurenPoutou"),
+                Is.EqualTo(2));
             Assert.That(driver.CandidateYakuCount(candidate), Is.EqualTo(1));
         }
 
@@ -439,6 +445,10 @@ namespace MahjongPrototype.Tests
             Assert.That(driver.CandidateContainsYaku(candidate, "JunseiChuurenPoutou"), Is.False);
             Assert.That(driver.CandidateHasYakuman(candidate), Is.True);
             Assert.That(driver.CandidateTotalHan(candidate), Is.EqualTo(0));
+            Assert.That(driver.CandidateTotalYakumanMultiplier(candidate), Is.EqualTo(1));
+            Assert.That(
+                driver.CandidateYakuYakumanMultiplier(candidate, "ChuurenPoutou"),
+                Is.EqualTo(1));
             Assert.That(driver.CandidateYakuCount(candidate), Is.EqualTo(1));
         }
 

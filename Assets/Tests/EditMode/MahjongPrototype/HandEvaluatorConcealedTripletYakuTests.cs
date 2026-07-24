@@ -408,7 +408,7 @@ namespace MahjongPrototype.Tests
                             "Daisuushii",
                             "None",
                             "None",
-                            isYakuman: true),
+                            yakumanMultiplier: 2),
                         CreateSanankouDefinition(driver),
                         CreateSuuankouDefinition(driver),
                         CreateSuuankouTankiDefinition(driver)),
@@ -425,6 +425,9 @@ namespace MahjongPrototype.Tests
                 Assert.That(driver.CandidateContainsYaku(candidate, "Sanankou"), Is.False);
                 Assert.That(driver.CandidateHasYakuman(candidate), Is.True);
                 Assert.That(driver.CandidateTotalHan(candidate), Is.EqualTo(0));
+                Assert.That(
+                    driver.CandidateTotalYakumanMultiplier(candidate),
+                    Is.EqualTo(4));
                 Assert.That(driver.CandidateYakuCount(candidate), Is.EqualTo(2));
             }
         }
@@ -485,7 +488,7 @@ namespace MahjongPrototype.Tests
                 "Suuankou",
                 "None",
                 "None",
-                isYakuman: true);
+                yakumanMultiplier: 1);
         }
 
         private static object CreateSuuankouTankiDefinition(
@@ -495,7 +498,7 @@ namespace MahjongPrototype.Tests
                 "SuuankouTanki",
                 "None",
                 "None",
-                isYakuman: true);
+                yakumanMultiplier: 2);
         }
 
         private static void AssertSuuankouTankiOnly(
@@ -510,6 +513,10 @@ namespace MahjongPrototype.Tests
             Assert.That(driver.CandidateContainsYaku(candidate, "Sanankou"), Is.False);
             Assert.That(driver.CandidateHasYakuman(candidate), Is.True);
             Assert.That(driver.CandidateTotalHan(candidate), Is.EqualTo(0));
+            Assert.That(driver.CandidateTotalYakumanMultiplier(candidate), Is.EqualTo(2));
+            Assert.That(
+                driver.CandidateYakuYakumanMultiplier(candidate, "SuuankouTanki"),
+                Is.EqualTo(2));
             Assert.That(driver.CandidateYakuCount(candidate), Is.EqualTo(1));
         }
 
@@ -526,6 +533,10 @@ namespace MahjongPrototype.Tests
             Assert.That(driver.CandidateContainsYaku(candidate, "Sanankou"), Is.False);
             Assert.That(driver.CandidateHasYakuman(candidate), Is.True);
             Assert.That(driver.CandidateTotalHan(candidate), Is.EqualTo(0));
+            Assert.That(driver.CandidateTotalYakumanMultiplier(candidate), Is.EqualTo(1));
+            Assert.That(
+                driver.CandidateYakuYakumanMultiplier(candidate, "Suuankou"),
+                Is.EqualTo(1));
             Assert.That(driver.CandidateYakuCount(candidate), Is.EqualTo(1));
         }
 

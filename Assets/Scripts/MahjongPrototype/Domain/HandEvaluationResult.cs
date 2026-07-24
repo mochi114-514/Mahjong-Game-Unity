@@ -33,6 +33,7 @@ namespace MahjongPrototype.Domain
             {
                 Yakus = EmptyYakus;
                 TotalHan = 0;
+                TotalYakumanMultiplier = 0;
                 HasYakuman = ContainsCandidateWithYakuman(CandidateResults);
                 HasYaku = ContainsCandidateWithYaku(CandidateResults);
                 return;
@@ -41,22 +42,23 @@ namespace MahjongPrototype.Domain
             Yakus = copiedYakus.Count == 0 ? EmptyYakus : copiedYakus.AsReadOnly();
 
             int totalHan = 0;
-            bool hasYakuman = false;
+            int totalYakumanMultiplier = 0;
             for (int i = 0; i < copiedYakus.Count; i++)
             {
                 EvaluatedYaku yaku = copiedYakus[i];
-                if (yaku.IsYakuman)
+                totalYakumanMultiplier += yaku.YakumanMultiplier;
+                if (yaku.YakumanMultiplier > 0)
                 {
-                    hasYakuman = true;
                     continue;
                 }
 
                 totalHan += (int)yaku.Han;
             }
 
-            TotalHan = totalHan;
-            HasYakuman = hasYakuman;
-            HasYaku = HasYakuman || TotalHan > 0;
+            TotalYakumanMultiplier = totalYakumanMultiplier;
+            TotalHan = TotalYakumanMultiplier > 0 ? 0 : totalHan;
+            HasYakuman = TotalYakumanMultiplier > 0;
+            HasYaku = TotalHan > 0 || TotalYakumanMultiplier > 0;
         }
 
         /// <summary>
@@ -70,6 +72,10 @@ namespace MahjongPrototype.Domain
         /// Candidate-based evaluations keep this 0 until candidate selection is implemented.
         /// </summary>
         public int TotalHan { get; }
+        /// <summary>
+        /// Legacy top-level yakuman total. Candidate-based evaluations keep this 0.
+        /// </summary>
+        public int TotalYakumanMultiplier { get; }
         public bool HasYakuman { get; }
         public bool HasYaku { get; }
 

@@ -347,12 +347,12 @@ namespace MahjongPrototype.Tests
                     "Shousuushii",
                     "None",
                     "None",
-                    isYakuman: true),
+                    yakumanMultiplier: 1),
                 driver.CreateDefinition(
                     "Daisuushii",
                     "None",
                     "None",
-                    isYakuman: true));
+                    yakumanMultiplier: 2));
         }
 
         private static object CreateWindYakumanAndNormalCatalog(
@@ -363,12 +363,12 @@ namespace MahjongPrototype.Tests
                     "Shousuushii",
                     "None",
                     "None",
-                    isYakuman: true),
+                    yakumanMultiplier: 1),
                 driver.CreateDefinition(
                     "Daisuushii",
                     "None",
                     "None",
-                    isYakuman: true),
+                    yakumanMultiplier: 2),
                 driver.CreateDefinition("YakuhaiSeatWind", "One", "One"),
                 driver.CreateDefinition("YakuhaiRoundWind", "One", "One"),
                 driver.CreateDefinition("Reach", "One", "None"),
@@ -397,6 +397,13 @@ namespace MahjongPrototype.Tests
             Assert.That(driver.CandidateContainsYaku(candidate, excludedYakuKindName), Is.False);
             Assert.That(driver.CandidateHasYakuman(candidate), Is.True);
             Assert.That(driver.CandidateTotalHan(candidate), Is.EqualTo(0));
+            int expectedMultiplier = yakuKindName == "Daisuushii" ? 2 : 1;
+            Assert.That(
+                driver.CandidateTotalYakumanMultiplier(candidate),
+                Is.EqualTo(expectedMultiplier));
+            Assert.That(
+                driver.CandidateYakuYakumanMultiplier(candidate, yakuKindName),
+                Is.EqualTo(expectedMultiplier));
             Assert.That(driver.ContainsYaku(result, yakuKindName), Is.False);
         }
 

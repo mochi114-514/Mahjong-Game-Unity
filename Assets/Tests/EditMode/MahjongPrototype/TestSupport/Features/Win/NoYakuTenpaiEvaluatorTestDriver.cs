@@ -26,13 +26,26 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
             string yakuKindName,
             string closedHanName,
             string openHanName,
-            bool isYakuman = false)
+            int yakumanMultiplier = 0)
         {
             return support.CreateYakuDefinition(
                 yakuKindName,
                 closedHanName,
                 openHanName,
-                isYakuman);
+                yakumanMultiplier);
+        }
+
+        public object CreateDefinition(
+            string yakuKindName,
+            string closedHanName,
+            string openHanName,
+            bool isYakuman)
+        {
+            return CreateDefinition(
+                yakuKindName,
+                closedHanName,
+                openHanName,
+                isYakuman ? 1 : 0);
         }
 
         public object Evaluate(

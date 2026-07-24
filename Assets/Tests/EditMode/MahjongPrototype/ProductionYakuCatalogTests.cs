@@ -102,7 +102,7 @@ namespace MahjongPrototype.Tests
             string displayName,
             string closedHanName,
             string openHanName,
-            bool isYakuman)
+            int yakumanMultiplier)
         {
             var definition = LoadDefinitions()
                 .SingleOrDefault(candidate => candidate != null && DefinitionKindName(candidate) == kindName);
@@ -116,8 +116,57 @@ namespace MahjongPrototype.Tests
             Assert.That(DefinitionDisplayName(definition), Is.EqualTo(displayName), $"{kindName} DisplayName does not match.");
             Assert.That(DefinitionClosedHanName(definition), Is.EqualTo(closedHanName), $"{kindName} ClosedHan does not match.");
             Assert.That(DefinitionOpenHanName(definition), Is.EqualTo(openHanName), $"{kindName} OpenHan does not match.");
-            Assert.That(DefinitionIsYakuman(definition), Is.EqualTo(isYakuman), $"{kindName} IsYakuman does not match.");
+            Assert.That(
+                DefinitionYakumanMultiplier(definition),
+                Is.EqualTo(yakumanMultiplier),
+                $"{kindName} YakumanMultiplier does not match.");
+            Assert.That(
+                DefinitionIsYakuman(definition),
+                Is.EqualTo(yakumanMultiplier > 0),
+                $"{kindName} IsYakuman does not match its multiplier.");
             Assert.That(DefinitionIsEnabled(definition), Is.True, $"{kindName} IsEnabled must be true in the production catalog.");
+        }
+
+        [Test]
+        public void ProductionCatalog_OnlySpecifiedKindsHaveDoubleYakumanMultiplier()
+        {
+            string[] actualDoubleYakumanKinds = LoadDefinitions()
+                .Where(definition =>
+                    definition != null &&
+                    DefinitionYakumanMultiplier(definition) == 2)
+                .Select(DefinitionKindName)
+                .OrderBy(kind => kind)
+                .ToArray();
+            string[] expectedDoubleYakumanKinds =
+            {
+                "Daisuushii",
+                "JunseiChuurenPoutou",
+                "KokushiMusouThirteenWait",
+                "SuuankouTanki"
+            };
+
+            Assert.That(
+                actualDoubleYakumanKinds,
+                Is.EqualTo(expectedDoubleYakumanKinds.OrderBy(kind => kind).ToArray()));
+        }
+
+        [Test]
+        public void ProductionCatalog_YakumanDefinitionsHaveNoHan()
+        {
+            string[] invalidKinds = LoadDefinitions()
+                .Where(definition =>
+                    definition != null &&
+                    DefinitionYakumanMultiplier(definition) > 0 &&
+                    (DefinitionClosedHanName(definition) != "None" ||
+                     DefinitionOpenHanName(definition) != "None"))
+                .Select(DefinitionKindName)
+                .OrderBy(kind => kind)
+                .ToArray();
+
+            Assert.That(
+                invalidKinds,
+                Is.Empty,
+                "Yakuman definitions must have None for both ClosedHan and OpenHan.");
         }
 
         [TestCase("Renhou")]
@@ -138,7 +187,7 @@ namespace MahjongPrototype.Tests
                         definition.DisplayName,
                         definition.ClosedHanName,
                         definition.OpenHanName,
-                        definition.IsYakuman)
+                        definition.YakumanMultiplier)
                     .SetName($"ProductionCatalog_DefinitionMatchesExpectedValue_{definition.KindName}");
             }
         }
@@ -175,51 +224,51 @@ namespace MahjongPrototype.Tests
 
         private static readonly ExpectedDefinition[] ExpectedDefinitions =
         {
-            new ExpectedDefinition("MenzenTsumo", "門前清自摸和", "One", "None", false),
-            new ExpectedDefinition("Reach", "リーチ", "One", "None", false),
-            new ExpectedDefinition("Ippatsu", "一発", "One", "None", false),
-            new ExpectedDefinition("HaiteiRaoyue", "海底撈月", "One", "One", false),
-            new ExpectedDefinition("HouteiRaoyui", "河底撈魚", "One", "One", false),
-            new ExpectedDefinition("Tanyao", "断么九", "One", "One", false),
-            new ExpectedDefinition("Pinfu", "平和", "One", "None", false),
-            new ExpectedDefinition("Iipeikou", "一盃口", "One", "None", false),
-            new ExpectedDefinition("Ryanpeikou", "二盃口", "Three", "None", false),
-            new ExpectedDefinition("SevenPairs", "七対子", "Two", "None", false),
-            new ExpectedDefinition("KokushiMusou", "国士無双", "None", "None", true),
-            new ExpectedDefinition("KokushiMusouThirteenWait", "国士無双　十三面待ち", "None", "None", true),
-            new ExpectedDefinition("YakuhaiSeatWind", "役牌・自風", "One", "One", false),
-            new ExpectedDefinition("YakuhaiRoundWind", "役牌・場風", "One", "One", false),
-            new ExpectedDefinition("YakuhaiWhiteDragon", "白", "One", "One", false),
-            new ExpectedDefinition("YakuhaiGreenDragon", "發", "One", "One", false),
-            new ExpectedDefinition("YakuhaiRedDragon", "中", "One", "One", false),
-            new ExpectedDefinition("DoubleReach", "ダブルリーチ", "Two", "None", false),
-            new ExpectedDefinition("SanshokuDoukou", "三色同刻", "Two", "One", false),
-            new ExpectedDefinition("SanshokuDoujun", "三色同順", "Two", "One", false),
-            new ExpectedDefinition("Ittsuu", "一気通貫", "Two", "One", false),
-            new ExpectedDefinition("Chanta", "混全帯么九", "Two", "One", false),
-            new ExpectedDefinition("Junchan", "純全帯幺九", "Three", "Two", false),
-            new ExpectedDefinition("Shousangen", "小三元", "Two", "Two", false),
-            new ExpectedDefinition("Daisangen", "大三元", "None", "None", true),
-            new ExpectedDefinition("Honitsu", "混一色", "Three", "Two", false),
-            new ExpectedDefinition("Chinitsu", "清一色", "Six", "Five", false),
-            new ExpectedDefinition("Ryuuiisou", "緑一色", "None", "None", true),
-            new ExpectedDefinition("Sanankou", "三暗刻", "Two", "Two", false),
-            new ExpectedDefinition("Suuankou", "四暗刻", "None", "None", true),
-            new ExpectedDefinition("SuuankouTanki", "四暗刻　単騎", "None", "None", true),
-            new ExpectedDefinition("Shousuushii", "小四喜", "None", "None", true),
-            new ExpectedDefinition("Daisuushii", "大四喜", "None", "None", true),
-            new ExpectedDefinition("Tsuuiisou", "字一色", "None", "None", true),
-            new ExpectedDefinition("Honroutou", "混老頭", "Two", "Two", false),
-            new ExpectedDefinition("Chinroutou", "清老頭", "None", "None", true),
-            new ExpectedDefinition("ChuurenPoutou", "九蓮宝燈", "None", "None", true),
-            new ExpectedDefinition("JunseiChuurenPoutou", "純正九蓮宝燈", "None", "None", true),
-            new ExpectedDefinition("RinshanKaihou", "嶺上開花", "One", "One", false),
-            new ExpectedDefinition("Chankan", "槍槓", "One", "One", false),
-            new ExpectedDefinition("Toitoi", "対々和", "Two", "Two", false),
-            new ExpectedDefinition("Sankantsu", "三槓子", "Two", "Two", false),
-            new ExpectedDefinition("Suukantsu", "四槓子", "None", "None", true),
-            new ExpectedDefinition("Tenhou", "天和", "None", "None", true),
-            new ExpectedDefinition("Chiihou", "地和", "None", "None", true)
+            new ExpectedDefinition("MenzenTsumo", "門前清自摸和", "One", "None", 0),
+            new ExpectedDefinition("Reach", "リーチ", "One", "None", 0),
+            new ExpectedDefinition("Ippatsu", "一発", "One", "None", 0),
+            new ExpectedDefinition("HaiteiRaoyue", "海底撈月", "One", "One", 0),
+            new ExpectedDefinition("HouteiRaoyui", "河底撈魚", "One", "One", 0),
+            new ExpectedDefinition("Tanyao", "断么九", "One", "One", 0),
+            new ExpectedDefinition("Pinfu", "平和", "One", "None", 0),
+            new ExpectedDefinition("Iipeikou", "一盃口", "One", "None", 0),
+            new ExpectedDefinition("Ryanpeikou", "二盃口", "Three", "None", 0),
+            new ExpectedDefinition("SevenPairs", "七対子", "Two", "None", 0),
+            new ExpectedDefinition("KokushiMusou", "国士無双", "None", "None", 1),
+            new ExpectedDefinition("KokushiMusouThirteenWait", "国士無双　十三面待ち", "None", "None", 2),
+            new ExpectedDefinition("YakuhaiSeatWind", "役牌・自風", "One", "One", 0),
+            new ExpectedDefinition("YakuhaiRoundWind", "役牌・場風", "One", "One", 0),
+            new ExpectedDefinition("YakuhaiWhiteDragon", "白", "One", "One", 0),
+            new ExpectedDefinition("YakuhaiGreenDragon", "發", "One", "One", 0),
+            new ExpectedDefinition("YakuhaiRedDragon", "中", "One", "One", 0),
+            new ExpectedDefinition("DoubleReach", "ダブルリーチ", "Two", "None", 0),
+            new ExpectedDefinition("SanshokuDoukou", "三色同刻", "Two", "One", 0),
+            new ExpectedDefinition("SanshokuDoujun", "三色同順", "Two", "One", 0),
+            new ExpectedDefinition("Ittsuu", "一気通貫", "Two", "One", 0),
+            new ExpectedDefinition("Chanta", "混全帯么九", "Two", "One", 0),
+            new ExpectedDefinition("Junchan", "純全帯幺九", "Three", "Two", 0),
+            new ExpectedDefinition("Shousangen", "小三元", "Two", "Two", 0),
+            new ExpectedDefinition("Daisangen", "大三元", "None", "None", 1),
+            new ExpectedDefinition("Honitsu", "混一色", "Three", "Two", 0),
+            new ExpectedDefinition("Chinitsu", "清一色", "Six", "Five", 0),
+            new ExpectedDefinition("Ryuuiisou", "緑一色", "None", "None", 1),
+            new ExpectedDefinition("Sanankou", "三暗刻", "Two", "Two", 0),
+            new ExpectedDefinition("Suuankou", "四暗刻", "None", "None", 1),
+            new ExpectedDefinition("SuuankouTanki", "四暗刻　単騎", "None", "None", 2),
+            new ExpectedDefinition("Shousuushii", "小四喜", "None", "None", 1),
+            new ExpectedDefinition("Daisuushii", "大四喜", "None", "None", 2),
+            new ExpectedDefinition("Tsuuiisou", "字一色", "None", "None", 1),
+            new ExpectedDefinition("Honroutou", "混老頭", "Two", "Two", 0),
+            new ExpectedDefinition("Chinroutou", "清老頭", "None", "None", 1),
+            new ExpectedDefinition("ChuurenPoutou", "九蓮宝燈", "None", "None", 1),
+            new ExpectedDefinition("JunseiChuurenPoutou", "純正九蓮宝燈", "None", "None", 2),
+            new ExpectedDefinition("RinshanKaihou", "嶺上開花", "One", "One", 0),
+            new ExpectedDefinition("Chankan", "槍槓", "One", "One", 0),
+            new ExpectedDefinition("Toitoi", "対々和", "Two", "Two", 0),
+            new ExpectedDefinition("Sankantsu", "三槓子", "Two", "Two", 0),
+            new ExpectedDefinition("Suukantsu", "四槓子", "None", "None", 1),
+            new ExpectedDefinition("Tenhou", "天和", "None", "None", 1),
+            new ExpectedDefinition("Chiihou", "地和", "None", "None", 1)
         };
 
         private static string DefinitionKindName(object definition)
@@ -245,6 +294,11 @@ namespace MahjongPrototype.Tests
         private static bool DefinitionIsYakuman(object definition)
         {
             return (bool)GetProperty(definition, "IsYakuman");
+        }
+
+        private static int DefinitionYakumanMultiplier(object definition)
+        {
+            return (int)GetProperty(definition, "YakumanMultiplier");
         }
 
         private static bool DefinitionIsEnabled(object definition)
@@ -279,20 +333,20 @@ namespace MahjongPrototype.Tests
                 string displayName,
                 string closedHanName,
                 string openHanName,
-                bool isYakuman)
+                int yakumanMultiplier)
             {
                 KindName = kindName;
                 DisplayName = displayName;
                 ClosedHanName = closedHanName;
                 OpenHanName = openHanName;
-                IsYakuman = isYakuman;
+                YakumanMultiplier = yakumanMultiplier;
             }
 
             public string KindName { get; }
             public string DisplayName { get; }
             public string ClosedHanName { get; }
             public string OpenHanName { get; }
-            public bool IsYakuman { get; }
+            public int YakumanMultiplier { get; }
         }
     }
 

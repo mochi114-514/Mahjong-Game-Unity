@@ -14,7 +14,7 @@ namespace MahjongPrototype.Services
             }
 
             HandEvaluationCandidateResult selectedYakumanCandidate = null;
-            int selectedYakumanCount = 0;
+            int selectedYakumanMultiplier = 0;
             HandEvaluationCandidateResult selectedNormalCandidate = null;
 
             for (int i = 0; i < evaluationResult.CandidateResults.Count; i++)
@@ -25,11 +25,11 @@ namespace MahjongPrototype.Services
 
                 if (candidate.HasYakuman)
                 {
-                    int yakumanCount = CountYakuman(candidate);
-                    if (selectedYakumanCandidate == null || yakumanCount > selectedYakumanCount)
+                    if (selectedYakumanCandidate == null ||
+                        candidate.TotalYakumanMultiplier > selectedYakumanMultiplier)
                     {
                         selectedYakumanCandidate = candidate;
-                        selectedYakumanCount = yakumanCount;
+                        selectedYakumanMultiplier = candidate.TotalYakumanMultiplier;
                     }
 
                     continue;
@@ -43,21 +43,6 @@ namespace MahjongPrototype.Services
             }
 
             return selectedYakumanCandidate ?? selectedNormalCandidate;
-        }
-
-        private static int CountYakuman(HandEvaluationCandidateResult candidate)
-        {
-            int count = 0;
-            if (candidate.Yakus == null)
-                return count;
-
-            for (int i = 0; i < candidate.Yakus.Count; i++)
-            {
-                if (candidate.Yakus[i].IsYakuman)
-                    count++;
-            }
-
-            return count;
         }
     }
 }

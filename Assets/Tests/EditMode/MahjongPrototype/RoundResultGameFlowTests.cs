@@ -13,6 +13,8 @@ namespace MahjongPrototype.Tests
     {
         private const string StandardHand =
             "1m 2m 3m 1p 2p 3p 1s 2s 3s E E E C";
+        private const string DaisuushiiHand =
+            "E E E S S S W W W N N N 5m";
 
         [Test]
         public void TsumoWin_StoresRoundResultAndSelectedCandidateWithoutStartingNextRound()
@@ -87,6 +89,44 @@ namespace MahjongPrototype.Tests
                 Assert.That(driver.CurrentRoundResultIsNull, Is.True);
                 Assert.That(driver.CurrentState, Is.Not.SameAs(endedState));
                 Assert.That(driver.WindProgressHandNumber, Is.EqualTo(2));
+            }
+        }
+
+        [Test]
+        public void TsumoDoubleYakuman_TransfersCandidateMultiplierToRoundResult()
+        {
+            using (Driver driver = Driver.Create(
+                participantCount: 1,
+                additionalYakumanKindName: "Daisuushii",
+                additionalYakumanMultiplier: 2))
+            {
+                driver.PrepareTsumoDecision(DaisuushiiHand, "5m");
+
+                driver.DeclareWin();
+
+                Assert.That(driver.RoundResultWinTypeName, Is.EqualTo("Tsumo"));
+                Assert.That(driver.RoundResultTotalHan, Is.EqualTo(0));
+                Assert.That(driver.RoundResultTotalYakumanMultiplier, Is.EqualTo(2));
+                Assert.That(driver.RoundResultYakumanCount, Is.EqualTo(2));
+            }
+        }
+
+        [Test]
+        public void RonDoubleYakuman_TransfersCandidateMultiplierToRoundResult()
+        {
+            using (Driver driver = Driver.Create(
+                participantCount: 2,
+                additionalYakumanKindName: "Daisuushii",
+                additionalYakumanMultiplier: 2))
+            {
+                driver.PrepareRonDecision(DaisuushiiHand, "5m", "West");
+
+                driver.DeclareWin();
+
+                Assert.That(driver.RoundResultWinTypeName, Is.EqualTo("Ron"));
+                Assert.That(driver.RoundResultTotalHan, Is.EqualTo(0));
+                Assert.That(driver.RoundResultTotalYakumanMultiplier, Is.EqualTo(2));
+                Assert.That(driver.RoundResultYakumanCount, Is.EqualTo(2));
             }
         }
 
@@ -473,6 +513,35 @@ namespace MahjongPrototype.Tests
             }
         }
 
+        [Test]
+        public void Notifications_DoubleYakuman_KeepOriginalRoundResultAndMultiplier()
+        {
+            using (Driver driver = Driver.Create(
+                participantCount: 1,
+                additionalYakumanKindName: "Daisuushii",
+                additionalYakumanMultiplier: 2))
+            using (EventTrace trace = EventTrace.Subscribe(
+                driver.EventNotifier,
+                "RoundResultReady",
+                "RoundResultConfirmed"))
+            {
+                driver.PrepareTsumoDecision(DaisuushiiHand, "5m");
+                driver.DeclareWin();
+
+                object result = driver.CurrentRoundResult;
+                object readyResult = trace.FirstPayload("RoundResultReady");
+                Assert.That(readyResult, Is.SameAs(result));
+                Assert.That(driver.RoundResultTotalYakumanMultiplier, Is.EqualTo(2));
+                Assert.That(
+                    (int)driver.ReflectionProperty(readyResult, "TotalYakumanMultiplier"),
+                    Is.EqualTo(2));
+
+                driver.AdvanceFromRoundResult();
+
+                Assert.That(trace.FirstPayload("RoundResultConfirmed"), Is.SameAs(result));
+            }
+        }
+
         private sealed class Driver : IDisposable
         {
             private const string SelectorTypeName =
@@ -491,15 +560,26 @@ namespace MahjongPrototype.Tests
             public static Driver Create(
                 int participantCount,
                 bool addGameLogRecorder = false,
-                int initialHandTileCount = 0)
+                int initialHandTileCount = 0,
+                string additionalYakumanKindName = null,
+                int additionalYakumanMultiplier = 0)
             {
                 ReflectionTestAccess reflection = new ReflectionTestAccess();
                 CollectionTestAccess collections = new CollectionTestAccess(reflection);
                 MahjongTestTypes types = new MahjongTestTypes(reflection);
                 MahjongTestDataFactory dataFactory =
                     new MahjongTestDataFactory(reflection, types);
-                object catalog =
-                    MahjongTestCatalogFactory.CreateStandardGameFlowYakuCatalog(dataFactory);
+                object catalog = string.IsNullOrEmpty(additionalYakumanKindName)
+                    ? MahjongTestCatalogFactory.CreateStandardGameFlowYakuCatalog(dataFactory)
+                    : dataFactory.CreateYakuCatalog(
+                        dataFactory.CreateYakuDefinition("MenzenTsumo", "One", "None"),
+                        dataFactory.CreateYakuDefinition("Reach", "One", "None"),
+                        dataFactory.CreateYakuDefinition("Tanyao", "One", "One"),
+                        dataFactory.CreateYakuDefinition(
+                            additionalYakumanKindName,
+                            "None",
+                            "None",
+                            additionalYakumanMultiplier));
                 MahjongGameFlowTestOptions options = new MahjongGameFlowTestOptions
                 {
                     RootName = "RoundResultGameFlowTest",
@@ -572,6 +652,9 @@ namespace MahjongPrototype.Tests
             public object RoundResultSelectedCandidate => Query.RoundResultSelectedCandidate;
             public int RoundResultYakuCount => Query.RoundResultYakuCount;
             public int RoundResultTotalHan => Query.RoundResultTotalHan;
+            public int RoundResultTotalYakumanMultiplier =>
+                Query.RoundResultTotalYakumanMultiplier;
+            public int RoundResultYakumanCount => Query.RoundResultYakumanCount;
             public bool RoundResultIsFinalRound => Query.RoundResultIsFinalRound;
             public string RoundResultAbortiveDrawKindName =>
                 Query.RoundResultAbortiveDrawKindNameOrNull;
@@ -750,6 +833,11 @@ namespace MahjongPrototype.Tests
                 }
 
                 return false;
+            }
+
+            public object ReflectionProperty(object target, string propertyName)
+            {
+                return Reflection.GetProperty(target, propertyName);
             }
 
             public void Dispose()

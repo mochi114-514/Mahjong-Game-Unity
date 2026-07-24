@@ -229,15 +229,30 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
             string yakuKindName,
             string closedHanName,
             string openHanName,
-            bool isYakuman = false,
+            int yakumanMultiplier = 0,
             bool isEnabled = true)
         {
-            return CreateYakuDefinition(
+            return CreateYakuDefinitionCore(
                 yakuKindName,
                 yakuKindName,
                 closedHanName,
                 openHanName,
-                isYakuman,
+                yakumanMultiplier,
+                isEnabled);
+        }
+
+        public object CreateYakuDefinition(
+            string yakuKindName,
+            string closedHanName,
+            string openHanName,
+            bool isYakuman,
+            bool isEnabled = true)
+        {
+            return CreateYakuDefinition(
+                yakuKindName,
+                closedHanName,
+                openHanName,
+                isYakuman ? 1 : 0,
                 isEnabled);
         }
 
@@ -246,24 +261,41 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
             string displayName,
             string closedHanName,
             string openHanName,
-            bool isYakuman = false,
+            int yakumanMultiplier = 0,
             bool isEnabled = true)
         {
-            return CreateYakuDefinition(
+            return CreateYakuDefinitionCore(
                 yakuKindName,
                 displayName,
                 closedHanName,
                 openHanName,
-                isYakuman,
+                yakumanMultiplier,
                 isEnabled);
         }
 
-        private object CreateYakuDefinition(
+        public object CreateYakuDefinitionWithDisplayName(
             string yakuKindName,
             string displayName,
             string closedHanName,
             string openHanName,
             bool isYakuman,
+            bool isEnabled = true)
+        {
+            return CreateYakuDefinitionWithDisplayName(
+                yakuKindName,
+                displayName,
+                closedHanName,
+                openHanName,
+                isYakuman ? 1 : 0,
+                isEnabled);
+        }
+
+        private object CreateYakuDefinitionCore(
+            string yakuKindName,
+            string displayName,
+            string closedHanName,
+            string openHanName,
+            int yakumanMultiplier,
             bool isEnabled)
         {
             return reflection.CreateInstance(
@@ -272,7 +304,7 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
                 displayName,
                 Enum.Parse(types.HanValue, closedHanName),
                 Enum.Parse(types.HanValue, openHanName),
-                isYakuman,
+                yakumanMultiplier,
                 isEnabled);
         }
 

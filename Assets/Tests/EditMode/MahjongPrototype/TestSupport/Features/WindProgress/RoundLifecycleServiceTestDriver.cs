@@ -205,7 +205,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.WindProgress
                 Enum.Parse(types.YakuKind, "Tanyao"),
                 "Tanyao",
                 Enum.Parse(types.HanValue, "One"),
-                false);
+                0);
             Type evaluatedYakuListType = typeof(List<>).MakeGenericType(
                 reflection.RequireType(EvaluatedYakuTypeName));
             IList evaluatedYakus = (IList)reflection.CreateInstance(evaluatedYakuListType);

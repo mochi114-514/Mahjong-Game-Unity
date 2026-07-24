@@ -1027,27 +1027,31 @@ namespace MahjongPrototype.Tests
 
     internal readonly struct YakuSpec
     {
-        private YakuSpec(string kindName, string displayName, string hanName, bool isYakuman)
+        private YakuSpec(
+            string kindName,
+            string displayName,
+            string hanName,
+            int yakumanMultiplier)
         {
             KindName = kindName;
             DisplayName = displayName;
             HanName = hanName;
-            IsYakuman = isYakuman;
+            YakumanMultiplier = yakumanMultiplier;
         }
 
         public string KindName { get; }
         public string DisplayName { get; }
         public string HanName { get; }
-        public bool IsYakuman { get; }
+        public int YakumanMultiplier { get; }
 
         public static YakuSpec Normal(string kindName, string displayName, string hanName)
         {
-            return new YakuSpec(kindName, displayName, hanName, false);
+            return new YakuSpec(kindName, displayName, hanName, 0);
         }
 
         public static YakuSpec Yakuman(string kindName, string displayName)
         {
-            return new YakuSpec(kindName, displayName, "None", true);
+            return new YakuSpec(kindName, displayName, "None", 1);
         }
     }
 
@@ -1155,14 +1159,27 @@ namespace MahjongPrototype.Tests
             string kindName,
             string displayName,
             string hanName,
-            bool isYakuman)
+            int yakumanMultiplier)
         {
             return reflection.CreateInstance(
                 EvaluatedYakuType,
                 Enum.Parse(types.YakuKind, kindName),
                 displayName,
                 Enum.Parse(types.HanValue, hanName),
-                isYakuman);
+                yakumanMultiplier);
+        }
+
+        public object CreateYaku(
+            string kindName,
+            string displayName,
+            string hanName,
+            bool isYakuman)
+        {
+            return CreateYaku(
+                kindName,
+                displayName,
+                hanName,
+                isYakuman ? 1 : 0);
         }
 
         private object CreateSevenPairsCandidate()
@@ -1184,7 +1201,11 @@ namespace MahjongPrototype.Tests
             for (int i = 0; i < yakuSpecs.Length; i++)
             {
                 YakuSpec spec = yakuSpecs[i];
-                list.Add(CreateYaku(spec.KindName, spec.DisplayName, spec.HanName, spec.IsYakuman));
+                list.Add(CreateYaku(
+                    spec.KindName,
+                    spec.DisplayName,
+                    spec.HanName,
+                    spec.YakumanMultiplier));
             }
 
             return list;

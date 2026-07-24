@@ -43,14 +43,29 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
             string yakuKindName,
             string closedHanName,
             string openHanName,
-            bool isYakuman = false,
+            int yakumanMultiplier = 0,
             bool isEnabled = true)
         {
             return support.CreateYakuDefinition(
                 yakuKindName,
                 closedHanName,
                 openHanName,
-                isYakuman,
+                yakumanMultiplier,
+                isEnabled);
+        }
+
+        public object CreateDefinition(
+            string yakuKindName,
+            string closedHanName,
+            string openHanName,
+            bool isYakuman,
+            bool isEnabled = true)
+        {
+            return CreateDefinition(
+                yakuKindName,
+                closedHanName,
+                openHanName,
+                isYakuman ? 1 : 0,
                 isEnabled);
         }
 
@@ -59,7 +74,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
             string displayName,
             string closedHanName,
             string openHanName,
-            bool isYakuman = false,
+            int yakumanMultiplier = 0,
             bool isEnabled = true)
         {
             return support.DataFactory.CreateYakuDefinitionWithDisplayName(
@@ -67,7 +82,24 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
                 displayName,
                 closedHanName,
                 openHanName,
-                isYakuman,
+                yakumanMultiplier,
+                isEnabled);
+        }
+
+        public object CreateDefinitionWithDisplayName(
+            string yakuKindName,
+            string displayName,
+            string closedHanName,
+            string openHanName,
+            bool isYakuman,
+            bool isEnabled = true)
+        {
+            return CreateDefinitionWithDisplayName(
+                yakuKindName,
+                displayName,
+                closedHanName,
+                openHanName,
+                isYakuman ? 1 : 0,
                 isEnabled);
         }
 
@@ -386,6 +418,13 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
             return (int)support.Reflection.GetProperty(candidateResult, "TotalHan");
         }
 
+        public int CandidateTotalYakumanMultiplier(object candidateResult)
+        {
+            return (int)support.Reflection.GetProperty(
+                candidateResult,
+                "TotalYakumanMultiplier");
+        }
+
         public object CandidateYakus(object candidateResult)
         {
             return support.Reflection.GetProperty(candidateResult, "Yakus");
@@ -411,6 +450,14 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
         {
             object yaku = CandidateYaku(candidateResult, yakuKindName);
             return support.Reflection.GetProperty(yaku, "Han").ToString();
+        }
+
+        public int CandidateYakuYakumanMultiplier(
+            object candidateResult,
+            string yakuKindName)
+        {
+            object yaku = CandidateYaku(candidateResult, yakuKindName);
+            return (int)support.Reflection.GetProperty(yaku, "YakumanMultiplier");
         }
 
         public bool CandidateContainsYaku(object candidateResult, string yakuKindName)
@@ -792,22 +839,28 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
         public object CreateLegacyHandEvaluationResultWithYaku(
             string yakuKindName,
             string hanValueName,
-            bool isYakuman = false)
+            int yakumanMultiplier = 0)
         {
             return support.Reflection.CreateInstance(
                 support.Reflection.RequireType(HandEvaluationResultTypeName),
-                CreateEvaluatedYakuList(yakuKindName, hanValueName, isYakuman));
+                CreateEvaluatedYakuList(
+                    yakuKindName,
+                    hanValueName,
+                    yakumanMultiplier));
         }
 
         public object CreateHandEvaluationResultWithLegacyYakuAndCandidateResults(
             string yakuKindName,
             string hanValueName,
             object resultWithCandidateResults,
-            bool isYakuman = false)
+            int yakumanMultiplier = 0)
         {
             return support.Reflection.CreateInstance(
                 support.Reflection.RequireType(HandEvaluationResultTypeName),
-                CreateEvaluatedYakuList(yakuKindName, hanValueName, isYakuman),
+                CreateEvaluatedYakuList(
+                    yakuKindName,
+                    hanValueName,
+                    yakumanMultiplier),
                 CandidateResultsCollection(resultWithCandidateResults));
         }
 
@@ -862,7 +915,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
         private object CreateEvaluatedYakuList(
             string yakuKindName,
             string hanValueName,
-            bool isYakuman)
+            int yakumanMultiplier)
         {
             Type evaluatedYakuType = support.Reflection.RequireType(EvaluatedYakuTypeName);
             Type listType = typeof(List<>).MakeGenericType(evaluatedYakuType);
@@ -872,7 +925,7 @@ namespace MahjongPrototype.Tests.TestSupport.Features.Win
                 Enum.Parse(support.Types.YakuKind, yakuKindName),
                 yakuKindName,
                 Enum.Parse(support.Types.HanValue, hanValueName),
-                isYakuman);
+                yakumanMultiplier);
 
             listType.GetMethod("Add").Invoke(yakus, new[] { yaku });
             return yakus;

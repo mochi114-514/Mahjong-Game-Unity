@@ -318,14 +318,14 @@ namespace MahjongPrototype.Services
                 return false;
 
             HanValue han = ResolveHan(definition, isClosed);
-            if (!definition.IsYakuman && han == HanValue.None)
+            if (definition.YakumanMultiplier == 0 && han == HanValue.None)
                 return false;
 
             yakus.Add(new EvaluatedYaku(
                 definition.Kind,
                 definition.DisplayName,
-                definition.IsYakuman ? HanValue.None : han,
-                definition.IsYakuman));
+                definition.YakumanMultiplier > 0 ? HanValue.None : han,
+                definition.YakumanMultiplier));
             return true;
         }
 

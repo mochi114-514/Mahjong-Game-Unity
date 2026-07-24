@@ -16,29 +16,29 @@ namespace MahjongPrototype.Domain
             Yakus = CopyYakus(yakus);
 
             int totalHan = 0;
-            bool hasYakuman = false;
+            int totalYakumanMultiplier = 0;
             for (int i = 0; i < Yakus.Count; i++)
             {
                 EvaluatedYaku yaku = Yakus[i];
-                if (yaku.IsYakuman)
+                totalYakumanMultiplier += yaku.YakumanMultiplier;
+                if (yaku.YakumanMultiplier > 0)
                 {
-                    hasYakuman = true;
                     continue;
                 }
 
                 totalHan += (int)yaku.Han;
             }
 
-            TotalHan = totalHan;
-            HasYakuman = hasYakuman;
-            HasYaku = HasYakuman || TotalHan > 0;
+            TotalYakumanMultiplier = totalYakumanMultiplier;
+            TotalHan = TotalYakumanMultiplier > 0 ? 0 : totalHan;
         }
 
         public HandEvaluationCandidate Candidate { get; }
         public IReadOnlyList<EvaluatedYaku> Yakus { get; }
         public int TotalHan { get; }
-        public bool HasYakuman { get; }
-        public bool HasYaku { get; }
+        public int TotalYakumanMultiplier { get; }
+        public bool HasYakuman => TotalYakumanMultiplier > 0;
+        public bool HasYaku => TotalHan > 0 || TotalYakumanMultiplier > 0;
 
         private static IReadOnlyList<EvaluatedYaku> CopyYakus(
             IReadOnlyList<EvaluatedYaku> yakus)

@@ -45,8 +45,11 @@ namespace MahjongPrototype.Domain
         public IReadOnlyList<EvaluatedYaku> Yakus =>
             SelectedCandidate == null ? EmptyYakus : SelectedCandidate.Yakus;
         public int TotalHan => SelectedCandidate == null ? 0 : SelectedCandidate.TotalHan;
-        public bool HasYakuman => SelectedCandidate != null && SelectedCandidate.HasYakuman;
-        public int YakumanCount => CountYakuman(SelectedCandidate);
+        public int TotalYakumanMultiplier =>
+            SelectedCandidate == null ? 0 : SelectedCandidate.TotalYakumanMultiplier;
+        public bool HasYakuman => TotalYakumanMultiplier > 0;
+        // Compatibility projection for result presentation that has not yet migrated.
+        public int YakumanCount => TotalYakumanMultiplier;
 
         public static RoundResult CreateWin(
             WindProgress windProgress,
@@ -110,19 +113,5 @@ namespace MahjongPrototype.Domain
                 kind);
         }
 
-        private static int CountYakuman(HandEvaluationCandidateResult candidate)
-        {
-            if (candidate == null || candidate.Yakus == null)
-                return 0;
-
-            int count = 0;
-            for (int i = 0; i < candidate.Yakus.Count; i++)
-            {
-                if (candidate.Yakus[i].IsYakuman)
-                    count++;
-            }
-
-            return count;
-        }
     }
 }

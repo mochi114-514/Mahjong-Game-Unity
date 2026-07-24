@@ -129,20 +129,84 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void Select_YakumanCandidatesWithEqualYakumanCount_ReturnsEarlierCandidate()
+        public void Select_DoubleYakumanCandidate_BeatsSingleYakumanCandidate()
         {
             using (Driver driver = Driver.Create())
             {
-                object firstCandidate = driver.CreateCandidate(YakuSpec.Yakuman("Daisangen"));
-                object secondCandidate = driver.CreateCandidate(YakuSpec.Yakuman("Shousuushii"));
+                object singleYakumanCandidate = driver.CreateCandidate(YakuSpec.Yakuman("Daisangen"));
+                object doubleYakumanCandidate = driver.CreateCandidate(
+                    YakuSpec.Yakuman("SuuankouTanki", 2));
+                object evaluation = driver.CreateEvaluation(
+                    singleYakumanCandidate,
+                    doubleYakumanCandidate);
+
+                Assert.That(driver.TotalYakumanMultiplier(singleYakumanCandidate), Is.EqualTo(1));
+                Assert.That(driver.TotalYakumanMultiplier(doubleYakumanCandidate), Is.EqualTo(2));
+                Assert.That(driver.Select(evaluation), Is.SameAs(doubleYakumanCandidate));
+            }
+        }
+
+        [Test]
+        public void Select_EqualYakumanMultiplier_ReturnsEarlierCandidate()
+        {
+            using (Driver driver = Driver.Create())
+            {
+                object firstCandidate = driver.CreateCandidate(
+                    YakuSpec.Yakuman("SuuankouTanki", 2));
+                object secondCandidate = driver.CreateCandidate(
+                    YakuSpec.Yakuman("Daisangen"),
+                    YakuSpec.Yakuman("Tsuuiisou"));
                 object evaluation = driver.CreateEvaluation(firstCandidate, secondCandidate);
 
+                Assert.That(driver.TotalYakumanMultiplier(firstCandidate), Is.EqualTo(2));
+                Assert.That(driver.TotalYakumanMultiplier(secondCandidate), Is.EqualTo(2));
                 Assert.That(driver.Select(evaluation), Is.SameAs(firstCandidate));
             }
         }
 
         [Test]
-        public void Select_YakumanComparison_IgnoresTotalHan()
+        public void Select_HigherYakumanMultiplier_BeatsLowerMultiplier()
+        {
+            using (Driver driver = Driver.Create())
+            {
+                object doubleYakumanCandidate = driver.CreateCandidate(
+                    YakuSpec.Yakuman("SuuankouTanki", 2));
+                object tripleYakumanCandidate = driver.CreateCandidate(
+                    YakuSpec.Yakuman("Daisuushii", 2),
+                    YakuSpec.Yakuman("Daisangen"));
+                object evaluation = driver.CreateEvaluation(
+                    doubleYakumanCandidate,
+                    tripleYakumanCandidate);
+
+                Assert.That(driver.TotalYakumanMultiplier(doubleYakumanCandidate), Is.EqualTo(2));
+                Assert.That(driver.TotalYakumanMultiplier(tripleYakumanCandidate), Is.EqualTo(3));
+                Assert.That(driver.Select(evaluation), Is.SameAs(tripleYakumanCandidate));
+            }
+        }
+
+        [Test]
+        public void Select_QuadrupleYakumanCandidate_BeatsTripleYakumanCandidate()
+        {
+            using (Driver driver = Driver.Create())
+            {
+                object tripleYakumanCandidate = driver.CreateCandidate(
+                    YakuSpec.Yakuman("Daisuushii", 2),
+                    YakuSpec.Yakuman("Daisangen"));
+                object quadrupleYakumanCandidate = driver.CreateCandidate(
+                    YakuSpec.Yakuman("Daisuushii", 2),
+                    YakuSpec.Yakuman("SuuankouTanki", 2));
+                object evaluation = driver.CreateEvaluation(
+                    tripleYakumanCandidate,
+                    quadrupleYakumanCandidate);
+
+                Assert.That(driver.TotalYakumanMultiplier(tripleYakumanCandidate), Is.EqualTo(3));
+                Assert.That(driver.TotalYakumanMultiplier(quadrupleYakumanCandidate), Is.EqualTo(4));
+                Assert.That(driver.Select(evaluation), Is.SameAs(quadrupleYakumanCandidate));
+            }
+        }
+
+        [Test]
+        public void Select_YakumanComparison_DoesNotKeepNormalHanInYakumanCandidate()
         {
             using (Driver driver = Driver.Create())
             {
@@ -152,7 +216,8 @@ namespace MahjongPrototype.Tests
                     YakuSpec.Normal("Chinitsu", "Six"));
                 object evaluation = driver.CreateEvaluation(firstCandidate, secondCandidate);
 
-                Assert.That(driver.TotalHan(secondCandidate), Is.GreaterThan(driver.TotalHan(firstCandidate)));
+                Assert.That(driver.TotalHan(firstCandidate), Is.EqualTo(0));
+                Assert.That(driver.TotalHan(secondCandidate), Is.EqualTo(0));
                 Assert.That(driver.Select(evaluation), Is.SameAs(firstCandidate));
             }
         }
@@ -228,25 +293,33 @@ namespace MahjongPrototype.Tests
 
         private readonly struct YakuSpec
         {
-            private YakuSpec(string kindName, string hanName, bool isYakuman)
+            private YakuSpec(
+                string kindName,
+                string hanName,
+                int yakumanMultiplier)
             {
                 KindName = kindName;
                 HanName = hanName;
-                IsYakuman = isYakuman;
+                YakumanMultiplier = yakumanMultiplier;
             }
 
             public string KindName { get; }
             public string HanName { get; }
-            public bool IsYakuman { get; }
+            public int YakumanMultiplier { get; }
 
             public static YakuSpec Normal(string kindName, string hanName)
             {
-                return new YakuSpec(kindName, hanName, false);
+                return new YakuSpec(kindName, hanName, 0);
             }
 
             public static YakuSpec Yakuman(string kindName)
             {
-                return new YakuSpec(kindName, "None", true);
+                return new YakuSpec(kindName, "None", 1);
+            }
+
+            public static YakuSpec Yakuman(string kindName, int yakumanMultiplier)
+            {
+                return new YakuSpec(kindName, "None", yakumanMultiplier);
             }
         }
 
@@ -404,6 +477,11 @@ namespace MahjongPrototype.Tests
                 return (int)Reflection.GetProperty(candidateResult, "TotalHan");
             }
 
+            public int TotalYakumanMultiplier(object candidateResult)
+            {
+                return (int)Reflection.GetProperty(candidateResult, "TotalYakumanMultiplier");
+            }
+
             public int CandidateYakuCount(object candidateResult)
             {
                 return Collections.Count(Reflection.GetProperty(candidateResult, "Yakus"));
@@ -488,7 +566,7 @@ namespace MahjongPrototype.Tests
                     Enum.Parse(Types.YakuKind, yakuSpec.KindName),
                     yakuSpec.KindName,
                     Enum.Parse(Types.HanValue, yakuSpec.HanName),
-                    yakuSpec.IsYakuman);
+                    yakuSpec.YakumanMultiplier);
             }
         }
     }
