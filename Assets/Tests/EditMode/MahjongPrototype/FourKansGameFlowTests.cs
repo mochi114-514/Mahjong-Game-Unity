@@ -108,6 +108,10 @@ namespace MahjongPrototype.Tests
                 AddAnkan(session, "East", "3m");
                 AddAnkan(session, "East", "4m");
                 ExhaustRinshan(session, 0);
+                session.DataFactory.SetParticipantType(
+                    session.CurrentState,
+                    "South",
+                    "LocalHuman");
                 session.DataFactory.AddHandTiles(session.Query.GetPlayerSeat("South"), "P", "P");
 
                 DiscardDrawnTile(session, "East", "P");
@@ -194,6 +198,8 @@ namespace MahjongPrototype.Tests
                         session.Query.ReactionWindowId),
                     Is.True);
                 PrepareThreePriorKans(session);
+                Assert.That(session.Query.HasDrawnTile("East"), Is.False);
+                session.Reflection.Invoke(session.CurrentState, "EnterWaitingForDraw");
                 session.DataFactory.SetDrawnTile(session.CurrentState, "East", "P");
 
                 Assert.That(

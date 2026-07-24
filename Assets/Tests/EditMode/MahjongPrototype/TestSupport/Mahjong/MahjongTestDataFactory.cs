@@ -209,8 +209,7 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
         public object AddDiscard(object gameState, string seatName, string tileCode, int turnIndex)
         {
             object record = CreateDiscardRecord(seatName, tileCode, turnIndex);
-            reflection.Invoke(gameState, "AddDiscard", record);
-            return record;
+            return reflection.Invoke(gameState, "AddDiscard", record);
         }
 
         public object CreateYakuCatalog(params object[] definitions)
