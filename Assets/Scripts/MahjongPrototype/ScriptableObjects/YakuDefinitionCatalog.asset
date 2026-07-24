@@ -32,7 +32,7 @@ MonoBehaviour:
     yakumanMultiplier: 0
     isEnabled: 1
   - kind: 14
-    displayName: "\u6D77\u5E95\u6488\u6708"
+    displayName: "\u6D77\u5E95\u6478\u6708"
     closedHan: 1
     openHan: 1
     yakumanMultiplier: 0
@@ -136,7 +136,7 @@ MonoBehaviour:
   - kind: 105
     displayName: "\u4E09\u8272\u540C\u523B"
     closedHan: 2
-    openHan: 1
+    openHan: 2
     yakumanMultiplier: 0
     isEnabled: 1
   - kind: 106
@@ -176,7 +176,7 @@ MonoBehaviour:
     yakumanMultiplier: 0
     isEnabled: 1
   - kind: 200
-    displayName: "\u7D14\u5168\u5E2F\u5E7A\u4E5D"
+    displayName: "\u7D14\u5168\u5E2F\u4E48\u4E5D"
     closedHan: 3
     openHan: 2
     yakumanMultiplier: 0
