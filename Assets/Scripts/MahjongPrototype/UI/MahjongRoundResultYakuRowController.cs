@@ -28,7 +28,9 @@ namespace MahjongPrototype.UI
                 "YakuNameText is not assigned.");
             SetTextOrWarn(
                 valueText,
-                yaku.IsYakuman ? "役満" : $"{(int)yaku.Han}翻",
+                yaku.YakumanMultiplier > 0
+                    ? YakumanMultiplierFormatter.Format(yaku.YakumanMultiplier)
+                    : $"{(int)yaku.Han}翻",
                 ref warnedMissingValueText,
                 "ValueText is not assigned.");
         }

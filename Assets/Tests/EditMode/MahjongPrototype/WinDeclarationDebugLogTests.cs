@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -19,6 +20,12 @@ namespace MahjongPrototype.Tests
             "1m 2m 3m 4m 5m 2p 3p 4p 5p 6p 7p 4s 4s";
         private const string AmbiguousMultiCandidateHand =
             "1m 1m 2m 2m 3m 3m 4m 4m 5m 5m 6m 6m 7m";
+        private const string DaisuushiiTankiHand =
+            "E E E S S S W W W N N N 5m";
+        private const string ChinroutouTankiHand =
+            "1m 1m 1m 9m 9m 9m 1p 1p 1p 9p 9p 9p 1s";
+        private const string TsuuiisouHand =
+            "E E E S S S W W W P P P C";
 
         [Test]
         public void WinDecisionPending_DoesNotWriteWinResultConsoleLog()
@@ -124,6 +131,89 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
+        public void DeclareWin_SingleDoubleYakuman_FormatsIndividualYakuAndTotal()
+        {
+            using (WinResultLogCapture capture = new WinResultLogCapture())
+            using (Driver driver = Driver.Create(
+                1,
+                YakuSpec.Yakuman("Daisuushii", "大四喜", 2)))
+            {
+                driver.PrepareTsumoDecision(DaisuushiiTankiHand, "5m");
+
+                driver.RequestDeclareWin();
+
+                StringAssert.Contains("大四喜(二倍役満)", capture.SingleMessage);
+                StringAssert.Contains("合計=二倍役満", capture.SingleMessage);
+            }
+        }
+
+        [Test]
+        public void DeclareWin_SingleYakuman_FormatsIndividualYakuAndTotal()
+        {
+            using (WinResultLogCapture capture = new WinResultLogCapture())
+            using (Driver driver = Driver.Create(
+                1,
+                YakuSpec.Yakuman("Tsuuiisou", "字一色", 1)))
+            {
+                driver.PrepareTsumoDecision(TsuuiisouHand, "C");
+
+                driver.RequestDeclareWin();
+
+                StringAssert.Contains("字一色(役満)", capture.SingleMessage);
+                StringAssert.Contains("合計=役満", capture.SingleMessage);
+            }
+        }
+
+        [Test]
+        public void DeclareWin_DoubleYakumanAndSingleYakuman_FormatsTotalAsTripleYakuman()
+        {
+            using (WinResultLogCapture capture = new WinResultLogCapture())
+            using (Driver driver = Driver.Create(
+                1,
+                YakuSpec.Yakuman("Chinroutou", "清老頭", 1),
+                YakuSpec.Yakuman("SuuankouTanki", "四暗刻　単騎", 2)))
+            {
+                driver.PrepareTsumoDecision(ChinroutouTankiHand, "1s");
+
+                driver.RequestDeclareWin();
+
+                StringAssert.Contains("清老頭(役満)", capture.SingleMessage);
+                StringAssert.Contains("四暗刻　単騎(二倍役満)", capture.SingleMessage);
+                StringAssert.Contains("合計=三倍役満", capture.SingleMessage);
+            }
+        }
+
+        [Test]
+        public void DeclareWin_TwoDoubleYakuman_FormatsTotalAsQuadrupleYakuman()
+        {
+            using (WinResultLogCapture capture = new WinResultLogCapture())
+            using (Driver driver = Driver.Create(
+                1,
+                YakuSpec.Yakuman("Daisuushii", "大四喜", 2),
+                YakuSpec.Yakuman("SuuankouTanki", "四暗刻　単騎", 2)))
+            {
+                driver.PrepareTsumoDecision(DaisuushiiTankiHand, "5m");
+
+                driver.RequestDeclareWin();
+
+                StringAssert.Contains("大四喜(二倍役満)", capture.SingleMessage);
+                StringAssert.Contains("四暗刻　単騎(二倍役満)", capture.SingleMessage);
+                StringAssert.Contains("合計=四倍役満", capture.SingleMessage);
+            }
+        }
+
+        [Test]
+        public void LegacyHandEvaluationLog_UsesYakumanMultiplierFormatter()
+        {
+            LegacyEvaluationLogDriver driver = LegacyEvaluationLogDriver.Create();
+
+            string message = driver.BuildLegacyYakumanLog("SuuankouTanki", "四暗刻　単騎", 2);
+
+            StringAssert.Contains("四暗刻　単騎(二倍役満)", message);
+            StringAssert.Contains("合計=二倍役満", message);
+        }
+
+        [Test]
         public void DeclareWin_DoesNotSelectOrSumMultipleYakuCandidates()
         {
             using (WinResultLogCapture capture = new WinResultLogCapture())
@@ -214,37 +304,53 @@ namespace MahjongPrototype.Tests
                 string kindName,
                 string displayName,
                 string closedHanName,
-                string openHanName)
+                string openHanName,
+                int yakumanMultiplier)
             {
                 KindName = kindName;
                 DisplayName = displayName;
                 ClosedHanName = closedHanName;
                 OpenHanName = openHanName;
+                YakumanMultiplier = yakumanMultiplier;
             }
 
             public string KindName { get; }
             public string DisplayName { get; }
             public string ClosedHanName { get; }
             public string OpenHanName { get; }
+            public int YakumanMultiplier { get; }
 
             public static YakuSpec MenzenTsumo()
             {
-                return new YakuSpec("MenzenTsumo", "門前清自摸和", "One", "None");
+                return new YakuSpec("MenzenTsumo", "門前清自摸和", "One", "None", 0);
             }
 
             public static YakuSpec Pinfu()
             {
-                return new YakuSpec("Pinfu", "平和", "One", "None");
+                return new YakuSpec("Pinfu", "平和", "One", "None", 0);
             }
 
             public static YakuSpec Iipeikou()
             {
-                return new YakuSpec("Iipeikou", "一盃口", "One", "None");
+                return new YakuSpec("Iipeikou", "一盃口", "One", "None", 0);
             }
 
             public static YakuSpec Ryanpeikou()
             {
-                return new YakuSpec("Ryanpeikou", "二盃口", "Three", "None");
+                return new YakuSpec("Ryanpeikou", "二盃口", "Three", "None", 0);
+            }
+
+            public static YakuSpec Yakuman(
+                string kindName,
+                string displayName,
+                int yakumanMultiplier)
+            {
+                return new YakuSpec(
+                    kindName,
+                    displayName,
+                    "None",
+                    "None",
+                    yakumanMultiplier);
             }
         }
 
@@ -276,7 +382,8 @@ namespace MahjongPrototype.Tests
                         yakuSpecs[i].KindName,
                         yakuSpecs[i].DisplayName,
                         yakuSpecs[i].ClosedHanName,
-                        yakuSpecs[i].OpenHanName);
+                        yakuSpecs[i].OpenHanName,
+                        yakuSpecs[i].YakumanMultiplier);
                 }
 
                 object catalog = dataFactory.CreateYakuCatalog(definitions);
@@ -362,6 +469,85 @@ namespace MahjongPrototype.Tests
 
                 disposed = true;
                 session.Dispose();
+            }
+        }
+
+        private sealed class LegacyEvaluationLogDriver
+        {
+            private const string MahjongGameLogRecorderTypeName =
+                "MahjongPrototype.Logging.MahjongGameLogRecorder, Assembly-CSharp";
+            private const string EvaluatedYakuTypeName =
+                "MahjongPrototype.Domain.EvaluatedYaku, Assembly-CSharp";
+            private const string HandEvaluationResultTypeName =
+                "MahjongPrototype.Domain.HandEvaluationResult, Assembly-CSharp";
+            private const string WinCheckResultTypeName =
+                "MahjongPrototype.Domain.WinCheckResult, Assembly-CSharp";
+            private const string WinningHandShapeTypeName =
+                "MahjongPrototype.Domain.WinningHandShape, Assembly-CSharp";
+            private const string WinDeclarationEvaluationResultTypeName =
+                "MahjongPrototype.Domain.WinDeclarationEvaluationResult, Assembly-CSharp";
+
+            private readonly ReflectionTestAccess reflection;
+            private readonly MahjongTestTypes types;
+            private readonly MahjongTestDataFactory dataFactory;
+
+            private LegacyEvaluationLogDriver(
+                ReflectionTestAccess reflection,
+                MahjongTestTypes types,
+                MahjongTestDataFactory dataFactory)
+            {
+                this.reflection = reflection;
+                this.types = types;
+                this.dataFactory = dataFactory;
+            }
+
+            public static LegacyEvaluationLogDriver Create()
+            {
+                ReflectionTestAccess reflection = new ReflectionTestAccess();
+                MahjongTestTypes types = new MahjongTestTypes(reflection);
+                return new LegacyEvaluationLogDriver(
+                    reflection,
+                    types,
+                    new MahjongTestDataFactory(reflection, types));
+            }
+
+            public string BuildLegacyYakumanLog(
+                string kindName,
+                string displayName,
+                int yakumanMultiplier)
+            {
+                Type evaluatedYakuType = reflection.RequireType(EvaluatedYakuTypeName);
+                object yaku = reflection.CreateInstance(
+                    evaluatedYakuType,
+                    Enum.Parse(types.YakuKind, kindName),
+                    displayName,
+                    Enum.Parse(types.HanValue, "None"),
+                    yakumanMultiplier);
+                Type listType = typeof(List<>).MakeGenericType(evaluatedYakuType);
+                IList yakus = (IList)Activator.CreateInstance(listType);
+                yakus.Add(yaku);
+                object handEvaluation = reflection.CreateInstance(
+                    reflection.RequireType(HandEvaluationResultTypeName),
+                    yakus);
+                object winCheckResult = reflection.InvokeStatic(
+                    reflection.RequireType(WinCheckResultTypeName),
+                    "Win",
+                    Enum.Parse(
+                        reflection.RequireType(WinningHandShapeTypeName),
+                        "SevenPairs"));
+                object evaluationResult = reflection.CreateInstance(
+                    reflection.RequireType(WinDeclarationEvaluationResultTypeName),
+                    winCheckResult,
+                    handEvaluation);
+
+                return (string)reflection.InvokeStatic(
+                    reflection.RequireType(MahjongGameLogRecorderTypeName),
+                    "BuildWinDeclaredEvaluationText",
+                    dataFactory.ParseSeat("East"),
+                    dataFactory.ParseWinType("Tsumo"),
+                    dataFactory.CreateTile("C"),
+                    null,
+                    evaluationResult);
             }
         }
 

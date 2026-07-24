@@ -404,7 +404,7 @@ namespace MahjongPrototype.UI
 
         private static ResultPresentationTier GetResultPresentationTier(RoundResult result)
         {
-            if (result != null && (result.HasYakuman || result.YakumanCount > 0))
+            if (result != null && result.TotalYakumanMultiplier > 0)
                 return ResultPresentationTier.Yakuman;
 
             if (result != null && result.TotalHan >= 5)
@@ -556,14 +556,8 @@ namespace MahjongPrototype.UI
 
         private static string FormatTotal(RoundResult result)
         {
-            if (result.HasYakuman)
-            {
-                int yakumanCount = result.YakumanCount;
-                if (yakumanCount <= 1)
-                    return "役満";
-
-                return $"役満×{yakumanCount}";
-            }
+            if (result.TotalYakumanMultiplier > 0)
+                return YakumanMultiplierFormatter.Format(result.TotalYakumanMultiplier);
 
             return $"{result.TotalHan}翻";
         }

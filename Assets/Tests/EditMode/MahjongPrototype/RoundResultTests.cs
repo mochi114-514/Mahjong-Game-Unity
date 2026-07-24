@@ -78,7 +78,6 @@ namespace MahjongPrototype.Tests
             Assert.That(driver.TotalHan(result), Is.EqualTo(0));
             Assert.That(driver.HasYakuman(result), Is.True);
             Assert.That(driver.TotalYakumanMultiplier(result), Is.EqualTo(2));
-            Assert.That(driver.YakumanCount(result), Is.EqualTo(2));
         }
 
         [TestCase(1)]
@@ -104,7 +103,6 @@ namespace MahjongPrototype.Tests
             Assert.That(driver.TotalHan(result), Is.EqualTo(0));
             Assert.That(driver.HasYakuman(result), Is.True);
             Assert.That(driver.TotalYakumanMultiplier(result), Is.EqualTo(expectedMultiplier));
-            Assert.That(driver.YakumanCount(result), Is.EqualTo(expectedMultiplier));
         }
 
         [Test]
@@ -190,7 +188,6 @@ namespace MahjongPrototype.Tests
             Assert.That(driver.TotalHan(result), Is.EqualTo(0));
             Assert.That(driver.HasYakuman(result), Is.False);
             Assert.That(driver.TotalYakumanMultiplier(result), Is.EqualTo(0));
-            Assert.That(driver.YakumanCount(result), Is.EqualTo(0));
             Assert.That(driver.IsFinalRound(result), Is.True);
         }
 
@@ -219,7 +216,6 @@ namespace MahjongPrototype.Tests
             Assert.That(driver.TotalHan(result), Is.EqualTo(0));
             Assert.That(driver.HasYakuman(result), Is.False);
             Assert.That(driver.TotalYakumanMultiplier(result), Is.EqualTo(0));
-            Assert.That(driver.YakumanCount(result), Is.EqualTo(0));
         }
 
         private static YakuSpec[] CreateYakumanSpecs(int totalYakumanMultiplier)
@@ -433,7 +429,6 @@ namespace MahjongPrototype.Tests
             public bool HasYakuman(object result) => (bool)Property(result, "HasYakuman");
             public int TotalYakumanMultiplier(object result) =>
                 (int)Property(result, "TotalYakumanMultiplier");
-            public int YakumanCount(object result) => (int)Property(result, "YakumanCount");
             public string AbortiveDrawKindName(object result) =>
                 NullableProperty(result, "AbortiveDrawKind");
             public int RoundResultTypeValue(string name) =>

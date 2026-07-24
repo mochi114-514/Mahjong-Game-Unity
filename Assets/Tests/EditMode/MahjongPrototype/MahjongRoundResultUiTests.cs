@@ -21,7 +21,7 @@ namespace MahjongPrototype.Tests
         {
             using (RoundResultYakuRowHarness harness = RoundResultYakuRowHarness.Create())
             {
-                object yaku = harness.CreateYaku("Tanyao", "断么九", "One", false);
+                object yaku = harness.CreateYaku("Tanyao", "断么九", "One", 0);
 
                 harness.Bind(yaku);
 
@@ -35,12 +35,35 @@ namespace MahjongPrototype.Tests
         {
             using (RoundResultYakuRowHarness harness = RoundResultYakuRowHarness.Create())
             {
-                object yaku = harness.CreateYaku("Daisangen", "大三元", "None", true);
+                object yaku = harness.CreateYaku("Daisangen", "大三元", "None", 1);
 
                 harness.Bind(yaku);
 
                 Assert.That(harness.YakuNameText, Is.EqualTo("大三元"));
                 Assert.That(harness.ValueText, Is.EqualTo("役満"));
+            }
+        }
+
+        [TestCase("SuuankouTanki", "四暗刻　単騎", 2, "二倍役満")]
+        [TestCase("Daisuushii", "大四喜", 3, "三倍役満")]
+        public void Bind_MultipleYakuman_SetsKanjiMultiplierValue(
+            string kindName,
+            string displayName,
+            int yakumanMultiplier,
+            string expectedValue)
+        {
+            using (RoundResultYakuRowHarness harness = RoundResultYakuRowHarness.Create())
+            {
+                object yaku = harness.CreateYaku(
+                    kindName,
+                    displayName,
+                    "None",
+                    yakumanMultiplier);
+
+                harness.Bind(yaku);
+
+                Assert.That(harness.YakuNameText, Is.EqualTo(displayName));
+                Assert.That(harness.ValueText, Is.EqualTo(expectedValue));
             }
         }
 
@@ -63,7 +86,7 @@ namespace MahjongPrototype.Tests
 
                 try
                 {
-                    object yaku = harness.CreateYaku("Reach", "立直", "One", false);
+                    object yaku = harness.CreateYaku("Reach", "立直", "One", 0);
 
                     Assert.DoesNotThrow(() => harness.Bind(yaku));
                     Assert.DoesNotThrow(() => harness.Bind(yaku));
@@ -162,19 +185,16 @@ namespace MahjongPrototype.Tests
         }
 
         [TestCase(1, "役満")]
-        [TestCase(2, "役満×2")]
-        public void SetResult_YakumanTotals_UseYakumanCount(int yakumanCount, string expected)
+        [TestCase(2, "二倍役満")]
+        [TestCase(3, "三倍役満")]
+        [TestCase(4, "四倍役満")]
+        public void SetResult_YakumanTotals_UseTotalYakumanMultiplier(
+            int totalYakumanMultiplier,
+            string expected)
         {
             using (RoundResultControllerTestHarness harness =
                 RoundResultControllerTestHarness.Create())
             {
-                List<YakuSpec> yakus = new List<YakuSpec>
-                {
-                    YakuSpec.Yakuman("Daisangen", "大三元")
-                };
-                if (yakumanCount > 1)
-                    yakus.Add(YakuSpec.Yakuman("Tsuuiisou", "字一色"));
-
                 object result = harness.Data.CreateWin(
                     "East",
                     1,
@@ -183,11 +203,81 @@ namespace MahjongPrototype.Tests
                     null,
                     "C",
                     false,
-                    harness.Data.CreateCandidate(yakus.ToArray()));
+                    harness.Data.CreateCandidate(
+                        CreateYakumanSpecs(totalYakumanMultiplier)));
 
                 harness.SetResult(result);
 
                 Assert.That(harness.TotalText, Is.EqualTo(expected));
+            }
+        }
+
+        [Test]
+        public void SetResult_MixedYakuman_FormatsEachRowWithoutReplacingWithTotal()
+        {
+            using (RoundResultControllerTestHarness harness =
+                RoundResultControllerTestHarness.Create())
+            {
+                object result = harness.Data.CreateWin(
+                    "East",
+                    1,
+                    "East",
+                    "Tsumo",
+                    null,
+                    "C",
+                    false,
+                    harness.Data.CreateCandidate(
+                        YakuSpec.Yakuman("SuuankouTanki", "四暗刻　単騎", 2),
+                        YakuSpec.Yakuman("Daisangen", "大三元")));
+
+                harness.SetResult(result);
+
+                Assert.That(harness.YakuRowCount, Is.EqualTo(2));
+                Assert.That(harness.YakuNameAt(0), Is.EqualTo("四暗刻　単騎"));
+                Assert.That(harness.YakuValueAt(0), Is.EqualTo("二倍役満"));
+                Assert.That(harness.YakuNameAt(1), Is.EqualTo("大三元"));
+                Assert.That(harness.YakuValueAt(1), Is.EqualTo("役満"));
+                Assert.That(harness.TotalText, Is.EqualTo("三倍役満"));
+            }
+        }
+
+        [Test]
+        public void SetResult_TwoSingleYakuman_FormatsEachRowAndTotalSeparately()
+        {
+            using (RoundResultControllerTestHarness harness =
+                RoundResultControllerTestHarness.Create())
+            {
+                object result = CreateWinResult(
+                    harness,
+                    harness.Data.CreateCandidate(
+                        YakuSpec.Yakuman("Daisangen", "大三元"),
+                        YakuSpec.Yakuman("Tsuuiisou", "字一色")));
+
+                harness.SetResult(result);
+
+                Assert.That(harness.YakuValueAt(0), Is.EqualTo("役満"));
+                Assert.That(harness.YakuValueAt(1), Is.EqualTo("役満"));
+                Assert.That(harness.TotalText, Is.EqualTo("二倍役満"));
+            }
+        }
+
+        [Test]
+        public void SetResult_TwoDoubleYakuman_FormatsEachRowAndTotalSeparately()
+        {
+            using (RoundResultControllerTestHarness harness =
+                RoundResultControllerTestHarness.Create())
+            {
+                object result = CreateWinResult(
+                    harness,
+                    harness.Data.CreateCandidate(
+                        YakuSpec.Yakuman("SuuankouTanki", "四暗刻　単騎", 2),
+                        YakuSpec.Yakuman("Daisuushii", "大四喜", 2)));
+
+                harness.SetResult(result);
+
+                Assert.That(harness.YakuValueAt(0), Is.EqualTo("二倍役満"));
+                Assert.That(harness.YakuValueAt(1), Is.EqualTo("二倍役満"));
+                Assert.That(harness.TotalText, Is.EqualTo("四倍役満"));
             }
         }
 
@@ -674,6 +764,31 @@ namespace MahjongPrototype.Tests
                 selectedCandidate);
         }
 
+        private static YakuSpec[] CreateYakumanSpecs(int totalYakumanMultiplier)
+        {
+            switch (totalYakumanMultiplier)
+            {
+                case 1:
+                    return new[] { YakuSpec.Yakuman("Daisangen", "大三元") };
+                case 2:
+                    return new[] { YakuSpec.Yakuman("SuuankouTanki", "四暗刻　単騎", 2) };
+                case 3:
+                    return new[]
+                    {
+                        YakuSpec.Yakuman("SuuankouTanki", "四暗刻　単騎", 2),
+                        YakuSpec.Yakuman("Daisangen", "大三元")
+                    };
+                case 4:
+                    return new[]
+                    {
+                        YakuSpec.Yakuman("SuuankouTanki", "四暗刻　単騎", 2),
+                        YakuSpec.Yakuman("Daisuushii", "大四喜", 2)
+                    };
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(totalYakumanMultiplier));
+            }
+        }
+
         private static void CompleteNext(IEnumerator sequence)
         {
             Assert.That(sequence.MoveNext(), Is.True);
@@ -1053,6 +1168,14 @@ namespace MahjongPrototype.Tests
         {
             return new YakuSpec(kindName, displayName, "None", 1);
         }
+
+        public static YakuSpec Yakuman(
+            string kindName,
+            string displayName,
+            int yakumanMultiplier)
+        {
+            return new YakuSpec(kindName, displayName, "None", yakumanMultiplier);
+        }
     }
 
     internal sealed class RoundResultUiTestData
@@ -1169,19 +1292,6 @@ namespace MahjongPrototype.Tests
                 yakumanMultiplier);
         }
 
-        public object CreateYaku(
-            string kindName,
-            string displayName,
-            string hanName,
-            bool isYakuman)
-        {
-            return CreateYaku(
-                kindName,
-                displayName,
-                hanName,
-                isYakuman ? 1 : 0);
-        }
-
         private object CreateSevenPairsCandidate()
         {
             object analysis = reflection.InvokeStatic(
@@ -1262,9 +1372,9 @@ namespace MahjongPrototype.Tests
             string kindName,
             string displayName,
             string hanName,
-            bool isYakuman)
+            int yakumanMultiplier)
         {
-            return data.CreateYaku(kindName, displayName, hanName, isYakuman);
+            return data.CreateYaku(kindName, displayName, hanName, yakumanMultiplier);
         }
 
         public void Bind(object yaku)

@@ -415,4 +415,64 @@ namespace MahjongPrototype.Tests
             }
         }
     }
+
+    public sealed class YakumanMultiplierFormatterTests
+    {
+        [TestCase(1, "役満")]
+        [TestCase(2, "二倍役満")]
+        [TestCase(3, "三倍役満")]
+        [TestCase(4, "四倍役満")]
+        [TestCase(10, "十倍役満")]
+        [TestCase(11, "十一倍役満")]
+        [TestCase(20, "二十倍役満")]
+        [TestCase(int.MaxValue, "二十一億四千七百四十八万三千六百四十七倍役満")]
+        public void Format_PositiveMultiplierUsesKanjiNumerals(
+            int yakumanMultiplier,
+            string expected)
+        {
+            Driver driver = Driver.Create();
+
+            Assert.That(driver.Format(yakumanMultiplier), Is.EqualTo(expected));
+        }
+
+        [TestCase(0)]
+        [TestCase(-1)]
+        public void Format_NonPositiveMultiplierIsRejected(int yakumanMultiplier)
+        {
+            Driver driver = Driver.Create();
+
+            TargetInvocationException exception = Assert.Throws<TargetInvocationException>(
+                () => driver.Format(yakumanMultiplier));
+
+            Assert.That(exception.InnerException, Is.TypeOf<ArgumentOutOfRangeException>());
+        }
+
+        private sealed class Driver
+        {
+            private const string FormatterTypeName =
+                "MahjongPrototype.Domain.YakumanMultiplierFormatter, Assembly-CSharp";
+
+            private readonly ReflectionTestAccess reflection;
+            private readonly Type formatterType;
+
+            private Driver(ReflectionTestAccess reflection)
+            {
+                this.reflection = reflection;
+                formatterType = reflection.RequireType(FormatterTypeName);
+            }
+
+            public static Driver Create()
+            {
+                return new Driver(new ReflectionTestAccess());
+            }
+
+            public string Format(int yakumanMultiplier)
+            {
+                return (string)reflection.InvokeStatic(
+                    formatterType,
+                    "Format",
+                    yakumanMultiplier);
+            }
+        }
+    }
 }

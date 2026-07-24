@@ -618,7 +618,9 @@ namespace MahjongPrototype.Logging
             builder.Append(" / 役=");
             builder.Append(FormatYakuList(candidateResult.Yakus));
             builder.Append(" / 合計=");
-            builder.Append(FormatTotalHan(candidateResult.HasYakuman, candidateResult.TotalHan));
+            builder.Append(FormatTotalHan(
+                candidateResult.TotalYakumanMultiplier,
+                candidateResult.TotalHan));
             builder.AppendLine();
         }
 
@@ -632,7 +634,9 @@ namespace MahjongPrototype.Logging
             builder.Append("成立候補1: 形=旧評価 / 待ち=不明 / 役=");
             builder.Append(FormatYakuList(handEvaluation.Yakus));
             builder.Append(" / 合計=");
-            builder.Append(FormatTotalHan(handEvaluation.HasYakuman, handEvaluation.TotalHan));
+            builder.Append(FormatTotalHan(
+                handEvaluation.TotalYakumanMultiplier,
+                handEvaluation.TotalHan));
             return true;
         }
 
@@ -649,15 +653,20 @@ namespace MahjongPrototype.Logging
 
                 EvaluatedYaku yaku = yakus[i];
                 builder.Append(yaku.DisplayName);
-                builder.Append(yaku.IsYakuman ? "(役満)" : "(" + (int)yaku.Han + "翻)");
+                builder.Append(
+                    yaku.YakumanMultiplier > 0
+                        ? "(" + YakumanMultiplierFormatter.Format(yaku.YakumanMultiplier) + ")"
+                        : "(" + (int)yaku.Han + "翻)");
             }
 
             return builder.ToString();
         }
 
-        private static string FormatTotalHan(bool hasYakuman, int totalHan)
+        private static string FormatTotalHan(int totalYakumanMultiplier, int totalHan)
         {
-            return hasYakuman ? "役満" : totalHan + "翻";
+            return totalYakumanMultiplier > 0
+                ? YakumanMultiplierFormatter.Format(totalYakumanMultiplier)
+                : totalHan + "翻";
         }
 
         private static string FormatCandidateType(HandEvaluationCandidate candidate)

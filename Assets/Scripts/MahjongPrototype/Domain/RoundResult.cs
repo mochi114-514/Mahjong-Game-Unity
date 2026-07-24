@@ -48,8 +48,6 @@ namespace MahjongPrototype.Domain
         public int TotalYakumanMultiplier =>
             SelectedCandidate == null ? 0 : SelectedCandidate.TotalYakumanMultiplier;
         public bool HasYakuman => TotalYakumanMultiplier > 0;
-        // Compatibility projection for result presentation that has not yet migrated.
-        public int YakumanCount => TotalYakumanMultiplier;
 
         public static RoundResult CreateWin(
             WindProgress windProgress,
@@ -113,5 +111,78 @@ namespace MahjongPrototype.Domain
                 kind);
         }
 
+    }
+
+    /// <summary>
+    /// Formats a positive yakuman multiplier for result presentation.
+    /// </summary>
+    public static class YakumanMultiplierFormatter
+    {
+        private static readonly string[] Digits =
+        {
+            "零", "一", "二", "三", "四", "五", "六", "七", "八", "九"
+        };
+
+        private static readonly string[] PlaceValues = { "千", "百", "十", string.Empty };
+        private static readonly string[] LargeUnits = { string.Empty, "万", "億" };
+
+        public static string Format(int yakumanMultiplier)
+        {
+            if (yakumanMultiplier <= 0)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(yakumanMultiplier),
+                    "Yakuman multiplier must be positive.");
+            }
+
+            return yakumanMultiplier == 1
+                ? "役満"
+                : FormatKanjiNumber(yakumanMultiplier) + "倍役満";
+        }
+
+        private static string FormatKanjiNumber(int value)
+        {
+            List<int> groups = new List<int>();
+            while (value > 0)
+            {
+                groups.Add(value % 10000);
+                value /= 10000;
+            }
+
+            System.Text.StringBuilder builder = new System.Text.StringBuilder();
+            for (int i = groups.Count - 1; i >= 0; i--)
+            {
+                int group = groups[i];
+                if (group == 0)
+                    continue;
+
+                builder.Append(FormatGroup(group));
+                builder.Append(LargeUnits[i]);
+            }
+
+            return builder.ToString();
+        }
+
+        private static string FormatGroup(int value)
+        {
+            System.Text.StringBuilder builder = new System.Text.StringBuilder();
+            int divisor = 1000;
+            for (int i = 0; i < PlaceValues.Length; i++)
+            {
+                int digit = value / divisor;
+                value %= divisor;
+                divisor /= 10;
+
+                if (digit == 0)
+                    continue;
+
+                if (digit > 1 || i == PlaceValues.Length - 1)
+                    builder.Append(Digits[digit]);
+
+                builder.Append(PlaceValues[i]);
+            }
+
+            return builder.ToString();
+        }
     }
 }

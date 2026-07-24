@@ -107,7 +107,6 @@ namespace MahjongPrototype.Tests
                 Assert.That(driver.RoundResultWinTypeName, Is.EqualTo("Tsumo"));
                 Assert.That(driver.RoundResultTotalHan, Is.EqualTo(0));
                 Assert.That(driver.RoundResultTotalYakumanMultiplier, Is.EqualTo(2));
-                Assert.That(driver.RoundResultYakumanCount, Is.EqualTo(2));
             }
         }
 
@@ -126,7 +125,6 @@ namespace MahjongPrototype.Tests
                 Assert.That(driver.RoundResultWinTypeName, Is.EqualTo("Ron"));
                 Assert.That(driver.RoundResultTotalHan, Is.EqualTo(0));
                 Assert.That(driver.RoundResultTotalYakumanMultiplier, Is.EqualTo(2));
-                Assert.That(driver.RoundResultYakumanCount, Is.EqualTo(2));
             }
         }
 
@@ -654,7 +652,6 @@ namespace MahjongPrototype.Tests
             public int RoundResultTotalHan => Query.RoundResultTotalHan;
             public int RoundResultTotalYakumanMultiplier =>
                 Query.RoundResultTotalYakumanMultiplier;
-            public int RoundResultYakumanCount => Query.RoundResultYakumanCount;
             public bool RoundResultIsFinalRound => Query.RoundResultIsFinalRound;
             public string RoundResultAbortiveDrawKindName =>
                 Query.RoundResultAbortiveDrawKindNameOrNull;

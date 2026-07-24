@@ -142,7 +142,6 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
         public bool RoundResultHasYakuman => (bool)RoundResultProperty("HasYakuman");
         public int RoundResultTotalYakumanMultiplier =>
             (int)RoundResultProperty("TotalYakumanMultiplier");
-        public int RoundResultYakumanCount => (int)RoundResultProperty("YakumanCount");
 
         public string SeatByPlayerIdName(string playerIdName)
         {
