@@ -212,21 +212,38 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void AbortiveDrawDecision_Accepted_EndsRoundAsNineTerminalsAndHonors()
+        public void AbortiveDrawDecision_Accepted_AutomaticallyRestartsSameRound()
         {
             using (MahjongGameFlowTestSession session = CreateSession())
             {
                 PrepareEligibleDraw(session);
                 object request = GetPendingDecision(session, "AbortiveDraw");
+                object endedState = session.CurrentState;
+                string windProgress = session.Reflection.GetProperty(
+                    endedState,
+                    "WindProgress").ToString();
+                string selfSeat = session.Query.SelfSeatName;
 
                 Assert.That(SubmitDecisionResponse(session, request, true), Is.True);
                 PumpDecisionCoordinator(session);
 
+                Assert.That(session.CurrentState, Is.SameAs(endedState));
                 Assert.That(session.Query.IsRoundResultPending, Is.True);
                 Assert.That(session.Query.RoundResultTypeName, Is.EqualTo("AbortiveDraw"));
                 Assert.That(
                     session.Query.RoundResultAbortiveDrawKindNameOrNull,
                     Is.EqualTo("NineTerminalsAndHonors"));
+
+                session.Commands.RunAuthorityUpdate();
+
+                Assert.That(session.CurrentState, Is.Not.SameAs(endedState));
+                Assert.That(
+                    session.Reflection.GetProperty(
+                        session.CurrentState,
+                        "WindProgress").ToString(),
+                    Is.EqualTo(windProgress));
+                Assert.That(session.Query.SelfSeatName, Is.EqualTo(selfSeat));
+                Assert.That(session.Query.IsRoundResultPending, Is.False);
             }
         }
 

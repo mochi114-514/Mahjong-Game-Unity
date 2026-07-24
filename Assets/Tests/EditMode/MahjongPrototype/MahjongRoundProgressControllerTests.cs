@@ -1,5 +1,7 @@
 using System;
 using System.Reflection;
+using MahjongPrototype.Tests.TestSupport.Core;
+using MahjongPrototype.Tests.TestSupport.Mahjong;
 using NUnit.Framework;
 using UnityEngine;
 using Object = UnityEngine.Object;
@@ -16,6 +18,8 @@ namespace MahjongPrototype.Tests
             "MahjongPrototype.Domain.RoundWind, Assembly-CSharp";
         private const string SeatIdTypeName =
             "MahjongPrototype.Domain.SeatId, Assembly-CSharp";
+        private const string MahjongGameStateTypeName =
+            "MahjongPrototype.Domain.MahjongGameState, Assembly-CSharp";
         private const string TextMeshProUguiTypeName =
             "TMPro.TextMeshProUGUI, Unity.TextMeshPro";
 
@@ -50,17 +54,11 @@ namespace MahjongPrototype.Tests
 
                 object progress = CreateWindProgress(roundWind, handNumber);
                 object selfSeat = Enum.Parse(RequireType(SeatIdTypeName), selfSeatName);
-                bool firstPlayed = (bool)controllerType
-                    .GetMethod("TryPlay")
-                    .Invoke(controller, new[] { progress, selfSeat });
-                bool duplicatePlayed = (bool)controllerType
-                    .GetMethod("TryPlay")
-                    .Invoke(controller, new[] { progress, selfSeat });
+                bool firstPlayed = TryPlay(controller, progress, selfSeat);
+                bool duplicatePlayed = TryPlay(controller, progress, selfSeat);
 
                 controllerType.GetMethod("ResetPlaybackHistory").Invoke(controller, null);
-                bool replayedAfterReset = (bool)controllerType
-                    .GetMethod("TryPlay")
-                    .Invoke(controller, new[] { progress, selfSeat });
+                bool replayedAfterReset = TryPlay(controller, progress, selfSeat);
 
                 Assert.That(firstPlayed, Is.True);
                 Assert.That(duplicatePlayed, Is.False);
@@ -89,11 +87,47 @@ namespace MahjongPrototype.Tests
                 object progress = CreateWindProgress("East", 1);
                 object selfSeat = Enum.Parse(RequireType(SeatIdTypeName), "East");
 
-                bool played = (bool)controllerType
-                    .GetMethod("TryPlay")
-                    .Invoke(controller, new[] { progress, selfSeat });
+                bool played = TryPlay(controller, progress, selfSeat);
 
                 Assert.That(played, Is.False);
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+            }
+        }
+
+        [Test]
+        public void TryPlay_NewGameStateReplaysSameRoundAndDuplicateStateIsSuppressed()
+        {
+            GameObject host = new GameObject("RoundProgressStateIdentityTestHost");
+            host.SetActive(false);
+
+            try
+            {
+                Type controllerType = RequireType(ControllerTypeName);
+                GameObject root = CreateChild(host.transform, "Round Progress");
+                Component roundText = CreateText(root.transform, "Round Text");
+                Component myWindText = CreateText(root.transform, "My Wind Text");
+                Component windText = CreateText(root.transform, "Wind Text");
+                Component controller = host.AddComponent(controllerType);
+                SetPrivateField(controller, "roundProgressRoot", root);
+                SetPrivateField(controller, "roundText", roundText);
+                SetPrivateField(controller, "myWindText", myWindText);
+                SetPrivateField(controller, "windText", windText);
+                host.SetActive(true);
+
+                ReflectionTestAccess reflection = new ReflectionTestAccess();
+                MahjongTestTypes types = new MahjongTestTypes(reflection);
+                MahjongTestDataFactory data = new MahjongTestDataFactory(reflection, types);
+                object firstState = data.CreateGameState("East", "South", "West", "North");
+                object repeatedState = data.CreateGameState("East", "South", "West", "North");
+
+                Assert.That(TryPlay(controller, firstState), Is.True);
+                Assert.That(TryPlay(controller, firstState), Is.False);
+                Assert.That(TryPlay(controller, repeatedState), Is.True);
+                Assert.That(Text(roundText), Is.EqualTo("\u6771\u4e00\u5c40"));
+                Assert.That(Text(windText), Is.EqualTo("\u6771"));
             }
             finally
             {
@@ -139,6 +173,24 @@ namespace MahjongPrototype.Tests
                 BindingFlags.Instance | BindingFlags.NonPublic);
             Assert.That(field, Is.Not.Null, $"Missing field {name}.");
             field.SetValue(component, value);
+        }
+
+        private static bool TryPlay(Component controller, object progress, object selfSeat)
+        {
+            MethodInfo method = controller.GetType().GetMethod(
+                "TryPlay",
+                new[] { RequireType(WindProgressTypeName), RequireType(SeatIdTypeName) });
+            Assert.That(method, Is.Not.Null);
+            return (bool)method.Invoke(controller, new[] { progress, selfSeat });
+        }
+
+        private static bool TryPlay(Component controller, object gameState)
+        {
+            MethodInfo method = controller.GetType().GetMethod(
+                "TryPlay",
+                new[] { RequireType(MahjongGameStateTypeName) });
+            Assert.That(method, Is.Not.Null);
+            return (bool)method.Invoke(controller, new[] { gameState });
         }
 
         private static Type RequireType(string typeName)

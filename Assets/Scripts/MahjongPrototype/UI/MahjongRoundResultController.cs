@@ -82,7 +82,7 @@ namespace MahjongPrototype.UI
 
         public void SetResult(RoundResult result)
         {
-            if (result == null)
+            if (result == null || result.Type != RoundResultType.Win)
             {
                 Clear();
                 return;
@@ -102,25 +102,8 @@ namespace MahjongPrototype.UI
             SetText(roundText, FormatWindProgress(result.WindProgress));
             SetText(
                 confirmButtonLabel,
-                result.Type == RoundResultType.AbortiveDraw
-                    ? "同局をやり直す"
-                    : result.IsFinalRound ? "ゲーム終了" : "次局へ進む");
-
-            switch (result.Type)
-            {
-                case RoundResultType.Win:
-                    SetWinResult(result);
-                    break;
-                case RoundResultType.ExhaustiveDraw:
-                    SetExhaustiveDrawResult();
-                    break;
-                case RoundResultType.AbortiveDraw:
-                    SetAbortiveDrawResult(result);
-                    break;
-                default:
-                    SetExhaustiveDrawResult();
-                    break;
-            }
+                result.IsFinalRound ? "ゲーム終了" : "次局へ進む");
+            SetWinResult(result);
 
             WarnMissingTextReferencesOnce();
         }
@@ -185,54 +168,6 @@ namespace MahjongPrototype.UI
             PopulateYakuRows(result.Yakus);
             SetText(totalText, FormatTotal(result));
             BeginWinResultReveal();
-        }
-
-        private void SetExhaustiveDrawResult()
-        {
-            SetNonWinResult("流局");
-        }
-
-        private void SetAbortiveDrawResult(RoundResult result)
-        {
-            SetNonWinResult(FormatAbortiveDrawTitle(result.AbortiveDrawKind));
-        }
-
-        private void SetNonWinResult(string title)
-        {
-            shouldRevealWinTypeSeal = false;
-            ResetTotalPresentation();
-            SetText(titleText, title);
-            SetActiveOrWarn(
-                winDetailsRoot,
-                false,
-                ref warnedMissingWinDetailsRoot,
-                "WinDetailsRoot is not assigned.");
-            SetActive(sourceSeatRoot, false);
-            SetText(winnerText, string.Empty);
-            SetText(winTypeText, string.Empty);
-            SetText(sourceSeatText, string.Empty);
-            SetText(winningTileText, string.Empty);
-            SetText(totalText, string.Empty);
-            ResetWinTypePresentation();
-            SetTotalRevealVisible(true);
-            SetConfirmInteractable(true);
-        }
-
-        private static string FormatAbortiveDrawTitle(AbortiveDrawKind? kind)
-        {
-            switch (kind)
-            {
-                case AbortiveDrawKind.NineTerminalsAndHonors:
-                    return "途中流局（九種九牌）";
-                case AbortiveDrawKind.FourWinds:
-                    return "途中流局（四風連打）";
-                case AbortiveDrawKind.FourReaches:
-                    return "途中流局（四家立直）";
-                case AbortiveDrawKind.FourKans:
-                    return "途中流局（四槓散了）";
-                default:
-                    return "途中流局";
-            }
         }
 
         private void PopulateYakuRows(IReadOnlyList<EvaluatedYaku> yakus)

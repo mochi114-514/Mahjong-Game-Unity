@@ -24,6 +24,7 @@ namespace MahjongPrototype.UI
 
         private Coroutine playRoutine;
         private WindProgress lastPlayedProgress;
+        private MahjongGameState lastPlayedState;
         private WindProgress activeProgress;
         private bool hasPlayedProgress;
         private bool isPresentationActive;
@@ -54,9 +55,28 @@ namespace MahjongPrototype.UI
         }
 
         /// <summary>
-        /// Plays the round presentation once for each distinct wind progress.
+        /// Plays the round presentation once for the supplied round state.
+        /// </summary>
+        public bool TryPlay(MahjongGameState state)
+        {
+            if (state == null)
+                return false;
+
+            return TryPlay(state.WindProgress, state.SelfSeat, state);
+        }
+
+        /// <summary>
+        /// Compatibility entry point for presentations that do not own a round-state identity.
         /// </summary>
         public bool TryPlay(WindProgress progress, SeatId selfSeat)
+        {
+            return TryPlay(progress, selfSeat, null);
+        }
+
+        private bool TryPlay(
+            WindProgress progress,
+            SeatId selfSeat,
+            MahjongGameState state)
         {
             if (!isActiveAndEnabled)
             {
@@ -70,11 +90,15 @@ namespace MahjongPrototype.UI
             if (!HasRequiredReferences())
                 return false;
 
-            if (hasPlayedProgress && lastPlayedProgress.Equals(progress))
+            bool alreadyPlayed = state != null
+                ? ReferenceEquals(lastPlayedState, state)
+                : hasPlayedProgress && lastPlayedProgress.Equals(progress);
+            if (alreadyPlayed)
                 return false;
 
             hasPlayedProgress = true;
             lastPlayedProgress = progress;
+            lastPlayedState = state;
             StopPlayRoutine();
             activeProgress = progress;
             isPresentationActive = true;
@@ -103,6 +127,7 @@ namespace MahjongPrototype.UI
         {
             Clear();
             hasPlayedProgress = false;
+            lastPlayedState = null;
         }
 
         private IEnumerator PlayRoutine(WindProgress progress, SeatId selfSeat)

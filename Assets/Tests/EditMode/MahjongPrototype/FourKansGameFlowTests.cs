@@ -37,7 +37,7 @@ namespace MahjongPrototype.Tests
                     session.Reflection.GetProperty(cpuTurnController, "IsCpuTurnRunning"),
                     Is.False);
 
-                session.Commands.RequestAdvanceFromRoundResult();
+                session.Commands.RunAuthorityUpdate();
 
                 Assert.That(session.CurrentState, Is.Not.SameAs(previousState));
                 Assert.That(

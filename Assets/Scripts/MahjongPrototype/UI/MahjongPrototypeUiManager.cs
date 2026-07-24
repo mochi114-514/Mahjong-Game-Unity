@@ -911,7 +911,7 @@ namespace MahjongPrototype.UI
             }
 
             SubscribeRoundProgressPresentation();
-            if (roundProgressController.TryPlay(state.WindProgress, state.SelfSeat))
+            if (roundProgressController.TryPlay(state))
             {
                 gameFlow?.NotifyRoundProgressPlaybackStarted(state.WindProgress);
                 return;
@@ -1743,7 +1743,8 @@ namespace MahjongPrototype.UI
         {
             if (state != null &&
                 state.IsRoundResultPending &&
-                state.CurrentRoundResult != null)
+                state.CurrentRoundResult != null &&
+                state.CurrentRoundResult.Type == RoundResultType.Win)
             {
                 SetRoundResultUi(state.CurrentRoundResult);
                 return;
@@ -1754,6 +1755,12 @@ namespace MahjongPrototype.UI
 
         private void SetRoundResultUi(RoundResult result)
         {
+            if (result == null || result.Type != RoundResultType.Win)
+            {
+                ClearRoundResultUi();
+                return;
+            }
+
             if (roundResultController == null)
                 EnsureRoundResultController();
 

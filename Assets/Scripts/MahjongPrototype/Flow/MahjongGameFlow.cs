@@ -95,6 +95,8 @@ namespace MahjongPrototype
         private bool roundProgressPlaybackStarted;
         private bool roundProgressPlaybackCompleted;
         private int roundSetupSequence;
+        private MahjongGameState pendingAutomaticRoundResultState;
+        private RoundResult pendingAutomaticRoundResult;
         private readonly MatchStartValidator matchStartValidator = new MatchStartValidator();
         private MatchRoster matchRoster;
         private DecisionProviderRegistry decisionProviderRegistry;
@@ -734,6 +736,7 @@ namespace MahjongPrototype
             // authority update keeps them from re-entering authority logic.
             decisionCoordinator?.Pump();
             TryResumeReactionSeatAnswerRequests();
+            ProcessPendingAutomaticRoundResultTransition();
         }
 
         private void OnDisable()
@@ -741,6 +744,7 @@ namespace MahjongPrototype
             CancelPendingRoundSetup();
             CancelPendingDecisions();
             CancelPendingAutoDiscardDrawnTile();
+            ClearPendingAutomaticRoundResultTransition();
         }
 
 #if UNITY_EDITOR
@@ -801,6 +805,7 @@ namespace MahjongPrototype
             bool notifyRunStarted,
             SeatId selfSeat)
         {
+            ClearPendingAutomaticRoundResultTransition();
             CancelPendingRoundSetup();
             EnsureMatchConfiguration();
             MatchStartValidationResult validationResult = matchStartValidator.Validate(
@@ -979,6 +984,12 @@ namespace MahjongPrototype
             if (result == null)
                 return;
 
+            if (ReferenceEquals(pendingAutomaticRoundResultState, gameState) &&
+                ReferenceEquals(pendingAutomaticRoundResult, result))
+            {
+                ClearPendingAutomaticRoundResultTransition();
+            }
+
             EnsureMatchConfiguration();
             MatchStartValidationResult validationResult = matchStartValidator.Validate(
                 matchRoster,
@@ -1037,7 +1048,7 @@ namespace MahjongPrototype
                 turnIndex: gameState.TurnIndex);
             EventPublisher.NotifyAbortiveDrawResolved(kind);
             EventPublisher.NotifyRoundEnded(reason);
-            EventPublisher.NotifyRoundResultReady(endResult.RoundResult);
+            PublishRoundResultReady(endResult.RoundResult);
             return true;
         }
 
@@ -3366,7 +3377,7 @@ namespace MahjongPrototype
             afterRoundMarkedEnded?.Invoke();
             EventPublisher.NotifyRoundEnded(reason);
             if (roundResult != null)
-                EventPublisher.NotifyRoundResultReady(roundResult);
+                PublishRoundResultReady(roundResult);
         }
 
         private void PrepareForRoundEnd()
@@ -3375,6 +3386,60 @@ namespace MahjongPrototype
             CancelPendingDecisions();
             CancelPendingAutoDiscardDrawnTile();
             handAutoSortService?.ClearDeferred();
+        }
+
+        private void PublishRoundResultReady(RoundResult result)
+        {
+            EventPublisher.NotifyRoundResultReady(result);
+            if (result != null && result.Type != RoundResultType.Win)
+                ScheduleAutomaticRoundResultTransition(gameState, result);
+        }
+
+        private void ScheduleAutomaticRoundResultTransition(
+            MahjongGameState endedState,
+            RoundResult result)
+        {
+            if (endedState == null || result == null ||
+                result.Type == RoundResultType.Win ||
+                !endedState.IsRoundResultPending ||
+                !ReferenceEquals(endedState.CurrentRoundResult, result))
+            {
+                return;
+            }
+
+            if (ReferenceEquals(pendingAutomaticRoundResultState, endedState) &&
+                ReferenceEquals(pendingAutomaticRoundResult, result))
+            {
+                return;
+            }
+
+            pendingAutomaticRoundResultState = endedState;
+            pendingAutomaticRoundResult = result;
+        }
+
+        private void ProcessPendingAutomaticRoundResultTransition()
+        {
+            MahjongGameState endedState = pendingAutomaticRoundResultState;
+            RoundResult result = pendingAutomaticRoundResult;
+            if (endedState == null || result == null)
+                return;
+
+            ClearPendingAutomaticRoundResultTransition();
+            if (!ReferenceEquals(gameState, endedState) ||
+                !endedState.IsRoundResultPending ||
+                !ReferenceEquals(endedState.CurrentRoundResult, result) ||
+                result.Type == RoundResultType.Win)
+            {
+                return;
+            }
+
+            RequestAdvanceFromRoundResult();
+        }
+
+        private void ClearPendingAutomaticRoundResultTransition()
+        {
+            pendingAutomaticRoundResultState = null;
+            pendingAutomaticRoundResult = null;
         }
 
         private void NotifySkillResolutionEvents(DrawResult result)

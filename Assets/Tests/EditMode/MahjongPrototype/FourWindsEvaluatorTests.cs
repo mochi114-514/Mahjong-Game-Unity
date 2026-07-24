@@ -193,6 +193,7 @@ namespace MahjongPrototype.Tests
             using (MahjongGameFlowTestSession session = CreateSession())
             {
                 session.Commands.StartNewRound();
+                object endedState = session.CurrentState;
 
                 DiscardOnCurrentTurn(session, "East", "E");
                 DiscardOnCurrentTurn(session, "South", "E");
@@ -205,6 +206,7 @@ namespace MahjongPrototype.Tests
 
                 Assert.That(session.Query.IsReactionWindowPending, Is.True);
                 Assert.That(session.Query.IsRoundResultPending, Is.False);
+                Assert.That(session.CurrentState, Is.SameAs(endedState));
                 Assert.That(session.Query.CurrentTurnName, Is.EqualTo("North"));
                 Assert.That(session.Query.TurnIndex, Is.EqualTo(4));
 
@@ -216,6 +218,10 @@ namespace MahjongPrototype.Tests
                     Is.True);
 
                 AssertFourWindsResult(session);
+                Assert.That(session.CurrentState, Is.SameAs(endedState));
+
+                session.Commands.RunAuthorityUpdate();
+                Assert.That(session.CurrentState, Is.Not.SameAs(endedState));
             }
         }
 
@@ -252,7 +258,7 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void FourWindsResult_ConfirmingRestartsSameRoundWithFreshState()
+        public void FourWindsResult_AutomaticallyRestartsSameRoundWithFreshState()
         {
             using (MahjongGameFlowTestSession session = CreateSession())
             {
@@ -272,7 +278,7 @@ namespace MahjongPrototype.Tests
                 DiscardOnCurrentTurn(session, "North", "N");
                 AssertFourWindsResult(session);
 
-                session.Commands.RequestAdvanceFromRoundResult();
+                session.Commands.RunAuthorityUpdate();
 
                 Assert.That(session.CurrentState, Is.Not.SameAs(previousState));
                 Assert.That(

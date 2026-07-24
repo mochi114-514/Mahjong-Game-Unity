@@ -429,7 +429,7 @@ namespace MahjongPrototype.Tests
                 AssertFourReachesResult(session);
                 Assert.That(session.Query.RoundResultIsFinalRound, Is.False);
 
-                session.Commands.RequestAdvanceFromRoundResult();
+                session.Commands.RunAuthorityUpdate();
 
                 Assert.That(session.CurrentState, Is.Not.SameAs(previousState));
                 Assert.That(

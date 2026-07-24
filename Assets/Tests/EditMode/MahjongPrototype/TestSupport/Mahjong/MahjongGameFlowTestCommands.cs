@@ -224,6 +224,11 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
             reflection.Invoke(GameFlow, "RequestAdvanceFromRoundResult");
         }
 
+        public void RunAuthorityUpdate()
+        {
+            reflection.Invoke(GameFlow, "Update");
+        }
+
         public bool TryEndAbortiveDraw(string kindName)
         {
             object kind = System.Enum.Parse(

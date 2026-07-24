@@ -34,6 +34,11 @@ namespace MahjongPrototype.Tests
                 Assert.That(driver.RoundResultSelectedCandidate, Is.SameAs(expectedSelectedCandidate));
                 Assert.That(driver.WindProgressHandNumber, Is.EqualTo(1));
                 Assert.That(driver.RoundStartedCount, Is.EqualTo(1));
+
+                object winState = driver.CurrentState;
+                driver.RunAuthorityUpdate();
+                Assert.That(driver.CurrentState, Is.SameAs(winState));
+                Assert.That(driver.IsRoundResultPending, Is.True);
             }
         }
 
@@ -57,12 +62,13 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void WallEmptyDrawFailure_CreatesExhaustiveDrawAndAdvancesOnlyAfterConfirmation()
+        public void WallEmptyDrawFailure_AutomaticallyAdvancesToNextRoundAfterDeferredProcessing()
         {
             using (Driver driver = Driver.Create(participantCount: 1))
             {
                 driver.StartNewRound();
                 driver.ClearWall();
+                object endedState = driver.CurrentState;
 
                 Assert.That(driver.TryDrawForCurrentTurn(), Is.False);
 
@@ -72,18 +78,20 @@ namespace MahjongPrototype.Tests
                 Assert.That(driver.RoundResultYakuCount, Is.EqualTo(0));
                 Assert.That(driver.RoundResultTotalHan, Is.EqualTo(0));
                 Assert.That(driver.WindProgressHandNumber, Is.EqualTo(1));
+                Assert.That(driver.CurrentState, Is.SameAs(endedState));
 
-                driver.AdvanceFromRoundResult();
+                driver.RunAuthorityUpdate();
 
                 Assert.That(driver.IsRoundEnded, Is.False);
                 Assert.That(driver.IsRoundResultPending, Is.False);
                 Assert.That(driver.CurrentRoundResultIsNull, Is.True);
+                Assert.That(driver.CurrentState, Is.Not.SameAs(endedState));
                 Assert.That(driver.WindProgressHandNumber, Is.EqualTo(2));
             }
         }
 
         [Test]
-        public void FinalRoundConfirmation_MovesToGameEndedAndKeepsFinalResult()
+        public void FinalRoundExhaustiveDraw_AutomaticallyMovesToGameEnded()
         {
             using (Driver driver = Driver.Create(participantCount: 1))
             {
@@ -97,7 +105,7 @@ namespace MahjongPrototype.Tests
                 Assert.That(driver.RoundResultIsFinalRound, Is.True);
 
                 object finalResult = driver.CurrentRoundResult;
-                driver.AdvanceFromRoundResult();
+                driver.RunAuthorityUpdate();
 
                 Assert.That(driver.IsGameEnded, Is.True);
                 Assert.That(driver.TurnPhaseName, Is.EqualTo("GameEnded"));
@@ -129,7 +137,7 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void RoundResultPending_BlocksRepresentativeOperationsUntilAdvanceRequest()
+        public void RoundResultPending_BlocksRepresentativeOperationsUntilAutomaticTransition()
         {
             using (Driver driver = Driver.Create(participantCount: 1))
             {
@@ -181,7 +189,7 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void Notifications_FinalRoundConfirmation_ConfirmsBeforeGameEnded()
+        public void Notifications_FinalRoundAutomaticTransition_ConfirmsBeforeGameEnded()
         {
             using (Driver driver = Driver.Create(participantCount: 1))
             using (EventTrace trace = EventTrace.Subscribe(
@@ -195,7 +203,7 @@ namespace MahjongPrototype.Tests
                 driver.TryDrawForCurrentTurn();
                 object result = driver.CurrentRoundResult;
 
-                driver.AdvanceFromRoundResult();
+                driver.RunAuthorityUpdate();
 
                 Assert.That(trace.IndexOf("RoundResultReady"), Is.GreaterThanOrEqualTo(0));
                 Assert.That(trace.IndexOf("RoundResultConfirmed"), Is.LessThan(trace.IndexOf("GameEnded")));
@@ -337,7 +345,7 @@ namespace MahjongPrototype.Tests
 
                 Assert.That(driver.TryEndAbortiveDraw(kindName), Is.True);
                 object oldResult = driver.CurrentRoundResult;
-                driver.AdvanceFromRoundResult();
+                driver.RunAuthorityUpdate();
 
                 Assert.That(driver.CurrentState, Is.Not.SameAs(oldState));
                 Assert.That(driver.CurrentWall, Is.Not.SameAs(oldWall));
@@ -368,7 +376,7 @@ namespace MahjongPrototype.Tests
                 Assert.That(driver.RoundStartedCount, Is.EqualTo(2));
 
                 object repeatedState = driver.CurrentState;
-                driver.AdvanceFromRoundResult();
+                driver.RunAuthorityUpdate();
                 Assert.That(driver.CurrentState, Is.SameAs(repeatedState));
                 Assert.That(driver.CurrentRoundResult, Is.Null);
                 Assert.That(oldResult, Is.Not.Null);
@@ -387,7 +395,7 @@ namespace MahjongPrototype.Tests
                 Assert.That(driver.TryEndAbortiveDraw(kindName), Is.True);
                 Assert.That(driver.RoundResultIsFinalRound, Is.False);
 
-                driver.AdvanceFromRoundResult();
+                driver.RunAuthorityUpdate();
 
                 Assert.That(driver.IsGameEnded, Is.False);
                 Assert.That(driver.WindProgressRoundWindName, Is.EqualTo("South"));
@@ -446,7 +454,8 @@ namespace MahjongPrototype.Tests
                     Assert.That(driver.RecentLogContains("AbortiveDrawResolved"), Is.True);
                     Assert.That(driver.RecentLogContains($"kind={kindName}"), Is.True);
 
-                    driver.AdvanceFromRoundResult();
+                driver.RunAuthorityUpdate();
+                driver.RunAuthorityUpdate();
 
                     Assert.That(
                         trace.IndexOf("RoundResultConfirmed"),
@@ -659,6 +668,11 @@ namespace MahjongPrototype.Tests
             public void AdvanceFromRoundResult()
             {
                 Commands.RequestAdvanceFromRoundResult();
+            }
+
+            public void RunAuthorityUpdate()
+            {
+                Commands.RunAuthorityUpdate();
             }
 
             public bool TryEndAbortiveDraw(string kindName)
