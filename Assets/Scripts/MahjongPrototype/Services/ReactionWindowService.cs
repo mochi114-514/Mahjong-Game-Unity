@@ -49,6 +49,21 @@ namespace MahjongPrototype.Services
             MahjongGameState gameState,
             DiscardRecord sourceDiscard)
         {
+            return BeginInternal(gameState, sourceDiscard, false);
+        }
+
+        public ReactionWindowStartResult BeginRonOnly(
+            MahjongGameState gameState,
+            DiscardRecord sourceDiscard)
+        {
+            return BeginInternal(gameState, sourceDiscard, true);
+        }
+
+        private ReactionWindowStartResult BeginInternal(
+            MahjongGameState gameState,
+            DiscardRecord sourceDiscard,
+            bool ronOnly)
+        {
             if (gameState == null)
                 return ReactionWindowStartResult.None;
 
@@ -65,10 +80,13 @@ namespace MahjongPrototype.Services
                     ronCandidate.EvaluationResult));
             }
 
-            IReadOnlyList<ReactionWindowCandidate> meldCallCandidates =
-                meldCallService.CollectCandidates(gameState, sourceDiscard);
-            for (int i = 0; i < meldCallCandidates.Count; i++)
-                candidates.Add(meldCallCandidates[i]);
+            if (!ronOnly)
+            {
+                IReadOnlyList<ReactionWindowCandidate> meldCallCandidates =
+                    meldCallService.CollectCandidates(gameState, sourceDiscard);
+                for (int i = 0; i < meldCallCandidates.Count; i++)
+                    candidates.Add(meldCallCandidates[i]);
+            }
 
             ReactionWindow reactionWindow =
                 gameState.BeginReactionWindow(sourceDiscard, candidates);

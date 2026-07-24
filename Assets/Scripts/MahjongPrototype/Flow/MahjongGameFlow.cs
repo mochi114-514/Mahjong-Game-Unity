@@ -67,6 +67,8 @@ namespace MahjongPrototype
             new FourWindsEvaluator();
         private readonly FourReachesEvaluator fourReachesEvaluator =
             new FourReachesEvaluator();
+        private readonly FourKansEvaluator fourKansEvaluator =
+            new FourKansEvaluator();
         private readonly SkillSystem skillSystem = new SkillSystem();
         private readonly SkillReservationService skillReservationService = new SkillReservationService();
 
@@ -2488,6 +2490,12 @@ namespace MahjongPrototype
                 return;
             }
 
+            if (IsFourKansAbortiveDrawCandidate(record) &&
+                TryEndAbortiveDraw(AbortiveDrawKind.FourKans))
+            {
+                return;
+            }
+
             if (record.IsLastLiveWallDiscard)
             {
             EndRound(RoundLifecycleService.RoundEndReasonWallEmpty);
@@ -2506,11 +2514,23 @@ namespace MahjongPrototype
             return playerSeats;
         }
 
+        private bool IsFourKansAbortiveDrawCandidate(DiscardRecord record)
+        {
+            return fourKansEvaluator.IsSatisfied(
+                gameState.ActiveTurnSeats,
+                GetActivePlayerSeats(),
+                gameState.Discards,
+                record,
+                gameState.Wall.RemainingRinshanTileCount);
+        }
+
         private void CompleteDiscard(DiscardRecord record)
         {
             CancelPendingDecisions();
             EnsureReactionWindowService();
-            ReactionWindowStartResult start = reactionWindowService.Begin(gameState, record);
+            ReactionWindowStartResult start = IsFourKansAbortiveDrawCandidate(record)
+                ? reactionWindowService.BeginRonOnly(gameState, record)
+                : reactionWindowService.Begin(gameState, record);
             cpuTurnController?.CancelPendingTurn();
             CancelPendingAutoDiscardDrawnTile();
 
