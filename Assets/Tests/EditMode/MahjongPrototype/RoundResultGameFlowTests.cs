@@ -205,15 +205,19 @@ namespace MahjongPrototype.Tests
             }
         }
 
-        [Test]
-        public void AbortiveDraw_ClearsPendingWinRejectsDuplicateEndAndKeepsTypedResult()
+        [TestCase("NineTerminalsAndHonors")]
+        [TestCase("FourWinds")]
+        [TestCase("FourReaches")]
+        [TestCase("FourKans")]
+        public void AbortiveDraw_ClearsPendingWinRejectsDuplicateEndAndKeepsTypedResult(
+            string kindName)
         {
             using (Driver driver = Driver.Create(participantCount: 1))
             {
                 driver.PrepareTsumoDecision(StandardHand, "C");
                 Assert.That(driver.IsWinDecisionPending, Is.True);
 
-                Assert.That(driver.TryEndAbortiveDraw("NineTerminalsAndHonors"), Is.True);
+                Assert.That(driver.TryEndAbortiveDraw(kindName), Is.True);
 
                 object result = driver.CurrentRoundResult;
                 Assert.That(driver.IsWinDecisionPending, Is.False);
@@ -223,7 +227,7 @@ namespace MahjongPrototype.Tests
                 Assert.That(driver.RoundResultTypeName, Is.EqualTo("AbortiveDraw"));
                 Assert.That(
                     driver.RoundResultAbortiveDrawKindName,
-                    Is.EqualTo("NineTerminalsAndHonors"));
+                    Is.EqualTo(kindName));
                 Assert.That(driver.RoundResultWinnerSeatName, Is.Null);
                 Assert.That(driver.RoundResultWinTypeName, Is.Null);
                 Assert.That(driver.RoundResultSourceSeatName, Is.Null);
@@ -233,11 +237,11 @@ namespace MahjongPrototype.Tests
                 Assert.That(driver.RoundResultTotalHan, Is.EqualTo(0));
                 Assert.That(driver.RoundResultIsFinalRound, Is.False);
 
-                Assert.That(driver.TryEndAbortiveDraw("FourWinds"), Is.False);
+                Assert.That(driver.TryEndAbortiveDraw(kindName), Is.False);
                 Assert.That(driver.CurrentRoundResult, Is.SameAs(result));
                 Assert.That(
                     driver.RoundResultAbortiveDrawKindName,
-                    Is.EqualTo("NineTerminalsAndHonors"));
+                    Is.EqualTo(kindName));
 
                 driver.RequestDeclineWin();
                 driver.RequestDraw();
@@ -306,8 +310,12 @@ namespace MahjongPrototype.Tests
             }
         }
 
-        [Test]
-        public void AbortiveDrawConfirmation_RepeatsRoundAndSeatsWithFreshRoundState()
+        [TestCase("NineTerminalsAndHonors")]
+        [TestCase("FourWinds")]
+        [TestCase("FourReaches")]
+        [TestCase("FourKans")]
+        public void AbortiveDrawConfirmation_RepeatsRoundAndSeatsWithFreshRoundState(
+            string kindName)
         {
             using (Driver driver = Driver.Create(
                        participantCount: 2,
@@ -327,7 +335,7 @@ namespace MahjongPrototype.Tests
                 string selfParticipantType = driver.ParticipantTypeName(selfSeat);
                 string player2ParticipantType = driver.ParticipantTypeName(player2Seat);
 
-                Assert.That(driver.TryEndAbortiveDraw("FourReaches"), Is.True);
+                Assert.That(driver.TryEndAbortiveDraw(kindName), Is.True);
                 object oldResult = driver.CurrentRoundResult;
                 driver.AdvanceFromRoundResult();
 
@@ -367,13 +375,16 @@ namespace MahjongPrototype.Tests
             }
         }
 
-        [Test]
-        public void AbortiveDrawAfterSouthFour_RepeatsSouthFourWithoutGameEnd()
+        [TestCase("NineTerminalsAndHonors")]
+        [TestCase("FourWinds")]
+        [TestCase("FourReaches")]
+        [TestCase("FourKans")]
+        public void AbortiveDrawAfterSouthFour_RepeatsSouthFourWithoutGameEnd(string kindName)
         {
             using (Driver driver = Driver.Create(participantCount: 1))
             {
                 driver.StartRound("South", 4, "North");
-                Assert.That(driver.TryEndAbortiveDraw("FourKans"), Is.True);
+                Assert.That(driver.TryEndAbortiveDraw(kindName), Is.True);
                 Assert.That(driver.RoundResultIsFinalRound, Is.False);
 
                 driver.AdvanceFromRoundResult();
@@ -386,33 +397,70 @@ namespace MahjongPrototype.Tests
             }
         }
 
-        [Test]
-        public void AbortiveDraw_EmitsTypedResultNotificationAndKindLog()
+        [TestCase("NineTerminalsAndHonors")]
+        [TestCase("FourWinds")]
+        [TestCase("FourReaches")]
+        [TestCase("FourKans")]
+        public void AbortiveDraw_EmitsTypedResultNotificationAndKindLog(string kindName)
         {
             using (Driver driver = Driver.Create(
                        participantCount: 1,
                        addGameLogRecorder: true))
-            using (EventTrace trace = EventTrace.Subscribe(
-                driver.EventNotifier,
-                "AbortiveDrawResolved",
-                "RoundEnded",
-                "RoundResultReady"))
             {
                 driver.StartNewRound();
+                using (EventTrace trace = EventTrace.Subscribe(
+                    driver.EventNotifier,
+                    "AbortiveDrawResolved",
+                    "RoundEnded",
+                    "RoundResultReady",
+                    "RoundResultConfirmed",
+                    "RoundStarted"))
+                {
+                    Assert.That(driver.TryEndAbortiveDraw(kindName), Is.True);
 
-                Assert.That(driver.TryEndAbortiveDraw("FourWinds"), Is.True);
+                    object result = driver.CurrentRoundResult;
+                    Assert.That(
+                        trace.IndexOf("AbortiveDrawResolved"),
+                        Is.LessThan(trace.IndexOf("RoundEnded")));
+                    Assert.That(
+                        trace.IndexOf("RoundEnded"),
+                        Is.LessThan(trace.IndexOf("RoundResultReady")));
+                    Assert.That(
+                        trace.FirstPayload("AbortiveDrawResolved").ToString(),
+                        Is.EqualTo(kindName));
+                    Assert.That(
+                        trace.FirstPayload("RoundEnded").ToString(),
+                        Is.EqualTo($"AbortiveDraw:{kindName}"));
+                    Assert.That(
+                        trace.FirstPayload("RoundResultReady"),
+                        Is.SameAs(result));
+                    Assert.That(
+                        trace.IndexOf("AbortiveDrawResolved"),
+                        Is.EqualTo(trace.LastIndexOf("AbortiveDrawResolved")));
+                    Assert.That(
+                        trace.IndexOf("RoundEnded"),
+                        Is.EqualTo(trace.LastIndexOf("RoundEnded")));
+                    Assert.That(
+                        trace.IndexOf("RoundResultReady"),
+                        Is.EqualTo(trace.LastIndexOf("RoundResultReady")));
+                    Assert.That(driver.RecentLogContains("AbortiveDrawResolved"), Is.True);
+                    Assert.That(driver.RecentLogContains($"kind={kindName}"), Is.True);
 
-                Assert.That(
-                    trace.FirstPayload("AbortiveDrawResolved").ToString(),
-                    Is.EqualTo("FourWinds"));
-                Assert.That(
-                    trace.FirstPayload("RoundEnded").ToString(),
-                    Is.EqualTo("AbortiveDraw:FourWinds"));
-                Assert.That(
-                    trace.FirstPayload("RoundResultReady"),
-                    Is.SameAs(driver.CurrentRoundResult));
-                Assert.That(driver.RecentLogContains("AbortiveDrawResolved"), Is.True);
-                Assert.That(driver.RecentLogContains("kind=FourWinds"), Is.True);
+                    driver.AdvanceFromRoundResult();
+
+                    Assert.That(
+                        trace.IndexOf("RoundResultConfirmed"),
+                        Is.LessThan(trace.IndexOf("RoundStarted")));
+                    Assert.That(
+                        trace.FirstPayload("RoundResultConfirmed"),
+                        Is.SameAs(result));
+                    Assert.That(
+                        trace.IndexOf("RoundResultConfirmed"),
+                        Is.EqualTo(trace.LastIndexOf("RoundResultConfirmed")));
+                    Assert.That(
+                        trace.IndexOf("RoundStarted"),
+                        Is.EqualTo(trace.LastIndexOf("RoundStarted")));
+                }
             }
         }
 
