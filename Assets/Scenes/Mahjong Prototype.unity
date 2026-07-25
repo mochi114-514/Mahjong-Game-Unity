@@ -10197,13 +10197,29 @@ PrefabInstance:
       propertyPath: totalRevealDuration
       value: 0.3
       objectReference: {fileID: 0}
+    - target: {fileID: 6100001002, guid: 655cbe60a6107244b913db4422f90f73, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: -5.2
+      objectReference: {fileID: 0}
+    - target: {fileID: 6100001004, guid: 655cbe60a6107244b913db4422f90f73, type: 3}
+      propertyPath: m_fontSize
+      value: 20
+      objectReference: {fileID: 0}
+    - target: {fileID: 6100001004, guid: 655cbe60a6107244b913db4422f90f73, type: 3}
+      propertyPath: m_fontSizeBase
+      value: 20
+      objectReference: {fileID: 0}
     - target: {fileID: 4197448039899632052, guid: 655cbe60a6107244b913db4422f90f73, type: 3}
       propertyPath: m_Name
       value: Result Panel
       objectReference: {fileID: 0}
     - target: {fileID: 4197448039899632052, guid: 655cbe60a6107244b913db4422f90f73, type: 3}
       propertyPath: m_IsActive
-      value: 0
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 5610923569298544184, guid: 655cbe60a6107244b913db4422f90f73, type: 3}
+      propertyPath: m_SizeDelta.x
+      value: 160
       objectReference: {fileID: 0}
     - target: {fileID: 8258592632297405370, guid: 655cbe60a6107244b913db4422f90f73, type: 3}
       propertyPath: m_Pivot.x
