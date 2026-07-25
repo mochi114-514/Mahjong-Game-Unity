@@ -179,7 +179,7 @@ namespace MahjongPrototype.UI
         {
             shouldRevealWinTypeSeal = false;
             SetResultPresentationTier(ResultPresentationTier.ManganOrAbove);
-            SetText(titleText, "流し満貫");
+            SetText(titleText, string.Empty);
             SetActiveOrWarn(
                 winDetailsRoot,
                 true,
@@ -190,6 +190,7 @@ namespace MahjongPrototype.UI
             SetText(winningTileText, string.Empty);
             SetActive(sourceSeatRoot, false);
             SetText(sourceSeatText, string.Empty);
+            AddYakuRow("流し満貫", "満貫");
             SetText(totalText, "満貫");
             BeginWinResultReveal();
         }
@@ -199,25 +200,51 @@ namespace MahjongPrototype.UI
             if (yakus == null || yakus.Count == 0)
                 return;
 
+            for (int i = 0; i < yakus.Count; i++)
+            {
+                if (!AddYakuRow(yakus[i]))
+                    return;
+            }
+        }
+
+        private bool AddYakuRow(EvaluatedYaku yaku)
+        {
+            MahjongRoundResultYakuRowController row = CreateYakuRow();
+            if (row == null)
+                return false;
+
+            row.Bind(yaku);
+            return true;
+        }
+
+        private bool AddYakuRow(string displayName, string displayValue)
+        {
+            MahjongRoundResultYakuRowController row = CreateYakuRow();
+            if (row == null)
+                return false;
+
+            row.BindDisplay(displayName, displayValue);
+            return true;
+        }
+
+        private MahjongRoundResultYakuRowController CreateYakuRow()
+        {
             if (yakuListRoot == null)
             {
                 WarnMissingOnce(ref warnedMissingYakuListRoot, "YakuListRoot is not assigned.");
-                return;
+                return null;
             }
 
             if (yakuRowPrefab == null)
             {
                 WarnMissingOnce(ref warnedMissingYakuRowPrefab, "YakuRowPrefab is not assigned.");
-                return;
+                return null;
             }
 
-            for (int i = 0; i < yakus.Count; i++)
-            {
-                MahjongRoundResultYakuRowController row =
-                    Instantiate(yakuRowPrefab, yakuListRoot);
-                generatedYakuRows.Add(row);
-                row.Bind(yakus[i]);
-            }
+            MahjongRoundResultYakuRowController row =
+                Instantiate(yakuRowPrefab, yakuListRoot);
+            generatedYakuRows.Add(row);
+            return row;
         }
 
         private void BeginWinResultReveal()

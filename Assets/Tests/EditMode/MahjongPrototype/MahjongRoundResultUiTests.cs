@@ -44,6 +44,18 @@ namespace MahjongPrototype.Tests
             }
         }
 
+        [Test]
+        public void BindDisplay_SetsProvidedNameAndValue()
+        {
+            using (RoundResultYakuRowHarness harness = RoundResultYakuRowHarness.Create())
+            {
+                harness.BindDisplay("流し満貫", "満貫");
+
+                Assert.That(harness.YakuNameText, Is.EqualTo("流し満貫"));
+                Assert.That(harness.ValueText, Is.EqualTo("満貫"));
+            }
+        }
+
         [TestCase("SuuankouTanki", "四暗刻　単騎", 2, "二倍役満")]
         [TestCase("Daisuushii", "大四喜", 3, "三倍役満")]
         public void Bind_MultipleYakuman_SetsKanjiMultiplierValue(
@@ -303,7 +315,7 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void SetResult_NagashiMangan_ShowsAllSeatsWithoutWinOrYakuFields()
+        public void SetResult_NagashiMangan_DisplaysAsSingleYakuRow()
         {
             using (RoundResultControllerTestHarness harness =
                 RoundResultControllerTestHarness.Create())
@@ -320,12 +332,14 @@ namespace MahjongPrototype.Tests
                 Assert.That(harness.RoundResultRootVisible, Is.True);
                 Assert.That(harness.WinDetailsVisible, Is.True);
                 Assert.That(harness.SourceSeatVisible, Is.False);
-                Assert.That(harness.TitleText, Is.EqualTo("流し満貫"));
+                Assert.That(harness.TitleText, Is.EqualTo(string.Empty));
                 Assert.That(harness.WinnerText, Is.EqualTo("成立者：東・西"));
                 Assert.That(harness.WinTypeText, Is.EqualTo(string.Empty));
                 Assert.That(harness.SourceSeatText, Is.EqualTo(string.Empty));
                 Assert.That(harness.WinningTileText, Is.EqualTo(string.Empty));
-                Assert.That(harness.YakuRowCount, Is.EqualTo(0));
+                Assert.That(harness.YakuRowCount, Is.EqualTo(1));
+                Assert.That(harness.YakuNameAt(0), Is.EqualTo("流し満貫"));
+                Assert.That(harness.YakuValueAt(0), Is.EqualTo("満貫"));
                 Assert.That(harness.TotalText, Is.EqualTo("満貫"));
                 Assert.That(harness.ResultPresentationTierName, Is.EqualTo("ManganOrAbove"));
                 Assert.That(harness.ConfirmButtonLabel, Is.EqualTo("次局へ進む"));
@@ -795,6 +809,47 @@ namespace MahjongPrototype.Tests
                 selectedCandidate);
         }
 
+        [Test]
+        public void SetResult_NagashiManganAndWin_ReplaceGeneratedYakuRows()
+        {
+            using (RoundResultControllerTestHarness harness =
+                RoundResultControllerTestHarness.Create())
+            {
+                object nagashiMangan = harness.Data.CreateNagashiMangan(
+                    "East",
+                    2,
+                    false,
+                    "East",
+                    "West");
+                object win = harness.Data.CreateWin(
+                    "East",
+                    2,
+                    "East",
+                    "Tsumo",
+                    null,
+                    "C",
+                    false,
+                    harness.Data.CreateCandidate(
+                        YakuSpec.Normal("Reach", "立直", "One")));
+
+                harness.SetResult(nagashiMangan);
+                harness.SetResult(nagashiMangan);
+
+                Assert.That(harness.YakuRowCount, Is.EqualTo(1));
+                Assert.That(harness.YakuNameAt(0), Is.EqualTo("流し満貫"));
+
+                harness.SetResult(win);
+
+                Assert.That(harness.YakuRowCount, Is.EqualTo(1));
+                Assert.That(harness.YakuNameAt(0), Is.EqualTo("立直"));
+
+                harness.SetResult(nagashiMangan);
+
+                Assert.That(harness.YakuRowCount, Is.EqualTo(1));
+                Assert.That(harness.YakuNameAt(0), Is.EqualTo("流し満貫"));
+            }
+        }
+
         private static YakuSpec[] CreateYakumanSpecs(int totalYakumanMultiplier)
         {
             switch (totalYakumanMultiplier)
@@ -891,7 +946,7 @@ namespace MahjongPrototype.Tests
 
                 driver.NotifyRoundResultReady(nagashiMangan);
                 Assert.That(driver.RoundResultRootVisible, Is.True);
-                Assert.That(driver.ResultTitleText, Is.EqualTo("流し満貫"));
+                Assert.That(driver.ResultTitleText, Is.EqualTo(string.Empty));
 
                 driver.NotifyRoundResultReady(win);
                 Assert.That(driver.RoundResultRootVisible, Is.True);
@@ -1453,6 +1508,11 @@ namespace MahjongPrototype.Tests
         public void Bind(object yaku)
         {
             reflection.Invoke(controller, "Bind", yaku);
+        }
+
+        public void BindDisplay(string displayName, string displayValue)
+        {
+            reflection.Invoke(controller, "BindDisplay", displayName, displayValue);
         }
 
         public void SetPresentation(Color nameColor, Color valueColor, Vector3 scale)

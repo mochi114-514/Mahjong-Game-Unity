@@ -21,16 +21,23 @@ namespace MahjongPrototype.UI
 
         public void Bind(EvaluatedYaku yaku)
         {
+            BindDisplay(
+                yaku.DisplayName,
+                yaku.YakumanMultiplier > 0
+                    ? YakumanMultiplierFormatter.Format(yaku.YakumanMultiplier)
+                    : $"{(int)yaku.Han}翻");
+        }
+
+        public void BindDisplay(string displayName, string displayValue)
+        {
             SetTextOrWarn(
                 yakuNameText,
-                yaku.DisplayName ?? string.Empty,
+                displayName ?? string.Empty,
                 ref warnedMissingYakuNameText,
                 "YakuNameText is not assigned.");
             SetTextOrWarn(
                 valueText,
-                yaku.YakumanMultiplier > 0
-                    ? YakumanMultiplierFormatter.Format(yaku.YakumanMultiplier)
-                    : $"{(int)yaku.Han}翻",
+                displayValue ?? string.Empty,
                 ref warnedMissingValueText,
                 "ValueText is not assigned.");
         }
