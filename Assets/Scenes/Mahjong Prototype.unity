@@ -9996,10 +9996,10 @@ MonoBehaviour:
   roundText: {fileID: 2137549886}
   myWindText: {fileID: 1615006263}
   windText: {fileID: 1665788121}
-  characterRevealDuration: 0.15
-  characterInterval: 0.1
-  windRevealDelay: 0.3
-  finalDisplayDuration: 0.7
+  characterRevealDuration: 0
+  characterInterval: 0
+  windRevealDelay: 0
+  finalDisplayDuration: 0
 --- !u!114 &6100000501
 MonoBehaviour:
   m_ObjectHideFlags: 0
