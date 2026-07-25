@@ -1,4 +1,6 @@
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using MahjongPrototype.Tests.TestSupport.Core;
 
 namespace MahjongPrototype.Tests.TestSupport.Mahjong
@@ -142,6 +144,20 @@ namespace MahjongPrototype.Tests.TestSupport.Mahjong
         public bool RoundResultHasYakuman => (bool)RoundResultProperty("HasYakuman");
         public int RoundResultTotalYakumanMultiplier =>
             (int)RoundResultProperty("TotalYakumanMultiplier");
+        public string[] RoundResultNagashiManganSeatNames
+        {
+            get
+            {
+                List<string> names = new List<string>();
+                foreach (object seat in (IEnumerable)RoundResultProperty(
+                    "NagashiManganSeats"))
+                {
+                    names.Add(seat.ToString());
+                }
+
+                return names.ToArray();
+            }
+        }
 
         public string SeatByPlayerIdName(string playerIdName)
         {

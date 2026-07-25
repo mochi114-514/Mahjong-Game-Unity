@@ -7,6 +7,8 @@ namespace MahjongPrototype.Domain
     {
         private static readonly IReadOnlyList<EvaluatedYaku> EmptyYakus =
             new List<EvaluatedYaku>().AsReadOnly();
+        private static readonly IReadOnlyList<SeatId> EmptyNagashiManganSeats =
+            new List<SeatId>().AsReadOnly();
 
         private RoundResult(
             RoundResultType type,
@@ -18,7 +20,8 @@ namespace MahjongPrototype.Domain
             SeatId? sourceSeat,
             Tile? winningTile,
             HandEvaluationCandidateResult selectedCandidate,
-            AbortiveDrawKind? abortiveDrawKind)
+            AbortiveDrawKind? abortiveDrawKind,
+            IReadOnlyList<SeatId> nagashiManganSeats)
         {
             Type = type;
             WindProgress = windProgress;
@@ -30,6 +33,7 @@ namespace MahjongPrototype.Domain
             WinningTile = winningTile;
             SelectedCandidate = selectedCandidate;
             AbortiveDrawKind = abortiveDrawKind;
+            NagashiManganSeats = nagashiManganSeats ?? EmptyNagashiManganSeats;
         }
 
         public RoundResultType Type { get; }
@@ -42,6 +46,7 @@ namespace MahjongPrototype.Domain
         public Tile? WinningTile { get; }
         public HandEvaluationCandidateResult SelectedCandidate { get; }
         public AbortiveDrawKind? AbortiveDrawKind { get; }
+        public IReadOnlyList<SeatId> NagashiManganSeats { get; }
         public IReadOnlyList<EvaluatedYaku> Yakus =>
             SelectedCandidate == null ? EmptyYakus : SelectedCandidate.Yakus;
         public int TotalHan => SelectedCandidate == null ? 0 : SelectedCandidate.TotalHan;
@@ -69,6 +74,7 @@ namespace MahjongPrototype.Domain
                 sourceSeat,
                 winningTile,
                 selectedCandidate,
+                null,
                 null);
         }
 
@@ -82,6 +88,7 @@ namespace MahjongPrototype.Domain
                 windProgress,
                 turnIndex,
                 isFinalRound,
+                null,
                 null,
                 null,
                 null,
@@ -108,7 +115,50 @@ namespace MahjongPrototype.Domain
                 null,
                 null,
                 null,
-                kind);
+                kind,
+                null);
+        }
+
+        public static RoundResult CreateNagashiMangan(
+            WindProgress windProgress,
+            int turnIndex,
+            IReadOnlyList<SeatId> winningSeats,
+            bool isFinalRound)
+        {
+            if (winningSeats == null)
+                throw new ArgumentNullException(nameof(winningSeats));
+            if (winningSeats.Count == 0)
+                throw new ArgumentException(
+                    "Nagashi mangan requires at least one winning seat.",
+                    nameof(winningSeats));
+
+            HashSet<SeatId> uniqueSeats = new HashSet<SeatId>();
+            List<SeatId> copiedSeats = new List<SeatId>(winningSeats.Count);
+            for (int i = 0; i < winningSeats.Count; i++)
+            {
+                SeatId seat = winningSeats[i];
+                if (!Enum.IsDefined(typeof(SeatId), seat) || !uniqueSeats.Add(seat))
+                {
+                    throw new ArgumentException(
+                        "Nagashi mangan seats must be valid and unique.",
+                        nameof(winningSeats));
+                }
+
+                copiedSeats.Add(seat);
+            }
+
+            return new RoundResult(
+                RoundResultType.NagashiMangan,
+                windProgress,
+                turnIndex,
+                isFinalRound,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                copiedSeats.AsReadOnly());
         }
 
     }

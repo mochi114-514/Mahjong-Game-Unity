@@ -303,6 +303,37 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
+        public void SetResult_NagashiMangan_ShowsAllSeatsWithoutWinOrYakuFields()
+        {
+            using (RoundResultControllerTestHarness harness =
+                RoundResultControllerTestHarness.Create())
+            {
+                object result = harness.Data.CreateNagashiMangan(
+                    "East",
+                    2,
+                    false,
+                    "East",
+                    "West");
+
+                harness.SetResult(result);
+
+                Assert.That(harness.RoundResultRootVisible, Is.True);
+                Assert.That(harness.WinDetailsVisible, Is.True);
+                Assert.That(harness.SourceSeatVisible, Is.False);
+                Assert.That(harness.TitleText, Is.EqualTo("流し満貫"));
+                Assert.That(harness.WinnerText, Is.EqualTo("成立者：東・西"));
+                Assert.That(harness.WinTypeText, Is.EqualTo(string.Empty));
+                Assert.That(harness.SourceSeatText, Is.EqualTo(string.Empty));
+                Assert.That(harness.WinningTileText, Is.EqualTo(string.Empty));
+                Assert.That(harness.YakuRowCount, Is.EqualTo(0));
+                Assert.That(harness.TotalText, Is.EqualTo("満貫"));
+                Assert.That(harness.ResultPresentationTierName, Is.EqualTo("ManganOrAbove"));
+                Assert.That(harness.ConfirmButtonLabel, Is.EqualTo("次局へ進む"));
+                Assert.That(harness.ShouldRevealWinTypeSeal, Is.False);
+            }
+        }
+
+        [Test]
         public void SetResult_FinalRound_UsesGameEndButtonLabel()
         {
             using (RoundResultControllerTestHarness harness =
@@ -839,7 +870,7 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void UiManager_RoundResultReady_ShowsOnlyWin()
+        public void UiManager_RoundResultReady_ShowsWinAndNagashiManganOnly()
         {
             using (RoundResultUiConnectionDriver driver = RoundResultUiConnectionDriver.Create())
             {
@@ -848,6 +879,8 @@ namespace MahjongPrototype.Tests
                     driver.CreateExhaustiveDrawResult("East", 1, false);
                 object abortiveDraw =
                     driver.CreateAbortiveDrawResult("East", 1, "FourWinds");
+                object nagashiMangan =
+                    driver.CreateNagashiManganResult("East", 1, false, "East");
                 object win = driver.CreateWinResult("East", 1, false);
 
                 driver.NotifyRoundResultReady(exhaustiveDraw);
@@ -856,9 +889,29 @@ namespace MahjongPrototype.Tests
                 driver.NotifyRoundResultReady(abortiveDraw);
                 Assert.That(driver.RoundResultRootVisible, Is.False);
 
+                driver.NotifyRoundResultReady(nagashiMangan);
+                Assert.That(driver.RoundResultRootVisible, Is.True);
+                Assert.That(driver.ResultTitleText, Is.EqualTo("流し満貫"));
+
                 driver.NotifyRoundResultReady(win);
                 Assert.That(driver.RoundResultRootVisible, Is.True);
                 Assert.That(driver.ResultTitleText, Is.EqualTo("和了"));
+            }
+        }
+
+        [Test]
+        public void RoundResultConfirmButton_NagashiMangan_AdvancesToNextRoundThroughGameFlow()
+        {
+            using (RoundResultUiConnectionDriver driver = RoundResultUiConnectionDriver.Create())
+            {
+                driver.PrepareNagashiManganResult();
+                driver.EnableRoundResultButtonRouting();
+
+                driver.ClickRoundResultConfirm();
+
+                Assert.That(driver.IsRoundResultPending, Is.False);
+                Assert.That(driver.IsGameEnded, Is.False);
+                Assert.That(driver.WindProgressHandNumber, Is.EqualTo(2));
             }
         }
 
@@ -1268,6 +1321,26 @@ namespace MahjongPrototype.Tests
                 Enum.Parse(
                     reflection.RequireType(AbortiveDrawKindTypeName),
                     kindName));
+        }
+
+        public object CreateNagashiMangan(
+            string roundWindName,
+            int handNumber,
+            bool isFinalRound,
+            params string[] seatNames)
+        {
+            Type seatListType = typeof(List<>).MakeGenericType(types.SeatId);
+            IList seats = (IList)Activator.CreateInstance(seatListType);
+            for (int i = 0; i < seatNames.Length; i++)
+                seats.Add(dataFactory.ParseSeat(seatNames[i]));
+
+            return reflection.InvokeStatic(
+                RoundResultType,
+                "CreateNagashiMangan",
+                dataFactory.CreateWindProgress(roundWindName, handNumber),
+                12,
+                seats,
+                isFinalRound);
         }
 
         public object CreateCandidate(params YakuSpec[] yakuSpecs)
@@ -1908,6 +1981,19 @@ namespace MahjongPrototype.Tests
                 kindName);
         }
 
+        public object CreateNagashiManganResult(
+            string roundWindName,
+            int handNumber,
+            bool isFinalRound,
+            params string[] seatNames)
+        {
+            return roundResultHarness.Data.CreateNagashiMangan(
+                roundWindName,
+                handNumber,
+                isFinalRound,
+                seatNames);
+        }
+
         public object CreateWinResult(
             string roundWindName,
             int handNumber,
@@ -1942,6 +2028,16 @@ namespace MahjongPrototype.Tests
                 session.CurrentState,
                 "BeginRoundResult",
                 CreateWinResult("East", 1, false));
+            Assert.That(IsRoundResultPending, Is.True);
+        }
+
+        public void PrepareNagashiManganResult()
+        {
+            session.Commands.StartNewRound();
+            session.Reflection.Invoke(
+                session.CurrentState,
+                "BeginRoundResult",
+                CreateNagashiManganResult("East", 1, false, "East"));
             Assert.That(IsRoundResultPending, Is.True);
         }
 

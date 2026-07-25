@@ -10,13 +10,14 @@ namespace MahjongPrototype.Tests
     public sealed class RoundResultTests
     {
         [Test]
-        public void RoundResultType_KeepsExistingNumericValuesAndAppendsAbortiveDraw()
+        public void RoundResultType_KeepsExistingNumericValuesAndAppendsNagashiMangan()
         {
             Driver driver = Driver.Create();
 
             Assert.That(driver.RoundResultTypeValue("Win"), Is.EqualTo(1));
             Assert.That(driver.RoundResultTypeValue("ExhaustiveDraw"), Is.EqualTo(2));
             Assert.That(driver.RoundResultTypeValue("AbortiveDraw"), Is.EqualTo(3));
+            Assert.That(driver.RoundResultTypeValue("NagashiMangan"), Is.EqualTo(4));
             Assert.That(driver.AbortiveDrawKindNames, Is.EqualTo(new[]
             {
                 "NineTerminalsAndHonors",
@@ -189,6 +190,41 @@ namespace MahjongPrototype.Tests
             Assert.That(driver.HasYakuman(result), Is.False);
             Assert.That(driver.TotalYakumanMultiplier(result), Is.EqualTo(0));
             Assert.That(driver.IsFinalRound(result), Is.True);
+        }
+
+        [Test]
+        public void CreateNagashiMangan_KeepsOnlyReadOnlyWinningSeats()
+        {
+            Driver driver = Driver.Create();
+
+            object result = driver.CreateNagashiMangan(
+                "East",
+                3,
+                18,
+                false,
+                "East",
+                "West");
+
+            Assert.That(driver.TypeName(result), Is.EqualTo("NagashiMangan"));
+            Assert.That(driver.RoundWindName(result), Is.EqualTo("East"));
+            Assert.That(driver.HandNumber(result), Is.EqualTo(3));
+            Assert.That(driver.TurnIndex(result), Is.EqualTo(18));
+            Assert.That(driver.IsFinalRound(result), Is.False);
+            Assert.That(
+                driver.NagashiManganSeatNames(result),
+                Is.EqualTo(new[] { "East", "West" }));
+            Assert.That(driver.NagashiManganSeatsAreReadOnly(result), Is.True);
+            Assert.Throws<NotSupportedException>(
+                () => driver.TryAddNagashiManganSeat(result, "South"));
+            Assert.That(driver.WinnerSeatName(result), Is.Null);
+            Assert.That(driver.WinTypeName(result), Is.Null);
+            Assert.That(driver.SourceSeatName(result), Is.Null);
+            Assert.That(driver.WinningTileCode(result), Is.Null);
+            Assert.That(driver.SelectedCandidate(result), Is.Null);
+            Assert.That(driver.AbortiveDrawKindName(result), Is.Null);
+            Assert.That(driver.YakuCount(result), Is.EqualTo(0));
+            Assert.That(driver.TotalHan(result), Is.EqualTo(0));
+            Assert.That(driver.TotalYakumanMultiplier(result), Is.EqualTo(0));
         }
 
         [TestCase("NineTerminalsAndHonors")]
@@ -391,6 +427,27 @@ namespace MahjongPrototype.Tests
                     Enum.Parse(AbortiveDrawKindType, kindName));
             }
 
+            public object CreateNagashiMangan(
+                string roundWindName,
+                int handNumber,
+                int turnIndex,
+                bool isFinalRound,
+                params string[] seatNames)
+            {
+                Type seatListType = typeof(List<>).MakeGenericType(types.SeatId);
+                IList seats = (IList)reflection.CreateInstance(seatListType);
+                for (int i = 0; i < seatNames.Length; i++)
+                    seats.Add(dataFactory.ParseSeat(seatNames[i]));
+
+                return reflection.InvokeStatic(
+                    RoundResultType,
+                    "CreateNagashiMangan",
+                    dataFactory.CreateWindProgress(roundWindName, handNumber),
+                    turnIndex,
+                    seats,
+                    isFinalRound);
+            }
+
             public object CreateEvaluation(params object[] candidates)
             {
                 return reflection.CreateInstance(
@@ -431,6 +488,21 @@ namespace MahjongPrototype.Tests
                 (int)Property(result, "TotalYakumanMultiplier");
             public string AbortiveDrawKindName(object result) =>
                 NullableProperty(result, "AbortiveDrawKind");
+            public string[] NagashiManganSeatNames(object result)
+            {
+                List<string> names = new List<string>();
+                foreach (object seat in (IEnumerable)Property(result, "NagashiManganSeats"))
+                    names.Add(seat.ToString());
+
+                return names.ToArray();
+            }
+            public bool NagashiManganSeatsAreReadOnly(object result) =>
+                ((IList)Property(result, "NagashiManganSeats")).IsReadOnly;
+            public void TryAddNagashiManganSeat(object result, string seatName)
+            {
+                ((IList)Property(result, "NagashiManganSeats"))
+                    .Add(dataFactory.ParseSeat(seatName));
+            }
             public int RoundResultTypeValue(string name) =>
                 (int)Enum.Parse(RoundResultTypeEnum, name);
             public string[] AbortiveDrawKindNames => Enum.GetNames(AbortiveDrawKindType);

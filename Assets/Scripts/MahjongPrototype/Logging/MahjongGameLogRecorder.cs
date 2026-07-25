@@ -246,13 +246,37 @@ namespace MahjongPrototype.Logging
         private void HandleRoundEnded(string reason)
         {
             MahjongGameState state = GetCurrentState();
+            string message = reason;
+            if (state?.CurrentRoundResult?.Type == RoundResultType.NagashiMangan)
+            {
+                message =
+                    $"{reason}; 流し満貫; 成立席={FormatSeats(state.CurrentRoundResult.NagashiManganSeats)}";
+            }
+
             DevLog.Record(
                 "GameFlow",
                 "RoundEnded",
-                reason,
+                message,
                 seat: state != null ? state.CurrentTurn : (SeatId?)null,
                 wallCount: state != null ? state.Wall.Count : (int?)null,
                 turnIndex: state != null ? state.TurnIndex : (int?)null);
+        }
+
+        private static string FormatSeats(IReadOnlyList<SeatId> seats)
+        {
+            if (seats == null || seats.Count == 0)
+                return string.Empty;
+
+            StringBuilder builder = new StringBuilder();
+            for (int i = 0; i < seats.Count; i++)
+            {
+                if (i > 0)
+                    builder.Append(',');
+
+                builder.Append(seats[i]);
+            }
+
+            return builder.ToString();
         }
 
         private void HandleAbortiveDrawResolved(AbortiveDrawKind kind)

@@ -100,6 +100,16 @@ namespace MahjongPrototype.Tests.TestSupport.Features.WindProgress
             reflection.Invoke(gameState, "RebuildActiveTurnSeatsFromSeatSlots");
         }
 
+        public void AssignPlayers(params string[] seatNames)
+        {
+            dataFactory.AssignPlayersToSeats(gameState, seatNames);
+        }
+
+        public void AddDiscard(string seatName, string tileCode, int turnIndex)
+        {
+            dataFactory.AddDiscard(gameState, seatName, tileCode, turnIndex);
+        }
+
         public object EndRound(string reason)
         {
             object endResult = reflection.Invoke(service, "EndRound", gameState, reason);
@@ -188,6 +198,19 @@ namespace MahjongPrototype.Tests.TestSupport.Features.WindProgress
         {
             object kind = reflection.GetProperty(result, "AbortiveDrawKind");
             return kind?.ToString();
+        }
+
+        public string[] RoundResultNagashiManganSeatNames(object result)
+        {
+            List<string> names = new List<string>();
+            foreach (object seat in (IEnumerable)reflection.GetProperty(
+                result,
+                "NagashiManganSeats"))
+            {
+                names.Add(seat.ToString());
+            }
+
+            return names.ToArray();
         }
 
         private object CreateSelectedCandidate()

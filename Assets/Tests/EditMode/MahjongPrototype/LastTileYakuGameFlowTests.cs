@@ -168,6 +168,7 @@ namespace MahjongPrototype.Tests
             using (Driver driver = Driver.Create(participantCount: 2))
             {
                 driver.StartNewRound();
+                driver.AddDiscard("East", "5m", 0);
                 driver.SetTurnDrawOrder("C");
 
                 driver.DrawForSeat("East");
@@ -176,7 +177,7 @@ namespace MahjongPrototype.Tests
                 Assert.That(driver.IsRoundResultPending, Is.True);
                 Assert.That(driver.RoundResultTypeName, Is.EqualTo("ExhaustiveDraw"));
                 Assert.That(driver.WindProgressHandNumber, Is.EqualTo(1));
-                Assert.That(driver.DiscardCount, Is.EqualTo(1));
+                Assert.That(driver.DiscardCount, Is.EqualTo(2));
                 Assert.That(driver.HasLastTurnDraw, Is.True);
 
                 driver.AdvanceFromRoundResult();
@@ -196,6 +197,7 @@ namespace MahjongPrototype.Tests
             using (Driver driver = Driver.Create(participantCount: 2))
             {
                 driver.StartNewRound();
+                driver.AddDiscard("East", "5m", 0);
                 driver.SetParticipantType("West", "LocalHuman");
                 driver.AddHandTiles("West", StandardHand);
                 driver.SetTurnDrawOrder("C");
@@ -210,7 +212,7 @@ namespace MahjongPrototype.Tests
                 Assert.That(driver.IsRoundResultPending, Is.True);
                 Assert.That(driver.RoundResultTypeName, Is.EqualTo("ExhaustiveDraw"));
                 Assert.That(driver.WindProgressHandNumber, Is.EqualTo(1));
-                Assert.That(driver.DiscardCount, Is.EqualTo(1));
+                Assert.That(driver.DiscardCount, Is.EqualTo(2));
                 Assert.That(driver.HasLastTurnDraw, Is.True);
 
                 driver.AdvanceFromRoundResult();
@@ -339,6 +341,18 @@ namespace MahjongPrototype.Tests
                 session.DataFactory.AddHandTilesFromText(
                     session.Query.GetPlayerSeat(seatName),
                     tileText);
+            }
+
+            public void AddDiscard(
+                string seatName,
+                string tileCode,
+                int turnIndex)
+            {
+                session.DataFactory.AddDiscard(
+                    session.CurrentState,
+                    seatName,
+                    tileCode,
+                    turnIndex);
             }
 
             public void SetTurnDrawOrder(params string[] tileCodes)

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using MahjongPrototype.Domain;
 
 namespace MahjongPrototype.Services
@@ -9,11 +10,21 @@ namespace MahjongPrototype.Services
         public const string RoundEndReasonWallEmpty = "WallEmpty";
 
         private readonly WinningCandidateSelector winningCandidateSelector;
+        private readonly NagashiManganEvaluator nagashiManganEvaluator;
 
         public RoundLifecycleService(WinningCandidateSelector winningCandidateSelector)
+            : this(winningCandidateSelector, new NagashiManganEvaluator())
+        {
+        }
+
+        public RoundLifecycleService(
+            WinningCandidateSelector winningCandidateSelector,
+            NagashiManganEvaluator nagashiManganEvaluator)
         {
             this.winningCandidateSelector = winningCandidateSelector ??
                 throw new ArgumentNullException(nameof(winningCandidateSelector));
+            this.nagashiManganEvaluator = nagashiManganEvaluator ??
+                throw new ArgumentNullException(nameof(nagashiManganEvaluator));
         }
 
         public WindProgress GetInitialWindProgress()
@@ -122,13 +133,32 @@ namespace MahjongPrototype.Services
                 case RoundEndReasonWin:
                     return CreateWinRoundResult(gameState, reactionResolution);
                 case RoundEndReasonWallEmpty:
-                    return RoundResult.CreateExhaustiveDraw(
-                        gameState.WindProgress,
-                        gameState.TurnIndex,
-                        IsFinalRound(gameState.WindProgress));
+                    return CreateWallEmptyRoundResult(gameState);
                 default:
                     return null;
             }
+        }
+
+        private RoundResult CreateWallEmptyRoundResult(MahjongGameState gameState)
+        {
+            IReadOnlyList<SeatId> nagashiManganSeats = nagashiManganEvaluator.Evaluate(
+                gameState.ActiveSeats,
+                gameState.Discards,
+                gameState.DiscardClaims);
+            bool isFinalRound = IsFinalRound(gameState.WindProgress);
+            if (nagashiManganSeats.Count > 0)
+            {
+                return RoundResult.CreateNagashiMangan(
+                    gameState.WindProgress,
+                    gameState.TurnIndex,
+                    nagashiManganSeats,
+                    isFinalRound);
+            }
+
+            return RoundResult.CreateExhaustiveDraw(
+                gameState.WindProgress,
+                gameState.TurnIndex,
+                isFinalRound);
         }
 
         private RoundResult CreateWinRoundResult(

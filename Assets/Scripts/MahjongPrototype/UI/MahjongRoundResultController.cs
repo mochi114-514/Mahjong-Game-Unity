@@ -82,7 +82,9 @@ namespace MahjongPrototype.UI
 
         public void SetResult(RoundResult result)
         {
-            if (result == null || result.Type != RoundResultType.Win)
+            if (result == null ||
+                (result.Type != RoundResultType.Win &&
+                 result.Type != RoundResultType.NagashiMangan))
             {
                 Clear();
                 return;
@@ -103,7 +105,10 @@ namespace MahjongPrototype.UI
             SetText(
                 confirmButtonLabel,
                 result.IsFinalRound ? "ゲーム終了" : "次局へ進む");
-            SetWinResult(result);
+            if (result.Type == RoundResultType.NagashiMangan)
+                SetNagashiManganResult(result);
+            else
+                SetWinResult(result);
 
             WarnMissingTextReferencesOnce();
         }
@@ -167,6 +172,25 @@ namespace MahjongPrototype.UI
 
             PopulateYakuRows(result.Yakus);
             SetText(totalText, FormatTotal(result));
+            BeginWinResultReveal();
+        }
+
+        private void SetNagashiManganResult(RoundResult result)
+        {
+            shouldRevealWinTypeSeal = false;
+            SetResultPresentationTier(ResultPresentationTier.ManganOrAbove);
+            SetText(titleText, "流し満貫");
+            SetActiveOrWarn(
+                winDetailsRoot,
+                true,
+                ref warnedMissingWinDetailsRoot,
+                "WinDetailsRoot is not assigned.");
+            SetText(winnerText, FormatNagashiManganSeats(result.NagashiManganSeats));
+            SetText(winTypeText, string.Empty);
+            SetText(winningTileText, string.Empty);
+            SetActive(sourceSeatRoot, false);
+            SetText(sourceSeatText, string.Empty);
+            SetText(totalText, "満貫");
             BeginWinResultReveal();
         }
 
@@ -404,6 +428,9 @@ namespace MahjongPrototype.UI
 
         private static ResultPresentationTier GetResultPresentationTier(RoundResult result)
         {
+            if (result != null && result.Type == RoundResultType.NagashiMangan)
+                return ResultPresentationTier.ManganOrAbove;
+
             if (result != null && result.TotalYakumanMultiplier > 0)
                 return ResultPresentationTier.Yakuman;
 
@@ -560,6 +587,18 @@ namespace MahjongPrototype.UI
                 return YakumanMultiplierFormatter.Format(result.TotalYakumanMultiplier);
 
             return $"{result.TotalHan}翻";
+        }
+
+        private static string FormatNagashiManganSeats(IReadOnlyList<SeatId> seats)
+        {
+            if (seats == null || seats.Count == 0)
+                return string.Empty;
+
+            List<string> seatNames = new List<string>(seats.Count);
+            for (int i = 0; i < seats.Count; i++)
+                seatNames.Add(FormatSeat(seats[i]));
+
+            return $"成立者：{string.Join("・", seatNames)}";
         }
 
         private static string FormatWindProgress(WindProgress progress)

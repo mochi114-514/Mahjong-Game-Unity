@@ -93,6 +93,80 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
+        public void WallEmptyNagashiMangan_KeepsAllSeatsLogsAndWaitsForConfirmation()
+        {
+            using (Driver driver = Driver.Create(
+                participantCount: 2,
+                addGameLogRecorder: true))
+            using (EventTrace trace = EventTrace.Subscribe(
+                driver.EventNotifier,
+                "RoundResultReady",
+                "RoundResultConfirmed",
+                "RoundStarted"))
+            {
+                driver.StartNewRound();
+                string secondSeat = driver.SeatByPlayerIdName("Player2");
+                driver.AddDiscard("East", "1m", 1);
+                driver.AddDiscard("East", "C", 2);
+                driver.AddDiscard(secondSeat, "9s", 3);
+                driver.ClearWall();
+                object endedState = driver.CurrentState;
+
+                Assert.That(driver.TryDrawForCurrentTurn(), Is.False);
+
+                object result = driver.CurrentRoundResult;
+                Assert.That(driver.RoundResultTypeName, Is.EqualTo("NagashiMangan"));
+                Assert.That(
+                    driver.RoundResultNagashiManganSeatNames,
+                    Is.EqualTo(new[] { "East", secondSeat }));
+                Assert.That(driver.RoundResultWinnerSeatName, Is.Null);
+                Assert.That(driver.RoundResultWinTypeName, Is.Null);
+                Assert.That(driver.RoundResultSourceSeatName, Is.Null);
+                Assert.That(driver.RoundResultWinningTileCode, Is.Null);
+                Assert.That(driver.RoundResultSelectedCandidate, Is.Null);
+                Assert.That(driver.RoundResultYakuCount, Is.EqualTo(0));
+                Assert.That(driver.RoundResultTotalHan, Is.EqualTo(0));
+                Assert.That(driver.RoundResultTotalYakumanMultiplier, Is.EqualTo(0));
+                Assert.That(trace.FirstPayload("RoundResultReady"), Is.SameAs(result));
+                Assert.That(driver.RecentLogContains("流し満貫"), Is.True);
+                Assert.That(
+                    driver.RecentLogContains($"成立席=East,{secondSeat}"),
+                    Is.True);
+
+                driver.RunAuthorityUpdate();
+
+                Assert.That(driver.CurrentState, Is.SameAs(endedState));
+                Assert.That(driver.CurrentRoundResult, Is.SameAs(result));
+                Assert.That(driver.IsRoundResultPending, Is.True);
+                Assert.That(trace.IndexOf("RoundResultConfirmed"), Is.EqualTo(-1));
+
+                driver.AdvanceFromRoundResult();
+
+                Assert.That(trace.FirstPayload("RoundResultConfirmed"), Is.SameAs(result));
+                Assert.That(driver.CurrentState, Is.Not.SameAs(endedState));
+                Assert.That(driver.IsRoundResultPending, Is.False);
+                Assert.That(driver.WindProgressHandNumber, Is.EqualTo(2));
+            }
+        }
+
+        [Test]
+        public void QualifyingNagashiManganDiscards_DoNotEndRoundBeforeWallEmpty()
+        {
+            using (Driver driver = Driver.Create(participantCount: 1))
+            {
+                driver.StartNewRound();
+                driver.AddDiscard("East", "1m", 1);
+                driver.AddDiscard("East", "N", 2);
+
+                driver.RunAuthorityUpdate();
+
+                Assert.That(driver.IsRoundEnded, Is.False);
+                Assert.That(driver.IsRoundResultPending, Is.False);
+                Assert.That(driver.CurrentRoundResultIsNull, Is.True);
+            }
+        }
+
+        [Test]
         public void TsumoDoubleYakuman_TransfersCandidateMultiplierToRoundResult()
         {
             using (Driver driver = Driver.Create(
@@ -652,6 +726,8 @@ namespace MahjongPrototype.Tests
             public int RoundResultTotalHan => Query.RoundResultTotalHan;
             public int RoundResultTotalYakumanMultiplier =>
                 Query.RoundResultTotalYakumanMultiplier;
+            public string[] RoundResultNagashiManganSeatNames =>
+                Query.RoundResultNagashiManganSeatNames;
             public bool RoundResultIsFinalRound => Query.RoundResultIsFinalRound;
             public string RoundResultAbortiveDrawKindName =>
                 Query.RoundResultAbortiveDrawKindNameOrNull;
@@ -800,6 +876,18 @@ namespace MahjongPrototype.Tests
                 object wall = Reflection.GetProperty(session.CurrentState, "Wall");
                 IList tiles = (IList)Reflection.GetPrivateField(wall, "tiles");
                 tiles.Clear();
+            }
+
+            public void AddDiscard(
+                string seatName,
+                string tileCode,
+                int turnIndex)
+            {
+                DataFactory.AddDiscard(
+                    CurrentState,
+                    seatName,
+                    tileCode,
+                    turnIndex);
             }
 
             public string SeatByPlayerIdName(string playerIdName)

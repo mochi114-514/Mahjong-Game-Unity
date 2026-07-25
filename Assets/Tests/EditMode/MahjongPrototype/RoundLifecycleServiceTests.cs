@@ -94,6 +94,40 @@ namespace MahjongPrototype.Tests
             Assert.That(driver.IsRoundResultPending, Is.True);
         }
 
+        [Test]
+        public void EndRound_WallEmptyWithNagashiManganCreatesTypedMultipleSeatResult()
+        {
+            RoundLifecycleServiceTestDriver driver = RoundLifecycleServiceTestDriver.Create();
+            driver.StartRound("East", 1, "East");
+            driver.AssignPlayers("East", "South", "West", "North");
+            driver.AddDiscard("East", "1m", 1);
+            driver.AddDiscard("South", "5m", 2);
+            driver.AddDiscard("West", "N", 3);
+
+            object result = driver.EndRound("WallEmpty");
+
+            Assert.That(driver.RoundResultTypeName(result), Is.EqualTo("NagashiMangan"));
+            Assert.That(
+                driver.RoundResultNagashiManganSeatNames(result),
+                Is.EqualTo(new[] { "East", "West" }));
+            Assert.That(driver.IsRoundResultPending, Is.True);
+        }
+
+        [Test]
+        public void EndRound_WinDoesNotEvaluateQualifyingNagashiManganDiscards()
+        {
+            RoundLifecycleServiceTestDriver driver = RoundLifecycleServiceTestDriver.Create();
+            driver.StartRound("East", 1, "East");
+            driver.AssignPlayers("East");
+            driver.AddDiscard("East", "1m", 1);
+            driver.AddDiscard("East", "C", 2);
+
+            object result = driver.EndWinWithSelectedCandidate();
+
+            Assert.That(driver.RoundResultTypeName(result), Is.EqualTo("Win"));
+            Assert.That(driver.RoundResultNagashiManganSeatNames(result), Is.Empty);
+        }
+
         [TestCase("NineTerminalsAndHonors")]
         [TestCase("FourWinds")]
         [TestCase("FourReaches")]

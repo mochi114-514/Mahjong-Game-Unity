@@ -3391,7 +3391,7 @@ namespace MahjongPrototype
         private void PublishRoundResultReady(RoundResult result)
         {
             EventPublisher.NotifyRoundResultReady(result);
-            if (result != null && result.Type != RoundResultType.Win)
+            if (result != null && !RequiresManualRoundResultConfirmation(result))
                 ScheduleAutomaticRoundResultTransition(gameState, result);
         }
 
@@ -3400,7 +3400,7 @@ namespace MahjongPrototype
             RoundResult result)
         {
             if (endedState == null || result == null ||
-                result.Type == RoundResultType.Win ||
+                RequiresManualRoundResultConfirmation(result) ||
                 !endedState.IsRoundResultPending ||
                 !ReferenceEquals(endedState.CurrentRoundResult, result))
             {
@@ -3428,12 +3428,19 @@ namespace MahjongPrototype
             if (!ReferenceEquals(gameState, endedState) ||
                 !endedState.IsRoundResultPending ||
                 !ReferenceEquals(endedState.CurrentRoundResult, result) ||
-                result.Type == RoundResultType.Win)
+                RequiresManualRoundResultConfirmation(result))
             {
                 return;
             }
 
             RequestAdvanceFromRoundResult();
+        }
+
+        private static bool RequiresManualRoundResultConfirmation(RoundResult result)
+        {
+            return result != null &&
+                (result.Type == RoundResultType.Win ||
+                 result.Type == RoundResultType.NagashiMangan);
         }
 
         private void ClearPendingAutomaticRoundResultTransition()

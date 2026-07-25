@@ -1744,7 +1744,7 @@ namespace MahjongPrototype.UI
             if (state != null &&
                 state.IsRoundResultPending &&
                 state.CurrentRoundResult != null &&
-                state.CurrentRoundResult.Type == RoundResultType.Win)
+                IsDisplayedRoundResult(state.CurrentRoundResult))
             {
                 SetRoundResultUi(state.CurrentRoundResult);
                 return;
@@ -1755,7 +1755,7 @@ namespace MahjongPrototype.UI
 
         private void SetRoundResultUi(RoundResult result)
         {
-            if (result == null || result.Type != RoundResultType.Win)
+            if (!IsDisplayedRoundResult(result))
             {
                 ClearRoundResultUi();
                 return;
@@ -1773,6 +1773,13 @@ namespace MahjongPrototype.UI
             }
 
             roundResultController.SetResult(result);
+        }
+
+        private static bool IsDisplayedRoundResult(RoundResult result)
+        {
+            return result != null &&
+                (result.Type == RoundResultType.Win ||
+                 result.Type == RoundResultType.NagashiMangan);
         }
 
         private void ClearRoundResultUi()

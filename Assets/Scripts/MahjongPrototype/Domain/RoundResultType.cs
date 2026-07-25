@@ -4,7 +4,8 @@ namespace MahjongPrototype.Domain
     {
         Win = 1,
         ExhaustiveDraw = 2,
-        AbortiveDraw = 3
+        AbortiveDraw = 3,
+        NagashiMangan = 4
     }
 
     public enum AbortiveDrawKind
