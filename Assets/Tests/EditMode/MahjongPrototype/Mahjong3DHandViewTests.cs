@@ -621,7 +621,7 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void RenderOpenMelds_DaiminkanAndAnkanRenderFourTilesWithOnlyCalledKanTileRotated()
+        public void RenderOpenMelds_DaiminkanAndAnkanRenderFourTilesWithExpectedFacesAndOrientations()
         {
             GameObject root = new GameObject("OpenMeldKanLayoutTest");
             GameObject prefab = new GameObject("Tile3DPrefab");
@@ -650,9 +650,17 @@ namespace MahjongPrototype.Tests
                         AssertHorizontal(tileViews[tileIndex]);
                     else
                         AssertVertical(tileViews[tileIndex]);
+
+                    Assert.That(GetProperty(tileViews[tileIndex], "FaceUp"), Is.True);
                 }
-                for (int tileIndex = 4; tileIndex < 8; tileIndex++)
-                    AssertVertical(tileViews[tileIndex]);
+                AssertFaceDownVertical(tileViews[4]);
+                AssertVertical(tileViews[5]);
+                AssertVertical(tileViews[6]);
+                AssertFaceDownVertical(tileViews[7]);
+                Assert.That(GetProperty(tileViews[4], "FaceUp"), Is.False);
+                Assert.That(GetProperty(tileViews[5], "FaceUp"), Is.True);
+                Assert.That(GetProperty(tileViews[6], "FaceUp"), Is.True);
+                Assert.That(GetProperty(tileViews[7], "FaceUp"), Is.False);
             }
             finally
             {
@@ -690,6 +698,49 @@ namespace MahjongPrototype.Tests
                         AssertHorizontal(tileViews[tileIndex]);
                     else
                         AssertVertical(tileViews[tileIndex]);
+                }
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(prefab);
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void RenderOpenMelds_HorizontalTilesUseTheOpenMeldBottomAlignmentOffset()
+        {
+            GameObject root = new GameObject("OpenMeldBottomAlignmentTest");
+            GameObject prefab = new GameObject("Tile3DPrefab");
+            try
+            {
+                object view = root.AddComponent(Type.GetType(Mahjong3DOpenMeldViewTypeName, true));
+                object tilePrefab = prefab.AddComponent(Type.GetType(Mahjong3DTileViewTypeName, true));
+                SetPrivateField(view, "tilePrefab", tilePrefab);
+
+                IList melds = CreateList(RequireType(PlayerMeldTypeName));
+                melds.Add(CreateDiscardDerivedMeld("Chi", "3m 4m 5m", "4m", 1, "East", "North"));
+                melds.Add(CreateDiscardDerivedMeld("Pon", "6m 6m 6m", "6m", 2, "East", "South"));
+                melds.Add(CreateDiscardDerivedMeld(
+                    "Kakan",
+                    "7m 7m 7m 7m",
+                    "7m",
+                    3,
+                    "East",
+                    "South"));
+                Invoke(view, "RenderOpenMelds", melds);
+
+                Component[] tileViews = GetTileViews(root);
+                Assert.That(tileViews.Length, Is.EqualTo(10));
+                AssertHorizontalTileBottomAligned(tileViews[0]);
+                AssertHorizontalTileBottomAligned(tileViews[5]);
+                AssertHorizontalTileBottomAligned(tileViews[8]);
+                for (int tileIndex = 0; tileIndex < tileViews.Length; tileIndex++)
+                {
+                    if (tileIndex == 0 || tileIndex == 5 || tileIndex == 8)
+                        continue;
+
+                    Assert.That(tileViews[tileIndex].transform.localPosition.y, Is.Zero.Within(0.0001f));
                 }
             }
             finally
@@ -848,6 +899,19 @@ namespace MahjongPrototype.Tests
         private static void AssertVertical(Component tileView)
         {
             Assert.That(Quaternion.Angle(tileView.transform.localRotation, Quaternion.identity), Is.LessThan(0.001f));
+        }
+
+        private static void AssertFaceDownVertical(Component tileView)
+        {
+            Assert.That(
+                Quaternion.Angle(tileView.transform.localRotation, Quaternion.Euler(0f, 180f, 0f)),
+                Is.LessThan(0.001f));
+        }
+
+        private static void AssertHorizontalTileBottomAligned(Component tileView)
+        {
+            AssertHorizontal(tileView);
+            Assert.That(tileView.transform.localPosition.y, Is.EqualTo(-0.24f).Within(0.0001f));
         }
 
         private static object Invoke(object target, string methodName, params object[] args)

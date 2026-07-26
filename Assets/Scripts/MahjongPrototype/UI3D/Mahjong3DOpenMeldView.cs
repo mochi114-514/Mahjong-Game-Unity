@@ -10,6 +10,9 @@ namespace MahjongPrototype.UI3D
     [AddComponentMenu("Mahjong Prototype/UI3D/Mahjong 3D Open Meld View")]
     public sealed class Mahjong3DOpenMeldView : MonoBehaviour
     {
+        // Based on the 0.8-scale open meld tile prefab dimensions.
+        private const float HorizontalTileBottomAlignmentOffsetY = -0.24f;
+
         [SerializeField] private Transform spawnRoot;
         [SerializeField] private Mahjong3DTileView tilePrefab;
 
@@ -51,13 +54,11 @@ namespace MahjongPrototype.UI3D
                     Mahjong3DTileView tile = Instantiate(tilePrefab, root);
                     tile.transform.localPosition = new Vector3(
                         tilePositions[tileOffset],
-                        0f,
+                        meldTile.IsCalledTile ? HorizontalTileBottomAlignmentOffsetY : 0f,
                         0f);
-                    tile.transform.localRotation = meldTile.IsCalledTile
-                        ? Quaternion.Euler(0f, 0f, 90f)
-                        : Quaternion.identity;
+                    tile.transform.localRotation = GetTileRotation(meldTile);
                     tile.transform.localScale = Vector3.one;
-                    tile.Initialize(tileIndex++, meldTile.Tile, true, false);
+                    tile.Initialize(tileIndex++, meldTile.Tile, meldTile.IsFaceUp, false);
                     activeTiles.Add(tile);
                 }
 
@@ -112,12 +113,12 @@ namespace MahjongPrototype.UI3D
             {
                 int calledTileIndex = FindCalledTileIndex(tiles, meld.AcquiredTile.Value);
                 if (calledTileIndex >= 0)
-                    layout.Add(new MeldTileLayout(tiles[calledTileIndex], true));
+                    layout.Add(new MeldTileLayout(tiles[calledTileIndex], true, true));
 
                 for (int tileIndex = 0; tileIndex < tiles.Count; tileIndex++)
                 {
                     if (tileIndex != calledTileIndex)
-                        layout.Add(new MeldTileLayout(tiles[tileIndex], false));
+                        layout.Add(new MeldTileLayout(tiles[tileIndex], false, true));
                 }
 
                 return layout;
@@ -128,7 +129,12 @@ namespace MahjongPrototype.UI3D
                 : -1;
             for (int tileIndex = 0; tileIndex < tiles.Count; tileIndex++)
             {
-                layout.Add(new MeldTileLayout(tiles[tileIndex], tileIndex == ponCalledTileIndex));
+                bool isFaceUp = meld.Type != PlayerMeldType.Ankan ||
+                                (tileIndex != 0 && tileIndex != tiles.Count - 1);
+                layout.Add(new MeldTileLayout(
+                    tiles[tileIndex],
+                    tileIndex == ponCalledTileIndex,
+                    isFaceUp));
             }
 
             return layout;
@@ -150,6 +156,16 @@ namespace MahjongPrototype.UI3D
             }
 
             return positions;
+        }
+
+        private static Quaternion GetTileRotation(MeldTileLayout meldTile)
+        {
+            Quaternion rotation = meldTile.IsCalledTile
+                ? Quaternion.Euler(0f, 0f, 90f)
+                : Quaternion.identity;
+            return meldTile.IsFaceUp
+                ? rotation
+                : rotation * Quaternion.Euler(0f, 180f, 0f);
         }
 
         private float GetTileSpacing(MeldTileLayout meldTile)
@@ -188,14 +204,16 @@ namespace MahjongPrototype.UI3D
 
         private readonly struct MeldTileLayout
         {
-            public MeldTileLayout(Tile tile, bool isCalledTile)
+            public MeldTileLayout(Tile tile, bool isCalledTile, bool isFaceUp)
             {
                 Tile = tile;
                 IsCalledTile = isCalledTile;
+                IsFaceUp = isFaceUp;
             }
 
             public Tile Tile { get; }
             public bool IsCalledTile { get; }
+            public bool IsFaceUp { get; }
         }
 
         private static void DestroyTile(Mahjong3DTileView tile)
