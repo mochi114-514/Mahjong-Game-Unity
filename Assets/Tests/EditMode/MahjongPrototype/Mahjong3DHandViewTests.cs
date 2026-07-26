@@ -674,8 +674,12 @@ namespace MahjongPrototype.Tests
             }
         }
 
-        [Test]
-        public void RenderOpenMelds_KakanRendersFourTilesAndPreservesTheOriginalCalledTileOrientation()
+        [TestCase("North", 0)]
+        [TestCase("West", 1)]
+        [TestCase("South", 2)]
+        public void RenderOpenMelds_KakanPlacesTheAddedTileAboveTheOriginalCalledTile(
+            string sourceSeatName,
+            int expectedCalledTileIndex)
         {
             GameObject root = new GameObject("OpenMeldKakanLayoutTest");
             GameObject prefab = new GameObject("Tile3DPrefab");
@@ -692,18 +696,31 @@ namespace MahjongPrototype.Tests
                     "5m",
                     1,
                     "East",
-                    "South"));
+                    sourceSeatName));
                 Invoke(view, "RenderOpenMelds", melds);
 
                 Component[] tileViews = GetTileViews(root);
                 Assert.That(tileViews.Length, Is.EqualTo(4));
-                for (int tileIndex = 0; tileIndex < tileViews.Length; tileIndex++)
+                for (int tileIndex = 0; tileIndex < 3; tileIndex++)
                 {
-                    if (tileIndex == 2)
+                    if (tileIndex == expectedCalledTileIndex)
                         AssertHorizontal(tileViews[tileIndex]);
                     else
                         AssertVertical(tileViews[tileIndex]);
+
+                    Assert.That(tileViews[tileIndex].transform.localPosition.z, Is.Zero.Within(0.0001f));
                 }
+                AssertHorizontal(tileViews[3]);
+                Assert.That(
+                    tileViews[3].transform.localPosition.x,
+                    Is.EqualTo(tileViews[expectedCalledTileIndex].transform.localPosition.x).Within(0.0001f));
+                Assert.That(
+                    tileViews[3].transform.localPosition.y,
+                    Is.EqualTo(tileViews[expectedCalledTileIndex].transform.localPosition.y + 1.546f)
+                        .Within(0.0001f));
+                Assert.That(
+                    tileViews[3].transform.localPosition.z,
+                    Is.EqualTo(tileViews[expectedCalledTileIndex].transform.localPosition.z).Within(0.0001f));
             }
             finally
             {
@@ -743,6 +760,14 @@ namespace MahjongPrototype.Tests
                 for (int tileIndex = 0; tileIndex < tileViews.Length; tileIndex++)
                 {
                     Assert.That(tileViews[tileIndex].transform.localPosition.z, Is.Zero.Within(0.0001f));
+                    if (tileIndex == 9)
+                    {
+                        Assert.That(
+                            tileViews[tileIndex].transform.localPosition.y,
+                            Is.EqualTo(-0.24f + 1.546f).Within(0.0001f));
+                        continue;
+                    }
+
                     if (tileIndex == 0 || tileIndex == 5 || tileIndex == 8)
                         continue;
 
@@ -793,6 +818,60 @@ namespace MahjongPrototype.Tests
                 Assert.That(
                     tileViews[6].transform.localPosition.x + 1f,
                     Is.EqualTo(-7f).Within(0.0001f));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(prefab);
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void RenderOpenMelds_KakanUsesPonWidthAndMeldGapForTheFollowingMeld()
+        {
+            GameObject root = new GameObject("OpenMeldKakanWidthTest");
+            GameObject prefab = new GameObject("Tile3DPrefab");
+            try
+            {
+                object view = root.AddComponent(Type.GetType(Mahjong3DOpenMeldViewTypeName, true));
+                object tilePrefab = prefab.AddComponent(Type.GetType(Mahjong3DTileViewTypeName, true));
+                SetPrivateField(view, "tilePrefab", tilePrefab);
+                SetPrivateField(view, "verticalTileSpacing", 2f);
+                SetPrivateField(view, "horizontalTileSpacing", 1f);
+                SetPrivateField(view, "meldSpacing", 3f);
+
+                IList melds = CreateList(RequireType(PlayerMeldTypeName));
+                melds.Add(CreateDiscardDerivedMeld(
+                    "Kakan",
+                    "5m 5m 5m 5m",
+                    "5m",
+                    1,
+                    "East",
+                    "South"));
+                melds.Add(CreateDiscardDerivedMeld(
+                    "Pon",
+                    "6m 6m 6m",
+                    "6m",
+                    2,
+                    "East",
+                    "South"));
+                Invoke(view, "RenderOpenMelds", melds);
+
+                Component[] tileViews = GetTileViews(root);
+                Assert.That(tileViews.Length, Is.EqualTo(7));
+                Assert.That(tileViews[0].transform.localPosition.x, Is.EqualTo(-3.5f).Within(0.0001f));
+                Assert.That(tileViews[1].transform.localPosition.x, Is.EqualTo(-1.5f).Within(0.0001f));
+                Assert.That(tileViews[2].transform.localPosition.x, Is.Zero.Within(0.0001f));
+                Assert.That(tileViews[3].transform.localPosition.x, Is.Zero.Within(0.0001f));
+                Assert.That(tileViews[4].transform.localPosition.x, Is.EqualTo(-11.5f).Within(0.0001f));
+                Assert.That(tileViews[5].transform.localPosition.x, Is.EqualTo(-9.5f).Within(0.0001f));
+                Assert.That(tileViews[6].transform.localPosition.x, Is.EqualTo(-8f).Within(0.0001f));
+                Assert.That(
+                    tileViews[0].transform.localPosition.x - 1f,
+                    Is.EqualTo(-4.5f).Within(0.0001f));
+                Assert.That(
+                    tileViews[6].transform.localPosition.x + 0.5f,
+                    Is.EqualTo(-7.5f).Within(0.0001f));
             }
             finally
             {

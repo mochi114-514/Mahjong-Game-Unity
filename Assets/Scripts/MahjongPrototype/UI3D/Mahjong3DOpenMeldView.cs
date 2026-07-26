@@ -20,6 +20,10 @@ namespace MahjongPrototype.UI3D
         // Matches the face-depth difference of the current 0.8-scale open meld tile prefab.
         [SerializeField] private float faceDownTileLocalZOffset = -0.307f;
 
+        [Header("Kakan Added Tile Position")]
+        // Matches the horizontal tile height of the current 0.8-scale open meld tile prefab.
+        [SerializeField] private float kakanAddedTileLocalYOffset = 1.546f;
+
         [Header("Tile Spacing")]
         [FormerlySerializedAs("tileSpacing")]
         [SerializeField] private float verticalTileSpacing = 1.6f;
@@ -58,8 +62,8 @@ namespace MahjongPrototype.UI3D
                     Mahjong3DTileView tile = Instantiate(tilePrefab, root);
                     tile.transform.localPosition = new Vector3(
                         tilePositions[tileOffset],
-                        meldTile.IsCalledTile ? HorizontalTileBottomAlignmentOffsetY : 0f,
-                        meldTile.IsFaceUp ? 0f : faceDownTileLocalZOffset);
+                        GetTileLocalY(meldTile),
+                        GetTileLocalZ(meldTile));
                     tile.transform.localRotation = GetTileRotation(meldTile);
                     tile.transform.localScale = Vector3.one;
                     tile.Initialize(tileIndex++, meldTile.Tile, meldTile.IsFaceUp, false);
@@ -71,7 +75,7 @@ namespace MahjongPrototype.UI3D
                     float leftEdgeX = tilePositions[0] - (GetTileSpacing(meldTiles[0]) * 0.5f);
                     List<MeldTileLayout> nextMeldTiles = meldLayouts[meldIndex + 1];
                     float nextRightmostHalfWidth =
-                        GetTileSpacing(nextMeldTiles[nextMeldTiles.Count - 1]) * 0.5f;
+                        GetTileSpacing(nextMeldTiles[GetRightmostTileIndex(nextMeldTiles)]) * 0.5f;
                     rightEdgeX = leftEdgeX - meldSpacing - nextRightmostHalfWidth;
                 }
             }
@@ -133,12 +137,16 @@ namespace MahjongPrototype.UI3D
                 : -1;
             for (int tileIndex = 0; tileIndex < tiles.Count; tileIndex++)
             {
+                bool isKakanAddedTile =
+                    meld.Type == PlayerMeldType.Kakan && tileIndex == tiles.Count - 1;
                 bool isFaceUp = meld.Type != PlayerMeldType.Ankan ||
                                 (tileIndex != 0 && tileIndex != tiles.Count - 1);
                 layout.Add(new MeldTileLayout(
                     tiles[tileIndex],
-                    tileIndex == ponCalledTileIndex,
-                    isFaceUp));
+                    tileIndex == ponCalledTileIndex || isKakanAddedTile,
+                    isFaceUp,
+                    isKakanAddedTile,
+                    isKakanAddedTile ? ponCalledTileIndex : -1));
             }
 
             return layout;
@@ -149,9 +157,9 @@ namespace MahjongPrototype.UI3D
             float rightmostTileX)
         {
             float[] positions = new float[meldTiles.Count];
-            int lastIndex = meldTiles.Count - 1;
-            positions[lastIndex] = rightmostTileX;
-            for (int tileIndex = lastIndex - 1; tileIndex >= 0; tileIndex--)
+            int rightmostTileIndex = GetRightmostTileIndex(meldTiles);
+            positions[rightmostTileIndex] = rightmostTileX;
+            for (int tileIndex = rightmostTileIndex - 1; tileIndex >= 0; tileIndex--)
             {
                 float spacing = (GetTileSpacing(meldTiles[tileIndex]) +
                                  GetTileSpacing(meldTiles[tileIndex + 1])) *
@@ -159,7 +167,39 @@ namespace MahjongPrototype.UI3D
                 positions[tileIndex] = positions[tileIndex + 1] - spacing;
             }
 
+            for (int tileIndex = rightmostTileIndex + 1; tileIndex < meldTiles.Count; tileIndex++)
+            {
+                MeldTileLayout meldTile = meldTiles[tileIndex];
+                if (meldTile.IsKakanAddedTile)
+                    positions[tileIndex] = positions[meldTile.OverlappedTileIndex];
+            }
+
             return positions;
+        }
+
+        private float GetTileLocalY(MeldTileLayout meldTile)
+        {
+            float localY = meldTile.IsCalledTile ? HorizontalTileBottomAlignmentOffsetY : 0f;
+            return meldTile.IsKakanAddedTile ? localY + kakanAddedTileLocalYOffset : localY;
+        }
+
+        private float GetTileLocalZ(MeldTileLayout meldTile)
+        {
+            if (!meldTile.IsFaceUp)
+                return faceDownTileLocalZOffset;
+
+            return 0f;
+        }
+
+        private static int GetRightmostTileIndex(IReadOnlyList<MeldTileLayout> meldTiles)
+        {
+            for (int tileIndex = meldTiles.Count - 1; tileIndex >= 0; tileIndex--)
+            {
+                if (!meldTiles[tileIndex].IsKakanAddedTile)
+                    return tileIndex;
+            }
+
+            return meldTiles.Count - 1;
         }
 
         private static Quaternion GetTileRotation(MeldTileLayout meldTile)
@@ -208,16 +248,25 @@ namespace MahjongPrototype.UI3D
 
         private readonly struct MeldTileLayout
         {
-            public MeldTileLayout(Tile tile, bool isCalledTile, bool isFaceUp)
+            public MeldTileLayout(
+                Tile tile,
+                bool isCalledTile,
+                bool isFaceUp,
+                bool isKakanAddedTile = false,
+                int overlappedTileIndex = -1)
             {
                 Tile = tile;
                 IsCalledTile = isCalledTile;
                 IsFaceUp = isFaceUp;
+                IsKakanAddedTile = isKakanAddedTile;
+                OverlappedTileIndex = overlappedTileIndex;
             }
 
             public Tile Tile { get; }
             public bool IsCalledTile { get; }
             public bool IsFaceUp { get; }
+            public bool IsKakanAddedTile { get; }
+            public int OverlappedTileIndex { get; }
         }
 
         private static void DestroyTile(Mahjong3DTileView tile)
