@@ -621,7 +621,7 @@ namespace MahjongPrototype.Tests
         }
 
         [Test]
-        public void RenderOpenMelds_DaiminkanAndAnkanRenderFourTilesWithExpectedFacesAndOrientations()
+        public void RenderOpenMelds_DaiminkanAndAnkanRenderFourTilesWithExpectedFacesOrientationsAndDepth()
         {
             GameObject root = new GameObject("OpenMeldKanLayoutTest");
             GameObject prefab = new GameObject("Tile3DPrefab");
@@ -652,6 +652,7 @@ namespace MahjongPrototype.Tests
                         AssertVertical(tileViews[tileIndex]);
 
                     Assert.That(GetProperty(tileViews[tileIndex], "FaceUp"), Is.True);
+                    Assert.That(tileViews[tileIndex].transform.localPosition.z, Is.Zero.Within(0.0001f));
                 }
                 AssertFaceDownVertical(tileViews[4]);
                 AssertVertical(tileViews[5]);
@@ -661,6 +662,10 @@ namespace MahjongPrototype.Tests
                 Assert.That(GetProperty(tileViews[5], "FaceUp"), Is.True);
                 Assert.That(GetProperty(tileViews[6], "FaceUp"), Is.True);
                 Assert.That(GetProperty(tileViews[7], "FaceUp"), Is.False);
+                Assert.That(tileViews[4].transform.localPosition.z, Is.EqualTo(-0.307f).Within(0.0001f));
+                Assert.That(tileViews[5].transform.localPosition.z, Is.Zero.Within(0.0001f));
+                Assert.That(tileViews[6].transform.localPosition.z, Is.Zero.Within(0.0001f));
+                Assert.That(tileViews[7].transform.localPosition.z, Is.EqualTo(-0.307f).Within(0.0001f));
             }
             finally
             {
@@ -737,6 +742,7 @@ namespace MahjongPrototype.Tests
                 AssertHorizontalTileBottomAligned(tileViews[8]);
                 for (int tileIndex = 0; tileIndex < tileViews.Length; tileIndex++)
                 {
+                    Assert.That(tileViews[tileIndex].transform.localPosition.z, Is.Zero.Within(0.0001f));
                     if (tileIndex == 0 || tileIndex == 5 || tileIndex == 8)
                         continue;
 

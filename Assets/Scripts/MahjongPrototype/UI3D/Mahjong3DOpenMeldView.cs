@@ -16,6 +16,10 @@ namespace MahjongPrototype.UI3D
         [SerializeField] private Transform spawnRoot;
         [SerializeField] private Mahjong3DTileView tilePrefab;
 
+        [Header("Face-down Tile Position")]
+        // Matches the face-depth difference of the current 0.8-scale open meld tile prefab.
+        [SerializeField] private float faceDownTileLocalZOffset = -0.307f;
+
         [Header("Tile Spacing")]
         [FormerlySerializedAs("tileSpacing")]
         [SerializeField] private float verticalTileSpacing = 1.6f;
@@ -55,7 +59,7 @@ namespace MahjongPrototype.UI3D
                     tile.transform.localPosition = new Vector3(
                         tilePositions[tileOffset],
                         meldTile.IsCalledTile ? HorizontalTileBottomAlignmentOffsetY : 0f,
-                        0f);
+                        meldTile.IsFaceUp ? 0f : faceDownTileLocalZOffset);
                     tile.transform.localRotation = GetTileRotation(meldTile);
                     tile.transform.localScale = Vector3.one;
                     tile.Initialize(tileIndex++, meldTile.Tile, meldTile.IsFaceUp, false);
